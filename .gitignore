@@ -1,0 +1,35 @@
+# PlatformIO
+.pio
+.pioenvs
+.piolibdeps
+.clang_complete
+.gcc-flags.json
+
+# VSCode
+.vscode
+
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Backup files
+*.bak
+*.tmp
+*.swp
+*~
+
+# Build outputs
+*.bin
+*.elf
+*.map
+*.hex
+
+# Debug files
+*.log
+debug.txt
+note.txt
