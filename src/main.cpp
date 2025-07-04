@@ -373,7 +373,7 @@ void createTasks() {
   #endif
   
   log_msg("UART Bridge task created (priority " + String(UART_TASK_PRIORITY) + ")");
-  log_msg("Adaptive buffering: 256 byte buffer, protocol optimized");
+  log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized");
   log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance");
   
   // Create web server task only in CONFIG mode

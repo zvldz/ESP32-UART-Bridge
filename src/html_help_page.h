@@ -9,7 +9,7 @@ const char HTML_HELP_HEADER[] PROGMEM = R"rawliteral(
 <title>ESP32 UART Bridge - Connection Help</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='0' y='14' font-size='16'>🔗</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
 )rawliteral";
 
 const char HTML_HELP_BODY[] PROGMEM = R"rawliteral(
@@ -24,13 +24,14 @@ const char HTML_HELP_PROTOCOL_INFO[] PROGMEM = R"rawliteral(
 <div class="success">
 <strong>Universal UART Bridge:</strong> This bridge works with any UART protocol. It uses adaptive buffering that automatically optimizes for different data patterns. The system is particularly well-tuned for MAVLink protocol used by drone autopilots (ArduPilot, PX4), but works efficiently with any serial communication protocol.
 </div>
-<p><strong>Tested with common protocols:</strong></p>
+<p><strong>Supported protocols:</strong></p>
 <ul style="margin-left: 20px;">
 <li><strong>MAVLink</strong> - Optimized for telemetry and parameter transfer</li>
 <li><strong>NMEA GPS</strong> - Clean message boundaries detection</li>
 <li><strong>Modbus RTU</strong> - Preserves inter-frame gaps</li>
 <li><strong>AT Commands</strong> - Fast response for modem control</li>
 <li><strong>Firmata</strong> - Low latency for microcontroller communication</li>
+<li><strong>and other UART-based protocols</strong></li>
 </ul>
 <p style="margin-top: 10px;"><small>The adaptive buffering (200μs to 15ms) ensures optimal performance across different protocols and data rates.</small></p>
 <p style="margin-top: 5px;"><small><strong>Note:</strong> The bridge works efficiently at all supported speeds. For MAVLink specifically, protocol-aware parsing could provide up to 20% improvement at very high speeds (≥460800 baud), though the current implementation already delivers excellent performance across the entire range.</small></p>

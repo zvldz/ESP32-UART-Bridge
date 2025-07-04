@@ -12,7 +12,7 @@ const char HTML_HEADER[] PROGMEM = R"rawliteral(
 <title>ESP32 UART Bridge</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='0' y='14' font-size='16'>🔗</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
 )rawliteral";
 
 const char HTML_STYLES[] PROGMEM = R"rawliteral(
@@ -33,7 +33,7 @@ td:first-child { width: 45%; }
 td:last-child { width: 55%; text-align: right; }
 table tr:nth-child(even) { background-color: #f1f3f4; }
 table tr:nth-child(odd) { background-color: #ffffff; }
-.log-container { height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa; font-family: monospace; font-size: 12px; }
+.log-container { height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #e9ecef; font-family: monospace; font-size: 12px; }
 .log-entry { margin: 2px 0; }
 .warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; }
 .success { background-color: #d4edda; border-left: 4px solid #28a745; padding: 10px; margin: 10px 0; }
