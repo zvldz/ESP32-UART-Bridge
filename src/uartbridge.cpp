@@ -64,8 +64,7 @@ void uartBridgeTask(void* parameter) {
   // Add counter for WiFi mode
   int wifiModeYieldCounter = 0;
   
-  log_msg("UART Bridge Task started with adaptive buffering");
-  log_msg("Buffer size: " + String(UART_BUFFER_SIZE) + " bytes");
+  log_msg("UART Bridge Task started");
 
   while (1) {
     // Stack diagnostics in debug mode only

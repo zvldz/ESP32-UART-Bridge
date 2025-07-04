@@ -51,11 +51,16 @@ const char HTML_TRAFFIC_STATS[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
-// System logs section with icon button
+// System logs section with minimal SVG icon button
 const char HTML_SYSTEM_LOGS[] PROGMEM = R"rawliteral(
 <div class="section"><h3>System Logs</h3>
 <div style="position: relative;">
-<button onclick="copyLogs()" style="position: absolute; top: 5px; right: 5px; padding: 5px 8px; font-size: 16px; background-color: #2196F3;" title="Copy logs to clipboard">📋</button>
+<span id="copyBtn" onclick="copyLogs()" style="position: absolute; top: 5px; right: 15px; cursor: pointer; user-select: none; display: flex; align-items: center; padding: 5px;" title="Copy logs to clipboard">
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5">
+<rect x="6" y="6" width="10" height="12" rx="1"></rect>
+<path d="M14 4V3a1 1 0 00-1-1H5a1 1 0 00-1 1v12a1 1 0 001 1h1"></path>
+</svg>
+</span>
 <div class="log-container" id="logContainer">
 <div id="logEntries">Loading logs...</div>
 </div>
@@ -64,7 +69,7 @@ const char HTML_SYSTEM_LOGS[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
-// Combined settings form
+// Combined settings form with SVG password toggle
 const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
 <div class="section"><h3>Device Settings</h3>
 <form action="/save" method="POST">
@@ -110,7 +115,12 @@ const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
 <label for="password">WiFi Password:</label>
 <div style="position: relative;">
 <input type="password" name="password" id="password" value="%WIFI_PASSWORD%" maxlength="64" style="padding-right: 40px;">
-<span onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none;">👁️</span>
+<span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; display: flex; align-items: center;">
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+<circle cx="10" cy="10" r="3"></circle>
+</svg>
+</span>
 </div>
 <div style="text-align: center; margin-top: 20px;">
 <button type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
@@ -129,7 +139,7 @@ const char HTML_FIRMWARE_UPDATE[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
-// JavaScript with fixed Last Activity handling
+// JavaScript with improved copy function and password toggle
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(
 <script>
 document.getElementById('baudrate').value = '%BAUDRATE%';
@@ -140,20 +150,57 @@ document.querySelector('input[name="flowcontrol"]').checked = %FLOWCONTROL%;
 
 function togglePassword() {
   var x = document.getElementById("password");
+  var icon = document.getElementById("toggleIcon");
+  
   if (x.type === "password") {
     x.type = "text";
+    // Eye with slash (hidden)
+    icon.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>';
   } else {
     x.type = "password";
+    // Open eye
+    icon.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>';
   }
 }
 
 function copyLogs() {
-  var logs = document.getElementById('logEntries').innerText;
-  navigator.clipboard.writeText(logs).then(function() {
-    alert('Logs copied to clipboard!');
-  }, function(err) {
-    console.error('Could not copy logs: ', err);
-  });
+  const logEntriesElement = document.getElementById('logEntries');
+  if (!logEntriesElement) {
+    return;
+  }
+  
+  const logs = logEntriesElement.innerText || logEntriesElement.textContent || '';
+  if (!logs || logs === 'Loading logs...') {
+    return;
+  }
+  
+  // Create textarea for copy operation
+  const textArea = document.createElement("textarea");
+  textArea.value = logs;
+  textArea.style.position = "fixed";
+  textArea.style.left = "-999999px";
+  document.body.appendChild(textArea);
+  textArea.select();
+  
+  try {
+    document.execCommand('copy');
+    // Visual feedback
+    const icon = document.getElementById('copyBtn').querySelector('svg');
+    const originalStroke = icon.getAttribute('stroke');
+    const originalContent = icon.innerHTML;
+    
+    icon.setAttribute('stroke', '#4CAF50');
+    icon.innerHTML = '<polyline points="5 10 8 13 15 6"></polyline>';
+    
+    setTimeout(function() {
+      icon.setAttribute('stroke', originalStroke);
+      icon.innerHTML = originalContent;
+    }, 1500);
+  } catch (err) {
+    console.error('Copy failed:', err);
+  }
+  
+  document.body.removeChild(textArea);
 }
 
 function updateStatus() {
