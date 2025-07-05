@@ -3,12 +3,12 @@
 #include "leds.h"
 #include "defines.h"
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 
 // External objects from main.cpp
 extern HardwareSerial uartBridgeSerial;
 extern DeviceMode currentMode;
 extern const int DEBUG_MODE;
-extern SemaphoreHandle_t statsMutex;
 extern Config config;
 extern UartStats uartStats;
 extern FlowControlStatus flowControlStatus;
@@ -64,9 +64,35 @@ void uartBridgeTask(void* parameter) {
   // Add counter for WiFi mode
   int wifiModeYieldCounter = 0;
   
+  // WDT protection
+  static unsigned long lastWdtFeed = 0;
+  
+  // Diagnostic counters for dropped data
+  static unsigned long droppedBytes = 0;
+  static unsigned long totalDroppedBytes = 0;
+  static unsigned long lastDropLog = 0;
+  static unsigned long dropEvents = 0;
+  
+  // Packet size diagnostics
+  static int maxDropSize = 0;
+  static int timeoutDropSizes[10] = {0};
+  static int timeoutDropIndex = 0;
+  
+  // Periodic statistics
+  static unsigned long lastPeriodicStats = 0;
+  
   log_msg("UART Bridge Task started");
 
   while (1) {
+    // Periodic statistics every 30 seconds - shows system is alive
+    if (millis() - lastPeriodicStats > 30000) {
+      String mode = (currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
+      log_msg("UART bridge alive [" + mode + " mode]: TX=" + String(localUartToUsb) + 
+              " bytes, RX=" + String(localUsbToUart) + " bytes" +
+              (totalDroppedBytes > 0 ? ", dropped=" + String(totalDroppedBytes) : ""));
+      lastPeriodicStats = millis();
+    }
+    
     // Stack diagnostics in debug mode only
     if (DEBUG_MODE == 1) {
       static unsigned long lastDiagnostic = 0;
@@ -159,19 +185,45 @@ void uartBridgeTask(void* parameter) {
           // Transmit accumulated data if conditions met
           if (shouldTransmit) {
             // Check USB buffer availability to prevent blocking
-            if (Serial.availableForWrite() >= bufferIndex) {
+            int availableSpace = Serial.availableForWrite();
+            
+            if (availableSpace >= bufferIndex) {
+              // Can write entire buffer
               Serial.write(adaptiveBuffer, bufferIndex);
               bufferIndex = 0;  // Reset buffer
+            } else if (availableSpace > 0) {
+              // USB buffer has some space - write what we can
+              Serial.write(adaptiveBuffer, availableSpace);
+              // Move remaining data to front of buffer
+              memmove(adaptiveBuffer, adaptiveBuffer + availableSpace, bufferIndex - availableSpace);
+              bufferIndex -= availableSpace;
             } else {
-              // USB buffer congested - try partial transmission
-              int availableSpace = Serial.availableForWrite();
-              if (availableSpace > 0) {
-                Serial.write(adaptiveBuffer, availableSpace);
-                // Move remaining data to front of buffer
-                memmove(adaptiveBuffer, adaptiveBuffer + availableSpace, bufferIndex - availableSpace);
-                bufferIndex -= availableSpace;
+              // No space available - USB buffer completely full
+              if (bufferIndex >= sizeof(adaptiveBuffer)) {
+                // Must drop data to prevent our buffer overflow
+                droppedBytes += bufferIndex;
+                totalDroppedBytes += bufferIndex;
+                dropEvents++;
+                
+                // Track maximum dropped packet size
+                if (bufferIndex > maxDropSize) {
+                  maxDropSize = bufferIndex;
+                }
+                
+                bufferIndex = 0;  // Drop buffer to prevent overflow
+                
+                // Log periodically with statistics
+                if (millis() - lastDropLog > 5000) {  // Every 5 seconds
+                  log_msg("USB buffer full: dropped " + String(droppedBytes) + " bytes in " + 
+                          String(dropEvents) + " events (total: " + String(totalDroppedBytes) + 
+                          " bytes), max packet: " + String(maxDropSize) + " bytes");
+                  lastDropLog = millis();
+                  droppedBytes = 0;
+                  dropEvents = 0;
+                  maxDropSize = 0;  // Reset for next period
+                }
               }
-              // If still no space, keep data in buffer for next iteration
+              // If buffer not full yet, keep data and try again next iteration
             }
           }
         }
@@ -183,9 +235,49 @@ void uartBridgeTask(void* parameter) {
       if (DEBUG_MODE == 0 && bufferIndex > 0) {
         unsigned long timeInBuffer = micros() - bufferStartTime;
         if (timeInBuffer >= 15000) {  // 15ms emergency timeout
-          if (Serial.availableForWrite() >= bufferIndex) {
+          int availableSpace = Serial.availableForWrite();
+          if (availableSpace >= bufferIndex) {
             Serial.write(adaptiveBuffer, bufferIndex);
             bufferIndex = 0;
+          } else if (availableSpace > 0) {
+            // Write what we can
+            Serial.write(adaptiveBuffer, availableSpace);
+            memmove(adaptiveBuffer, adaptiveBuffer + availableSpace, bufferIndex - availableSpace);
+            bufferIndex -= availableSpace;
+          } else {
+            // Buffer stuck - drop data
+            droppedBytes += bufferIndex;
+            totalDroppedBytes += bufferIndex;
+            dropEvents++;
+            
+            // Track timeout drop sizes
+            timeoutDropSizes[timeoutDropIndex % 10] = bufferIndex;
+            timeoutDropIndex++;
+            
+            bufferIndex = 0;
+            
+            // Log if haven't logged recently
+            if (millis() - lastDropLog > 5000) {
+              // Build string with last 10 timeout drop sizes
+              String sizes = "Sizes: ";
+              int sizeCount = 0;
+              for(int i = 0; i < 10; i++) {
+                if (timeoutDropSizes[i] > 0) {
+                  if (sizeCount > 0) sizes += ", ";
+                  sizes += String(timeoutDropSizes[i]);
+                  sizeCount++;
+                }
+              }
+              
+              log_msg("USB timeout: dropped " + String(droppedBytes) + " bytes in " + 
+                      String(dropEvents) + " events (total: " + String(totalDroppedBytes) + 
+                      " bytes). " + sizes);
+              lastDropLog = millis();
+              droppedBytes = 0;
+              dropEvents = 0;
+              // Clear timeout sizes for next period
+              for(int i = 0; i < 10; i++) timeoutDropSizes[i] = 0;
+            }
           }
         }
       }
@@ -205,12 +297,18 @@ void uartBridgeTask(void* parameter) {
         }
       }
       
-      // Update shared statistics every 100ms to avoid mutex overhead
+      // Update shared statistics periodically (interval defined by UART_STATS_UPDATE_INTERVAL_MS)
       static unsigned long lastStatsUpdate = 0;
-      if (millis() - lastStatsUpdate > 100) {
+      if (millis() - lastStatsUpdate > UART_STATS_UPDATE_INTERVAL_MS) {
         updateSharedStats(localUartToUsb, localUsbToUart, localLastActivity);
         lastStatsUpdate = millis();
       }
+    }
+    
+    // Explicit WDT reset to prevent watchdog timeout
+    if (millis() - lastWdtFeed > 500) {
+      esp_task_wdt_reset();
+      lastWdtFeed = millis();
     }
     
     // Adaptive delay based on core count and mode
@@ -226,16 +324,15 @@ void uartBridgeTask(void* parameter) {
   }
 }
 
-// Thread-safe function to update shared statistics
+// Thread-safe function to update shared statistics using critical sections
 void updateSharedStats(unsigned long uartToUsb, unsigned long usbToUart, unsigned long activity) {
-  if (xSemaphoreTake(statsMutex, portMAX_DELAY) == pdTRUE) {
-    uartStats.bytesUartToUsb = uartToUsb;
-    uartStats.bytesUsbToUart = usbToUart;
-    if (activity > 0) {
-      uartStats.lastActivityTime = activity;
-    }
-    xSemaphoreGive(statsMutex);
+  enterStatsCritical();
+  uartStats.bytesUartToUsb = uartToUsb;
+  uartStats.bytesUsbToUart = usbToUart;
+  if (activity > 0) {
+    uartStats.lastActivityTime = activity;
   }
+  exitStatsCritical();
 }
 
 // Detect flow control hardware presence - see TODO: Enhanced Flow Control diagnostics
@@ -284,14 +381,13 @@ String getFlowControlStatus() {
   }
 }
 
-// Reset all statistics
+// Reset all statistics using critical sections
 void resetStatistics(UartStats* stats) {
-  if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-    stats->bytesUartToUsb = 0;
-    stats->bytesUsbToUart = 0;
-    stats->lastActivityTime = 0;
-    stats->deviceStartTime = millis();
-    stats->totalUartPackets = 0;
-    xSemaphoreGive(statsMutex);
-  }
+  enterStatsCritical();
+  stats->bytesUartToUsb = 0;
+  stats->bytesUsbToUart = 0;
+  stats->lastActivityTime = 0;
+  stats->deviceStartTime = millis();
+  stats->totalUartPackets = 0;
+  exitStatsCritical();
 }

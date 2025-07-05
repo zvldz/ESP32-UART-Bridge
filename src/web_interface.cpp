@@ -66,6 +66,8 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/reset_stats", handleResetStats);
   server->on("/help", handleHelp);
   server->on("/success", handleSuccess);
+  server->on("/crashlog_json", handleCrashLogJson);
+  server->on("/clear_crashlog", handleClearCrashLog);
   server->onNotFound(handleNotFound);
   server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
   
@@ -130,10 +132,13 @@ bool checkWiFiTimeout() {
 void handleRoot() {
   String html;
   
-  // Load and build page from templates
-  html += loadTemplate(HTML_HEADER);
-  html += loadTemplate(HTML_STYLES);
-  html += loadTemplate(HTML_BODY_START);
+  // Build page using new structure
+  html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
+  html += loadTemplate(HTML_MAIN_TITLE);      // Page-specific title
+  html += loadTemplate(HTML_STYLES);          // Common styles
+  html += loadTemplate(HTML_COMMON_JS);       // Common JavaScript utilities
+  html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
+  html += loadTemplate(HTML_MAIN_HEADING);    // Page heading
   html += loadTemplate(HTML_QUICK_GUIDE);
   
   // System Status section
@@ -147,6 +152,9 @@ void handleRoot() {
   
   // System Logs section
   html += processTemplate(loadTemplate(HTML_SYSTEM_LOGS), mainPageProcessor);
+  
+  // Crash History section
+  html += loadTemplate(HTML_CRASH_HISTORY);
   
   // Combined Device Settings section
   html += processTemplate(loadTemplate(HTML_DEVICE_SETTINGS), mainPageProcessor);
@@ -166,10 +174,12 @@ void handleRoot() {
 void handleHelp() {
   String html;
   
-  // Load help page templates
-  html += loadTemplate(HTML_HELP_HEADER);
-  html += loadTemplate(HTML_STYLES);
-  html += loadTemplate(HTML_HELP_BODY);
+  // Build page using new structure
+  html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
+  html += loadTemplate(HTML_HELP_TITLE);      // Page-specific title
+  html += loadTemplate(HTML_STYLES);          // Common styles  
+  html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
+  html += loadTemplate(HTML_HELP_HEADING);    // Page heading
   
   // Add all help sections from templates
   html += loadTemplate(HTML_HELP_PROTOCOL_INFO);

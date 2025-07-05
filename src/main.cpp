@@ -9,6 +9,7 @@
 #include "leds.h"
 #include "web_interface.h"
 #include "uartbridge.h"
+#include "crashlog.h"
 
 // Global constants
 const int DEBUG_MODE = 0;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
@@ -28,8 +29,15 @@ TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t webServerTaskHandle = NULL;
 
 // Mutexes for thread safety
-SemaphoreHandle_t statsMutex = NULL;
 SemaphoreHandle_t logMutex = NULL;
+
+// Spinlock for statistics critical sections
+portMUX_TYPE statsMux = portMUX_INITIALIZER_UNLOCKED;
+
+// RTC variables for crash logging (survive reset but not power loss)
+RTC_DATA_ATTR uint32_t g_last_heap = 0;
+RTC_DATA_ATTR uint32_t g_last_uptime = 0;
+RTC_DATA_ATTR uint32_t g_min_heap = 0xFFFFFFFF;
 
 // Function declarations
 void initPins();
@@ -102,6 +110,9 @@ void setup() {
   log_msg("Loading configuration...");
   config_load(&config);
   log_msg("Configuration loaded");
+  
+  // Check for crash and log if needed
+  crashlog_check_and_save();
   
   // Initialize hardware
   log_msg("Initializing pins...");
@@ -219,13 +230,58 @@ void loop() {
     }
   }
   
+  // Handle long press for WiFi reset (5+ seconds)
+  static unsigned long buttonHoldStart = 0;
+  static bool buttonHoldDetected = false;
+  
+  if (digitalRead(BOOT_PIN) == LOW) {
+    if (buttonHoldStart == 0) {
+      buttonHoldStart = millis();
+    } else if (!buttonHoldDetected && (millis() - buttonHoldStart > 5000)) {
+      buttonHoldDetected = true;
+      log_msg("Button held for 5 seconds - resetting WiFi to defaults");
+      
+      // Reset to default WiFi settings
+      config.ssid = "ESP-Bridge";
+      config.password = "12345678";
+      config_save(&config);
+      
+      // Visual feedback - rapid LED blinking
+      for (int i = 0; i < 10; i++) {
+        digitalWrite(BLUE_LED_PIN, LOW);   // LED ON (inverted logic)
+        delay(100);
+        digitalWrite(BLUE_LED_PIN, HIGH);  // LED OFF (inverted logic)
+        delay(100);
+      }
+      
+      log_msg("WiFi reset to defaults: SSID=ESP-Bridge, Password=12345678");
+      log_msg("Restarting...");
+      delay(1000);
+      ESP.restart();
+    }
+  } else {
+    buttonHoldStart = 0;
+    buttonHoldDetected = false;
+  }
+  
   // Update LED state
   led_update();
   
-  if (currentMode == MODE_CONFIG) {
-    // WiFi Config Mode
-    // REMOVED: led_set_mode(LED_MODE_WIFI_ON); - Already set in initConfigMode()
+  // Update RTC variables for crash logging
+  static unsigned long lastRtcUpdate = 0;
+  if (millis() - lastRtcUpdate > CRASHLOG_UPDATE_INTERVAL_MS) {
+    g_last_heap = ESP.getFreeHeap();
+    g_last_uptime = millis() / 1000;
     
+    // Track minimum heap
+    if (g_last_heap < g_min_heap) {
+      g_min_heap = g_last_heap;
+    }
+    
+    lastRtcUpdate = millis();
+  }
+  
+  if (currentMode == MODE_CONFIG) {
     if (checkWiFiTimeout()) {
       log_msg("WiFi timeout - switching to normal mode");
       ESP.restart();
@@ -341,21 +397,16 @@ void createMutexes() {
     return;
   }
   
-  // Create statistics mutex
-  statsMutex = xSemaphoreCreateMutex();
-  if (statsMutex == NULL) {
-    log_msg("ERROR: Failed to create stats mutex!");
-    return;
-  }
+  // Note: statsMutex removed - now using critical sections via statsMux spinlock
 }
 
 void createTasks() {
-  // Create UART bridge task
+  // Create UART bridge task with increased stack size
   #ifdef CONFIG_FREERTOS_UNICORE
     xTaskCreate(
       uartBridgeTask,        // Task function
       "UART_Bridge_Task",    // Task name
-      6144,                  // Stack size
+      16384,                 // Stack size (increased from 8192)
       NULL,                  // Parameters
       UART_TASK_PRIORITY,    // Priority
       &uartBridgeTaskHandle  // Task handle
@@ -364,7 +415,7 @@ void createTasks() {
     xTaskCreatePinnedToCore(
       uartBridgeTask,        // Task function
       "UART_Bridge_Task",    // Task name
-      6144,                  // Stack size
+      16384,                 // Stack size (increased from 8192)
       NULL,                  // Parameters
       UART_TASK_PRIORITY,    // Priority
       &uartBridgeTaskHandle, // Task handle
@@ -376,12 +427,12 @@ void createTasks() {
   log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized");
   log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance");
   
-  // Create web server task only in CONFIG mode
+  // Create web server task only in CONFIG mode with increased stack size
   if (currentMode == MODE_CONFIG) {
     xTaskCreate(
       webServerTask,         // Task function
       "Web_Server_Task",     // Task name
-      4096,                  // Stack size
+      16384,                 // Stack size (increased from 8192)
       NULL,                  // Parameters
       WEB_TASK_PRIORITY,     // Priority
       &webServerTaskHandle   // Task handle

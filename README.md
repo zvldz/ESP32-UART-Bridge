@@ -4,7 +4,7 @@ A high-performance, universal UART to USB bridge that works with any serial prot
 
 Transform any UART connection into a modern USB interface - no drivers, no complexity, just plug and play.
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue)]()
+[![Version](https://img.shields.io/badge/version-2.1.1-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-ESP32--C3-green)]()
 
@@ -22,6 +22,8 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 - **Configuration Without Drivers** - Web-based setup via WiFi
 - **Wide Compatibility** - Works with any UART-based device
 - **Visual Status Indicators** - Blue LED shows data activity and mode
+- **Recovery Options** - Reset WiFi settings without reflashing
+- **Crash History Logging** - Automatic recording of system crashes with diagnostics
 
 ---
 
@@ -79,6 +81,21 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 - **WiFi AP**: SSID "ESP-Bridge", Password "12345678"
 - **Config Timeout**: 20 minutes
 - **Buffer Size**: 256 bytes (adaptive)
+
+### Button Functions
+
+| Button Action | Function | LED Feedback |
+|--------------|----------|--------------|
+| **Triple-click** | Enter WiFi configuration mode | Blue LED stays ON |
+| **Hold 5+ seconds** | Reset WiFi to factory defaults | Blue LED blinks rapidly 10 times |
+| **Hold during boot** | Enter firmware flashing mode | No LED activity |
+
+### Forgot WiFi Password?
+
+1. **Press and hold** BOOT button for at least 5 seconds
+2. Blue LED will **blink rapidly** 10 times to confirm
+3. Device will **restart automatically**
+4. Connect to default WiFi: **SSID "ESP-Bridge"**, **Password "12345678"**
 
 ---
 
@@ -203,10 +220,12 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 
 ### ⚠️ USB Connection Warning
 
-**Disconnecting serial terminal or USB cable WILL restart the ESP32-C3!**
-- This is hardware behavior of ESP32-C3/S2/S3 with native USB
-- Cannot be fixed in software
-- Keep connection active during configuration
+**ESP32-C3/S2/S3 Native USB Behavior:**
+- Device may restart when USB serial connection is closed
+- This is hardware behavior, not a bug
+- To avoid unexpected restarts:
+  - Keep serial terminal connected during configuration
+  - Or power ESP32 externally via 3.3V pins
 
 ---
 
@@ -220,7 +239,7 @@ The bridge design prioritizes UART data transfer:
   - Currently optimized for ESP32-C3 (single core)
   - Future versions will support Core 0 pinning on multi-core ESP32
   - Minimal latency data forwarding
-  - Local variables to avoid mutex overhead
+  - Non-blocking USB operations prevent hangs
   
 - **Web/WiFi Task** - Secondary priority
   - Only active in Config Mode (triple-click activation)
@@ -228,8 +247,9 @@ The bridge design prioritizes UART data transfer:
   - Auto-shutdown after 20 minutes
 
 - **Smart Resource Management**
+  - Critical sections for statistics (no mutex blocking)
   - Adaptive buffering optimizes throughput and latency
-  - Thread-safe statistics without blocking UART
+  - Watchdog protection ensures system stability
   - LED indication without performance impact
 
 ### Operating Modes
@@ -289,7 +309,7 @@ The project is configured for ESP32-C3 SuperMini in `platformio.ini`. No changes
 
 ### Build Output
 
-Firmware binary will be in `.pio/build/esp32-c3-supermini/firmware.bin`
+Firmware binary will be in `.pio/build/lolin_c3_mini/firmware.bin`
 
 ---
 
@@ -306,6 +326,18 @@ Firmware binary will be in `.pio/build/esp32-c3-supermini/firmware.bin`
 ## 📝 Development
 
 See [TODO.md](TODO.md) for roadmap and planned features.
+
+### Recent Improvements
+
+- **v2.1.1** - Enhanced stability and diagnostics
+  - Implemented critical sections for thread-safe statistics
+  - Added non-blocking USB write protection
+  - Explicit watchdog timer management
+  - WiFi settings reset via button hold (5+ seconds)
+  - Crash history logging with diagnostics
+    - Tracks reset reasons, uptime, and memory state
+    - Web interface for viewing crash patterns
+    - Helps diagnose field issues without serial access
 
 ---
 

@@ -66,4 +66,16 @@ typedef struct {
   bool flowControlActive;
 } FlowControlStatus;
 
+// Spinlock for statistics critical sections
+extern portMUX_TYPE statsMux;
+
+// Inline functions for convenient critical section handling
+inline void enterStatsCritical() {
+    taskENTER_CRITICAL(&statsMux);
+}
+
+inline void exitStatsCritical() {
+    taskEXIT_CRITICAL(&statsMux);
+}
+
 #endif // TYPES_H
