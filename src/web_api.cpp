@@ -5,8 +5,10 @@
 #include "uartbridge.h"
 #include "defines.h"
 #include "html_common.h"
+#include "crashlog.h"
 #include <Arduino.h>
 #include <WebServer.h>
+#include <ArduinoJson.h>
 
 // External objects from main.cpp
 extern Config config;
@@ -14,8 +16,17 @@ extern UartStats uartStats;
 extern SystemState systemState;
 extern DeviceMode currentMode;
 extern const int DEBUG_MODE;
-extern SemaphoreHandle_t statsMutex;
 extern SemaphoreHandle_t logMutex;
+
+// Helper function to safely read protected unsigned long value using critical sections
+unsigned long getProtectedULongValue(unsigned long* valuePtr) {
+    if (!valuePtr) return 0;
+    unsigned long result;
+    enterStatsCritical();
+    result = *valuePtr;
+    exitStatsCritical();
+    return result;
+}
 
 // Template processor for main page
 String mainPageProcessor(const String& var) {
@@ -25,12 +36,8 @@ String mainPageProcessor(const String& var) {
   
   // Protected access to uartStats.deviceStartTime
   if (var == "UPTIME") {
-    unsigned long value = 0;
-    if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-      value = (millis() - uartStats.deviceStartTime) / 1000;
-      xSemaphoreGive(statsMutex);
-    }
-    return String(value);
+    unsigned long startTime = getProtectedULongValue(&uartStats.deviceStartTime);
+    return String((millis() - startTime) / 1000);
   }
   
   if (var == "WIFI_SSID") return config.ssid;
@@ -43,47 +50,36 @@ String mainPageProcessor(const String& var) {
   
   // Protected access to uartStats.bytesUartToUsb
   if (var == "UART_TO_USB") {
-    unsigned long value = 0;
-    if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-      value = uartStats.bytesUartToUsb;
-      xSemaphoreGive(statsMutex);
-    }
-    return String(value);
+    return String(getProtectedULongValue(&uartStats.bytesUartToUsb));
   }
   
   // Protected access to uartStats.bytesUsbToUart
   if (var == "USB_TO_UART") {
-    unsigned long value = 0;
-    if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-      value = uartStats.bytesUsbToUart;
-      xSemaphoreGive(statsMutex);
-    }
-    return String(value);
+    return String(getProtectedULongValue(&uartStats.bytesUsbToUart));
   }
   
   // Protected access to total traffic
   if (var == "TOTAL_TRAFFIC") {
-    unsigned long value = 0;
-    if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-      value = uartStats.bytesUartToUsb + uartStats.bytesUsbToUart;
-      xSemaphoreGive(statsMutex);
-    }
-    return String(value);
+    unsigned long total = 0;
+    enterStatsCritical();
+    total = uartStats.bytesUartToUsb + uartStats.bytesUsbToUart;
+    exitStatsCritical();
+    return String(total);
   }
   
   // FIXED: Protected access to lastActivityTime with proper "Never" handling
   if (var == "LAST_ACTIVITY") {
-    if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-      if (uartStats.lastActivityTime == 0) {
-        xSemaphoreGive(statsMutex);
-        return String("Never");
-      } else {
-        unsigned long secondsAgo = (millis() - uartStats.lastActivityTime) / 1000;
-        xSemaphoreGive(statsMutex);
-        return String(secondsAgo);
-      }
+    unsigned long lastActivity;
+    enterStatsCritical();
+    lastActivity = uartStats.lastActivityTime;
+    exitStatsCritical();
+    
+    if (lastActivity == 0) {
+      return String("Never");
+    } else {
+      unsigned long secondsAgo = (millis() - lastActivity) / 1000;
+      return String(secondsAgo);
     }
-    return String("Never");  // Fallback if mutex timeout
   }
   
   if (var == "DEBUG_MODE") {
@@ -106,42 +102,34 @@ String mainPageProcessor(const String& var) {
   return String(); // Return empty string if variable not found
 }
 
-// Handle status request
+// Handle status request with critical sections
 void handleStatus() {
   WebServer* server = getWebServer();
   if (!server) return;
   
-  // Return JSON with current statistics (thread-safe)
-  String json = "{";
+  StaticJsonDocument<512> doc;
   
-  // Get statistics with mutex protection
-  if (xSemaphoreTake(statsMutex, 100) == pdTRUE) {
-    json += "\"freeRam\":" + String(ESP.getFreeHeap()) + ",";
-    json += "\"uptime\":" + String((millis() - uartStats.deviceStartTime) / 1000) + ",";
-    json += "\"uartToUsb\":" + String(uartStats.bytesUartToUsb) + ",";
-    json += "\"usbToUart\":" + String(uartStats.bytesUsbToUart) + ",";
-    json += "\"totalTraffic\":" + String(uartStats.bytesUartToUsb + uartStats.bytesUsbToUart) + ",";
-    
-    // FIXED: Handle "Never" case in JSON response
-    if (uartStats.lastActivityTime == 0) {
-      json += "\"lastActivity\":\"Never\"";
-    } else {
-      json += "\"lastActivity\":" + String((millis() - uartStats.lastActivityTime) / 1000);
-    }
-    
-    xSemaphoreGive(statsMutex);
+  // Copy all statistics in one critical section
+  UartStats localStats;
+  enterStatsCritical();
+  localStats = uartStats;
+  exitStatsCritical();
+  
+  // Work with local copy
+  doc["freeRam"] = ESP.getFreeHeap();
+  doc["uptime"] = (millis() - localStats.deviceStartTime) / 1000;
+  doc["uartToUsb"] = localStats.bytesUartToUsb;
+  doc["usbToUart"] = localStats.bytesUsbToUart;
+  doc["totalTraffic"] = localStats.bytesUartToUsb + localStats.bytesUsbToUart;
+  
+  if (localStats.lastActivityTime == 0) {
+    doc["lastActivity"] = "Never";
   } else {
-    // Fallback if mutex timeout
-    json += "\"freeRam\":" + String(ESP.getFreeHeap()) + ",";
-    json += "\"uptime\":" + String((millis() / 1000)) + ",";
-    json += "\"uartToUsb\":0,";
-    json += "\"usbToUart\":0,";
-    json += "\"totalTraffic\":0,";
-    json += "\"lastActivity\":\"Never\"";
+    doc["lastActivity"] = (millis() - localStats.lastActivityTime) / 1000;
   }
   
-  json += "}";
-  
+  String json;
+  serializeJson(doc, json);
   server->send(200, "application/json", json);
 }
 
@@ -149,20 +137,20 @@ void handleStatus() {
 void handleLogs() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
-  // Return JSON with recent log entries
-  String json = "{\"logs\":[";
+ 
+  DynamicJsonDocument doc(8192);
+  JsonArray logs = doc.createNestedArray("logs");
   
   String logBuffer[LOG_DISPLAY_COUNT];
   int actualCount = 0;
   logging_get_recent_logs(logBuffer, LOG_DISPLAY_COUNT, &actualCount);
   
   for (int i = 0; i < actualCount; i++) {
-    if (i > 0) json += ",";
-    json += "\"" + logBuffer[i] + "\"";
+    logs.add(logBuffer[i]);
   }
   
-  json += "]}";
+  String json;
+  serializeJson(doc, json);
   server->send(200, "application/json", json);
 }
 
@@ -259,4 +247,22 @@ void handleResetStats() {
   logging_clear();
   
   server->send(200, "text/html", loadTemplate(HTML_RESET_SUCCESS));
+}
+
+// Handle crash log JSON request
+void handleCrashLogJson() {
+  WebServer* server = getWebServer();
+  if (!server) return;
+  
+  String json = crashlog_get_json();
+  server->send(200, "application/json", json);
+}
+
+// Handle clear crash log request
+void handleClearCrashLog() {
+  WebServer* server = getWebServer();
+  if (!server) return;
+  
+  crashlog_clear();
+  server->send(200, "application/json", "{\"status\":\"ok\"}");
 }

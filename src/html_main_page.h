@@ -3,6 +3,16 @@
 
 #include <Arduino.h>
 
+// Main page specific title
+const char HTML_MAIN_TITLE[] PROGMEM = R"rawliteral(
+<title>ESP32 UART Bridge</title>
+)rawliteral";
+
+// Main page heading
+const char HTML_MAIN_HEADING[] PROGMEM = R"rawliteral(
+<h1>🔗 ESP32 UART Bridge</h1>
+)rawliteral";
+
 // Quick connection guide with integrated USB warning
 const char HTML_QUICK_GUIDE[] PROGMEM = R"rawliteral(
 <div class="section" style="padding: 10px 15px;">
@@ -69,12 +79,60 @@ const char HTML_SYSTEM_LOGS[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
-// Combined settings form with SVG password toggle
+// Crash history section
+const char HTML_CRASH_HISTORY[] PROGMEM = R"rawliteral(
+<div class="section" style="padding: 10px 15px;">
+<h3 style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin: 10px 0;" onclick="toggleCrashLog()">
+  <span>💥 Crash History</span>
+  <span style="display: flex; align-items: center; gap: 10px;">
+    <span id="crashBadge" class="badge" style="background: #4CAF50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px; font-weight: bold; min-width: 20px; text-align: center;">0</span>
+    <span id="crashClear" onclick="event.stopPropagation(); clearCrashHistory();" title="Clear all crash history" style="cursor: pointer; display: none; opacity: 0.6; padding: 4px; transition: all 0.2s;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 3h10l-1 10H4L3 3z"></path>
+        <path d="M6 3V2a1 1 0 011-1h2a1 1 0 011 1v1"></path>
+        <path d="M2 3h12"></path>
+        <path d="M6 6v4M10 6v4"></path>
+      </svg>
+    </span>
+    <span id="crashArrow" style="user-select: none; font-size: 18px; transition: transform 0.3s;">▼</span>
+  </span>
+</h3>
+<div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;">
+  <div class="log-container" style="height: 150px;">
+    <table style="width: 100%; font-size: 12px;">
+      <thead>
+        <tr><th style="width: 10%;">#</th><th style="width: 25%;">Type</th><th style="width: 25%;">Uptime</th><th style="width: 20%;">Heap</th><th style="width: 20%;">Min</th></tr>
+      </thead>
+      <tbody id="crashTableBody">
+        <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<style>
+#crashClear:hover {
+  opacity: 1 !important;
+  transform: scale(1.1);
+}
+#crashClear:hover svg {
+  stroke: #f44336;
+}
+.badge.warning { background: #ff9800 !important; }
+.badge.danger { background: #f44336 !important; }
+.crash-panic { color: #d32f2f; font-weight: bold; }
+.crash-wdt { color: #f57c00; font-weight: bold; }
+.heap-critical { background: #fff3cd; }
+</style>
+)rawliteral";
+
+// Combined settings form with SVG password toggle - FIXED align-items
 const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
 <div class="section"><h3>Device Settings</h3>
 <form action="/save" method="POST">
 <h4>UART Configuration</h4>
-<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: end;">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
 <div><label for="baudrate">Baud Rate:</label>
 <select name="baudrate" id="baudrate" style="width: 100px;">
 <option value="4800">4800</option>
@@ -139,7 +197,7 @@ const char HTML_FIRMWARE_UPDATE[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
-// JavaScript with improved copy function and password toggle
+// JavaScript with improved copy function and password toggle - using safeFetch
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(
 <script>
 document.getElementById('baudrate').value = '%BAUDRATE%';
@@ -203,8 +261,114 @@ function copyLogs() {
   document.body.removeChild(textArea);
 }
 
+// Crash log functions
+function toggleCrashLog() {
+  var content = document.getElementById('crashContent');
+  var arrow = document.getElementById('crashArrow');
+  
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    arrow.style.transform = 'rotate(180deg)';
+    loadCrashLog();
+  } else {
+    content.style.display = 'none';
+    arrow.style.transform = 'rotate(0deg)';
+  }
+}
+
+function loadCrashLog() {
+  safeFetch('/crashlog_json', function(data) {
+    var tbody = document.getElementById('crashTableBody');
+    var badge = document.getElementById('crashBadge');
+    var clearBtn = document.getElementById('crashClear');
+    
+    // Update badge
+    var count = data.total || 0;
+    badge.textContent = count;
+    
+    // Update badge color
+    if (count === 0) {
+      badge.className = 'badge';
+      clearBtn.style.display = 'none';
+    } else if (count <= 5) {
+      badge.className = 'badge warning';
+      clearBtn.style.display = 'inline-flex';
+    } else {
+      badge.className = 'badge danger';
+      clearBtn.style.display = 'inline-flex';
+    }
+    
+    // Update table
+    if (data.entries && data.entries.length > 0) {
+      tbody.innerHTML = '';
+      data.entries.forEach(function(entry) {
+        var heapClass = entry.heap < 15000 ? ' class="heap-critical"' : '';
+        var typeClass = entry.reason === 'PANIC' ? 'crash-panic' : 'crash-wdt';
+        
+        var row = '<tr' + heapClass + '>' +
+          '<td>' + entry.num + '</td>' +
+          '<td class="' + typeClass + '">' + entry.reason + '</td>' +
+          '<td>' + formatUptime(entry.uptime) + '</td>' +
+          '<td>' + formatBytes(entry.heap) + '</td>' +
+          '<td>' + formatBytes(entry.min_heap) + '</td>' +
+          '</tr>';
+        tbody.innerHTML += row;
+      });
+    } else {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No crashes recorded</td></tr>';
+    }
+  });
+}
+
+function formatUptime(seconds) {
+  if (!seconds || seconds === 0) return '0s';
+  if (seconds < 60) return seconds + 's';
+  if (seconds < 3600) return Math.floor(seconds/60) + 'm';
+  return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0';
+  return Math.floor(bytes/1024) + 'KB';
+}
+
+function clearCrashHistory() {
+  if (confirm('Clear all crash history?\nThis action cannot be undone.')) {
+    safeFetch('/clear_crashlog', function() {
+      // Update UI
+      document.getElementById('crashBadge').textContent = '0';
+      document.getElementById('crashBadge').className = 'badge';
+      document.getElementById('crashClear').style.display = 'none';
+      
+      // Reload table if open
+      if (document.getElementById('crashContent').style.display !== 'none') {
+        loadCrashLog();
+      }
+    });
+  }
+}
+
+// Update crash count on page load
+safeFetch('/crashlog_json', function(data) {
+  var count = data.total || 0;
+  var badge = document.getElementById('crashBadge');
+  var clearBtn = document.getElementById('crashClear');
+  
+  badge.textContent = count;
+  if (count === 0) {
+    badge.className = 'badge';
+    clearBtn.style.display = 'none';
+  } else if (count <= 5) {
+    badge.className = 'badge warning';
+    clearBtn.style.display = 'inline-flex';
+  } else {
+    badge.className = 'badge danger';
+    clearBtn.style.display = 'inline-flex';
+  }
+});
+
 function updateStatus() {
-  fetch('/status').then(r => r.json()).then(data => {
+  safeFetch('/status', function(data) {
     document.getElementById('freeRam').textContent = data.freeRam + ' bytes';
     document.getElementById('uptime').textContent = data.uptime + ' seconds';
     document.getElementById('uartToUsb').textContent = data.uartToUsb + ' bytes';
@@ -221,7 +385,7 @@ function updateStatus() {
 }
 
 function updateLogs() {
-  fetch('/logs').then(r => r.json()).then(data => {
+  safeFetch('/logs', function(data) {
     const logContainer = document.getElementById('logEntries');
     logContainer.innerHTML = '';
     data.logs.forEach(log => {

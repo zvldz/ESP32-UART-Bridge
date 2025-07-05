@@ -1,14 +1,40 @@
 # TODO / Roadmap
 
-## Priority 1 - Core Stability
+## Priority 1 - Code Optimization & Diagnostics Refactoring
 
-- [ ] **Watchdog Timer Protection**
-  - Prevent system hang on Serial.write() blocking
-  - Critical for high-speed operations (921600+)
-  - Implement esp_task_wdt_add() for UART task
-  - Auto-recovery from stuck states
+- [ ] **UART Performance Optimization & Diagnostics System**
+  - Implement configurable diagnostics levels (compile-time flag vs web interface option)
+  - Optimize UART task for production use while maintaining debugging capabilities
+  - Balance between minimal overhead and useful diagnostics
+  - Consider web-configurable diagnostic levels instead of compile flags
+  - Profile and optimize critical data path for high-speed operation
+
+- [ ] **Code Refactoring & Size Reduction**
+  - Reduce size of main.cpp, uartbridge.cpp, and html_main_page.h
+  - Consider splitting into logical modules vs combining small related files
+  - Extract button handling logic from main.cpp
+  - Separate JavaScript from HTML templates
+  - Clean up redundant code and optimize memory usage
+
+- [ ] **Button Handler Module**
+  - Extract button logic from main.cpp (~100 lines)
+  - Support for additional patterns:
+    - Double-click actions
+    - Different hold durations
+    - Combination patterns
+
+- [ ] **Code Cleanup - Old TODOs**
+  - Search for TODO comments previously located in defines.h
+  - Review and address or remove outdated TODO items
+  - Consolidate all TODOs in this file
 
 ## Priority 2 - Enhanced Features
+
+- [ ] **High-Speed UART Optimization** *(For 921600+ baud rates)*
+  - Increase adaptive buffer size to 512 bytes
+  - Consider DMA implementation (requires ESP-IDF)
+  - Profile and optimize critical path
+  - Note: Current implementation works well up to 460800 baud
 
 - [ ] **WiFi Mode Management**
   - "Persistent WiFi mode" checkbox in web interface
@@ -54,4 +80,5 @@
 
 - [ ] **Dark Theme for Web Interface**
   - Toggle button in web interface
-  - Store preference
+  - Store preference in config.json
+  - CSS variables for easy theme switching

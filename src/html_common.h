@@ -6,10 +6,9 @@
 // Template processor function type
 typedef String (*TemplateProcessor)(const String& var);
 
-// Common HTML elements used by all pages
-const char HTML_HEADER[] PROGMEM = R"rawliteral(
+// Base HTML header without title
+const char HTML_DOCTYPE_META[] PROGMEM = R"rawliteral(
 <!DOCTYPE html><html><head>
-<title>ESP32 UART Bridge</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
@@ -48,10 +47,29 @@ pre { background-color: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: 
 </style>
 )rawliteral";
 
-const char HTML_BODY_START[] PROGMEM = R"rawliteral(
+// Generic body container without page-specific heading
+const char HTML_BODY_CONTAINER[] PROGMEM = R"rawliteral(
 </head><body>
 <div class="container">
-<h1>🔗 ESP32 UART Bridge</h1>
+)rawliteral";
+
+// Common JavaScript utilities
+const char HTML_COMMON_JS[] PROGMEM = R"rawliteral(
+<script>
+// Safe fetch with error handling
+function safeFetch(url, callback, errorCallback) {
+  fetch(url)
+    .then(r => {
+      if (!r.ok) throw new Error('Network response was not ok');
+      return r.json();
+    })
+    .then(callback)
+    .catch(err => {
+      console.error('Fetch error:', err);
+      if (errorCallback) errorCallback(err);
+    });
+}
+</script>
 )rawliteral";
 
 const char HTML_FOOTER[] PROGMEM = R"rawliteral(

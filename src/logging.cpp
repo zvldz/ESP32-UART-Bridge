@@ -25,10 +25,10 @@ void logging_init() {
   logCount = 0;
 }
 
-// Thread-safe logging implementation
+// Thread-safe logging implementation with non-blocking mutex
 void log_msg(String message) {
-  // Thread-safe logging
-  if (xSemaphoreTake(logMutex, portMAX_DELAY) == pdTRUE) {
+  // Thread-safe logging - non-blocking to prevent UART task stalls
+  if (xSemaphoreTake(logMutex, 0) == pdTRUE) {  // 0 = don't wait
     // Limit message length to prevent memory issues
     if (message.length() > 120) {
       message = message.substring(0, 120) + "...";
@@ -51,6 +51,7 @@ void log_msg(String message) {
     }
     xSemaphoreGive(logMutex);
   }
+  // If mutex is busy - skip this log to prevent blocking
   
   // Duplicate to Serial in debug mode (without timestamp)
   if (DEBUG_MODE == 1) {

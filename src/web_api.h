@@ -11,5 +11,7 @@ void handleStatus();
 void handleLogs();
 void handleSave();
 void handleResetStats();
+void handleCrashLogJson();
+void handleClearCrashLog();
 
 #endif // WEB_API_H

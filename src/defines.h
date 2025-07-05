@@ -3,7 +3,7 @@
 
 /*
 ===============================================================================
-                          ESP32 UART Bridge v2.1.0
+                          ESP32 UART Bridge
 ===============================================================================
 
 Universal UART to USB bridge with web configuration interface.
@@ -16,56 +16,6 @@ Hardware: ESP32-C3 SuperMini
 - GPIO9: BOOT button (triple-click for WiFi config)
 
 ===============================================================================
-                                TODO LIST
-===============================================================================
-
-PRIORITY 1 (Next tasks):
-- [ ] Consider adding watchdog timer for UART task protection
-      against Serial.write() blocking and mutex deadlocks
-
-PRIORITY 2 (Medium priority):
-- [ ] WiFi mode management - web interface settings:
-      * "Persistent WiFi mode" option
-      * Disable automatic WiFi timeout
-      * Manual WiFi on/off control
-- [ ] MAVLink protocol parsing mode (optional):
-      * Parse and forward complete MAVLink packets
-      * Only beneficial at speeds ≥ 460800 baud
-      * Potential performance gain up to 20%
-      * Not critical as high speeds are already fast
-- [ ] Configurable GPIO pins for other ESP32 boards:
-      * Web interface pin selection for TX/RX/CTS/RTS
-      * Support different ESP32 variants pin layouts
-      * Save pin configuration to config.json
-      * Required when expanding beyond ESP32-C3 SuperMini
-
-PRIORITY 3 (Future features):
-- [ ] Alternative data transmission modes for WiFi CONFIG mode:
-      * UDP forwarding - UART data over WiFi UDP packets
-      * TCP server mode - UART data over TCP connection
-      * WebSocket streaming for real-time data
-      * Allow UART bridge to work simultaneously with WiFi
-- [ ] Dark theme for web interface (store preference in config.json)
-- [ ] Button handler module - extract button logic when adding features like:
-      * Long press detection
-      * Double-click actions
-      * Button debouncing improvements
-      * Additional button patterns
-      (Currently ~100 lines in main.cpp, not worth extracting yet)
-- [ ] SBUS protocol support:
-      * SBUS input mode (RC receiver → USB)
-      * SBUS output mode (USB → RC servos)
-      * Simple implementation (inverted UART 100000 8E2)
-      * Popular in RC/drone applications
-      * Extends compatibility with flight controllers
-
-COMPLETED:
-- [x] Logging system with web buffer
-- [x] DEBUG modes (0=production, 1=debug only)
-- [x] Adaptive buffering for UART protocols
-- [x] Web interface with real-time statistics
-
-===============================================================================
 
 Note: Some features like Enhanced Flow Control diagnostics, UART error detection
 (overrun, framing, parity errors) cannot be implemented with Arduino framework
@@ -76,7 +26,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.1.0"
+#define DEVICE_VERSION "2.1.1"
 
 // Hardware pins
 #define BOOT_PIN 9          // BOOT button is on GPIO9
@@ -94,10 +44,19 @@ these features but is not justified for current requirements.
 
 // Logging system
 #define LOG_BUFFER_SIZE 100
-#define LOG_DISPLAY_COUNT 20
+#define LOG_DISPLAY_COUNT 50
 
 // UART buffering
 #define UART_BUFFER_SIZE 256
+
+// UART task statistics update interval
+#define UART_STATS_UPDATE_INTERVAL_MS 500  // How often UART task updates shared statistics
+
+// Crash logging
+#define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep
+#define CRASHLOG_FILE_PATH "/crashlog.json"  // Path to crash log file
+#define CRASHLOG_MIN_HEAP_WARNING 15000      // Show warning if heap < 15KB
+#define CRASHLOG_UPDATE_INTERVAL_MS 5000     // How often to update RTC variables
 
 // FreeRTOS priorities based on core count
 #ifdef CONFIG_FREERTOS_UNICORE

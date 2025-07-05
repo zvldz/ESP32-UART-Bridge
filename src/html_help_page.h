@@ -3,18 +3,13 @@
 
 #include <Arduino.h>
 
-// Help page specific header (reuses icon from common)
-const char HTML_HELP_HEADER[] PROGMEM = R"rawliteral(
-<!DOCTYPE html><html><head>
+// Help page specific title
+const char HTML_HELP_TITLE[] PROGMEM = R"rawliteral(
 <title>ESP32 UART Bridge - Connection Help</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta charset="UTF-8">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
 )rawliteral";
 
-const char HTML_HELP_BODY[] PROGMEM = R"rawliteral(
-</head><body>
-<div class="container">
+// Help page heading
+const char HTML_HELP_HEADING[] PROGMEM = R"rawliteral(
 <h1>🔗 ESP32 UART Bridge - Connection Help</h1>
 )rawliteral";
 
@@ -119,11 +114,54 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
 <tr><td>No WiFi config</td><td>Triple-click BOOT button, wait 30 seconds</td></tr>
 <tr><td>Blue LED always on</td><td>Device is in WiFi config mode - normal behavior</td></tr>
+<tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
+<tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
 </table>
+</div>
+
+<div class="section">
+<h3>🔘 Button Functions</h3>
+<div class="success">
+<strong>BOOT Button (GPIO9) Functions:</strong><br>
+• <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
+• <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
+• <strong>Hold during power-on:</strong> Enter firmware flashing mode<br>
+<br>
+<strong>WiFi Reset Procedure:</strong><br>
+1. Press and hold BOOT button for at least 5 seconds<br>
+2. Blue LED will blink rapidly 10 times to confirm<br>
+3. Device will restart with default WiFi settings<br>
+4. Connect to "ESP-Bridge" network with password "12345678"
+</div>
 </div>
 )rawliteral";
 
 const char HTML_HELP_BUTTONS[] PROGMEM = R"rawliteral(
+<div class="section">
+<h3>🔍 Crash Diagnostics</h3>
+<div class="success">
+<strong>The device automatically logs system crashes to help diagnose issues:</strong><br>
+<br>
+<strong>What is logged:</strong><br>
+• Reset reason (PANIC, TASK_WDT, etc.)<br>
+• Uptime before crash<br>
+• Free heap memory<br>
+• Minimum heap during session<br>
+<br>
+<strong>Viewing crash history:</strong><br>
+1. Go to the main configuration page<br>
+2. Look for "Crash History" section below System Logs<br>
+3. Click to expand and view last 10 crashes<br>
+4. Red badge shows total crash count<br>
+<br>
+<strong>Common crash patterns:</strong><br>
+• Crashes at similar uptime → Possible memory leak<br>
+• Low heap values → Out of memory<br>
+• TASK_WDT → Task blocked (often USB disconnect)<br>
+• PANIC → Software exception<br>
+</div>
+</div>
+
 <div class="section">
 <button onclick="window.close()">Close Help</button>
 <button onclick="location.href='/'">Back to Settings</button>
