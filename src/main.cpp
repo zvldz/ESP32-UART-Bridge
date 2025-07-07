@@ -242,8 +242,8 @@ void loop() {
       log_msg("Button held for 5 seconds - resetting WiFi to defaults");
       
       // Reset to default WiFi settings
-      config.ssid = "ESP-Bridge";
-      config.password = "12345678";
+      config.ssid = DEFAULT_AP_SSID;
+      config.password = DEFAULT_AP_PASSWORD;
       config_save(&config);
       
       // Visual feedback - rapid LED blinking
@@ -254,7 +254,7 @@ void loop() {
         delay(100);
       }
       
-      log_msg("WiFi reset to defaults: SSID=ESP-Bridge, Password=12345678");
+      log_msg("WiFi reset to defaults: SSID=" + String(DEFAULT_AP_SSID) + ", Password=" + String(DEFAULT_AP_PASSWORD));
       log_msg("Restarting...");
       delay(1000);
       ESP.restart();

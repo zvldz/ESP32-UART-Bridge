@@ -12,8 +12,8 @@ void config_init(Config* config) {
   config->parity = "none";
   config->stopbits = 1;
   config->flowcontrol = false;
-  config->ssid = "ESP-Bridge";
-  config->password = "12345678";
+  config->ssid = DEFAULT_AP_SSID;
+  config->password = DEFAULT_AP_PASSWORD;
   config->version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
 }
@@ -49,8 +49,8 @@ void config_load(Config* config) {
   
   // Load WiFi settings
   if (doc.containsKey("wifi")) {
-    config->ssid = doc["wifi"]["ssid"] | "ESP-Bridge";
-    config->password = doc["wifi"]["password"] | "12345678";
+    config->ssid = doc["wifi"]["ssid"] | DEFAULT_AP_SSID;
+    config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
   }
   
   // System settings like version and device_name are NOT loaded from file

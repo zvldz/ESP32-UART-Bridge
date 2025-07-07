@@ -42,6 +42,10 @@ these features but is not justified for current requirements.
 #define CLICK_TIMEOUT 3000  // 3 seconds between clicks
 #define WIFI_TIMEOUT 1200000  // 20 minutes in milliseconds
 
+// Default WiFi AP credentials
+#define DEFAULT_AP_SSID "ESP-Bridge"
+#define DEFAULT_AP_PASSWORD "12345678"
+
 // Logging system
 #define LOG_BUFFER_SIZE 100
 #define LOG_DISPLAY_COUNT 50
