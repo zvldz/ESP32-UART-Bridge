@@ -13,17 +13,16 @@ const char HTML_MAIN_HEADING[] PROGMEM = R"rawliteral(
 <h1>🔗 ESP32 UART Bridge</h1>
 )rawliteral";
 
-// Quick connection guide with integrated USB warning
+// Quick connection guide with updated USB note
 const char HTML_QUICK_GUIDE[] PROGMEM = R"rawliteral(
 <div class="section" style="padding: 10px 15px;">
 <h3 style="margin: 10px 0 5px 0;">📡 Quick Connection Guide</h3>
-<p style="margin: 5px 0;"><strong>UART Device → ESP32-C3:</strong> TX→GPIO4, RX→GPIO5, GND→GND</p>
-<p style="margin: 5px 0;"><strong>USB Host:</strong> USB cable to ESP32-C3 (for any USB application)</p>
-<div class="warning" style="font-size: 13px; margin: 10px 0 5px 0;">
-<strong>⚠️ USB Serial Connection:</strong><br>
-Closing serial terminal software or disconnecting from COM port will restart the ESP32-C3.<br>
-This is hardware behavior of ESP32-C3/S2/S3 chips with native USB.<br>
-To avoid restart: keep serial connection active during WiFi configuration.
+<p style="margin: 5px 0;"><strong>UART Device → ESP32-S3:</strong> TX→GPIO4, RX→GPIO5, GND→GND</p>
+<p style="margin: 5px 0;"><strong>USB Host:</strong> USB cable to ESP32-S3 (for any USB application)</p>
+<div class="status" style="font-size: 13px; margin: 10px 0 5px 0;">
+<strong>📌 USB Connection Note:</strong><br>
+ESP32-S3 uses native USB with improved stability and hot-plug support.<br>
+For best results during configuration, keep serial connection active.
 </div>
 <p style="margin: 5px 0;"><a href='/help' target='_blank'>📋 Detailed wiring diagram & troubleshooting</a></p>
 </div>

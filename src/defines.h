@@ -9,11 +9,11 @@
 Universal UART to USB bridge with web configuration interface.
 Optimized for drone autopilots (ArduPilot, PX4) but works with any UART protocol.
 
-Hardware: ESP32-C3 SuperMini
+Hardware: ESP32-S3-Zero
 - GPIO4: UART RX (connect to device TX)
 - GPIO5: UART TX (connect to device RX)
-- GPIO8: Blue LED (data activity indicator)
-- GPIO9: BOOT button (triple-click for WiFi config)
+- GPIO21: RGB LED (WS2812 - data activity indicator)
+- GPIO0: BOOT button (triple-click for WiFi config)
 
 ===============================================================================
 
@@ -29,13 +29,12 @@ these features but is not justified for current requirements.
 #define DEVICE_VERSION "2.1.1"
 
 // Hardware pins
-#define BOOT_PIN 9          // BOOT button is on GPIO9
+#define BOOT_PIN 0          // BOOT button is on GPIO0
 #define UART_RX_PIN 4
 #define UART_TX_PIN 5
-#define BLUE_LED_PIN 8      // Blue LED - controllable (data activity / WiFi status)
-#define RED_LED_PIN 2       // Red LED - always on when ESP32 is powered (not controllable)
-#define RTS_PIN 20          // Reserved for flow control
-#define CTS_PIN 21          // Reserved for flow control
+#define BLUE_LED_PIN 21     // WS2812 RGB LED on GPIO21 for S3-Zero
+#define RTS_PIN 6           // Reserved for flow control
+#define CTS_PIN 7           // Reserved for flow control
 
 // WiFi settings
 #define WIFI_ACTIVATION_CLICKS 3

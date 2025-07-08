@@ -37,32 +37,36 @@ const char HTML_HELP_PIN_TABLE[] PROGMEM = R"rawliteral(
 <div class="section">
 <h3>Pin Connections</h3>
 <table>
-<tr><th>ESP32-C3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
+<tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
 <tr><td>GPIO4</td><td>UART RX</td><td>Device TX (UART/TELEM)</td><td>✅ Yes</td></tr>
 <tr><td>GPIO5</td><td>UART TX</td><td>Device RX (UART/TELEM)</td><td>✅ Yes</td></tr>
 <tr><td>GND</td><td>Ground</td><td>Device GND</td><td>✅ Yes</td></tr>
-<tr><td>GPIO9</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
-<tr><td>GPIO8</td><td>Blue LED (controllable)</td><td>Built-in</td><td>✅ Yes</td></tr>
-<tr><td>GPIO2</td><td>Red LED (power)</td><td>Built-in (always on)</td><td>✅ Yes</td></tr>
-<tr><td>GPIO20</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
-<tr><td>GPIO21</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+<tr><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
+<tr><td>GPIO21</td><td>RGB LED</td><td>Built-in (WS2812)</td><td>✅ Yes</td></tr>
+<tr><td>GPIO6</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+<tr><td>GPIO7</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
 </table>
 </div>
 )rawliteral";
 
 const char HTML_HELP_LED_BEHAVIOR[] PROGMEM = R"rawliteral(
 <div class="section">
-<h3>💡 LED Behavior Guide</h3>
-<table>
-<tr><th>LED</th><th>Normal Mode</th><th>WiFi Config Mode</th><th>Notes</th></tr>
-<tr><td>Red LED (GPIO2)</td><td>Always ON</td><td>Always ON</td><td>Power indicator - not controllable</td></tr>
-<tr><td>Blue LED (GPIO8)</td><td>Flashes on data</td><td>Constantly ON</td><td>Controllable - shows activity/status</td></tr>
-</table>
+<h3>💡 LED Status Indicators</h3>
 <div class="success">
-<strong>Normal Mode:</strong> Blue LED flashes briefly (50ms) when data is transferred in either direction<br>
-<strong>WiFi Config Mode:</strong> Blue LED stays constantly ON while in configuration mode<br>
-<strong>Triple-click detection:</strong> Blue LED blinks rapidly to show click count
+<strong>The RGB LED (GPIO21) provides visual feedback:</strong><br>
+• <strong>Blue flashes</strong> - Data transfer activity<br>
+• <strong>Solid blue</strong> - WiFi configuration mode<br>
+• <strong>Rapid blue blinking</strong> - WiFi reset confirmation or click feedback<br>
+• <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
+• <strong>Off</strong> - Idle, no data transfer
 </div>
+<table>
+<tr><th>Mode</th><th>LED State</th><th>Description</th></tr>
+<tr><td>Normal Mode</td><td>Blue flashes</td><td>Brief flash (50ms) when data is transferred</td></tr>
+<tr><td>WiFi Config Mode</td><td>Solid blue</td><td>Constantly ON while in configuration mode</td></tr>
+<tr><td>Boot Sequence</td><td>Rainbow effect</td><td>Colorful startup animation for 1 second</td></tr>
+<tr><td>Triple-click</td><td>Blue blinks</td><td>Shows click count with rapid blinks</td></tr>
+</table>
 </div>
 )rawliteral";
 
@@ -90,8 +94,8 @@ const char HTML_HELP_SETUP_INSTRUCTIONS[] PROGMEM = R"rawliteral(
 <h3>Setup Instructions</h3>
 <div class="warning"><strong>⚠️ Important:</strong> Only connect signal wires and GND. Do not connect power between devices!</div>
 <div class="warning" style="background-color: #ffebee; border-left-color: #f44336;">
-<strong>⚡ Voltage Warning:</strong> ESP32-C3 GPIO pins support only 3.3V logic levels!<br>
-Connecting 5V devices directly WILL damage the ESP32-C3.<br>
+<strong>⚡ Voltage Warning:</strong> ESP32-S3 GPIO pins support only 3.3V logic levels!<br>
+Connecting 5V devices directly WILL damage the ESP32-S3.<br>
 For 5V devices, you MUST use a level shifter (e.g., TXS0108E).
 </div>
 <ol>
@@ -110,10 +114,10 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <tr><th>Problem</th><th>Solution</th></tr>
 <tr><td>No UART activity</td><td>Check TX/RX wiring, verify device UART settings</td></tr>
 <tr><td>Application can't connect</td><td>Check USB connection, try different baud rate</td></tr>
-<tr><td>Blue LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
+<tr><td>LED not flashing blue</td><td>No data activity - check connections and device settings</td></tr>
 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
-<tr><td>No WiFi config</td><td>Triple-click BOOT button, wait 30 seconds</td></tr>
-<tr><td>Blue LED always on</td><td>Device is in WiFi config mode - normal behavior</td></tr>
+<tr><td>No WiFi config</td><td>Triple-click BOOT button, wait for solid blue LED</td></tr>
+<tr><td>LED solid blue</td><td>Device is in WiFi config mode - normal behavior</td></tr>
 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
 </table>
@@ -122,14 +126,14 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <div class="section">
 <h3>🔘 Button Functions</h3>
 <div class="success">
-<strong>BOOT Button (GPIO9) Functions:</strong><br>
+<strong>BOOT Button (GPIO0) Functions:</strong><br>
 • <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
 • <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
-• <strong>Hold during power-on:</strong> Enter firmware flashing mode<br>
+• <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
 <br>
 <strong>WiFi Reset Procedure:</strong><br>
 1. Press and hold BOOT button for at least 5 seconds<br>
-2. Blue LED will blink rapidly 10 times to confirm<br>
+2. LED will flash blue rapidly 10 times to confirm<br>
 3. Device will restart with default WiFi settings<br>
 4. Connect to "ESP-Bridge" network with password "12345678"
 </div>

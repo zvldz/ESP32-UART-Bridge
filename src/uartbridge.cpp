@@ -50,6 +50,8 @@ void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats) {
 void uartBridgeTask(void* parameter) {
   // wait init
   vTaskDelay(pdMS_TO_TICKS(1000));
+
+  log_msg("UART task started on core " + String(xPortGetCoreID()));
   
   unsigned long localUartToUsb = 0;
   unsigned long localUsbToUart = 0;

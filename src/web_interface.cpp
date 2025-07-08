@@ -77,6 +77,7 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 
 // Web server task for FreeRTOS
 void webServerTask(void* parameter) {
+  log_msg("Web task started on core " + String(xPortGetCoreID()));
   while (1) {
     // Stack diagnostics in debug mode only
     if (DEBUG_MODE == 1) {

@@ -6,7 +6,7 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 
 [![Version](https://img.shields.io/badge/version-2.1.1-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-ESP32--C3-green)]()
+[![Platform](https://img.shields.io/badge/platform-ESP32--S3--Zero-green)]()
 
 ---
 
@@ -21,7 +21,7 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 - **Adaptive Buffer Management** - Intelligent packet boundary detection
 - **Configuration Without Drivers** - Web-based setup via WiFi
 - **Wide Compatibility** - Works with any UART-based device
-- **Visual Status Indicators** - Blue LED shows data activity and mode
+- **Visual Status Indicators** - RGB LED shows different modes
 - **Recovery Options** - Reset WiFi settings without reflashing
 - **Crash History Logging** - Automatic recording of system crashes with diagnostics
 
@@ -34,7 +34,7 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
    - Device RX → ESP32 GPIO5  
    - Device GND → ESP32 GND
    
-2. **Connect** ESP32-C3 to USB port
+2. **Connect** ESP32-S3 to USB port
 
 3. **Configure** (optional):
    - Triple-click BOOT button for WiFi configuration
@@ -51,7 +51,7 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 ### Accessing Configuration
 
 1. **Triple-click** the BOOT button (3 clicks within 3 seconds)
-2. Blue LED stays **ON** indicating WiFi Config Mode
+2. LED glows **blue continuously** indicating WiFi Config Mode
 3. Connect to WiFi network "ESP-Bridge" (password: 12345678)
 4. Web browser opens automatically via captive portal
 5. Configure settings and save
@@ -86,14 +86,23 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 
 | Button Action | Function | LED Feedback |
 |--------------|----------|--------------|
-| **Triple-click** | Enter WiFi configuration mode | Blue LED stays ON |
-| **Hold 5+ seconds** | Reset WiFi to factory defaults | Blue LED blinks rapidly 10 times |
-| **Hold during boot** | Enter firmware flashing mode | No LED activity |
+| **Triple-click** | Enter WiFi configuration mode | LED stays ON (blue) |
+| **Hold 5+ seconds** | Reset WiFi to factory defaults | LED blinks rapidly (blue) |
+| **Hold during boot** | Enter bootloader mode | Device enters flashing mode |
+
+### LED Status Indicators
+
+The RGB LED (GPIO21) provides visual feedback:
+- **Blue flashes** - Data transfer activity
+- **Solid blue** - WiFi configuration mode
+- **Rapid blue blinking** - WiFi reset confirmation
+- **Rainbow effect** - Boot sequence (1 second)
+- **Off** - Idle, no data transfer
 
 ### Forgot WiFi Password?
 
 1. **Press and hold** BOOT button for at least 5 seconds
-2. Blue LED will **blink rapidly** 10 times to confirm
+2. LED will **flash blue rapidly** 10 times to confirm
 3. Device will **restart automatically**
 4. Connect to default WiFi: **SSID "ESP-Bridge"**, **Password "12345678"**
 
@@ -101,12 +110,12 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 
 ## 📐 Hardware Connection
 
-### Pin Mapping (ESP32-C3 SuperMini)
+### Pin Mapping (ESP32-S3-Zero)
 
 <div align="center">
 <table>
 <tr>
-<td align="center" width="200"><strong>ESP32-C3</strong></td>
+<td align="center" width="200"><strong>ESP32-S3</strong></td>
 <td align="center" width="100">↔</td>
 <td align="center" width="200"><strong>UART Device</strong></td>
 </tr>
@@ -129,12 +138,12 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 <td colspan="3" align="center"><em>Optional Flow Control</em></td>
 </tr>
 <tr>
-<td align="right">GPIO20 (RTS) <strong>→</strong></td>
+<td align="right">GPIO6 (RTS) <strong>→</strong></td>
 <td align="center"></td>
 <td align="left"><strong>←</strong> CTS</td>
 </tr>
 <tr>
-<td align="right">GPIO21 (CTS) <strong>←</strong></td>
+<td align="right">GPIO7 (CTS) <strong>←</strong></td>
 <td align="center"></td>
 <td align="left"><strong>→</strong> RTS</td>
 </tr>
@@ -142,7 +151,7 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 </div>
 
 <div align="center">
-<strong>Built-in:</strong> GPIO8 (LED) • GPIO9 (BOOT Button)
+<strong>Built-in:</strong> GPIO21 (RGB LED) • GPIO0 (BOOT Button)
 </div>
 
 #### Pin Details
@@ -180,28 +189,28 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 <td><strong>Required</strong></td>
 </tr>
 <tr>
-<td><strong>GPIO20</strong></td>
+<td><strong>GPIO6</strong></td>
 <td>RTS</td>
 <td>Output</td>
 <td>Device CTS</td>
 <td><em>Optional flow control</em></td>
 </tr>
 <tr>
-<td><strong>GPIO21</strong></td>
+<td><strong>GPIO7</strong></td>
 <td>CTS</td>
 <td>Input</td>
 <td>Device RTS</td>
 <td><em>Optional flow control</em></td>
 </tr>
 <tr>
-<td><strong>GPIO8</strong></td>
-<td>Blue LED</td>
+<td><strong>GPIO21</strong></td>
+<td>RGB LED</td>
 <td>Output</td>
 <td><em>Built-in</em></td>
-<td>Status indicator</td>
+<td>WS2812 RGB status indicator</td>
 </tr>
 <tr>
-<td><strong>GPIO9</strong></td>
+<td><strong>GPIO0</strong></td>
 <td>BOOT Button</td>
 <td>Input</td>
 <td><em>Built-in</em></td>
@@ -212,20 +221,19 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 
 ### ⚡ Voltage Level Warning
 
-**ESP32-C3 GPIO pins support only 3.3V logic levels!**
+**ESP32-S3 GPIO pins support only 3.3V logic levels!**
 
 - ✅ **3.3V devices**: Direct connection
 - ❌ **5V devices**: REQUIRES level shifter (e.g., TXS0108E)
 - ⚠️ **Direct 5V connection WILL damage the ESP32!**
 
-### ⚠️ USB Connection Warning
+### ⚠️ USB Connection Note
 
-**ESP32-C3/S2/S3 Native USB Behavior:**
-- Device may restart when USB serial connection is closed
-- This is hardware behavior, not a bug
-- To avoid unexpected restarts:
-  - Keep serial terminal connected during configuration
-  - Or power ESP32 externally via 3.3V pins
+**ESP32-S3 Native USB Implementation:**
+- ESP32-S3 uses native USB with improved stability
+- USB connection handled automatically
+- Hot-plug support for development
+- For production use, external power via 3.3V pins recommended
 
 ---
 
@@ -236,8 +244,8 @@ Transform any UART connection into a modern USB interface - no drivers, no compl
 The bridge design prioritizes UART data transfer:
 
 - **UART Task** - Highest priority
-  - Currently optimized for ESP32-C3 (single core)
-  - Future versions will support Core 0 pinning on multi-core ESP32
+  - Optimized for ESP32-S3 (dual core)
+  - UART task runs on dedicated core for maximum performance
   - Minimal latency data forwarding
   - Non-blocking USB operations prevent hangs
   
@@ -257,7 +265,7 @@ The bridge design prioritizes UART data transfer:
 #### Normal Mode (Default)
 - Full-speed UART↔USB bridge
 - WiFi disabled for power efficiency
-- Blue LED flashes on data activity
+- LED flashes blue on data activity
 - Maximum performance, minimum latency
 
 #### Config Mode
@@ -305,11 +313,11 @@ This system works efficiently with:
 
 ### Required Configuration
 
-The project is configured for ESP32-C3 SuperMini in `platformio.ini`. No changes needed for standard setup.
+The project is configured for ESP32-S3-Zero in `platformio.ini`. No changes needed for standard setup.
 
 ### Build Output
 
-Firmware binary will be in `.pio/build/lolin_c3_mini/firmware.bin`
+Firmware binary will be in `.pio/build/esp32-s3-devkitc-1/firmware.bin`
 
 ---
 
@@ -344,8 +352,8 @@ See [TODO.md](TODO.md) for roadmap and planned features.
 ## 📦 Hardware Support
 
 ### Current Version
-- **Target Board**: ESP32-C3 SuperMini
-- **Fixed Pins**: TX=GPIO5, RX=GPIO4, RTS=GPIO20, CTS=GPIO21
+- **Target Board**: ESP32-S3-Zero
+- **Fixed Pins**: TX=GPIO5, RX=GPIO4, RTS=GPIO6, CTS=GPIO7
 - **USB**: Native USB CDC (no external chip needed)
 
 ### Future Support
