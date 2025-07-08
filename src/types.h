@@ -10,6 +10,20 @@ typedef enum {
   MODE_CONFIG
 } DeviceMode;
 
+// LED modes
+typedef enum {
+  LED_MODE_OFF,
+  LED_MODE_WIFI_ON,      // Constantly ON in WiFi config mode
+  LED_MODE_DATA_FLASH    // Flash on data activity in normal mode
+} LedMode;
+
+// USB operation modes - MOVED HERE, BEFORE Config!
+enum UsbMode {
+    USB_MODE_DEVICE = 0,
+    USB_MODE_HOST,
+    USB_MODE_AUTO
+};
+
 // Configuration structure
 typedef struct {
   // UART settings
@@ -26,6 +40,9 @@ typedef struct {
   // System info
   String version;
   String device_name;
+
+  // USB mode
+  UsbMode usb_mode = USB_MODE_DEVICE;  // Now UsbMode is already defined above
 } Config;
 
 // Traffic statistics
@@ -52,13 +69,6 @@ typedef struct {
   unsigned long lastDataLedTime;
   bool dataLedState;
 } LedState;
-
-// LED modes
-typedef enum {
-  LED_MODE_OFF,
-  LED_MODE_WIFI_ON,      // Constantly ON in WiFi config mode
-  LED_MODE_DATA_FLASH    // Flash on data activity in normal mode
-} LedMode;
 
 // Flow control detection results
 typedef struct {

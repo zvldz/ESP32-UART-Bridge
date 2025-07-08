@@ -1,6 +1,16 @@
 # TODO / Roadmap
 
-## Priority 1 - Code Optimization & Diagnostics Refactoring
+## Priority 1 - USB Host Mode Support
+
+- [ ] **USB Host Mode Support**
+  - Add USB Host mode for modem connection
+  - Device/Host/Auto mode selection
+  - Web interface for USB mode configuration
+  - Hybrid Arduino + ESP-IDF implementation
+  - Auto-detection of connected device type
+  - Minimal changes to existing UART bridge logic
+
+## Priority 2 - Code Optimization & Diagnostics Refactoring
 
 - [ ] **UART Performance Optimization & Diagnostics System**
   - Implement configurable diagnostics levels (compile-time flag vs web interface option)
@@ -28,7 +38,7 @@
   - Review and address or remove outdated TODO items
   - Consolidate all TODOs in this file
 
-## Priority 2 - Enhanced Features
+## Priority 3 - Enhanced Features
 
 - [ ] **High-Speed UART Optimization** *(For 921600+ baud rates)*
   - Increase adaptive buffer size to 512 bytes
@@ -53,10 +63,10 @@
   - Web interface for pin selection (TX/RX/CTS/RTS)
   - Support different ESP32 variants and development boards
   - Save pin configuration to config.json
-  - Required when expanding beyond ESP32-C3 SuperMini
+  - Required when expanding beyond ESP32-S3-Zero
   - Pin validation to prevent conflicts
 
-## Priority 3 - Future Features
+## Priority 4 - Future Features
 
 - [ ] **Alternative Data Transmission Modes**
   - **UDP Forwarding** - UART data over WiFi UDP packets

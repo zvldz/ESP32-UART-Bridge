@@ -319,12 +319,8 @@ void detectMode() {
   
   log_msg("Click count at startup: " + String(systemState.clickCount));
   
-  // Check if BOOT button is pressed during startup (flashing mode)
-  if (digitalRead(BOOT_PIN) == LOW) {
-    log_msg("BOOT button pressed - entering flashing mode");
-    currentMode = MODE_FLASHING;
-    return;
-  }
+  // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode
+  // and this code won't run at all.
   
   // Check for triple click (config mode)
   log_msg("Waiting for potential clicks...");
@@ -349,8 +345,25 @@ void initNormalMode() {
   // Initialize Serial for UART bridge ONLY in production mode
   if (DEBUG_MODE == 0) {
     Serial.begin(config.baudrate);
-    delay(1000); // wait esp init
-    log_msg("Serial USB initialized for UART bridge at " + String(config.baudrate) + " baud");
+    
+    // Increase RX buffer for better performance at high speeds
+    if (config.baudrate >= 115200) {
+      Serial.setRxBufferSize(1024);
+    }
+    
+    // Wait for USB connection (maximum 2 seconds)
+    unsigned long startTime = millis();
+    while (!Serial && (millis() - startTime < 2000)) {
+      delay(10);
+    }
+    
+    // Add stabilization delay only if USB is connected
+    if (Serial) {
+      delay(500);  // Allow time for USB enumeration to complete
+      log_msg("USB connected, serial ready at " + String(config.baudrate) + " baud");
+    } else {
+      log_msg("No USB detected, continuing without USB connection");
+    }
   }
   
   // Initialize UART bridge
@@ -396,8 +409,6 @@ void createMutexes() {
     }
     return;
   }
-  
-  // Note: statsMutex removed - now using critical sections via statsMux spinlock
 }
 
 void createTasks() {
