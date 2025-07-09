@@ -44,6 +44,7 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   
   // Start WiFi Access Point
   WiFi.mode(WIFI_AP);
+  WiFi.setTxPower(WIFI_POWER_5dBm);
   WiFi.softAP(config->ssid.c_str(), config->password.c_str());
   
   // Create DNS server for Captive Portal
@@ -78,6 +79,7 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 // Web server task for FreeRTOS
 void webServerTask(void* parameter) {
   log_msg("Web task started on core " + String(xPortGetCoreID()));
+  vTaskDelay(pdMS_TO_TICKS(1000));
   while (1) {
     // Stack diagnostics in debug mode only
     if (DEBUG_MODE == 1) {

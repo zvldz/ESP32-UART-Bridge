@@ -2,15 +2,19 @@
 #include "logging.h"
 #include "defines.h"
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
 
 // LED brightness configuration (0-255)
-static const uint8_t LED_BRIGHTNESS = 50;        // Normal brightness (20%)
+static const uint8_t LED_BRIGHTNESS = 25;        // Normal brightness (10%)
 static const uint8_t LED_BRIGHTNESS_DIM = 25;    // Dimmed for effects (10%)
 static const uint8_t LED_BRIGHTNESS_BRIGHT = 100; // Bright for alerts (40%)
 
-// WS2812 on ESP32-S3-Zero (GPIO21)
-static Adafruit_NeoPixel pixel(1, BLUE_LED_PIN, NEO_GRB + NEO_KHZ800);
+// FastLED configuration
+#define NUM_LEDS 1
+static CRGB leds[NUM_LEDS];
+
+// Mutex for thread-safe LED access
+static SemaphoreHandle_t ledMutex = NULL;
 
 // External LED state from main.cpp
 extern LedState ledState;
@@ -20,21 +24,34 @@ extern const int DEBUG_MODE;
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
 
-// Helper function to set WS2812 LED state
+// Helper function to set WS2812 LED state (thread-safe)
 static void setLED(bool on) {
-  if (on) {
-    pixel.setPixelColor(0, 0, 0, 255);  // Blue color (R=0, G=0, B=255)
-  } else {
-    pixel.setPixelColor(0, 0, 0, 0);     // Off
+  if (ledMutex == NULL) return;
+  
+  if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    if (on) {
+      leds[0] = CRGB::Blue;  // Blue color
+    } else {
+      leds[0] = CRGB::Black; // Off
+    }
+    FastLED.show();
+    xSemaphoreGive(ledMutex);
   }
-  pixel.show();
 }
 
 // Initialize LED
 void leds_init() {
-  // WS2812 initialization
-  pixel.begin();
-  pixel.setBrightness(LED_BRIGHTNESS);  // Use defined constant
+  // Create mutex first
+  ledMutex = xSemaphoreCreateMutex();
+  if (ledMutex == NULL) {
+    log_msg("ERROR: Failed to create LED mutex!");
+    return;
+  }
+  
+  // FastLED initialization
+  FastLED.addLeds<WS2812B, BLUE_LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(LED_BRIGHTNESS);
+  FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
   
   // Rainbow startup effect (1 second)
   log_msg("Starting rainbow effect...");
@@ -43,20 +60,18 @@ void leds_init() {
   // Complete 3 full rainbow cycles in 1 second
   for(int cycle = 0; cycle < 3; cycle++) {
     for(int i = 0; i < 360; i += 6) {  // 60 steps per cycle
-      // Calculate RGB values using phase-shifted sine waves
-      int r = (sin(i * 0.017453) * 127) + 128;          // 0° phase
-      int g = (sin((i + 120) * 0.017453) * 127) + 128;  // 120° phase
-      int b = (sin((i + 240) * 0.017453) * 127) + 128;  // 240° phase
-      
-      pixel.setPixelColor(0, r/5, g/5, b/5);  // Divided by 5 for dimmer effect
-      pixel.show();
+      if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        // Use FastLED's HSV for smooth rainbow
+        leds[0] = CHSV(map(i, 0, 360, 0, 255), 255, 255);
+        FastLED.show();
+        xSemaphoreGive(ledMutex);
+      }
       delay(5);  // ~5ms per step = ~300ms per cycle = ~1 second total
     }
   }
   
   // Turn off LED after rainbow effect
-  pixel.setPixelColor(0, 0, 0, 0);
-  pixel.show();
+  setLED(false);
   
   unsigned long effectDuration = millis() - startTime;
   log_msg("WS2812 RGB LED initialized on GPIO" + String(BLUE_LED_PIN) + 
@@ -103,29 +118,16 @@ void led_flash_activity() {
 
 // Update LED state - called from main loop
 void led_update() {
+  // Skip update in WiFi mode - LED already set once
+  if (currentMode == MODE_CONFIG) {
+    return;
+  }
+  
   // Turn off LED after data flash (only in normal mode)
   if (currentMode == MODE_NORMAL && ledState.dataLedState) {
     if (millis() - ledState.lastDataLedTime > 50) {  // 50ms flash duration
       setLED(false);  // LED OFF
       ledState.dataLedState = false;
-    }
-  }
-  
-  // WiFi Config Mode - keep LED constantly ON
-  if (currentMode == MODE_CONFIG) {
-    static unsigned long lastConfigUpdate = 0;
-    // Update every 100ms to ensure LED stays on (WS2812 might need refresh)
-    if (millis() - lastConfigUpdate > 100) {
-      setLED(true);  // LED ON
-      lastConfigUpdate = millis();
-    }
-    
-    if (DEBUG_MODE == 1) {
-      static unsigned long lastWifiDebug = 0;
-      if (millis() - lastWifiDebug > 10000) {
-        log_msg("WiFi Config Mode - LED constantly ON");
-        lastWifiDebug = millis();
-      }
     }
   }
 }
