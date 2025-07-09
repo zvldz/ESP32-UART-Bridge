@@ -12,7 +12,7 @@
 #include "crashlog.h"
 
 // Global constants
-const int DEBUG_MODE = 0;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
+const int DEBUG_MODE = 1;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
 
 // Global objects
 Config config;
@@ -58,6 +58,40 @@ void setup() {
     Serial.println("Set DEBUG_MODE to 0 for production use");
   }
   
+  ///////////////////
+    esp_reset_reason_t reason = esp_reset_reason();
+  
+  // ВСЕГДА выводим причину сброса, даже в production mode
+  Serial.begin(115200);
+  delay(100);
+  Serial.println("\n\n=== BOOT INFO ===");
+  Serial.print("Reset reason: ");
+  Serial.println(esp_reset_reason());
+  Serial.print("Reset reason text: ");
+  
+  switch(reason) {
+    case ESP_RST_UNKNOWN: Serial.println("UNKNOWN"); break;
+    case ESP_RST_POWERON: Serial.println("POWERON"); break;
+    case ESP_RST_SW: Serial.println("SW_RESET"); break;
+    case ESP_RST_PANIC: Serial.println("PANIC"); break;
+    case ESP_RST_INT_WDT: Serial.println("INT_WDT"); break;
+    case ESP_RST_TASK_WDT: Serial.println("TASK_WDT"); break;
+    case ESP_RST_WDT: Serial.println("WDT"); break;
+    case ESP_RST_DEEPSLEEP: Serial.println("DEEPSLEEP"); break;
+    case ESP_RST_BROWNOUT: Serial.println("BROWNOUT"); break;
+    case ESP_RST_SDIO: Serial.println("SDIO"); break;
+    default: Serial.println("Unknown code: " + String(reason)); break;
+  }
+  
+  // Проверка стека при panic
+  if (reason == ESP_RST_PANIC || reason == ESP_RST_INT_WDT || reason == ESP_RST_TASK_WDT) {
+    Serial.println("CRASH DETECTED!");
+  }
+
+
+
+  ///////////////////
+
   // Create mutexes for thread safety
   createMutexes();
   
@@ -440,14 +474,26 @@ void createTasks() {
   
   // Create web server task only in CONFIG mode with increased stack size
   if (currentMode == MODE_CONFIG) {
-    xTaskCreate(
-      webServerTask,         // Task function
-      "Web_Server_Task",     // Task name
-      16384,                 // Stack size (increased from 8192)
-      NULL,                  // Parameters
-      WEB_TASK_PRIORITY,     // Priority
-      &webServerTaskHandle   // Task handle
-    );
+    #ifdef CONFIG_FREERTOS_UNICORE
+      xTaskCreate(
+        webServerTask,         // Task function
+        "Web_Server_Task",     // Task name
+        16384,                 // Stack size (increased from 8192)
+        NULL,                  // Parameters
+        WEB_TASK_PRIORITY,     // Priority
+        &webServerTaskHandle   // Task handle
+      );
+    #else
+      xTaskCreatePinnedToCore(
+        webServerTask,         
+        "Web_Server_Task",     
+        32768,                 // Увеличьте стек для WiFi
+        NULL,                  
+        WEB_TASK_PRIORITY,     
+        &webServerTaskHandle,
+        1                      // Core 1 для WiFi!
+      );
+    #endif    
     
     log_msg("Web Server task created (priority " + String(WEB_TASK_PRIORITY) + ")");
   }
