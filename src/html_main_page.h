@@ -208,7 +208,7 @@ document.querySelector('input[name="flowcontrol"]').checked = %FLOWCONTROL%;
 function togglePassword() {
   var x = document.getElementById("password");
   var icon = document.getElementById("toggleIcon");
-  
+
   if (x.type === "password") {
     x.type = "text";
     // Eye with slash (hidden)
@@ -225,12 +225,12 @@ function copyLogs() {
   if (!logEntriesElement) {
     return;
   }
-  
+
   const logs = logEntriesElement.innerText || logEntriesElement.textContent || '';
   if (!logs || logs === 'Loading logs...') {
     return;
   }
-  
+
   // Create textarea for copy operation
   const textArea = document.createElement("textarea");
   textArea.value = logs;
@@ -238,17 +238,17 @@ function copyLogs() {
   textArea.style.left = "-999999px";
   document.body.appendChild(textArea);
   textArea.select();
-  
+
   try {
     document.execCommand('copy');
     // Visual feedback
     const icon = document.getElementById('copyBtn').querySelector('svg');
     const originalStroke = icon.getAttribute('stroke');
     const originalContent = icon.innerHTML;
-    
+
     icon.setAttribute('stroke', '#4CAF50');
     icon.innerHTML = '<polyline points="5 10 8 13 15 6"></polyline>';
-    
+
     setTimeout(function() {
       icon.setAttribute('stroke', originalStroke);
       icon.innerHTML = originalContent;
@@ -256,7 +256,7 @@ function copyLogs() {
   } catch (err) {
     console.error('Copy failed:', err);
   }
-  
+
   document.body.removeChild(textArea);
 }
 
@@ -264,7 +264,7 @@ function copyLogs() {
 function toggleCrashLog() {
   var content = document.getElementById('crashContent');
   var arrow = document.getElementById('crashArrow');
-  
+
   if (content.style.display === 'none') {
     content.style.display = 'block';
     arrow.style.transform = 'rotate(180deg)';
@@ -280,11 +280,11 @@ function loadCrashLog() {
     var tbody = document.getElementById('crashTableBody');
     var badge = document.getElementById('crashBadge');
     var clearBtn = document.getElementById('crashClear');
-    
+
     // Update badge
     var count = data.total || 0;
     badge.textContent = count;
-    
+
     // Update badge color
     if (count === 0) {
       badge.className = 'badge';
@@ -296,14 +296,14 @@ function loadCrashLog() {
       badge.className = 'badge danger';
       clearBtn.style.display = 'inline-flex';
     }
-    
+
     // Update table
     if (data.entries && data.entries.length > 0) {
       tbody.innerHTML = '';
       data.entries.forEach(function(entry) {
         var heapClass = entry.heap < 15000 ? ' class="heap-critical"' : '';
         var typeClass = entry.reason === 'PANIC' ? 'crash-panic' : 'crash-wdt';
-        
+
         var row = '<tr' + heapClass + '>' +
           '<td>' + entry.num + '</td>' +
           '<td class="' + typeClass + '">' + entry.reason + '</td>' +
@@ -338,7 +338,7 @@ function clearCrashHistory() {
       document.getElementById('crashBadge').textContent = '0';
       document.getElementById('crashBadge').className = 'badge';
       document.getElementById('crashClear').style.display = 'none';
-      
+
       // Reload table if open
       if (document.getElementById('crashContent').style.display !== 'none') {
         loadCrashLog();
@@ -352,7 +352,7 @@ safeFetch('/crashlog_json', function(data) {
   var count = data.total || 0;
   var badge = document.getElementById('crashBadge');
   var clearBtn = document.getElementById('crashClear');
-  
+
   badge.textContent = count;
   if (count === 0) {
     badge.className = 'badge';
@@ -373,7 +373,7 @@ function updateStatus() {
     document.getElementById('uartToUsb').textContent = data.uartToUsb + ' bytes';
     document.getElementById('usbToUart').textContent = data.usbToUart + ' bytes';
     document.getElementById('totalTraffic').textContent = data.totalTraffic + ' bytes';
-    
+
     // Handle both "Never" string and numeric seconds
     if (data.lastActivity === "Never") {
       document.getElementById('lastActivity').textContent = "Never";

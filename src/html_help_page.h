@@ -54,18 +54,21 @@ const char HTML_HELP_LED_BEHAVIOR[] PROGMEM = R"rawliteral(
 <h3>💡 LED Status Indicators</h3>
 <div class="success">
 <strong>The RGB LED (GPIO21) provides visual feedback:</strong><br>
-• <strong>Blue flashes</strong> - Data transfer activity<br>
-• <strong>Solid blue</strong> - WiFi configuration mode<br>
-• <strong>Rapid blue blinking</strong> - WiFi reset confirmation or click feedback<br>
-• <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
-• <strong>Off</strong> - Idle, no data transfer
+- <strong>Blue flashes</strong> - Data from device (UART RX)<br>
+- <strong>Green flashes</strong> - Data from computer (USB RX)<br>
+- <strong>Cyan flashes</strong> - Bidirectional data transfer<br>
+- <strong>Solid purple</strong> - WiFi configuration mode<br>
+- <strong>White blinks</strong> - Button click feedback (1-2 clicks)<br>
+- <strong>Purple rapid blinking</strong> - WiFi reset confirmation (5s hold)<br>
+- <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
+- <strong>Off</strong> - Idle, no data transfer
 </div>
 <table>
 <tr><th>Mode</th><th>LED State</th><th>Description</th></tr>
-<tr><td>Normal Mode</td><td>Blue flashes</td><td>Brief flash (50ms) when data is transferred</td></tr>
-<tr><td>WiFi Config Mode</td><td>Solid blue</td><td>Constantly ON while in configuration mode</td></tr>
+<tr><td>Normal Mode</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
+<tr><td>WiFi Config Mode</td><td>Solid purple</td><td>Constantly ON while in configuration mode</td></tr>
 <tr><td>Boot Sequence</td><td>Rainbow effect</td><td>Colorful startup animation for 1 second</td></tr>
-<tr><td>Triple-click</td><td>Blue blinks</td><td>Shows click count with rapid blinks</td></tr>
+<tr><td>Button clicks</td><td>White blinks</td><td>Shows click count (100ms per blink)</td></tr>
 </table>
 </div>
 )rawliteral";
@@ -114,10 +117,10 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <tr><th>Problem</th><th>Solution</th></tr>
 <tr><td>No UART activity</td><td>Check TX/RX wiring, verify device UART settings</td></tr>
 <tr><td>Application can't connect</td><td>Check USB connection, try different baud rate</td></tr>
-<tr><td>LED not flashing blue</td><td>No data activity - check connections and device settings</td></tr>
+<tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
-<tr><td>No WiFi config</td><td>Triple-click BOOT button, wait for solid blue LED</td></tr>
-<tr><td>LED solid blue</td><td>Device is in WiFi config mode - normal behavior</td></tr>
+<tr><td>No WiFi config</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
+<tr><td>LED solid purple</td><td>Device is in WiFi config mode - normal behavior</td></tr>
 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
 </table>
@@ -127,13 +130,13 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <h3>🔘 Button Functions</h3>
 <div class="success">
 <strong>BOOT Button (GPIO0) Functions:</strong><br>
-• <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
-• <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
-• <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
+- <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
+- <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
+- <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
 <br>
 <strong>WiFi Reset Procedure:</strong><br>
 1. Press and hold BOOT button for at least 5 seconds<br>
-2. LED will flash blue rapidly 10 times to confirm<br>
+2. LED will flash purple rapidly 10 times to confirm<br>
 3. Device will restart with default WiFi settings<br>
 4. Connect to "ESP-Bridge" network with password "12345678"
 </div>
@@ -147,10 +150,10 @@ const char HTML_HELP_BUTTONS[] PROGMEM = R"rawliteral(
 <strong>The device automatically logs system crashes to help diagnose issues:</strong><br>
 <br>
 <strong>What is logged:</strong><br>
-• Reset reason (PANIC, TASK_WDT, etc.)<br>
-• Uptime before crash<br>
-• Free heap memory<br>
-• Minimum heap during session<br>
+- Reset reason (PANIC, TASK_WDT, etc.)<br>
+- Uptime before crash<br>
+- Free heap memory<br>
+- Minimum heap during session<br>
 <br>
 <strong>Viewing crash history:</strong><br>
 1. Go to the main configuration page<br>
@@ -159,10 +162,10 @@ const char HTML_HELP_BUTTONS[] PROGMEM = R"rawliteral(
 4. Red badge shows total crash count<br>
 <br>
 <strong>Common crash patterns:</strong><br>
-• Crashes at similar uptime → Possible memory leak<br>
-• Low heap values → Out of memory<br>
-• TASK_WDT → Task blocked (often USB disconnect)<br>
-• PANIC → Software exception<br>
+- Crashes at similar uptime → Possible memory leak<br>
+- Low heap values → Out of memory<br>
+- TASK_WDT → Task blocked (often USB disconnect)<br>
+- PANIC → Software exception<br>
 </div>
 </div>
 
