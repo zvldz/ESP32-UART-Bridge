@@ -12,84 +12,84 @@ extern RTC_DATA_ATTR uint32_t g_min_heap;
 // Check reset reason and save crash if needed
 void crashlog_check_and_save() {
     esp_reset_reason_t reason = esp_reset_reason();
-    
+
     // Only log abnormal resets
-    if (reason == ESP_RST_PANIC || reason == ESP_RST_TASK_WDT || 
+    if (reason == ESP_RST_PANIC || reason == ESP_RST_TASK_WDT ||
         reason == ESP_RST_INT_WDT || reason == ESP_RST_WDT) {
-        
+
         log_msg("System recovered from crash: " + crashlog_get_reset_reason_string(reason));
-        
+
         // Check if file exists, create if not
         if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
             // Create empty structure
-            DynamicJsonDocument doc(256);
+            JsonDocument doc;
             doc["total"] = 0;
-            doc.createNestedArray("entries");
-            
+            doc["entries"].to<JsonArray>();
+
             File file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
             if (file) {
                 serializeJson(doc, file);
                 file.close();
             }
         }
-        
+
         // Read existing crash log
-        DynamicJsonDocument doc(2048);
+        JsonDocument doc;
         File file = LittleFS.open(CRASHLOG_FILE_PATH, "r");
-        
+
         if (file) {
             // Check file size protection
             if (file.size() > 4096) {
                 log_msg("Crashlog too large, truncating");
                 file.close();
                 LittleFS.remove(CRASHLOG_FILE_PATH);
-                
+
                 // Create new empty file
                 doc["total"] = 0;
-                doc.createNestedArray("entries");
+                doc["entries"].to<JsonArray>();
             } else {
                 DeserializationError error = deserializeJson(doc, file);
                 file.close();
-                
+
                 if (error) {
                     log_msg("Crashlog corrupted, reinitializing: " + String(error.c_str()));
                     LittleFS.remove(CRASHLOG_FILE_PATH);
-                    
+
                     // Create new structure
                     doc["total"] = 0;
-                    doc.createNestedArray("entries");
+                    doc["entries"].to<JsonArray>();
                 }
             }
         } else {
             // File doesn't exist, create structure
             doc["total"] = 0;
-            doc.createNestedArray("entries");
+            doc["entries"].to<JsonArray>();
         }
-        
+
         // Update crash count
         int totalCrashes = doc["total"] | 0;
         totalCrashes++;
         doc["total"] = totalCrashes;
-        
+
         // Add new crash entry
         JsonArray entries = doc["entries"];
         if (!entries) {
-            entries = doc.createNestedArray("entries");
+            entries = doc["entries"].to<JsonArray>();
         }
-        
+
         // Create new entry at the beginning
-        JsonObject newEntry = entries.createNestedObject();
+        JsonObject newEntry = entries.add<JsonObject>();
         newEntry["num"] = totalCrashes;
         newEntry["reason"] = crashlog_get_reset_reason_string(reason);
         newEntry["uptime"] = g_last_uptime;
         newEntry["heap"] = g_last_heap;
         newEntry["min_heap"] = g_min_heap;
-        
+
         // Keep only last CRASHLOG_MAX_ENTRIES
         while (entries.size() > CRASHLOG_MAX_ENTRIES) {
             entries.remove(entries.size() - 1);  // Remove oldest
         }
-        
+
         // Save updated log
         file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
         if (file) {
@@ -99,7 +99,7 @@ void crashlog_check_and_save() {
         } else {
             log_msg("ERROR: Cannot write crashlog file");
         }
-        
+
         // Reset min heap tracking for new session
         g_min_heap = 0xFFFFFFFF;
     } else {
@@ -113,22 +113,22 @@ String crashlog_get_json() {
     if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
         return "{\"total\":0,\"entries\":[]}";
     }
-    
+
     File file = LittleFS.open(CRASHLOG_FILE_PATH, "r");
     if (!file) {
         return "{\"total\":0,\"entries\":[]}";
     }
-    
+
     String json = file.readString();
     file.close();
-    
+
     // Validate it's valid JSON
-    DynamicJsonDocument doc(2048);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
         return "{\"total\":0,\"entries\":[]}";
     }
-    
+
     return json;
 }
 
@@ -138,12 +138,12 @@ void crashlog_clear() {
         LittleFS.remove(CRASHLOG_FILE_PATH);
         log_msg("Crash history cleared");
     }
-    
+
     // Create empty file
-    DynamicJsonDocument doc(256);
+    JsonDocument doc;
     doc["total"] = 0;
-    doc.createNestedArray("entries");
-    
+    doc["entries"].to<JsonArray>();
+
     File file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
     if (file) {
         serializeJson(doc, file);

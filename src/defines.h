@@ -29,10 +29,10 @@ these features but is not justified for current requirements.
 #define DEVICE_VERSION "2.1.1"
 
 // Hardware pins
-#define BOOT_PIN 0          // BOOT button is on GPIO0
+#define BOOT_BUTTON_PIN 0
 #define UART_RX_PIN 4
 #define UART_TX_PIN 5
-#define BLUE_LED_PIN 21     // WS2812 RGB LED on GPIO21 for S3-Zero
+#define LED_PIN1 21         // WS2812 RGB LED on GPIO21 for S3-Zero
 #define RTS_PIN 6           // Reserved for flow control
 #define CTS_PIN 7           // Reserved for flow control
 
@@ -55,6 +55,11 @@ these features but is not justified for current requirements.
 // UART task statistics update interval
 #define UART_STATS_UPDATE_INTERVAL_MS 500  // How often UART task updates shared statistics
 
+// LED timing constants
+#define LED_DATA_FLASH_MS      50    // Data activity flash duration
+#define LED_BUTTON_FLASH_MS    100   // Button click feedback duration
+#define LED_WIFI_RESET_BLINK_MS 100  // WiFi reset rapid blink interval
+
 // Crash logging
 #define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep
 #define CRASHLOG_FILE_PATH "/crashlog.json"  // Path to crash log file
@@ -64,7 +69,7 @@ these features but is not justified for current requirements.
 // FreeRTOS priorities based on core count
 #ifdef CONFIG_FREERTOS_UNICORE
     // Single core - UART below WiFi (WiFi typically at configMAX_PRIORITIES-2)
-    #define UART_TASK_PRIORITY (configMAX_PRIORITIES - 3)  
+    #define UART_TASK_PRIORITY (configMAX_PRIORITIES - 3)
     #define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 20)
 #else
     // Multi core - UART highest priority

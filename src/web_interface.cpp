@@ -23,6 +23,10 @@
 #include "html_main_page.h"
 #include "html_help_page.h"
 
+#include "freertos/semphr.h"
+
+SemaphoreHandle_t webServerReadySemaphore = nullptr;
+
 // External objects from main.cpp
 extern Config config;
 extern UartStats uartStats;
@@ -35,29 +39,53 @@ extern Preferences preferences;
 WebServer* server = nullptr;
 DNSServer* dnsServer = nullptr;
 
+// Indicates whether the web server was successfully started
+static bool webServerInitialized = false;
+
 // Initialize web server in CONFIG mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   log_msg("Starting WiFi Configuration Mode");
-  
+
+  // Always disable USB CDC before Wi-Fi initialization to avoid conflicts
+  Serial.flush();
+  Serial.end();
+  vTaskDelay(pdMS_TO_TICKS(100));
+
   state->wifiAPActive = true;
   state->wifiStartTime = millis();
-  
+
   // Start WiFi Access Point
   WiFi.mode(WIFI_AP);
-  WiFi.setTxPower(WIFI_POWER_5dBm);
+  WiFi.setTxPower(WIFI_POWER_11dBm);
+
+  // Set static IP for AP mode to avoid DHCP race conditions
+  IPAddress apIP(192, 168, 4, 1);
+  IPAddress gateway(192, 168, 4, 1);
+  IPAddress subnet(255, 255, 255, 0);
+
+  WiFi.softAPConfig(apIP, gateway, subnet);
   WiFi.softAP(config->ssid.c_str(), config->password.c_str());
-  
+
   // Create DNS server for Captive Portal
   dnsServer = new DNSServer();
   dnsServer->start(53, "*", WiFi.softAPIP());
-  
+
   log_msg("WiFi AP started: " + config->ssid);
   log_msg("IP address: " + WiFi.softAPIP().toString());
   log_msg("Captive Portal DNS server started");
-  
+
+  // Re-enable USB CDC after Wi-Fi is active
+  if (DEBUG_MODE == 1) {
+    Serial.begin(115200);  // Debug mode fixed rate
+  } else {
+    Serial.begin(config->baudrate);  // Configured bridge rate
+  }
+  vTaskDelay(pdMS_TO_TICKS(100));
+  log_msg("Serial USB reinitialized in config mode");
+
   // Create web server
   server = new WebServer(80);
-  
+
   // Setup web server routes
   server->on("/", handleRoot);
   server->on("/save", HTTP_POST, handleSave);
@@ -71,13 +99,26 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/clear_crashlog", handleClearCrashLog);
   server->onNotFound(handleNotFound);
   server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
-  
+
   server->begin();
   log_msg("Web server started on port 80");
+  webServerInitialized = true;
+
+  // Signal that the web server is initialized
+  if (!webServerReadySemaphore) {
+    webServerReadySemaphore = xSemaphoreCreateBinary();
+  }
+  xSemaphoreGive(webServerReadySemaphore);
 }
 
 // Web server task for FreeRTOS
 void webServerTask(void* parameter) {
+  // Wait for Web Server initialization to complete
+  log_msg("Waiting for web server initialization...");
+  if (webServerReadySemaphore) {
+    xSemaphoreTake(webServerReadySemaphore, portMAX_DELAY);
+  }
+
   log_msg("Web task started on core " + String(xPortGetCoreID()));
   vTaskDelay(pdMS_TO_TICKS(1000));
   while (1) {
@@ -86,21 +127,24 @@ void webServerTask(void* parameter) {
       static unsigned long lastDiagnostic = 0;
       if (millis() - lastDiagnostic > 5000) {  // Every 5 seconds
         UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-        log_msg("Web task: Stack free=" + String(stackFree * 4) + 
-                " bytes, Heap free=" + String(ESP.getFreeHeap()) + 
+        log_msg("Web task: Stack free=" + String(stackFree * 4) +
+                " bytes, Heap free=" + String(ESP.getFreeHeap()) +
                 " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes");
         lastDiagnostic = millis();
       }
     }
-    
-    if (server != nullptr) {
+
+    if (server && !webServerInitialized) {
+      log_msg("Warning: server not started");
+    } else if (server) {
       server->handleClient();
-      vTaskDelay(pdMS_TO_TICKS(5)); // Give other tasks a chance
     }
-    if (dnsServer != nullptr) {
+    vTaskDelay(pdMS_TO_TICKS(5)); // Give other tasks a chance
+
+    if (dnsServer) {
       dnsServer->processNextRequest();
     }
-    
+
     // Check for WiFi timeout
     if (checkWiFiTimeout()) {
       log_msg("WiFi timeout - switching to normal mode");
@@ -134,7 +178,7 @@ bool checkWiFiTimeout() {
 // Handle root page
 void handleRoot() {
   String html;
-  
+
   // Build page using new structure
   html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
   html += loadTemplate(HTML_MAIN_TITLE);      // Page-specific title
@@ -143,47 +187,47 @@ void handleRoot() {
   html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
   html += loadTemplate(HTML_MAIN_HEADING);    // Page heading
   html += loadTemplate(HTML_QUICK_GUIDE);
-  
+
   // System Status section
   html += loadTemplate(HTML_SYSTEM_STATUS_START);
-  
+
   // Group 1: System Information
   html += processTemplate(loadTemplate(HTML_SYSTEM_INFO_TABLE), mainPageProcessor);
-  
-  // Group 2: Traffic Volume  
+
+  // Group 2: Traffic Volume
   html += processTemplate(loadTemplate(HTML_TRAFFIC_STATS), mainPageProcessor);
-  
+
   // System Logs section
   html += processTemplate(loadTemplate(HTML_SYSTEM_LOGS), mainPageProcessor);
-  
+
   // Crash History section
   html += loadTemplate(HTML_CRASH_HISTORY);
-  
+
   // Combined Device Settings section
   html += processTemplate(loadTemplate(HTML_DEVICE_SETTINGS), mainPageProcessor);
-  
+
   // Firmware Update section
   html += loadTemplate(HTML_FIRMWARE_UPDATE);
-  
+
   // JavaScript to set current values and auto-refresh
   html += processTemplate(loadTemplate(HTML_JAVASCRIPT), mainPageProcessor);
-  
+
   html += loadTemplate(HTML_FOOTER);
-  
+
   server->send(200, "text/html", html);
 }
 
 // Handle help page
 void handleHelp() {
   String html;
-  
+
   // Build page using new structure
   html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
   html += loadTemplate(HTML_HELP_TITLE);      // Page-specific title
-  html += loadTemplate(HTML_STYLES);          // Common styles  
+  html += loadTemplate(HTML_STYLES);          // Common styles
   html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
   html += loadTemplate(HTML_HELP_HEADING);    // Page heading
-  
+
   // Add all help sections from templates
   html += loadTemplate(HTML_HELP_PROTOCOL_INFO);
   html += loadTemplate(HTML_HELP_PIN_TABLE);
@@ -191,10 +235,10 @@ void handleHelp() {
   html += loadTemplate(HTML_HELP_CONNECTION_GUIDE);
   html += loadTemplate(HTML_HELP_SETUP_INSTRUCTIONS);
   html += loadTemplate(HTML_HELP_TROUBLESHOOTING);
-  
+
   html += loadTemplate(HTML_HELP_BUTTONS);
   html += loadTemplate(HTML_FOOTER);
-  
+
   server->send(200, "text/html", html);
 }
 
@@ -213,7 +257,7 @@ void handleNotFound() {
 void handleReboot() {
   log_msg("Device reboot requested via web interface");
   server->send(200, "text/html", "<h1>Rebooting...</h1>");
-  delay(1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
   ESP.restart();
 }
 

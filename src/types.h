@@ -6,7 +6,6 @@
 // Device modes
 typedef enum {
   MODE_NORMAL,
-  MODE_FLASHING,
   MODE_CONFIG
 } DeviceMode;
 
@@ -17,7 +16,7 @@ typedef enum {
   LED_MODE_DATA_FLASH    // Flash on data activity in normal mode
 } LedMode;
 
-// USB operation modes - MOVED HERE, BEFORE Config!
+// USB operation modes
 enum UsbMode {
     USB_MODE_DEVICE = 0,
     USB_MODE_HOST,
@@ -32,17 +31,17 @@ typedef struct {
   String parity;     // "none", "even", "odd"
   uint8_t stopbits;
   bool flowcontrol;
-  
+
   // WiFi settings
   String ssid;
   String password;
-  
+
   // System info
   String version;
   String device_name;
 
   // USB mode
-  UsbMode usb_mode = USB_MODE_DEVICE;  // Now UsbMode is already defined above
+  UsbMode usb_mode = USB_MODE_DEVICE;
 } Config;
 
 // Traffic statistics
@@ -63,12 +62,6 @@ typedef struct {
   volatile bool buttonPressed;
   volatile unsigned long buttonPressTime;
 } SystemState;
-
-// LED state
-typedef struct {
-  unsigned long lastDataLedTime;
-  bool dataLedState;
-} LedState;
 
 // Flow control detection results
 typedef struct {

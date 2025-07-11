@@ -6,8 +6,6 @@
 
 // LED brightness configuration (0-255)
 static const uint8_t LED_BRIGHTNESS = 25;        // Normal brightness (10%)
-static const uint8_t LED_BRIGHTNESS_DIM = 25;    // Dimmed for effects (10%)
-static const uint8_t LED_BRIGHTNESS_BRIGHT = 100; // Bright for alerts (40%)
 
 // FastLED configuration
 #define NUM_LEDS 1
@@ -16,25 +14,45 @@ static CRGB leds[NUM_LEDS];
 // Mutex for thread-safe LED access
 static SemaphoreHandle_t ledMutex = NULL;
 
-// External LED state from main.cpp
-extern LedState ledState;
+// External objects from main.cpp
 extern DeviceMode currentMode;
 extern const int DEBUG_MODE;
 
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
 
-// Helper function to set WS2812 LED state (thread-safe)
+// LED state tracking
+static volatile bool ledUpdateNeeded = false;
+static volatile uint32_t pendingColorValue = 0;  // Store as uint32_t instead of CRGB
+static volatile unsigned long ledOffTime = 0;
+static volatile bool ledIsOn = false;
+static volatile ActivityType lastActivity = ACTIVITY_NONE;
+
+// Activity counters
+static volatile uint32_t uartRxCounter = 0;
+static volatile uint32_t usbRxCounter = 0;
+
+// Rapid blink state
+static volatile bool rapidBlinkActive = false;
+static volatile int rapidBlinkCount = 0;
+static volatile int rapidBlinkDelay = 0;
+static volatile unsigned long rapidBlinkNextTime = 0;
+static volatile bool rapidBlinkState = false;
+static volatile uint32_t rapidBlinkColorValue = CRGB::Purple;  // Store as uint32_t
+
+// Button feedback state
+static volatile bool buttonBlinkActive = false;
+static volatile int buttonBlinkCount = 0;
+static volatile unsigned long buttonBlinkNextTime = 0;
+static volatile bool buttonBlinkState = false;
+
+// Helper function to set LED state (thread-safe)
 static void setLED(bool on) {
   if (ledMutex == NULL) return;
-  
+
   if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-    if (on) {
-      leds[0] = CRGB::Blue;  // Blue color
-    } else {
-      leds[0] = CRGB::Black; // Off
-    }
-    FastLED.show();
+    pendingColorValue = on ? (uint32_t)CRGB::Blue : (uint32_t)CRGB::Black;
+    ledUpdateNeeded = true;
     xSemaphoreGive(ledMutex);
   }
 }
@@ -47,16 +65,16 @@ void leds_init() {
     log_msg("ERROR: Failed to create LED mutex!");
     return;
   }
-  
+
   // FastLED initialization
-  FastLED.addLeds<WS2812B, BLUE_LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(LED_BRIGHTNESS);
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
-  
-  // Rainbow startup effect (1 second)
+
+  // Rainbow startup effect
   log_msg("Starting rainbow effect...");
   unsigned long startTime = millis();
-  
+
   // Complete 3 full rainbow cycles in 1 second
   for(int cycle = 0; cycle < 3; cycle++) {
     for(int i = 0; i < 360; i += 6) {  // 60 steps per cycle
@@ -66,107 +84,243 @@ void leds_init() {
         FastLED.show();
         xSemaphoreGive(ledMutex);
       }
-      delay(5);  // ~5ms per step = ~300ms per cycle = ~1 second total
+      vTaskDelay(pdMS_TO_TICKS(5));  // ~5ms per step = ~300ms per cycle = ~1 second total
     }
   }
-  
+
   // Turn off LED after rainbow effect
-  setLED(false);
-  
+  if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    leds[0] = CRGB::Black;
+    FastLED.show();
+    xSemaphoreGive(ledMutex);
+  }
+
   unsigned long effectDuration = millis() - startTime;
-  log_msg("WS2812 RGB LED initialized on GPIO" + String(BLUE_LED_PIN) + 
+  log_msg("WS2812 RGB LED initialized on GPIO" + String(LED_PIN1) +
           " (rainbow effect took " + String(effectDuration) + "ms)");
 }
 
 // Set LED mode
 void led_set_mode(LedMode mode) {
   currentLedMode = mode;
-  
+
   switch (mode) {
     case LED_MODE_OFF:
-      setLED(false);  // LED OFF
-      break;
-      
-    case LED_MODE_WIFI_ON:
-      // Force LED ON for WiFi config mode
-      setLED(true);   // LED ON
-      log_msg("LED forced ON for WiFi config mode");
-      break;
-      
-    case LED_MODE_DATA_FLASH:
-      // Will be handled by led_update()
-      break;
-  }
-}
-
-// Flash LED for data activity (only in normal mode)
-void led_flash_activity() {
-  if (currentMode == MODE_NORMAL) {
-    setLED(true);  // LED ON
-    ledState.lastDataLedTime = millis();
-    ledState.dataLedState = true;
-    
-    if (DEBUG_MODE == 1) {
-      static unsigned long lastDataDebug = 0;
-      if (millis() - lastDataDebug > 1000) {  // Debug every second to avoid spam
-        log_msg("Data activity - LED flash");
-        lastDataDebug = millis();
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        pendingColorValue = (uint32_t)CRGB::Black;
+        ledUpdateNeeded = true;
+        xSemaphoreGive(ledMutex);
       }
+      break;
+
+    case LED_MODE_WIFI_ON:
+      // Force LED ON for WiFi config mode - purple
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        pendingColorValue = (uint32_t)CRGB::Purple;
+        ledUpdateNeeded = true;
+        xSemaphoreGive(ledMutex);
+      }
+      log_msg("LED forced ON (purple) for WiFi config mode");
+      break;
+
+    case LED_MODE_DATA_FLASH:
+      // Will be handled by activity notifications
+      break;
+  }
+}
+
+// Notify functions for UART task
+void led_notify_uart_rx() {
+  uartRxCounter = uartRxCounter + 1;
+}
+
+void led_notify_usb_rx() {
+  usbRxCounter = usbRxCounter + 1;
+}
+
+// Flash LED for data activity
+static void led_flash_activity(ActivityType activity) {
+  if (currentMode == MODE_NORMAL && ledMutex != NULL) {
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+      unsigned long now = millis();
+
+      // Check if LED is still on from previous activity
+      if (ledOffTime > now && ledIsOn && activity != lastActivity) {
+        // Different activity while LED is on - mix colors
+        pendingColorValue = (uint32_t)CRGB::Cyan;
+        lastActivity = ACTIVITY_BOTH;
+      } else {
+        // Single activity or LED is off
+        switch(activity) {
+          case ACTIVITY_UART_RX:
+            pendingColorValue = (uint32_t)CRGB::Blue;
+            break;
+          case ACTIVITY_USB_RX:
+            pendingColorValue = (uint32_t)CRGB::Green;
+            break;
+          case ACTIVITY_BOTH:
+            pendingColorValue = (uint32_t)CRGB::Cyan;
+            break;
+          default:
+            pendingColorValue = (uint32_t)CRGB::Black;
+            break;
+        }
+        lastActivity = activity;
+      }
+
+      ledUpdateNeeded = true;
+      ledIsOn = true;
+      ledOffTime = now + LED_DATA_FLASH_MS;
+
+      xSemaphoreGive(ledMutex);
     }
   }
 }
 
-// Update LED state - called from main loop
-void led_update() {
-  // Skip update in WiFi mode - LED already set once
-  if (currentMode == MODE_CONFIG) {
-    return;
-  }
-  
-  // Turn off LED after data flash (only in normal mode)
-  if (currentMode == MODE_NORMAL && ledState.dataLedState) {
-    if (millis() - ledState.lastDataLedTime > 50) {  // 50ms flash duration
-      setLED(false);  // LED OFF
-      ledState.dataLedState = false;
-    }
+// Rapid blink function
+void led_rapid_blink(int count, int delay_ms) {
+  if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    rapidBlinkCount = count;
+    rapidBlinkDelay = delay_ms;
+    rapidBlinkActive = true;
+    rapidBlinkState = false;
+    rapidBlinkNextTime = millis();
+    rapidBlinkColorValue = (uint32_t)CRGB::Purple;  // Purple for WiFi reset
+    xSemaphoreGive(ledMutex);
   }
 }
 
-// Visual indication of click count (only in normal mode)
+// Visual indication of click count
 void led_blink_click_feedback(int clickCount) {
   if (currentMode == MODE_NORMAL && clickCount > 0) {
-    static unsigned long lastBlinkTime = 0;
-    static bool blinkState = false;
-    static int blinkCounter = 0;
-    
-    // Blink LED to show click count
-    if (millis() - lastBlinkTime > 200) {
-      if (blinkState) {
-        // LED was on, turn it off
-        setLED(false);
-        blinkState = false;
-        blinkCounter++;
-        
-        // If we've blinked enough times, add a longer pause
-        if (blinkCounter >= clickCount) {
-          lastBlinkTime = millis() + 400;  // Extra pause between sequences
-          blinkCounter = 0;
+    if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+      buttonBlinkCount = clickCount;
+      buttonBlinkActive = true;
+      buttonBlinkState = false;
+      buttonBlinkNextTime = millis();
+      xSemaphoreGive(ledMutex);
+    }
+  }
+}
+
+// Process LED updates from main loop
+void led_process_updates() {
+  // Skip all if not initialized
+  if (ledMutex == NULL) return;
+
+  // WiFi mode - purple constant, only rapid blink can interrupt
+  if (currentMode == MODE_CONFIG) {
+    // Handle rapid blink if active
+    if (rapidBlinkActive && millis() >= rapidBlinkNextTime) {
+      if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+        if (rapidBlinkState) {
+          leds[0] = CRGB::Black;
+          rapidBlinkState = false;
+          rapidBlinkCount = rapidBlinkCount - 1;
+          if (rapidBlinkCount <= 0) {
+            rapidBlinkActive = false;
+            // Return to purple for WiFi mode
+            leds[0] = CRGB::Purple;
+          }
+        } else {
+          leds[0] = CRGB(rapidBlinkColorValue);
+          rapidBlinkState = true;
+        }
+        FastLED.show();
+        rapidBlinkNextTime = millis() + rapidBlinkDelay;
+        xSemaphoreGive(ledMutex);
+      }
+    }
+    // Skip data activity in WiFi mode
+    return;
+  }
+
+  // Handle rapid blink
+  if (rapidBlinkActive && millis() >= rapidBlinkNextTime) {
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+      if (rapidBlinkState) {
+        leds[0] = CRGB::Black;
+        rapidBlinkState = false;
+        rapidBlinkCount = rapidBlinkCount - 1;
+        if (rapidBlinkCount <= 0) {
+          rapidBlinkActive = false;
         }
       } else {
-        // LED was off, turn it on
-        if (blinkCounter < clickCount) {
-          setLED(true);
-          blinkState = true;
+        leds[0] = CRGB(rapidBlinkColorValue);
+        rapidBlinkState = true;
+      }
+      FastLED.show();
+      rapidBlinkNextTime = millis() + rapidBlinkDelay;
+      xSemaphoreGive(ledMutex);
+    }
+    return;  // Skip other updates during rapid blink
+  }
+
+  // Handle button feedback blink
+  if (buttonBlinkActive && millis() >= buttonBlinkNextTime) {
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+      if (buttonBlinkState) {
+        leds[0] = CRGB::Black;
+        buttonBlinkState = false;
+        buttonBlinkCount = buttonBlinkCount - 1;
+        if (buttonBlinkCount <= 0) {
+          buttonBlinkActive = false;
         }
+        buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS * 2;  // Longer pause between blinks
+      } else {
+        leds[0] = CRGB::White;  // White for button feedback
+        buttonBlinkState = true;
+        buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS;
       }
-      
-      lastBlinkTime = millis();
-      
-      if (DEBUG_MODE == 1) {
-        log_msg("LED blink: clickCount=" + String(clickCount) + 
-                ", state=" + String(blinkState ? "ON" : "OFF") +
-                ", blinkCounter=" + String(blinkCounter));
-      }
+      FastLED.show();
+      xSemaphoreGive(ledMutex);
+    }
+    return;  // Skip data activity during button feedback
+  }
+
+  // Normal mode - check data activity
+  static uint32_t lastUartCount = 0;
+  static uint32_t lastUsbCount = 0;
+
+  // Check activity
+  bool uartActivity = (uartRxCounter != lastUartCount);
+  bool usbActivity = (usbRxCounter != lastUsbCount);
+
+  if (uartActivity || usbActivity) {
+    ActivityType activity;
+    if (uartActivity && usbActivity) {
+      activity = ACTIVITY_BOTH;
+    } else if (uartActivity) {
+      activity = ACTIVITY_UART_RX;
+    } else {
+      activity = ACTIVITY_USB_RX;
+    }
+
+    led_flash_activity(activity);
+
+    lastUartCount = uartRxCounter;
+    lastUsbCount = usbRxCounter;
+  }
+
+  // Process pending LED changes
+  if (ledUpdateNeeded && ledMutex != NULL) {
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+      leds[0] = CRGB(pendingColorValue);
+      FastLED.show();
+      ledUpdateNeeded = false;
+      xSemaphoreGive(ledMutex);
+    }
+  }
+
+  // Handle automatic LED off
+  if (ledOffTime > 0 && millis() >= ledOffTime) {
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+      leds[0] = CRGB::Black;
+      FastLED.show();
+      ledOffTime = 0;
+      ledIsOn = false;
+      lastActivity = ACTIVITY_NONE;
+      xSemaphoreGive(ledMutex);
     }
   }
 }

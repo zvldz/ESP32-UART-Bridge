@@ -8,7 +8,6 @@
 # VSCode
 .vscode
 
-
 # OS specific
 .DS_Store
 .DS_Store?
@@ -33,3 +32,6 @@ Desktop.ini
 *.log
 debug.txt
 note.txt
+
+# Other
+old

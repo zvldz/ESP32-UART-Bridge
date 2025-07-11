@@ -33,31 +33,31 @@ String mainPageProcessor(const String& var) {
   if (var == "DEVICE_NAME") return config.device_name;
   if (var == "VERSION") return config.version;
   if (var == "FREE_RAM") return String(ESP.getFreeHeap());
-  
+
   // Protected access to uartStats.deviceStartTime
   if (var == "UPTIME") {
     unsigned long startTime = getProtectedULongValue(&uartStats.deviceStartTime);
     return String((millis() - startTime) / 1000);
   }
-  
+
   if (var == "WIFI_SSID") return config.ssid;
   if (var == "WIFI_PASSWORD") return config.password;
   if (var == "UART_CONFIG") {
-    return String(config.baudrate) + " baud, " + 
+    return String(config.baudrate) + " baud, " +
            String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
   }
   if (var == "FLOW_CONTROL") return getFlowControlStatus();
-  
+
   // Protected access to uartStats.bytesUartToUsb
   if (var == "UART_TO_USB") {
     return String(getProtectedULongValue(&uartStats.bytesUartToUsb));
   }
-  
+
   // Protected access to uartStats.bytesUsbToUart
   if (var == "USB_TO_UART") {
     return String(getProtectedULongValue(&uartStats.bytesUsbToUart));
   }
-  
+
   // Protected access to total traffic
   if (var == "TOTAL_TRAFFIC") {
     unsigned long total = 0;
@@ -66,14 +66,14 @@ String mainPageProcessor(const String& var) {
     exitStatsCritical();
     return String(total);
   }
-  
+
   // FIXED: Protected access to lastActivityTime with proper "Never" handling
   if (var == "LAST_ACTIVITY") {
     unsigned long lastActivity;
     enterStatsCritical();
     lastActivity = uartStats.lastActivityTime;
     exitStatsCritical();
-    
+
     if (lastActivity == 0) {
       return String("Never");
     } else {
@@ -81,7 +81,7 @@ String mainPageProcessor(const String& var) {
       return String(secondsAgo);
     }
   }
-  
+
   if (var == "DEBUG_MODE") {
     return String(DEBUG_MODE == 0 ? "Production (Bridge Active)" : "Debug (Bridge Disabled)");
   }
@@ -92,13 +92,13 @@ String mainPageProcessor(const String& var) {
   if (var == "STOPBITS") return String(config.stopbits);
   if (var == "FLOWCONTROL") return config.flowcontrol ? "true" : "false";
   if (var == "UART_FULL_CONFIG") {
-    return String(config.baudrate) + " baud, " + 
+    return String(config.baudrate) + " baud, " +
            String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
   }
   if (var == "FLOW_CONTROL_TEXT") {
     return String(config.flowcontrol ? "Enabled" : "Disabled");
   }
-  
+
   return String(); // Return empty string if variable not found
 }
 
@@ -106,28 +106,28 @@ String mainPageProcessor(const String& var) {
 void handleStatus() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
-  StaticJsonDocument<512> doc;
-  
+
+  JsonDocument doc;
+
   // Copy all statistics in one critical section
   UartStats localStats;
   enterStatsCritical();
   localStats = uartStats;
   exitStatsCritical();
-  
+
   // Work with local copy
   doc["freeRam"] = ESP.getFreeHeap();
   doc["uptime"] = (millis() - localStats.deviceStartTime) / 1000;
   doc["uartToUsb"] = localStats.bytesUartToUsb;
   doc["usbToUart"] = localStats.bytesUsbToUart;
   doc["totalTraffic"] = localStats.bytesUartToUsb + localStats.bytesUsbToUart;
-  
+
   if (localStats.lastActivityTime == 0) {
     doc["lastActivity"] = "Never";
   } else {
     doc["lastActivity"] = (millis() - localStats.lastActivityTime) / 1000;
   }
-  
+
   String json;
   serializeJson(doc, json);
   server->send(200, "application/json", json);
@@ -137,18 +137,18 @@ void handleStatus() {
 void handleLogs() {
   WebServer* server = getWebServer();
   if (!server) return;
- 
-  DynamicJsonDocument doc(8192);
-  JsonArray logs = doc.createNestedArray("logs");
-  
+
+  JsonDocument doc;
+  JsonArray logs = doc["logs"].to<JsonArray>();
+
   String logBuffer[LOG_DISPLAY_COUNT];
   int actualCount = 0;
   logging_get_recent_logs(logBuffer, LOG_DISPLAY_COUNT, &actualCount);
-  
+
   for (int i = 0; i < actualCount; i++) {
     logs.add(logBuffer[i]);
   }
-  
+
   String json;
   serializeJson(doc, json);
   server->send(200, "application/json", json);
@@ -158,12 +158,12 @@ void handleLogs() {
 void handleSave() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
+
   log_msg("Saving new configuration...");
-  
+
   // Parse form data
   bool configChanged = false;
-  
+
   // UART settings
   if (server->hasArg("baudrate")) {
     uint32_t newBaudrate = server->arg("baudrate").toInt();
@@ -173,7 +173,7 @@ void handleSave() {
       log_msg("UART baudrate changed to " + String(newBaudrate));
     }
   }
-  
+
   if (server->hasArg("databits")) {
     uint8_t newDatabits = server->arg("databits").toInt();
     if (newDatabits != config.databits) {
@@ -182,7 +182,7 @@ void handleSave() {
       log_msg("UART data bits changed to " + String(newDatabits));
     }
   }
-  
+
   if (server->hasArg("parity")) {
     String newParity = server->arg("parity");
     if (newParity != config.parity) {
@@ -191,7 +191,7 @@ void handleSave() {
       log_msg("UART parity changed to " + newParity);
     }
   }
-  
+
   if (server->hasArg("stopbits")) {
     uint8_t newStopbits = server->arg("stopbits").toInt();
     if (newStopbits != config.stopbits) {
@@ -200,14 +200,14 @@ void handleSave() {
       log_msg("UART stop bits changed to " + String(newStopbits));
     }
   }
-  
+
   bool newFlowcontrol = server->hasArg("flowcontrol");
   if (newFlowcontrol != config.flowcontrol) {
     config.flowcontrol = newFlowcontrol;
     configChanged = true;
     log_msg("Flow control " + String(newFlowcontrol ? "enabled" : "disabled"));
   }
-  
+
   // WiFi settings
   if (server->hasArg("ssid")) {
     String newSSID = server->arg("ssid");
@@ -217,7 +217,7 @@ void handleSave() {
       log_msg("WiFi SSID changed to " + newSSID);
     }
   }
-  
+
   if (server->hasArg("password")) {
     String newPassword = server->arg("password");
     if (newPassword.length() >= 8 && newPassword != config.password) {
@@ -226,11 +226,11 @@ void handleSave() {
       log_msg("WiFi password updated");
     }
   }
-  
+
   if (configChanged) {
     config_save(&config);
     server->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
-    delay(1000);
+    vTaskDelay(pdMS_TO_TICKS(1000));
     ESP.restart();
   } else {
     server->send(200, "text/html", "<h1>No Changes</h1><p>Configuration was not modified.</p><a href='/'>Back</a>");
@@ -241,11 +241,11 @@ void handleSave() {
 void handleResetStats() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
+
   log_msg("Resetting statistics and logs...");
   resetStatistics(&uartStats);
   logging_clear();
-  
+
   server->send(200, "text/html", loadTemplate(HTML_RESET_SUCCESS));
 }
 
@@ -253,7 +253,7 @@ void handleResetStats() {
 void handleCrashLogJson() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
+
   String json = crashlog_get_json();
   server->send(200, "application/json", json);
 }
@@ -262,7 +262,7 @@ void handleCrashLogJson() {
 void handleClearCrashLog() {
   WebServer* server = getWebServer();
   if (!server) return;
-  
+
   crashlog_clear();
   server->send(200, "application/json", "{\"status\":\"ok\"}");
 }
