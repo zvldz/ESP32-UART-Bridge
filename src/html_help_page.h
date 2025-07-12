@@ -123,6 +123,7 @@ const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
 <tr><td>LED solid purple</td><td>Device is in WiFi config mode - normal behavior</td></tr>
 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
+<tr><td>Mission Planner reset loops</td><td>Enable "Disable RTS resets on ESP32 SerialUSB" in Mission Planner connection settings. ESP32-S3's native USB outputs bootloader messages that can confuse some applications.</td></tr>
 </table>
 </div>
 

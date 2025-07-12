@@ -45,8 +45,8 @@ void log_msg(String message) {
 
     // Clear old string before assignment to prevent memory fragmentation
     logBuffer[logIndex].clear();
-    //logBuffer[logIndex] = timestamp + message;
-    logBuffer[logIndex] = message;
+    logBuffer[logIndex] = timestamp + message;
+    //logBuffer[logIndex] = message;
 
     logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
     if (logCount < LOG_BUFFER_SIZE) {

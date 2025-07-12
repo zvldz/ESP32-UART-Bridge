@@ -20,9 +20,8 @@ const char HTML_QUICK_GUIDE[] PROGMEM = R"rawliteral(
 <p style="margin: 5px 0;"><strong>UART Device → ESP32-S3:</strong> TX→GPIO4, RX→GPIO5, GND→GND</p>
 <p style="margin: 5px 0;"><strong>USB Host:</strong> USB cable to ESP32-S3 (for any USB application)</p>
 <div class="status" style="font-size: 13px; margin: 10px 0 5px 0;">
-<strong>📌 USB Connection Note:</strong><br>
-ESP32-S3 uses native USB with improved stability and hot-plug support.<br>
-For best results during configuration, keep serial connection active.
+<strong>📌 Mission Planner Users:</strong><br>
+Enable "Disable RTS resets on ESP32 SerialUSB" in connection options to prevent reset loops.
 </div>
 <p style="margin: 5px 0;"><a href='/help' target='_blank'>📋 Detailed wiring diagram & troubleshooting</a></p>
 </div>

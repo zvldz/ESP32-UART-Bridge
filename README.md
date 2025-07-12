@@ -1,178 +1,116 @@
-#ifndef HTML_HELP_PAGE_H
-#define HTML_HELP_PAGE_H
+# ESP32 UART Bridge
 
-#include <Arduino.h>
+Universal UART to USB bridge with web configuration interface. Optimized for drone autopilots (ArduPilot, PX4) but works with any UART protocol.
 
-// Help page specific title
-const char HTML_HELP_TITLE[] PROGMEM = R"rawliteral(
-<title>ESP32 UART Bridge - Connection Help</title>
-)rawliteral";
+## Features
 
-// Help page heading
-const char HTML_HELP_HEADING[] PROGMEM = R"rawliteral(
-<h1>🔗 ESP32 UART Bridge - Connection Help</h1>
-)rawliteral";
+- **Universal Protocol Support**: Works with MAVLink, NMEA GPS, Modbus RTU, AT Commands, and any UART-based protocol
+- **High Performance**: Adaptive buffering (200μs to 15ms) for optimal throughput
+- **Web Configuration**: Easy setup via WiFi access point
+- **Visual Feedback**: RGB LED shows data flow direction and system status
+- **Wide Speed Range**: 4800 to 1000000 baud
+- **Flow Control**: Hardware RTS/CTS support
+- **Crash Logging**: Automatic crash detection and logging for diagnostics
+- **OTA Updates**: Firmware updates via web interface
 
-const char HTML_HELP_PROTOCOL_INFO[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>📡 Protocol Optimization</h3>
-<div class="success">
-<strong>Universal UART Bridge:</strong> This bridge works with any UART protocol. It uses adaptive buffering that automatically optimizes for different data patterns. The system is particularly well-tuned for MAVLink protocol used by drone autopilots (ArduPilot, PX4), but works efficiently with any serial communication protocol.
-</div>
-<p><strong>Supported protocols:</strong></p>
-<ul style="margin-left: 20px;">
-<li><strong>MAVLink</strong> - Optimized for telemetry and parameter transfer</li>
-<li><strong>NMEA GPS</strong> - Clean message boundaries detection</li>
-<li><strong>Modbus RTU</strong> - Preserves inter-frame gaps</li>
-<li><strong>AT Commands</strong> - Fast response for modem control</li>
-<li><strong>Firmata</strong> - Low latency for microcontroller communication</li>
-<li><strong>and other UART-based protocols</strong></li>
-</ul>
-<p style="margin-top: 10px;"><small>The adaptive buffering (200μs to 15ms) ensures optimal performance across different protocols and data rates.</small></p>
-<p style="margin-top: 5px;"><small><strong>Note:</strong> The bridge works efficiently at all supported speeds. For MAVLink specifically, protocol-aware parsing could provide up to 20% improvement at very high speeds (≥460800 baud), though the current implementation already delivers excellent performance across the entire range.</small></p>
-</div>
-)rawliteral";
+## Hardware
 
-const char HTML_HELP_PIN_TABLE[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>Pin Connections</h3>
-<table>
-<tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
-<tr><td>GPIO4</td><td>UART RX</td><td>Device TX (UART/TELEM)</td><td>✅ Yes</td></tr>
-<tr><td>GPIO5</td><td>UART TX</td><td>Device RX (UART/TELEM)</td><td>✅ Yes</td></tr>
-<tr><td>GND</td><td>Ground</td><td>Device GND</td><td>✅ Yes</td></tr>
-<tr><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
-<tr><td>GPIO21</td><td>RGB LED</td><td>Built-in (WS2812)</td><td>✅ Yes</td></tr>
-<tr><td>GPIO6</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
-<tr><td>GPIO7</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
-</table>
-</div>
-)rawliteral";
+- **Board**: ESP32-S3-Zero or compatible ESP32-S3 development board
+- **Connections**:
+  - GPIO4: UART RX (connect to device TX)
+  - GPIO5: UART TX (connect to device RX)
+  - GPIO21: RGB LED (WS2812 - built-in)
+  - GPIO0: BOOT button (built-in)
+  - GPIO6/7: RTS/CTS (optional flow control)
 
-const char HTML_HELP_LED_BEHAVIOR[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>💡 LED Status Indicators</h3>
-<div class="success">
-<strong>The RGB LED (GPIO21) provides visual feedback:</strong><br>
-- <strong>Blue flashes</strong> - Data from device (UART RX)<br>
-- <strong>Green flashes</strong> - Data from computer (USB RX)<br>
-- <strong>Cyan flashes</strong> - Bidirectional data transfer<br>
-- <strong>Solid purple</strong> - WiFi configuration mode<br>
-- <strong>White blinks</strong> - Button click feedback (1-2 clicks)<br>
-- <strong>Purple rapid blinking</strong> - WiFi reset confirmation (5s hold)<br>
-- <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
-- <strong>Off</strong> - Idle, no data transfer
-</div>
-<table>
-<tr><th>Mode</th><th>LED State</th><th>Description</th></tr>
-<tr><td>Normal Mode</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
-<tr><td>WiFi Config Mode</td><td>Solid purple</td><td>Constantly ON while in configuration mode</td></tr>
-<tr><td>Boot Sequence</td><td>Rainbow effect</td><td>Colorful startup animation for 1 second</td></tr>
-<tr><td>Button clicks</td><td>White blinks</td><td>Shows click count (100ms per blink)</td></tr>
-</table>
-</div>
-)rawliteral";
+## Quick Start
 
-const char HTML_HELP_CONNECTION_GUIDE[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>Connection Guide</h3>
-<div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-<h4>Step 1: Connect UART wires</h4>
-<p style="font-size: 18px; background: #e9ecef; padding: 10px; border-radius: 5px;">
-Device TX → ESP32 GPIO4<br>
-Device RX → ESP32 GPIO5<br>
-Device GND → ESP32 GND
-</p>
-<h4>Step 2: Connect USB</h4>
-<p style="font-size: 18px; background: #d1ecf1; padding: 10px; border-radius: 5px;">
-ESP32 USB-C → Computer USB
-</p>
-<p><strong>Result:</strong> Transparent UART ↔ USB bridge ready!</p>
-</div>
-</div>
-)rawliteral";
+1. **Connect Hardware**:
+   - Device TX → ESP32 GPIO4
+   - Device RX → ESP32 GPIO5
+   - Device GND → ESP32 GND
+   - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
 
-const char HTML_HELP_SETUP_INSTRUCTIONS[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>Setup Instructions</h3>
-<div class="warning"><strong>⚠️ Important:</strong> Only connect signal wires and GND. Do not connect power between devices!</div>
-<div class="warning" style="background-color: #ffebee; border-left-color: #f44336;">
-<strong>⚡ Voltage Warning:</strong> ESP32-S3 GPIO pins support only 3.3V logic levels!<br>
-Connecting 5V devices directly WILL damage the ESP32-S3.<br>
-For 5V devices, you MUST use a level shifter (e.g., TXS0108E).
-</div>
-<ol>
-<li><strong>Physical Connection:</strong> Connect TX→GPIO4, RX→GPIO5, GND→GND</li>
-<li><strong>Device Settings:</strong> Configure UART protocol and baud rate on your device</li>
-<li><strong>Bridge Settings:</strong> Use this web interface to configure UART speed</li>
-<li><strong>USB Connection:</strong> Connect USB cable and select COM port in your application</li>
-</ol>
-</div>
-)rawliteral";
+2. **Power On**:
+   - Connect USB-C cable to computer
+   - Rainbow LED effect indicates successful boot
 
-const char HTML_HELP_TROUBLESHOOTING[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>Troubleshooting</h3>
-<table>
-<tr><th>Problem</th><th>Solution</th></tr>
-<tr><td>No UART activity</td><td>Check TX/RX wiring, verify device UART settings</td></tr>
-<tr><td>Application can't connect</td><td>Check USB connection, try different baud rate</td></tr>
-<tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
-<tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
-<tr><td>No WiFi config</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
-<tr><td>LED solid purple</td><td>Device is in WiFi config mode - normal behavior</td></tr>
-<tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
-<tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
-</table>
-</div>
+3. **Configure** (first time only):
+   - Triple-click BOOT button (LED turns solid purple)
+   - Connect to WiFi network "ESP-Bridge" (password: 12345678)
+   - Open web browser to 192.168.4.1
+   - Set your UART parameters and WiFi credentials
+   - Click "Save & Reboot"
 
-<div class="section">
-<h3>🔘 Button Functions</h3>
-<div class="success">
-<strong>BOOT Button (GPIO0) Functions:</strong><br>
-- <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
-- <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
-- <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
-<br>
-<strong>WiFi Reset Procedure:</strong><br>
-1. Press and hold BOOT button for at least 5 seconds<br>
-2. LED will flash purple rapidly 10 times to confirm<br>
-3. Device will restart with default WiFi settings<br>
-4. Connect to "ESP-Bridge" network with password "12345678"
-</div>
-</div>
-)rawliteral";
+4. **Use**:
+   - Device appears as COM port on computer
+   - LED flashes indicate data flow:
+     - Blue: Device → Computer
+     - Green: Computer → Device
+     - Cyan: Bidirectional
 
-const char HTML_HELP_BUTTONS[] PROGMEM = R"rawliteral(
-<div class="section">
-<h3>🔍 Crash Diagnostics</h3>
-<div class="success">
-<strong>The device automatically logs system crashes to help diagnose issues:</strong><br>
-<br>
-<strong>What is logged:</strong><br>
-- Reset reason (PANIC, TASK_WDT, etc.)<br>
-- Uptime before crash<br>
-- Free heap memory<br>
-- Minimum heap during session<br>
-<br>
-<strong>Viewing crash history:</strong><br>
-1. Go to the main configuration page<br>
-2. Look for "Crash History" section below System Logs<br>
-3. Click to expand and view last 10 crashes<br>
-4. Red badge shows total crash count<br>
-<br>
-<strong>Common crash patterns:</strong><br>
-- Crashes at similar uptime → Possible memory leak<br>
-- Low heap values → Out of memory<br>
-- TASK_WDT → Task blocked (often USB disconnect)<br>
-- PANIC → Software exception<br>
-</div>
-</div>
+## Connection Issues with Ground Control Software
 
-<div class="section">
-<button onclick="window.close()">Close Help</button>
-<button onclick="location.href='/'">Back to Settings</button>
-</div>
-)rawliteral";
+Some ground control applications may experience connection problems due to ESP32-S3's native USB bootloader messages. The bootloader outputs diagnostic information that can be misinterpreted as data, causing reset loops.
 
-#endif // HTML_HELP_PAGE_H
+**Mission Planner:** Enable "Disable RTS resets on ESP32 SerialUSB" option in the connection settings to prevent reset loops.
+
+**QGroundControl:** Generally handles ESP32 connections well without special configuration.
+
+**Other applications:** If you experience connection issues, look for options to disable DTR/RTS control or add connection delays.
+
+## LED Indicators
+
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Blue | Flash | Data from device (UART RX) |
+| Green | Flash | Data from computer (USB RX) |
+| Cyan | Flash | Bidirectional data transfer |
+| Purple | Solid | WiFi configuration mode |
+| Purple | Rapid blink | WiFi reset confirmation |
+| White | Blinks | Button click feedback |
+| Rainbow | 1 second | Boot sequence |
+| Off | - | Idle, no data |
+
+## Button Functions
+
+- **Triple-click**: Enter WiFi configuration mode
+- **Hold 5+ seconds**: Reset WiFi to defaults (SSID: ESP-Bridge, Password: 12345678)
+- **Hold during power-on**: Enter bootloader mode for firmware flashing
+
+## Building from Source
+
+### Requirements
+- VSCode with PlatformIO extension
+- ESP32 platform support
+
+### Build Instructions
+1. Clone repository
+2. Open in VSCode with PlatformIO
+3. Select environment:
+   - `production` - For normal use with Mission Planner
+   - `production_debug` - With crash diagnostics
+   - `full_debug` - Complete debug output
+4. Build and upload
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| No data activity | Check TX/RX connections, verify baud rate matches device |
+| LED solid purple | Device is in WiFi config mode - connect to "ESP-Bridge" network |
+| Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
+| Connection drops | Enable flow control if supported by device |
+| Application can't connect | Check USB cable, try different COM port settings |
+
+## Performance Notes
+
+The bridge uses adaptive buffering that automatically optimizes for different protocols:
+- **MAVLink**: Optimized for telemetry and parameter transfer
+- **NMEA GPS**: Clean message boundary detection
+- **Modbus RTU**: Preserves inter-frame gaps
+- **AT Commands**: Low latency for modem control
+
+## License
+
+MIT License - see LICENSE file for details
