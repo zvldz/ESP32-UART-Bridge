@@ -13,13 +13,11 @@
 #include "uartbridge.h"
 #include "crashlog.h"
 
-// Force disable chip debug report
-bool shouldPrintChipDebugReport(void) {
-    return false;
-}
-
 // Global constants
-const int DEBUG_MODE = 1;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
+#ifndef DEBUG_MODE_BUILD
+  #define DEBUG_MODE_BUILD 0
+#endif
+const int DEBUG_MODE = DEBUG_MODE_BUILD;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
 
 // Global objects
 Config config;
@@ -74,13 +72,26 @@ void setup() {
   // Print boot info first
   printBootInfo();
 
-  // Initialize Serial ONLY in debug mode
+  // Initialize Serial based on mode
   if (DEBUG_MODE == 1) {
     Serial.begin(115200);
     vTaskDelay(pdMS_TO_TICKS(1000));
     Serial.println("=== " + config.device_name + " Starting (DEBUG MODE) ===");
     Serial.println("WARNING: UART bridge functionality DISABLED in debug mode");
     Serial.println("Set DEBUG_MODE to 0 for production use");
+  } else {
+    // Production mode - suppress logs and clear buffer
+    #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL == 0
+      esp_log_level_set("*", ESP_LOG_NONE);
+    #endif
+    
+    // Clear bootloader messages from serial buffer
+    Serial.begin(115200);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    while (Serial.available()) Serial.read();
+    Serial.flush();
+    Serial.end();
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 
   // Create mutexes for thread safety
@@ -419,6 +430,8 @@ void handleButtonInput() {
 //================================================================
 
 void printBootInfo() {
+  if (DEBUG_MODE != 1) return;
+  
   // Initialize Serial for boot info
   Serial.begin(115200);
   vTaskDelay(pdMS_TO_TICKS(100));
@@ -540,6 +553,7 @@ void createTasks() {
 
   // Create web server task only in CONFIG mode with increased stack size
   if (currentMode == MODE_CONFIG) {
+    disableBrownout();
     #ifdef CONFIG_FREERTOS_UNICORE
       xTaskCreate(
         webServerTask,         // Task function

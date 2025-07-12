@@ -6,8 +6,6 @@
 #include <DNSServer.h>
 #include <LittleFS.h>
 #include <Preferences.h>
-
-// WebServer is part of ESP32 Arduino Core
 #include <WebServer.h>
 
 // Local includes
@@ -24,6 +22,7 @@
 #include "html_help_page.h"
 
 #include "freertos/semphr.h"
+#include "esp_wifi.h"
 
 SemaphoreHandle_t webServerReadySemaphore = nullptr;
 
@@ -56,7 +55,8 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 
   // Start WiFi Access Point
   WiFi.mode(WIFI_AP);
-  WiFi.setTxPower(WIFI_POWER_11dBm);
+  WiFi.setTxPower(WIFI_POWER_5dBm);     // For Arduino API compatibility  
+  esp_wifi_set_max_tx_power(20);        // Ensure immediate effect
 
   // Set static IP for AP mode to avoid DHCP race conditions
   IPAddress apIP(192, 168, 4, 1);
