@@ -13,8 +13,14 @@ extern Config config;
 extern UartStats uartStats;
 extern FlowControlStatus flowControlStatus;
 
+// USB interface pointer (set by uartbridge_init)
+static UsbInterface* g_usbInterface = nullptr;
+
 // Initialize UART bridge
-void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats) {
+void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, UsbInterface* usb) {
+  // Store USB interface pointer
+  g_usbInterface = usb;
+  
   // Configure UART with loaded settings
   uint32_t serialConfig = SERIAL_8N1;
 
@@ -145,8 +151,8 @@ void uartBridgeTask(void* parameter) {
           uartBridgeSerial.read();  // Read and discard
           localUartToUsb++;
           uartStats.totalUartPackets++;
-        } else {
-          // In production mode, use adaptive buffering
+        } else if (g_usbInterface) {
+          // In production mode with USB interface, use adaptive buffering
           uint8_t data = uartBridgeSerial.read();
           uartStats.totalUartPackets++;
 
@@ -200,15 +206,15 @@ void uartBridgeTask(void* parameter) {
           // Transmit accumulated data if conditions met
           if (shouldTransmit) {
             // Check USB buffer availability to prevent blocking
-            int availableSpace = Serial.availableForWrite();
+            int availableSpace = g_usbInterface->availableForWrite();
 
             if (availableSpace >= bufferIndex) {
               // Can write entire buffer
-              Serial.write(adaptiveBuffer, bufferIndex);
+              g_usbInterface->write(adaptiveBuffer, bufferIndex);
               bufferIndex = 0;  // Reset buffer
             } else if (availableSpace > 0) {
               // USB buffer has some space - write what we can
-              Serial.write(adaptiveBuffer, availableSpace);
+              g_usbInterface->write(adaptiveBuffer, availableSpace);
               // Move remaining data to front of buffer
               memmove(adaptiveBuffer, adaptiveBuffer + availableSpace, bufferIndex - availableSpace);
               bufferIndex -= availableSpace;
@@ -247,16 +253,16 @@ void uartBridgeTask(void* parameter) {
       }
 
       // Handle any remaining data in buffer (timeout-based flush) - production mode only
-      if (DEBUG_MODE == 0 && bufferIndex > 0) {
+      if (DEBUG_MODE == 0 && g_usbInterface && bufferIndex > 0) {
         unsigned long timeInBuffer = micros() - bufferStartTime;
         if (timeInBuffer >= 15000) {  // 15ms emergency timeout
-          int availableSpace = Serial.availableForWrite();
+          int availableSpace = g_usbInterface->availableForWrite();
           if (availableSpace >= bufferIndex) {
-            Serial.write(adaptiveBuffer, bufferIndex);
+            g_usbInterface->write(adaptiveBuffer, bufferIndex);
             bufferIndex = 0;
           } else if (availableSpace > 0) {
             // Write what we can
-            Serial.write(adaptiveBuffer, availableSpace);
+            g_usbInterface->write(adaptiveBuffer, availableSpace);
             memmove(adaptiveBuffer, adaptiveBuffer + availableSpace, bufferIndex - availableSpace);
             bufferIndex -= availableSpace;
           } else {
@@ -298,8 +304,8 @@ void uartBridgeTask(void* parameter) {
       }
 
       // USB → UART (immediate forwarding for commands) - production mode only
-      if (DEBUG_MODE == 0) {
-        while (Serial.available()) {
+      if (DEBUG_MODE == 0 && g_usbInterface) {
+        while (g_usbInterface->available()) {
           // Notify LED with rate limiting
           if (currentMode == MODE_NORMAL && millis() - lastUsbLedNotify > LED_NOTIFY_INTERVAL) {
             led_notify_usb_rx();
@@ -307,10 +313,12 @@ void uartBridgeTask(void* parameter) {
           }
 
           // Commands from GCS are critical - immediate byte-by-byte transfer
-          uint8_t data = Serial.read();
-          uartBridgeSerial.write(data);
-          localUsbToUart++;
-          localLastActivity = millis();
+          int data = g_usbInterface->read();
+          if (data >= 0) {
+            uartBridgeSerial.write((uint8_t)data);
+            localUsbToUart++;
+            localLastActivity = millis();
+          }
         }
       }
 

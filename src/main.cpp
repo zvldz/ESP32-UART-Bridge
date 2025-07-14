@@ -12,6 +12,7 @@
 #include "web_interface.h"
 #include "uartbridge.h"
 #include "crashlog.h"
+#include "usb_interface.h"
 
 // Global constants
 #ifndef DEBUG_MODE_BUILD
@@ -31,6 +32,9 @@ FlowControlStatus flowControlStatus = {false, false};
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t webServerTaskHandle = NULL;
+
+// USB interface
+UsbInterface* usbInterface = NULL;
 
 // Mutexes for thread safety
 SemaphoreHandle_t logMutex = NULL;
@@ -263,32 +267,34 @@ void initNormalMode() {
   // Set LED mode for data flash explicitly
   led_set_mode(LED_MODE_DATA_FLASH);
 
-  // Initialize Serial for UART bridge ONLY in production mode
+  // Create USB interface based on configuration
   if (DEBUG_MODE == 0) {
-    Serial.begin(config.baudrate);
-
-    // Increase RX buffer for better performance at high speeds
-    if (config.baudrate >= 115200) {
-      Serial.setRxBufferSize(1024);
+    switch(config.usb_mode) {
+      case USB_MODE_HOST:
+        log_msg("Creating USB Host interface");
+        usbInterface = createUsbHost(config.baudrate);
+        break;
+      case USB_MODE_AUTO:
+        log_msg("Creating USB Auto-detect interface");
+        usbInterface = createUsbAuto(config.baudrate);
+        break;
+      case USB_MODE_DEVICE:
+      default:
+        log_msg("Creating USB Device interface");
+        usbInterface = createUsbDevice(config.baudrate);
+        break;
     }
-
-    // Wait for USB connection (maximum 2 seconds)
-    unsigned long startTime = millis();
-    while (!Serial && (millis() - startTime < 2000)) {
-      delay(10);
-    }
-
-    // Add stabilization delay only if USB is connected
-    if (Serial) {
-      vTaskDelay(pdMS_TO_TICKS(500));  // Allow USB detection time
-      log_msg("USB connected, serial ready at " + String(config.baudrate) + " baud");
+    
+    if (usbInterface) {
+      usbInterface->init();
+      log_msg("USB interface initialized");
     } else {
-      log_msg("No USB detected, continuing without USB connection");
+      log_msg("ERROR: Failed to create USB interface");
     }
   }
 
   // Initialize UART bridge
-  uartbridge_init(&uartBridgeSerial, &config, &uartStats);
+  uartbridge_init(&uartBridgeSerial, &config, &uartStats, usbInterface);
 
   if (DEBUG_MODE == 0) {
     log_msg("UART Bridge ready - transparent forwarding active");
@@ -301,15 +307,18 @@ void initConfigMode() {
   // Set LED mode for WiFi config
   led_set_mode(LED_MODE_WIFI_ON);
 
-  // Initialize USB Serial even in config mode (for bridge functionality)
+  // Create USB interface even in config mode (for bridge functionality)
   if (DEBUG_MODE == 0) {
-    Serial.begin(config.baudrate);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    log_msg("Serial USB initialized in WiFi mode at " + String(config.baudrate) + " baud");
+    // Always use Device mode in WiFi config
+    usbInterface = createUsbDevice(config.baudrate);
+    if (usbInterface) {
+      usbInterface->init();
+      log_msg("USB Device initialized in WiFi mode at " + String(config.baudrate) + " baud");
+    }
   }
 
   // Initialize UART bridge even in config mode (for statistics)
-  uartbridge_init(&uartBridgeSerial, &config, &uartStats);
+  uartbridge_init(&uartBridgeSerial, &config, &uartStats, usbInterface);
 
   // Initialize web server
   webserver_init(&config, &uartStats, &systemState);

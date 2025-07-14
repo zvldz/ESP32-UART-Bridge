@@ -16,6 +16,7 @@ void config_init(Config* config) {
   config->password = DEFAULT_AP_PASSWORD;
   config->version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
+  config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
 }
 
 // Load configuration from LittleFS
@@ -53,6 +54,18 @@ void config_load(Config* config) {
     config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
   }
 
+  // Load USB settings
+  if (doc["usb"].is<JsonObject>()) {
+    String mode = doc["usb"]["mode"] | "device";
+    if (mode == "host") {
+      config->usb_mode = USB_MODE_HOST;
+    } else if (mode == "auto") {
+      config->usb_mode = USB_MODE_AUTO;
+    } else {
+      config->usb_mode = USB_MODE_DEVICE;  // Default to device mode
+    }
+  }
+
   // System settings like version and device_name are NOT loaded from file
   // They always use compiled-in values from defines.h
 }
@@ -81,6 +94,20 @@ void config_save(Config* config) {
   // WiFi settings
   doc["wifi"]["ssid"] = config->ssid;
   doc["wifi"]["password"] = config->password;
+
+  // USB settings
+  switch(config->usb_mode) {
+    case USB_MODE_HOST:
+      doc["usb"]["mode"] = "host";
+      break;
+    case USB_MODE_AUTO:
+      doc["usb"]["mode"] = "auto";
+      break;
+    case USB_MODE_DEVICE:
+    default:
+      doc["usb"]["mode"] = "device";
+      break;
+  }
 
   // Note: version and device_name are NOT saved - always use compiled values
 
