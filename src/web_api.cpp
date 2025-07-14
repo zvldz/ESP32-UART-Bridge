@@ -98,6 +98,14 @@ String mainPageProcessor(const String& var) {
   if (var == "FLOW_CONTROL_TEXT") {
     return String(config.flowcontrol ? "Enabled" : "Disabled");
   }
+  if (var == "USB_MODE") {
+    switch(config.usb_mode) {
+      case USB_MODE_HOST: return "host";
+      case USB_MODE_AUTO: return "auto";
+      case USB_MODE_DEVICE:
+      default: return "device";
+    }
+  }
 
   return String(); // Return empty string if variable not found
 }
@@ -206,6 +214,23 @@ void handleSave() {
     config.flowcontrol = newFlowcontrol;
     configChanged = true;
     log_msg("Flow control " + String(newFlowcontrol ? "enabled" : "disabled"));
+  }
+
+  // USB mode settings
+  if (server->hasArg("usbmode")) {
+    String mode = server->arg("usbmode");
+    UsbMode newMode = USB_MODE_DEVICE;
+    if (mode == "host") {
+      newMode = USB_MODE_HOST;
+    } else if (mode == "auto") {
+      newMode = USB_MODE_AUTO;
+    }
+    
+    if (newMode != config.usb_mode) {
+      config.usb_mode = newMode;
+      configChanged = true;
+      log_msg("USB mode changed to " + mode);
+    }
   }
 
   // WiFi settings

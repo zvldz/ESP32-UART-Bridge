@@ -2,10 +2,11 @@
 #define UARTBRIDGE_H
 
 #include "types.h"
+#include "usb_interface.h"
 #include <HardwareSerial.h>
 
 // UART bridge interface
-void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats);
+void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, UsbInterface* usb);
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
 
 // Flow control functions
