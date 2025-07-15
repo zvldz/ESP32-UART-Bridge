@@ -256,7 +256,7 @@ The device automatically logs system crashes including:
 View crash history in web interface under "Crash History" section.
 
 ### Debug Mode
-When compiled with DEBUG_MODE=1:
+When compiled with `full_debug` environment (DEBUG_MODE_BUILD=1):
 - Extensive logging available
 - In USB Device mode: logs output to Serial
 - In USB Host mode: logs only to web interface (no Serial output)
