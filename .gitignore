@@ -36,6 +36,7 @@ note.txt
 # Other
 old
 dependencies.lock
+sdkconfig.defaults
 sdkconfig.production_debug
 managed_components
 src/CMakeLists.txt

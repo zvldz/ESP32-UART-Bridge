@@ -167,9 +167,11 @@ const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
 </div>
 <h4 style="margin-top: 20px;">USB Mode</h4>
 <div style="margin: 10px 0;">
-<label><input type="radio" name="usbmode" value="device" checked> Device (Connect to PC)</label><br>
-<label><input type="radio" name="usbmode" value="host"> Host (Connect USB Modem)</label><br>
-<label><input type="radio" name="usbmode" value="auto"> Auto-detect</label>
+<select name="usbmode" id="usbmode" style="width: 200px;">
+  <option value="device">Device (Connect to PC)</option>
+  <option value="host">Host (Connect USB Modem)</option>
+  <option value="auto">Auto-detect</option>
+</select>
 </div>
 <h4 style="margin-top: 20px;">WiFi Configuration</h4>
 <label for="ssid">WiFi SSID:</label>
@@ -210,9 +212,8 @@ document.getElementById('parity').value = '%PARITY%';
 document.getElementById('stopbits').value = '%STOPBITS%';
 document.querySelector('input[name="flowcontrol"]').checked = %FLOWCONTROL%;
 
-// Set USB mode radio button
-var usbMode = '%USB_MODE%';
-document.querySelector('input[name="usbmode"][value="' + usbMode + '"]').checked = true;
+// Set USB mode in dropdown
+document.getElementById('usbmode').value = '%USB_MODE%';
 
 function togglePassword() {
   var x = document.getElementById("password");
