@@ -152,9 +152,6 @@ public:
         tx_head = (tx_head + 1) % TX_BUFFER_SIZE;
         xSemaphoreGive(tx_mutex);
         
-        // Trigger transmission
-        triggerTransmit();
-        
         return 1;
     }
     
@@ -469,10 +466,6 @@ private:
             usb_host_device_close(NULL, device_handle);
             device_handle = NULL;
         }
-    }
-    
-    void triggerTransmit() {
-        // Transmission is handled in the task loop
     }
 };
 
