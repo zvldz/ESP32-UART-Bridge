@@ -1,5 +1,11 @@
 # ESP32 UART Bridge
 
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
+[![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
+[![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
+[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
 
 ## Features
@@ -92,6 +98,17 @@ ESP32 acts as USB host for serial devices:
 - Configure via web interface
 - Setting is saved and persists across reboots
 - Requires restart when changing modes
+
+## Configuration Parameters
+
+The web interface allows configuration of:
+- **Baud Rate**: 4800 to 1000000 baud
+- **Data Bits**: 7 or 8
+- **Stop Bits**: 1 or 2
+- **Parity**: None, Even, Odd
+- **Flow Control**: None or RTS/CTS
+- **WiFi Settings**: SSID and password for your network
+- **USB Mode**: Device (default) or Host mode
 
 ## LED Indicators
 
