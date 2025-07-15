@@ -148,10 +148,6 @@ void setup() {
     log_msg("LittleFS mounted successfully");
   }
 
-  // Initialize configuration
-  log_msg("Initializing configuration...");
-  config_init(&config);
-
   // Load configuration from file (this may override defaults including usb_mode)
   log_msg("Loading configuration...");
   config_load(&config);
@@ -296,7 +292,7 @@ void initNormalMode() {
         usbInterface = createUsbDevice(config.baudrate);
         break;
     }
-    
+
     if (usbInterface) {
       usbInterface->init();
       log_msg("USB interface initialized");
@@ -319,16 +315,32 @@ void initConfigMode() {
   // Set LED mode for WiFi config
   led_set_mode(LED_MODE_WIFI_ON);
 
-  // Set USB mode to device for WiFi configuration
-  usbMode = USB_MODE_DEVICE;
+  // Use configured USB mode (from config file)
+  usbMode = config.usb_mode;
 
   // Create USB interface even in config mode (for bridge functionality)
   if (DEBUG_MODE == 0) {
-    // Always use Device mode in WiFi config
-    usbInterface = createUsbDevice(config.baudrate);
+    switch(config.usb_mode) {
+      case USB_MODE_HOST:
+        log_msg("Creating USB Host interface in WiFi mode");
+        usbInterface = createUsbHost(config.baudrate);
+        break;
+      case USB_MODE_AUTO:
+        log_msg("Creating USB Auto-detect interface in WiFi mode");
+        usbInterface = createUsbAuto(config.baudrate);
+        break;
+      case USB_MODE_DEVICE:
+      default:
+        log_msg("Creating USB Device interface in WiFi mode");
+        usbInterface = createUsbDevice(config.baudrate);
+        break;
+    }
+    
     if (usbInterface) {
       usbInterface->init();
-      log_msg("USB Device initialized in WiFi mode at " + String(config.baudrate) + " baud");
+      log_msg("USB interface initialized in WiFi mode");
+    } else {
+      log_msg("ERROR: Failed to create USB interface in WiFi mode");
     }
   }
 

@@ -255,7 +255,8 @@ void handleSave() {
   if (configChanged) {
     config_save(&config);
     server->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    server->client().flush();  // Ensure response is sent
+    vTaskDelay(pdMS_TO_TICKS(3000));  // Match the 3 seconds shown in HTML
     ESP.restart();
   } else {
     server->send(200, "text/html", "<h1>No Changes</h1><p>Configuration was not modified.</p><a href='/'>Back</a>");

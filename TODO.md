@@ -1,94 +1,123 @@
 # TODO / Roadmap
 
-## Priority 1 - USB Host Mode Support
+## Recently Completed ✅
 
-- [ ] **USB Host Mode Support**
-  - Add USB Host mode for modem connection
-  - Device/Host/Auto mode selection
-  - Web interface for USB mode configuration
+- [x] **USB Host Mode Support** - COMPLETED
+  - USB Host mode for connecting USB modems/devices to ESP32
+  - Device/Host/Auto mode selection in web interface
   - Hybrid Arduino + ESP-IDF implementation
-  - Auto-detection of connected device type
-  - Minimal changes to existing UART bridge logic
+  - Auto-detection of CDC devices (bInterfaceClass == 0x02)
+  - Seamless integration with existing UART bridge logic
 
-## Priority 2 - Code Optimization & Diagnostics Refactoring
+## Priority 1 - Code Optimization & Cleanup
 
-- [ ] **UART Performance Optimization & Diagnostics System**
-  - Implement configurable diagnostics levels (compile-time flag vs web interface option)
-  - Optimize UART task for production use while maintaining debugging capabilities
-  - Balance between minimal overhead and useful diagnostics
-  - Consider web-configurable diagnostic levels instead of compile flags
-  - Profile and optimize critical data path for high-speed operation
+- [ ] **Fix Spurious Bootloader Mode Entry**
+  - **Option 1: Disable DTR/RTS bootloader trigger**
+    - Complete immunity to spurious resets
+    - Firmware upload only via BOOT+RESET buttons
+    - Most reliable but less convenient
+  
+  - **Option 2: Smart DTR/RTS filtering**
+    - Analyze timing patterns of legitimate bootloader sequence
+    - Implement debouncing/filtering for DTR/RTS signals
+    - Allow normal resets but block bootloader entry
+    - Study USB_SERIAL_JTAG peripheral registers for configuration options
+    - May need ESP-IDF modifications or workarounds
+  
+  - Start with Option 2, fallback to Option 1 if not feasible
 
-- [ ] **Code Refactoring & Size Reduction**
-  - Reduce size of main.cpp, uartbridge.cpp, and html_main_page.h
-  - Consider splitting into logical modules vs combining small related files
-  - Extract button handling logic from main.cpp
-  - Separate JavaScript from HTML templates
-  - Clean up redundant code and optimize memory usage
+- [ ] **Remove Legacy Code** *(Partially completed)*
+  - ✅ TODO comments cleaned from defines.h
+  - ✅ Unused #defines removed
+  - [ ] Check all files for remaining TODO comments
+  - [ ] Review for any commented-out code blocks
+  - [ ] Remove unused function declarations
 
-- [ ] **Button Handler Module**
-  - Extract button logic from main.cpp (~100 lines)
-  - Support for additional patterns:
-    - Double-click actions
-    - Different hold durations
-    - Combination patterns
+- [ ] **Code Size Reduction**
+  - main.cpp is getting large (~600 lines)
+  - Consider extracting button handling to separate module
+  - Review uartbridge.cpp for potential optimizations
+  - HTML templates could be compressed or minified
 
-- [ ] **Code Cleanup - Old TODOs**
-  - Search for TODO comments previously located in defines.h
-  - Review and address or remove outdated TODO items
-  - Consolidate all TODOs in this file
+## Priority 2 - Enhanced Features
 
-## Priority 3 - Enhanced Features
+- [ ] **Backup Configuration Recovery**
+  - Implement automatic recovery from backup.json when config.json is corrupted
+  - Currently backup is created but never used
+  - Add integrity check on config load
 
-- [ ] **High-Speed UART Optimization** *(For 921600+ baud rates)*
-  - Increase adaptive buffer size to 512 bytes
-  - Consider DMA implementation (requires ESP-IDF)
-  - Profile and optimize critical path
-  - Note: Current implementation works well up to 460800 baud
-
-- [ ] **WiFi Mode Management**
+- [ ] **WiFi Mode Improvements**
   - "Persistent WiFi mode" checkbox in web interface
-  - Option to disable automatic WiFi timeout
-  - Manual WiFi on/off control buttons
-  - Save WiFi mode preference to config.json
+  - Option to disable automatic 20-minute timeout
+  - Manual WiFi on/off control
+  - Save WiFi mode preference
 
-- [ ] **MAVLink Protocol Parsing Mode** *(Optional Advanced Feature)*
-  - Add protocol detection and parsing
-  - Forward complete MAVLink packets without fragmentation
-  - Only beneficial at speeds ≥460800 baud
-  - Potential performance gain up to 20%
-  - Note: Current adaptive buffering already achieves 95%+ efficiency
+- [ ] **USB Device Selection (Host Mode)**
+  - Web interface to list connected USB devices
+  - Allow selection when multiple CDC devices connected
+  - Show device VID/PID and descriptive names
+  - Currently only connects to first CDC device found
 
-- [ ] **Configurable GPIO Pins**
-  - Web interface for pin selection (TX/RX/CTS/RTS)
-  - Support different ESP32 variants and development boards
-  - Save pin configuration to config.json
-  - Required when expanding beyond ESP32-S3-Zero
-  - Pin validation to prevent conflicts
+## Priority 3 - Performance Optimization
+
+- [ ] **High-Speed UART Optimization** *(For 921600+ baud)*
+  - Consider increasing adaptive buffer beyond 256 bytes
+  - Profile current implementation at maximum speeds
+  - Evaluate DMA benefits (requires more ESP-IDF integration)
+  - Note: Current implementation works well up to 500000 baud
+
+- [ ] **Diagnostic System Refactoring**
+  - Make diagnostic levels configurable via web interface
+  - Separate production vs debug diagnostics
+  - Add performance metrics display
+  - Memory usage trends over time
 
 ## Priority 4 - Future Features
 
-- [ ] **Alternative Data Transmission Modes**
-  - **UDP Forwarding** - UART data over WiFi UDP packets
+- [ ] **Alternative Data Modes**
+  - **UDP Bridge Mode** - UART over WiFi UDP
     - Configure target IP and port
-    - Useful for remote debugging
-  - **TCP Server Mode** - Accept TCP connections for UART access
+    - Useful for wireless telemetry
+  - **TCP Server Mode** - Accept TCP connections
     - Multiple client support
-    - Connection management
+    - Authentication options
   - **WebSocket Streaming** - Real-time data in browser
-    - JavaScript client example
-    - Data visualization possibilities
-  - Allow UART bridge to work simultaneously with WiFi
+    - Built-in terminal emulator
+    - Data visualization
 
-- [ ] **SBUS Protocol Support**
-  - SBUS input mode (RC receiver → USB)
-  - SBUS output mode (USB → RC servos)
-  - Configuration: 100000 baud, 8E2, inverted
-  - Auto-detection of SBUS data
-  - Popular in RC/drone applications
-  - Extends compatibility with flight controllers
+- [ ] **Protocol-Specific Optimizations**
+  - **MAVLink Mode** - Parse and optimize MAVLink packets
+    - Beneficial at high speeds (>460800 baud)
+    - Can reduce latency by sending complete packets immediately
+    - Potential 10-20% throughput improvement
+    - Eliminates 5ms pause waiting for packet boundaries
+  - **SBUS Mode** - RC receiver protocol support
+    - 100000 baud, 8E2, inverted signal
+    - Auto-detection and configuration
 
-- [ ] **Dark Theme for Web Interface**
-  - Toggle button in web interface
-  - Store preference in config.json
-  - CSS variables for easy theme switching
+- [ ] **Advanced Configuration**
+  - Configurable GPIO pins via web interface
+  - Support for different ESP32 board variants
+  - Import/Export configuration files
+  - Configuration profiles for common use cases
+
+## Low Priority / Nice to Have
+
+- [ ] **UI Improvements**
+  - Dark theme toggle
+  - Mobile-responsive improvements
+  - Real-time data graphs
+  - Connection quality indicators
+
+- [ ] **Documentation**
+  - Video tutorials
+  - Protocol-specific setup guides
+  - Troubleshooting flowchart
+  - Performance tuning guide
+
+## Notes
+
+- Current adaptive buffering achieves 95%+ efficiency for most protocols
+- USB Auto mode needs VBUS detection implementation
+- Consider security implications before adding network streaming modes
+- Maintain backward compatibility with existing installations
