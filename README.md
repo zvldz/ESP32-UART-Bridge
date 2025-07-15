@@ -102,11 +102,34 @@ ESP32 acts as USB host for serial devices:
 - Connect USB modems, GPS receivers, or other USB-serial devices to ESP32
 - Data is bridged between USB device and UART pins
 - Useful for adding USB connectivity to devices with only UART
+- **⚠️ Power Requirements**: In Host mode, you MUST provide external 5V power to the ESP32 board pins (VIN or 5V pin). The USB-C connector cannot power both ESP32 and connected USB devices.
 
 ### Mode Selection
 - Configure via web interface
 - Setting is saved and persists across reboots
 - Requires restart when changing modes
+
+## Power Requirements
+
+### Device Mode
+- Power via USB-C from computer - no external power needed
+- ESP32 and connected UART device are powered from USB
+
+### Host Mode  
+- **MUST** provide external 5V power via board pins (VIN/5V pin)
+- USB-C cannot provide enough power for both ESP32 and connected USB devices
+- External power supplies 5V VBUS to connected USB devices
+
+### ⚠️ Important Safety Warning
+**Never connect both USB-C and external power simultaneously!** This can damage the board.
+(Some boards have protection diodes that allow dual power, but verify your board's schematic first. Use at your own risk!)
+
+### Changing Settings
+To enter WiFi configuration mode and change settings (including USB mode):
+- Power ONLY via USB-C (disconnect external power)
+- OR power ONLY via external pins (disconnect USB-C)
+- The USB mode setting doesn't matter for configuration
+- Just ensure only ONE power source is connected
 
 ## Configuration Parameters
 
