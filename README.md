@@ -12,13 +12,13 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
 - **Smart Protocol Detection**: Adaptive buffering automatically optimizes for different data patterns
-  - Binary protocols (MAVLink, Modbus RTU): Preserves packet boundaries
-  - Text protocols (NMEA, AT commands): Line-based optimization
-  - Stream protocols: Minimal latency mode
+ - Binary protocols (MAVLink, Modbus RTU): Preserves packet boundaries
+ - Text protocols (NMEA, AT commands): Line-based optimization
+ - Stream protocols: Minimal latency mode
 - **USB Host/Device Modes**: 
-  - Device mode: Connect ESP32 to PC as USB serial device
-  - Host mode: Connect USB modems or serial adapters to ESP32
-  - Configurable via web interface
+ - Device mode: Connect ESP32 to PC as USB serial device
+ - Host mode: Connect USB modems or serial adapters to ESP32
+ - Configurable via web interface
 - **High Performance**: Adaptive buffering (200μs to 15ms) for optimal throughput
 - **Web Configuration**: Easy setup via WiFi access point
 - **Visual Feedback**: RGB LED shows data flow direction and system status
@@ -30,46 +30,55 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## Hardware
 
-- **Board**: ESP32-S3-Zero or compatible ESP32-S3 development board
+- **Recommended Board**: [Waveshare ESP32-S3-Zero](https://www.waveshare.com/wiki/ESP32-S3-Zero)
+ - Compact size (25x24mm)
+ - Built-in WS2812 RGB LED
+ - USB-C connector with native USB support
+ - 4MB Flash
+- **Alternative**: Compatible ESP32-S3 boards
+ - Must have ESP32-S3 chip with native USB support (for USB Host mode)
+ - USB-C or micro-USB with data lines connected to ESP32-S3
+ - Similar pinout and features to ESP32-S3-Zero
+ - Note: May require code modifications for different LED pins or missing components
 - **Connections**:
-  - GPIO4: UART RX (connect to device TX)
-  - GPIO5: UART TX (connect to device RX)
-  - GPIO21: RGB LED (WS2812 - built-in)
-  - GPIO0: BOOT button (built-in)
-  - GPIO6/7: RTS/CTS (optional flow control)
+ - GPIO4: UART RX (connect to device TX)
+ - GPIO5: UART TX (connect to device RX)  
+ - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
+ - GPIO0: BOOT button (built-in)
+ - GPIO6/7: RTS/CTS (optional flow control)
 
 ## Quick Start
 
 1. **Connect Hardware**:
-   - Device TX → ESP32 GPIO4
-   - Device RX → ESP32 GPIO5
-   - Device GND → ESP32 GND
-   - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
+  - Device TX → ESP32 GPIO4
+  - Device RX → ESP32 GPIO5
+  - Device GND → ESP32 GND
+  - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
 
 2. **Power On**:
-   - Connect USB-C cable to computer
-   - Rainbow LED effect indicates successful boot
+  - Connect USB-C cable to computer
+  - Rainbow LED effect indicates successful boot
 
 3. **Configure** (first time only):
-   - Triple-click BOOT button (LED turns solid purple)
-   - Connect to WiFi network "ESP-Bridge" (password: 12345678)
-   - Open web browser to 192.168.4.1
-   - Set your UART parameters and WiFi credentials
-   - Choose USB mode (Device/Host)
-   - Click "Save & Reboot"
+  - Triple-click BOOT button (LED turns solid purple)
+  - Connect to WiFi network "ESP-Bridge" (password: 12345678)
+  - Open web browser to 192.168.4.1
+  - Set your UART parameters and WiFi credentials
+  - Choose USB mode (Device/Host)
+  - Click "Save & Reboot"
 
 4. **Use**:
-   - **Device Mode**: ESP32 appears as COM port on computer
-     - Terminal software (PuTTY, CoolTerm, etc.)
-     - Industrial HMI software
-     - GPS utilities
-     - Ground control stations
-     - Custom applications
-   - **Host Mode**: Connect USB devices to ESP32's USB port
-   - LED flashes indicate data flow:
-     - Blue: Device → Computer
-     - Green: Computer → Device
-     - Cyan: Bidirectional
+  - **Device Mode**: ESP32 appears as COM port on computer
+    - Terminal software (PuTTY, CoolTerm, etc.)
+    - Industrial HMI software
+    - GPS utilities
+    - Ground control stations
+    - Custom applications
+  - **Host Mode**: Connect USB devices to ESP32's USB port
+  - LED flashes indicate data flow:
+    - Blue: Device → Computer
+    - Green: Computer → Device
+    - Cyan: Bidirectional
 
 ## Common Use Cases
 
@@ -139,9 +148,9 @@ The web interface allows configuration of:
 1. Clone repository
 2. Open in VSCode with PlatformIO
 3. Select environment:
-   - `production` - For normal use (no debug output)
-   - `production_debug` - With crash diagnostics
-   - `full_debug` - Complete debug output (bridge disabled)
+  - `production` - For normal use (no debug output)
+  - `production_debug` - With crash diagnostics
+  - `full_debug` - Complete debug output (bridge disabled)
 4. Build and upload
 
 ### Build Environments
