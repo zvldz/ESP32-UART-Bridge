@@ -33,6 +33,19 @@ const char HTML_HELP_PROTOCOL_INFO[] PROGMEM = R"rawliteral(
 </div>
 )rawliteral";
 
+const char HTML_HELP_USB_MODES[] PROGMEM = R"rawliteral(
+<div class="section">
+<h3>🔌 USB Modes</h3>
+<div class="success">
+<strong>The bridge supports two USB operation modes:</strong><br>
+- <strong>Device Mode (default):</strong> ESP32 acts as USB-to-Serial converter, appears as COM port on PC<br>
+- <strong>Host Mode:</strong> ESP32 acts as USB host for CDC devices (modems, GPS receivers, etc.)<br>
+<br>
+Configure USB mode in the main settings page. Requires restart after change.
+</div>
+</div>
+)rawliteral";
+
 const char HTML_HELP_PIN_TABLE[] PROGMEM = R"rawliteral(
 <div class="section">
 <h3>Pin Connections</h3>
@@ -105,8 +118,12 @@ For 5V devices, you MUST use a level shifter (e.g., TXS0108E).
 <li><strong>Physical Connection:</strong> Connect TX→GPIO4, RX→GPIO5, GND→GND</li>
 <li><strong>Device Settings:</strong> Configure UART protocol and baud rate on your device</li>
 <li><strong>Bridge Settings:</strong> Use this web interface to configure UART speed</li>
+<li><strong>USB Mode:</strong> Select Device or Host mode based on your setup</li>
 <li><strong>USB Connection:</strong> Connect USB cable and select COM port in your application</li>
 </ol>
+<p style="margin-top: 15px;">
+<strong>📚 Full documentation:</strong> <a href="https://github.com/zvldz/ESP32-UART-Bridge" target="_blank" style="color: #007bff;">https://github.com/zvldz/ESP32-UART-Bridge</a>
+</p>
 </div>
 )rawliteral";
 
