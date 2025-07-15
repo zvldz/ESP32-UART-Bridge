@@ -1,23 +1,18 @@
 #include "usb_interface.h"
 #include "logging.h"
-
-// Arduino.h already includes pins_arduino.h, but let's be explicit
+#include "types.h"
 #include <Arduino.h>
-
-// Check if we're building with ESP-IDF support
-#if defined(ESP_PLATFORM) && defined(CONFIG_USB_HOST_ENABLED)
 
 // ESP-IDF USB Host includes
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
-
-// USB Host library
 #include "usb/usb_host.h"
+#include "usb/usb_types_ch9.h"
 
-// Note: CDC ACM host driver might need separate component installation
-// For now, we'll implement basic CDC support ourselves
+// Global USB mode variable
+extern UsbMode usbMode;
 
 #define USB_HOST_PRIORITY 20
 #define USB_HOST_STACK_SIZE 4096
@@ -28,7 +23,7 @@ class UsbHost : public UsbInterface {
 private:
     uint32_t baudrate;
     bool initialized;
-    bool connected;
+    bool is_connected;  // Renamed to avoid conflict with method
     usb_device_handle_t device_handle;
     
     // Ring buffers for data
@@ -58,7 +53,7 @@ private:
     usb_transfer_t *out_transfer;
 
 public:
-    UsbHost(uint32_t baud) : baudrate(baud), initialized(false), connected(false),
+    UsbHost(uint32_t baud) : baudrate(baud), initialized(false), is_connected(false),
                              device_handle(NULL), rx_head(0), rx_tail(0), 
                              tx_head(0), tx_tail(0), bulk_in_ep(0), bulk_out_ep(0),
                              in_transfer(NULL), out_transfer(NULL) {
@@ -115,7 +110,7 @@ public:
     }
     
     int available() override {
-        if (!connected) return 0;
+        if (!is_connected) return 0;
         
         xSemaphoreTake(rx_mutex, portMAX_DELAY);
         int count = (rx_head >= rx_tail) ? 
@@ -127,7 +122,7 @@ public:
     }
     
     int availableForWrite() override {
-        if (!connected) return 0;
+        if (!is_connected) return 0;
         
         xSemaphoreTake(tx_mutex, portMAX_DELAY);
         int space = (tx_tail > tx_head) ? 
@@ -139,7 +134,7 @@ public:
     }
     
     int read() override {
-        if (!connected || available() == 0) return -1;
+        if (!is_connected || available() == 0) return -1;
         
         xSemaphoreTake(rx_mutex, portMAX_DELAY);
         uint8_t data = rx_buffer[rx_tail];
@@ -150,7 +145,7 @@ public:
     }
     
     size_t write(uint8_t data) override {
-        if (!connected || availableForWrite() == 0) return 0;
+        if (!is_connected || availableForWrite() == 0) return 0;
         
         xSemaphoreTake(tx_mutex, portMAX_DELAY);
         tx_buffer[tx_head] = data;
@@ -164,7 +159,7 @@ public:
     }
     
     size_t write(const uint8_t* buffer, size_t size) override {
-        if (!connected) return 0;
+        if (!is_connected) return 0;
         
         size_t written = 0;
         for (size_t i = 0; i < size; i++) {
@@ -176,11 +171,11 @@ public:
     }
     
     bool connected() override {
-        return initialized && connected;
+        return initialized && is_connected;
     }
     
     void flush() override {
-        if (!connected) return;
+        if (!is_connected) return;
         
         // Wait for TX buffer to empty
         while (tx_head != tx_tail) {
@@ -191,7 +186,7 @@ public:
     void end() override {
         log_msg("USB Host: Shutting down...");
         
-        connected = false;
+        is_connected = false;
         
         if (usb_host_task_handle) {
             vTaskDelete(usb_host_task_handle);
@@ -221,7 +216,7 @@ private:
             usb_host_client_handle_events(client_handle, portMAX_DELAY);
             
             // Handle TX data
-            if (instance && instance->connected && instance->tx_head != instance->tx_tail) {
+            if (instance && instance->is_connected && instance->tx_head != instance->tx_tail) {
                 instance->transmitPendingData();
             }
             
@@ -270,8 +265,13 @@ private:
             return;
         }
         
-        log_msg("USB Host: Device VID=0x" + String(dev_info.idVendor, HEX) + 
-                " PID=0x" + String(dev_info.idProduct, HEX));
+        // Get device descriptor for VID/PID
+        const usb_device_desc_t *device_desc;
+        err = usb_host_get_device_descriptor(device_handle, &device_desc);
+        if (err == ESP_OK) {
+            log_msg("USB Host: Device VID=0x" + String(device_desc->idVendor, HEX) + 
+                    " PID=0x" + String(device_desc->idProduct, HEX));
+        }
         
         // Get configuration descriptor
         const usb_config_desc_t *config_desc;
@@ -330,13 +330,13 @@ private:
             return;
         }
         
-        connected = true;
+        is_connected = true;
         log_msg("USB Host: CDC device connected and configured");
     }
     
     // Handle device disconnection
     void handleDeviceDisconnection() {
-        connected = false;
+        is_connected = false;
         cleanup();
     }
     
@@ -411,7 +411,7 @@ private:
             xSemaphoreGive(self->rx_mutex);
             
             // Resubmit transfer
-            if (self->connected) {
+            if (self->is_connected) {
                 transfer->num_bytes = 64;
                 usb_host_transfer_submit(transfer);
             }
@@ -478,35 +478,6 @@ private:
 
 // Static instance pointer
 UsbHost* UsbHost::instance = nullptr;
-
-#else // Not ESP-IDF or USB Host not enabled
-
-// Fallback implementation
-class UsbHost : public UsbInterface {
-private:
-    uint32_t baudrate;
-    bool initialized;
-
-public:
-    UsbHost(uint32_t baud) : baudrate(baud), initialized(false) {}
-    
-    void init() override {
-        log_msg("USB Host: Not available in this configuration");
-        log_msg("USB Host: Enable ESP-IDF framework in platformio.ini");
-        initialized = false;
-    }
-    
-    int available() override { return 0; }
-    int availableForWrite() override { return 0; }
-    int read() override { return -1; }
-    size_t write(uint8_t data) override { return 0; }
-    size_t write(const uint8_t* buffer, size_t size) override { return 0; }
-    bool connected() override { return false; }
-    void flush() override {}
-    void end() override { initialized = false; }
-};
-
-#endif // ESP_PLATFORM && CONFIG_USB_HOST_ENABLED
 
 // Factory function
 UsbInterface* createUsbHost(uint32_t baudrate) {

@@ -170,7 +170,7 @@ const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
 <select name="usbmode" id="usbmode" style="width: 200px;">
   <option value="device">Device (Connect to PC)</option>
   <option value="host">Host (Connect USB Modem)</option>
-  <option value="auto">Auto-detect</option>
+  <option value="auto" disabled>(Auto - not supported)</option>
 </select>
 </div>
 <h4 style="margin-top: 20px;">WiFi Configuration</h4>

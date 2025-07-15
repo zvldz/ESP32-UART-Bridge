@@ -60,7 +60,7 @@ void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, U
 
 // UART Bridge Task - runs with high priority (on Core 0 for multi-core systems)
 void uartBridgeTask(void* parameter) {
-  // wait init
+  // Wait for system initialization
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   log_msg("UART task started on core " + String(xPortGetCoreID()));
@@ -75,8 +75,8 @@ void uartBridgeTask(void* parameter) {
   unsigned long lastByteTime = 0;
   unsigned long bufferStartTime = 0;
 
-  // Add counter for WiFi mode
-  int wifiModeYieldCounter = 0;
+  // Timer for WiFi mode yielding (replaces counter)
+  static unsigned long lastWifiYield = 0;
 
   // WDT protection
   static unsigned long lastWdtFeed = 0;
@@ -127,13 +127,10 @@ void uartBridgeTask(void* parameter) {
     // Only run UART bridge in normal mode or config mode
     if (currentMode == MODE_NORMAL || currentMode == MODE_CONFIG) {
 
-      // Add yield in WiFi mode
-      if (currentMode == MODE_CONFIG) {
-        wifiModeYieldCounter++;
-        if (wifiModeYieldCounter >= 10) {  // Every 10 iterations
-          vTaskDelay(pdMS_TO_TICKS(5));   // Give time to WiFi stack
-          wifiModeYieldCounter = 0;
-        }
+      // Yield CPU time to WiFi stack periodically in config mode
+      if (currentMode == MODE_CONFIG && millis() - lastWifiYield > 50) {
+        vTaskDelay(pdMS_TO_TICKS(5));   // Give time to WiFi stack
+        lastWifiYield = millis();
       }
 
       // UART → USB (adaptive buffering optimized for protocol efficiency)
