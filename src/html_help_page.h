@@ -43,6 +43,14 @@ const char HTML_HELP_USB_MODES[] PROGMEM = R"rawliteral(
 <br>
 Configure USB mode in the main settings page. Requires restart after change.
 </div>
+<div class="warning" style="background-color: #ffebee; border-left-color: #f44336;">
+<strong>⚡ Power Safety:</strong><br>
+- <strong>Device Mode:</strong> Power via USB-C only<br>
+- <strong>Host Mode:</strong> Power via external 5V pins only<br>
+- <strong>Configuration Mode:</strong> Either power source works, but use ONLY ONE<br>
+- <strong style="color: #d32f2f;">NEVER connect USB-C and external power at the same time!</strong><br>
+<small>(Some boards have protection diodes allowing dual power, but verify your board's schematic first. Use at your own risk!)</small>
+</div>
 </div>
 )rawliteral";
 
