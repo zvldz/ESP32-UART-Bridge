@@ -29,6 +29,9 @@ Preferences preferences;
 HardwareSerial uartBridgeSerial(1);  // UART1
 FlowControlStatus flowControlStatus = {false, false};
 
+// Global USB mode variable
+UsbMode usbMode = USB_MODE_DEVICE;
+
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t webServerTaskHandle = NULL;
@@ -76,13 +79,19 @@ void setup() {
   // Print boot info first
   printBootInfo();
 
+  // Initialize configuration first to get defaults
+  config_init(&config);
+
   // Initialize Serial based on mode
   if (DEBUG_MODE == 1) {
-    Serial.begin(115200);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    Serial.println("=== " + config.device_name + " Starting (DEBUG MODE) ===");
-    Serial.println("WARNING: UART bridge functionality DISABLED in debug mode");
-    Serial.println("Set DEBUG_MODE to 0 for production use");
+    // Now config is initialized, safe to check usb_mode
+    if (config.usb_mode != USB_MODE_HOST) {
+      Serial.begin(115200);
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      Serial.println("=== " + config.device_name + " Starting (DEBUG MODE) ===");
+      Serial.println("WARNING: UART bridge functionality DISABLED in debug mode");
+      Serial.println("Set DEBUG_MODE to 0 for production use");
+    }
   } else {
     // Production mode - suppress logs and clear buffer
     #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL == 0
@@ -106,9 +115,6 @@ void setup() {
 
   // Initialize logging system
   logging_init();
-
-  // Initialize configuration first to get device name
-  config_init(&config);
 
   log_msg(config.device_name + " v" + config.version + " starting");
 
@@ -146,10 +152,13 @@ void setup() {
   log_msg("Initializing configuration...");
   config_init(&config);
 
-  // Load configuration from file
+  // Load configuration from file (this may override defaults including usb_mode)
   log_msg("Loading configuration...");
   config_load(&config);
   log_msg("Configuration loaded");
+
+  // Update global usbMode after loading config
+  usbMode = config.usb_mode;
 
   // Check for crash and log if needed
   crashlog_check_and_save();
@@ -267,6 +276,9 @@ void initNormalMode() {
   // Set LED mode for data flash explicitly
   led_set_mode(LED_MODE_DATA_FLASH);
 
+  // Set global USB mode based on configuration
+  usbMode = config.usb_mode;
+
   // Create USB interface based on configuration
   if (DEBUG_MODE == 0) {
     switch(config.usb_mode) {
@@ -306,6 +318,9 @@ void initNormalMode() {
 void initConfigMode() {
   // Set LED mode for WiFi config
   led_set_mode(LED_MODE_WIFI_ON);
+
+  // Set USB mode to device for WiFi configuration
+  usbMode = USB_MODE_DEVICE;
 
   // Create USB interface even in config mode (for bridge functionality)
   if (DEBUG_MODE == 0) {

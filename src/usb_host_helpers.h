@@ -1,10 +1,13 @@
 #ifndef USB_HOST_HELPERS_H
 #define USB_HOST_HELPERS_H
 
-// Helper macros for ESP-IDF USB Host
+// Helper macros and functions for ESP-IDF USB Host implementation
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "usb/usb_types_ch9.h"
+#include "usb/usb_host.h"
 
 // USB Host configuration helpers
 #define USB_HOST_DEFAULT_CONFIG() { \
@@ -12,6 +15,7 @@ extern "C" {
     .intr_flags = ESP_INTR_FLAG_LEVEL1, \
 }
 
+// CDC ACM driver configuration helper
 #define CDC_ACM_DEFAULT_CONFIG() { \
     .driver_task_stack_size = 4096, \
     .driver_task_priority = 10, \

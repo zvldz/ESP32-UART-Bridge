@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include "types.h"
 
+// Global USB mode variable
+extern UsbMode usbMode;
+
 // Abstract interface for USB communication
 class UsbInterface {
 public:

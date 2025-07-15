@@ -1,9 +1,12 @@
 #include "logging.h"
 #include <Arduino.h>
+#include "types.h"
+#include "usb_interface.h"
 
-// External mutex created in main.cpp
+// External mutex and flags
 extern SemaphoreHandle_t logMutex;
 extern const int DEBUG_MODE;
+extern UsbMode usbMode;
 
 // Logging system internal data
 static String logBuffer[LOG_BUFFER_SIZE];
@@ -13,11 +16,10 @@ static bool initialized = false;
 
 // Initialize logging system
 void logging_init() {
-  // Ensure proper initialization to prevent heap fragmentation
   if (!initialized) {
     for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
       logBuffer[i] = "";
-      logBuffer[i].reserve(128);  // Pre-allocate memory for each log entry
+      logBuffer[i].reserve(128);  // Pre-allocate memory
     }
     initialized = true;
   }
@@ -25,28 +27,23 @@ void logging_init() {
   logCount = 0;
 }
 
-// Thread-safe logging implementation with non-blocking mutex
+// Thread-safe log with optional Serial output
 void log_msg(String message) {
   if (!message || message.length() == 0) return;
 
-  // Thread-safe logging - non-blocking to prevent UART task stalls
-  if (xSemaphoreTake(logMutex, 0) == pdTRUE) {  // 0 = don't wait
-    // Limit message length to prevent memory issues
+  if (xSemaphoreTake(logMutex, 0) == pdTRUE) {
     if (message.length() > 120) {
       message = message.substring(0, 120) + "...";
     }
 
-    // Add timestamp with uptime
     unsigned long uptimeMs = millis();
     unsigned long seconds = uptimeMs / 1000;
     unsigned long ms = uptimeMs % 1000;
     String timestamp = "[" + String(seconds) + "." +
-                      String(ms / 100) + "s] ";  // One decimal place
+                      String(ms / 100) + "s] ";
 
-    // Clear old string before assignment to prevent memory fragmentation
     logBuffer[logIndex].clear();
     logBuffer[logIndex] = timestamp + message;
-    //logBuffer[logIndex] = message;
 
     logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
     if (logCount < LOG_BUFFER_SIZE) {
@@ -54,31 +51,29 @@ void log_msg(String message) {
     }
     xSemaphoreGive(logMutex);
   }
-  // If mutex is busy - skip this log to prevent blocking
 
-  // Duplicate to Serial in debug mode (without timestamp)
-  if (DEBUG_MODE == 1) {
+  // Conditionally forward log to Serial
+  if (DEBUG_MODE == 1 && usbMode != USB_MODE_HOST) {
     Serial.println(message);
+  } else if (DEBUG_MODE == 1 && usbMode == USB_MODE_HOST) {
+    // Serial output suppressed in USB Host mode
+    // Could add web-only logging indicator here if needed
   }
 }
 
-// Get recent log entries for web interface
+// Return logs for web interface
 void logging_get_recent_logs(String* buffer, int maxCount, int* actualCount) {
   if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
     *actualCount = 0;
     int maxEntries = min(maxCount, logCount);
 
-    // Calculate starting index for last N entries
     int startIndex;
     if (logCount < LOG_BUFFER_SIZE) {
-      // Buffer not full yet, start from beginning
       startIndex = max(0, logCount - maxEntries);
     } else {
-      // Buffer is full, calculate from current position
       startIndex = (logIndex - maxEntries + LOG_BUFFER_SIZE) % LOG_BUFFER_SIZE;
     }
 
-    // Copy entries to output buffer
     for (int i = 0; i < maxEntries; i++) {
       int index = (startIndex + i) % LOG_BUFFER_SIZE;
       if (logBuffer[index].length() > 0) {
@@ -96,7 +91,6 @@ void logging_clear() {
   if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
     logIndex = 0;
     logCount = 0;
-    // Clear strings but keep reserved memory
     for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
       logBuffer[i].clear();
     }
