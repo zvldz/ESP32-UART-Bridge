@@ -41,6 +41,39 @@
 
 ## Priority 2 - Enhanced Features
 
+- [ ] **Multi-Port UART Bridge/Splitter Mode**
+  - **Phase 1 - Core Multi-Port (Higher Priority)**:
+    - **Device 1** (Primary): GPIO 4/5 (UART1) - current pins
+    - **Device 2** (Flexible):
+      - Mode A: USB Serial (current behavior)
+      - Mode B: UART0 on GPIO 8/9 (left side of board)
+    - **Device 3** (Auxiliary): GPIO 11/12 (UART2, right side of board)
+      - Off/Bridge/Monitor/Debug modes
+      - Debug port fixed at 115200 baud
+    - **Pin selection rationale**:
+      - All pins have through-holes (easy soldering)
+      - Paired pins are adjacent for clean wiring
+      - Left/right separation for better cable management
+    - **Operating modes**: Simple bridge, Splitter, Multi-bridge
+    - **Benefits**: Hardware debug always available, solves USB Host logging
+  
+  - **Phase 2 - Network Port (Lower Priority)**:
+    - **Device 4** (Network): Virtual port over WiFi
+    - Requires "WiFi Mode Improvements" implementation first
+    - TCP/UDP/WebSocket support
+    - Extends bridge to network connectivity
+  
+  - **Configuration**:
+    - Web interface for mode selection
+    - Bridge baud rate for hardware ports
+    - Device 3 mode selector
+    - Independent log levels for web/UART
+  
+  - **Code Improvements**:
+    - Remove DEBUG_MODE conditionals
+    - Unified logging system
+    - Clean separation of bridge and debug data
+
 - [ ] **Backup Configuration Recovery**
   - Implement automatic recovery from backup.json when config.json is corrupted
   - Currently backup is created but never used
