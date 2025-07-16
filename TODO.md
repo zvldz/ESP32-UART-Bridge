@@ -39,58 +39,59 @@
   - Review uartbridge.cpp for potential optimizations
   - HTML templates could be compressed or minified
 
-## Priority 2 - Enhanced Features
 
-- [ ] **Multi-Port UART Bridge/Splitter Mode**
-  - **Phase 1 - Core Multi-Port (Higher Priority)**:
-    - **Device 1** (Primary): GPIO 4/5 (UART1) - current pins
-    - **Device 2** (Flexible):
-      - Mode A: USB Serial (current behavior)
-      - Mode B: UART0 on GPIO 8/9 (left side of board)
-    - **Device 3** (Auxiliary): GPIO 11/12 (UART2, right side of board)
-      - Off/Bridge/Monitor/Debug modes
-      - Debug port fixed at 115200 baud
-    - **Pin selection rationale**:
-      - All pins have through-holes (easy soldering)
-      - Paired pins are adjacent for clean wiring
-      - Left/right separation for better cable management
-    - **Operating modes**: Simple bridge, Splitter, Multi-bridge
-    - **Benefits**: Hardware debug always available, solves USB Host logging
-  
-  - **Phase 2 - Network Port (Lower Priority)**:
-    - **Device 4** (Network): Virtual port over WiFi
-    - Requires "WiFi Mode Improvements" implementation first
-    - TCP/UDP/WebSocket support
-    - Extends bridge to network connectivity
-  
-  - **Configuration**:
-    - Web interface for mode selection
-    - Bridge baud rate for hardware ports
-    - Device 3 mode selector
-    - Independent log levels for web/UART
-  
-  - **Code Improvements**:
-    - Remove DEBUG_MODE conditionals
-    - Unified logging system
-    - Clean separation of bridge and debug data
+## Priority 2 — Logging System and Device Roles
 
-- [ ] **Backup Configuration Recovery**
-  - Implement automatic recovery from backup.json when config.json is corrupted
-  - Currently backup is created but never used
-  - Add integrity check on config load
+### Logging Channels
 
-- [ ] **WiFi Mode Improvements**
-  - "Persistent WiFi mode" checkbox in web interface
-  - Option to disable automatic 20-minute timeout
-  - Manual WiFi on/off control
-  - Save WiFi mode preference
+There are three distinct logging channels, each with its own configurable verbosity level:
 
-- [ ] **USB Device Selection (Host Mode)**
-  - Web interface to list connected USB devices
-  - Allow selection when multiple CDC devices connected
-  - Show device VID/PID and descriptive names
-  - Currently only connects to first CDC device found
+- **Web (GUI) Logs** — displayed in the browser, optionally with filters.
+- **UART Logs** — output through UART (Device 3, TX pin 11).
+- **Network Logs** — transmitted over UDP when Wi-Fi is active (Device 4).
 
+Each channel can be enabled or disabled independently and can have its own log level (e.g. ERROR, WARNING, DEBUG).
+
+### Device Roles
+
+Each device can operate in one of several roles, or be disabled (`None`). Roles and pin assignments must be clearly configured through the web interface using a dropdown selector.
+
+#### Device 1 — Main UART Interface (Required)
+- **Always enabled**, uses fixed UART TX/RX on GPIO 4/5.
+- Protocol is generic UART (e.g. MAVLink, NMEA), not limited to MAVLink.
+- This device **does not participate in logging**.
+
+#### Device 2 — Secondary Communication Channel
+- Can be:
+  - Disabled
+  - UART over GPIO 8/9
+  - USB Device mode (connected to PC)
+  - USB Host mode (connected to external USB-serial adapter)
+- Can be a participant in a bidirectional UART bridge with Device 1.
+- Not used for logging.
+
+#### Device 3 — Logging or Mirror UART
+- Can be:
+  - Disabled
+  - Mirror of Device 1 (unidirectional 1 → 3)
+  - Full UART bridge with Device 1 (bidirectional)
+  - Dedicated UART log channel (TX only) at 115200 baud
+- Uses fixed UART pins 11/12.
+
+#### Device 4 — Wi-Fi / Network Channel
+- Can be:
+  - Disabled
+  - Network bridge (e.g. MAVLink-over-UDP)
+  - Logging over Wi-Fi (UDP logs)
+- Wi-Fi must be active for this device to be used.
+
+**Note**: Only one role can be active per device. Conflicting configurations (e.g. enabling both mirror and log on Device 3) must be blocked in the UI.
+
+### Logging Policies (Default Suggestions)
+- **UART logs (Device 3)** — log only errors by default
+- **Network logs (Device 4)** — log only errors or be disabled
+- **Web logs (GUI)** — full DEBUG by default (only shown in UI)
+- **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
 ## Priority 3 - Performance Optimization
 
 - [ ] **High-Speed UART Optimization** *(For 921600+ baud)*
@@ -154,3 +155,4 @@
 - USB Auto mode needs VBUS detection implementation
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
+
