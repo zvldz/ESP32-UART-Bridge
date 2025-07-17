@@ -8,6 +8,8 @@
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
 
+> **⚠️ BETA SOFTWARE**: This is a beta version and may not work stably in all configurations. Please report any issues you encounter.
+
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
