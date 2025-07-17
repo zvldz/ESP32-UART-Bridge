@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -27,7 +27,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
 - **Crash Logging**: Automatic crash detection and logging for diagnostics
-- **Debug Mode**: Diagnostic output without affecting bridge operation
+- **Flexible Logging**: Multi-level logging system with web interface
 - **OTA Updates**: Firmware updates via web interface
 
 ## Hardware
@@ -37,8 +37,10 @@ Universal UART to USB bridge with web configuration interface for any serial com
  - Built-in WS2812 RGB LED
  - USB-C connector with native USB support
  - 4MB Flash
+ - Dual-core processor (required)
 - **Alternative**: Compatible ESP32-S3 boards
  - Must have ESP32-S3 chip with native USB support (for USB Host mode)
+ - **Must be dual-core variant** (single-core ESP32 not supported)
  - USB-C or micro-USB with data lines connected to ESP32-S3
  - Similar pinout and features to ESP32-S3-Zero
  - Note: May require code modifications for different LED pins or missing components
@@ -174,18 +176,13 @@ The web interface allows configuration of:
 2. Open in VSCode with PlatformIO
 3. Select environment:
   - `production` - For normal use (no debug output)
-  - `production_debug` - With crash diagnostics
-  - `full_debug` - Complete debug output (bridge disabled)
+  - `debug` - With crash diagnostics and logging
 4. Build and upload
 
 ### Build Environments
 
-For most users, use `production` or `production_debug`:
 - **production**: Standard firmware with maximum performance
-- **production_debug**: Includes crash diagnostics for troubleshooting
-
-For developers:
-- **full_debug**: Diagnostic mode only - bridge functionality disabled, extensive logging (not for normal use)
+- **debug**: Includes crash diagnostics and debug logging for troubleshooting
 
 ## Application Compatibility Notes
 
@@ -257,12 +254,14 @@ The device automatically logs system crashes including:
 
 View crash history in web interface under "Crash History" section.
 
-### Debug Mode
-When compiled with `full_debug` environment (DEBUG_MODE_BUILD=1):
-- Extensive logging available
-- In USB Device mode: logs output to Serial
-- In USB Host mode: logs only to web interface (no Serial output)
-- UART data is read but not forwarded (diagnostic only)
+### Logging System
+Version 2.3.0 introduces a flexible logging system with multiple levels:
+- **ERROR**: Critical errors only
+- **WARNING**: Important warnings
+- **INFO**: General information
+- **DEBUG**: Detailed diagnostic information
+
+Logs are viewable through the web interface. Future versions will support additional logging outputs (UART, network).
 
 ### Adaptive Buffering Technology
 
