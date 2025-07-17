@@ -8,7 +8,6 @@
 // External objects from main.cpp
 extern HardwareSerial uartBridgeSerial;
 extern DeviceMode currentMode;
-extern const int DEBUG_MODE;
 extern Config config;
 extern UartStats uartStats;
 extern FlowControlStatus flowControlStatus;
@@ -46,7 +45,7 @@ void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, U
   serial->begin(config->baudrate, serialConfig, UART_RX_PIN, UART_TX_PIN);
 
   log_msg("UART configured: " + String(config->baudrate) + " baud, " +
-          String(config->databits) + "d" + config->parity.substring(0,1) + String(config->stopbits));
+          String(config->databits) + "d" + config->parity.substring(0,1) + String(config->stopbits), LOG_INFO);
 
   // Detect flow control if enabled
   if (config->flowcontrol) {
@@ -58,12 +57,12 @@ void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, U
   }
 }
 
-// UART Bridge Task - runs with high priority (on Core 0 for multi-core systems)
+// UART Bridge Task - runs with high priority on Core 0
 void uartBridgeTask(void* parameter) {
   // Wait for system initialization
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  log_msg("UART task started on core " + String(xPortGetCoreID()));
+  log_msg("UART task started on core " + String(xPortGetCoreID()), LOG_INFO);
 
   unsigned long localUartToUsb = 0;
   unsigned long localUsbToUart = 0;
@@ -100,7 +99,10 @@ void uartBridgeTask(void* parameter) {
   static unsigned long lastUsbLedNotify = 0;
   const unsigned long LED_NOTIFY_INTERVAL = 10; // Minimum 10ms between LED notifications
 
-  log_msg("UART Bridge Task started");
+  // Stack diagnostics
+  static unsigned long lastStackCheck = 0;
+
+  log_msg("UART Bridge Task started", LOG_INFO);
 
   while (1) {
     // Periodic statistics every 30 seconds - shows system is alive
@@ -108,20 +110,17 @@ void uartBridgeTask(void* parameter) {
       String mode = (currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
       log_msg("UART bridge alive [" + mode + " mode]: TX=" + String(localUartToUsb) +
               " bytes, RX=" + String(localUsbToUart) + " bytes" +
-              (totalDroppedBytes > 0 ? ", dropped=" + String(totalDroppedBytes) : ""));
+              (totalDroppedBytes > 0 ? ", dropped=" + String(totalDroppedBytes) : ""), LOG_DEBUG);
       lastPeriodicStats = millis();
     }
 
-    // Stack diagnostics in debug mode only
-    if (DEBUG_MODE == 1) {
-      static unsigned long lastDiagnostic = 0;
-      if (millis() - lastDiagnostic > 5000) {  // Every 5 seconds
-        UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-        log_msg("UART task: Stack free=" + String(stackFree * 4) +
-                " bytes, Heap free=" + String(ESP.getFreeHeap()) +
-                " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes");
-        lastDiagnostic = millis();
-      }
+    // Stack diagnostics every 5 seconds
+    if (millis() - lastStackCheck > 5000) {
+      UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
+      log_msg("UART task: Stack free=" + String(stackFree * 4) +
+              " bytes, Heap free=" + String(ESP.getFreeHeap()) +
+              " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
+      lastStackCheck = millis();
     }
 
     // Only run UART bridge in normal mode or config mode
@@ -143,13 +142,8 @@ void uartBridgeTask(void* parameter) {
           lastUartLedNotify = millis();
         }
 
-        if (DEBUG_MODE == 1) {
-          // In debug mode, read data for statistics but don't forward
-          uartBridgeSerial.read();  // Read and discard
-          localUartToUsb++;
-          uartStats.totalUartPackets++;
-        } else if (g_usbInterface) {
-          // In production mode with USB interface, use adaptive buffering
+        if (g_usbInterface) {
+          // Production mode with USB interface, use adaptive buffering
           uint8_t data = uartBridgeSerial.read();
           uartStats.totalUartPackets++;
 
@@ -234,7 +228,7 @@ void uartBridgeTask(void* parameter) {
                 if (millis() - lastDropLog > 5000) {  // Every 5 seconds
                   log_msg("USB buffer full: dropped " + String(droppedBytes) + " bytes in " +
                           String(dropEvents) + " events (total: " + String(totalDroppedBytes) +
-                          " bytes), max packet: " + String(maxDropSize) + " bytes");
+                          " bytes), max packet: " + String(maxDropSize) + " bytes", LOG_WARNING);
                   lastDropLog = millis();
                   droppedBytes = 0;
                   dropEvents = 0;
@@ -249,8 +243,8 @@ void uartBridgeTask(void* parameter) {
         localLastActivity = millis();
       }
 
-      // Handle any remaining data in buffer (timeout-based flush) - production mode only
-      if (DEBUG_MODE == 0 && g_usbInterface && bufferIndex > 0) {
+      // Handle any remaining data in buffer (timeout-based flush)
+      if (g_usbInterface && bufferIndex > 0) {
         unsigned long timeInBuffer = micros() - bufferStartTime;
         if (timeInBuffer >= 15000) {  // 15ms emergency timeout
           int availableSpace = g_usbInterface->availableForWrite();
@@ -289,7 +283,7 @@ void uartBridgeTask(void* parameter) {
 
               log_msg("USB timeout: dropped " + String(droppedBytes) + " bytes in " +
                       String(dropEvents) + " events (total: " + String(totalDroppedBytes) +
-                      " bytes). " + sizes);
+                      " bytes). " + sizes, LOG_WARNING);
               lastDropLog = millis();
               droppedBytes = 0;
               dropEvents = 0;
@@ -300,8 +294,8 @@ void uartBridgeTask(void* parameter) {
         }
       }
 
-      // USB → UART (immediate forwarding for commands) - production mode only
-      if (DEBUG_MODE == 0 && g_usbInterface) {
+      // USB → UART (immediate forwarding for commands)
+      if (g_usbInterface) {
         while (g_usbInterface->available()) {
           // Notify LED with rate limiting
           if (currentMode == MODE_NORMAL && millis() - lastUsbLedNotify > LED_NOTIFY_INTERVAL) {
@@ -327,16 +321,8 @@ void uartBridgeTask(void* parameter) {
       }
     }
 
-    // Adaptive delay based on core count and mode
-    #ifdef CONFIG_FREERTOS_UNICORE
-      if (currentMode == MODE_CONFIG) {
-        vTaskDelay(pdMS_TO_TICKS(5));  // 5ms for WiFi mode on single core
-      } else {
-        vTaskDelay(pdMS_TO_TICKS(2));  // 2ms for normal mode on single core
-      }
-    #else
-      vTaskDelay(pdMS_TO_TICKS(1));  // 1ms for multi-core systems
-    #endif
+    // Fixed delay for multi-core systems (always 1ms)
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -379,9 +365,9 @@ void detectFlowControl() {
     // Configure UART with hardware flow control
     uartBridgeSerial.setPins(UART_RX_PIN, UART_TX_PIN, CTS_PIN, RTS_PIN);
     flowControlStatus.flowControlActive = true;
-    log_msg("Flow control detected and activated");
+    log_msg("Flow control detected and activated", LOG_INFO);
   } else {
-    log_msg("Flow control enabled but no RTS/CTS detected");
+    log_msg("Flow control enabled but no RTS/CTS detected", LOG_WARNING);
     flowControlStatus.flowControlActive = false;
   }
 }

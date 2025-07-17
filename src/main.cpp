@@ -2,8 +2,6 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <LittleFS.h>
-#include "soc/soc.h"          // for disableBrownout()
-#include "soc/rtc_cntl_reg.h" // for disableBrownout()
 #include "defines.h"
 #include "types.h"
 #include "logging.h"
@@ -13,18 +11,8 @@
 #include "uartbridge.h"
 #include "crashlog.h"
 #include "usb_interface.h"
-
-#ifdef CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
-   #include "hal/usb_serial_jtag_ll.h"
-   #include "soc/usb_serial_jtag_reg.h"
-   #include "soc/usb_serial_jtag_struct.h"
-#endif
-
-// Global constants
-#ifndef DEBUG_MODE_BUILD
-  #define DEBUG_MODE_BUILD 0
-#endif
-const int DEBUG_MODE = DEBUG_MODE_BUILD;  // 0 = production UART bridge, 1 = debug only (no bridge functionality)
+#include "diagnostics.h"
+#include "system_utils.h"
 
 // Global objects
 Config config;
@@ -51,11 +39,6 @@ SemaphoreHandle_t logMutex = NULL;
 // Spinlock for statistics critical sections
 portMUX_TYPE statsMux = portMUX_INITIALIZER_UNLOCKED;
 
-// RTC variables for crash logging (survive reset but not power loss)
-RTC_DATA_ATTR uint32_t g_last_heap = 0;
-RTC_DATA_ATTR uint32_t g_last_uptime = 0;
-RTC_DATA_ATTR uint32_t g_min_heap = 0xFFFFFFFF;
-
 // Function declarations
 void initPins();
 void detectMode();
@@ -64,30 +47,18 @@ void initConfigMode();
 void bootButtonISR();
 void createMutexes();
 void createTasks();
-void printBootInfo();
 void handleButtonInput();
-void debugOutput();
-void updateCrashLogVariables();
 
-// FIRST thing - disable brownout
+// FIRST thing - disable brownout using constructor attribute
 void disableBrownout() __attribute__((constructor));
-void disableBrownout() {
-  uint32_t val = READ_PERI_REG(RTC_CNTL_BROWN_OUT_REG);
-  val &= ~(1 << 27);  // RTC_CNTL_BROWN_OUT_ENA
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, val);
-}
 
 //================================================================
 // MAIN ARDUINO FUNCTIONS
 //================================================================
 
 void setup() {
-    // Disable USB Serial/JTAG peripheral interrupts to reduce spurious resets
-    // VSCode/esptool can still upload firmware using standard DTR/RTS sequence
-    #ifdef CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
-        usb_serial_jtag_ll_disable_intr_mask(0xFFFFFFFF);
-        USB_SERIAL_JTAG.conf0.usb_pad_enable = 0;
-    #endif
+  // Disable USB Serial/JTAG peripheral interrupts to reduce spurious resets
+  disableUsbJtagInterrupts();
 
   // Print boot info first
   printBootInfo();
@@ -95,30 +66,13 @@ void setup() {
   // Initialize configuration first to get defaults
   config_init(&config);
 
-  // Initialize Serial based on mode
-  if (DEBUG_MODE == 1) {
-    // Now config is initialized, safe to check usb_mode
-    if (config.usb_mode != USB_MODE_HOST) {
-      Serial.begin(115200);
-      vTaskDelay(pdMS_TO_TICKS(1000));
-      Serial.println("=== " + config.device_name + " Starting (DEBUG MODE) ===");
-      Serial.println("WARNING: UART bridge functionality DISABLED in debug mode");
-      Serial.println("Set DEBUG_MODE to 0 for production use");
-    }
-  } else {
-    // Production mode - suppress logs and clear buffer
-    #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL == 0
-      esp_log_level_set("*", ESP_LOG_NONE);
-    #endif
-    
-    // Clear bootloader messages from serial buffer
-    Serial.begin(115200);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    while (Serial.available()) Serial.read();
-    Serial.flush();
-    Serial.end();
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
+  // Production mode - suppress logs and clear buffer
+  #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL == 0
+    esp_log_level_set("*", ESP_LOG_NONE);
+  #endif
+  
+  // Clear bootloader messages from serial buffer
+  clearBootloaderSerialBuffer();
 
   // Create mutexes for thread safety
   createMutexes();
@@ -129,42 +83,42 @@ void setup() {
   // Initialize logging system
   logging_init();
 
-  log_msg(config.device_name + " v" + config.version + " starting");
+  log_msg(config.device_name + " v" + config.version + " starting", LOG_INFO);
 
   // Initialize filesystem
-  log_msg("Initializing LittleFS...");
+  log_msg("Initializing LittleFS...", LOG_INFO);
 
   #ifdef FORMAT_FILESYSTEM
-    log_msg("FORMAT_FILESYSTEM flag detected - formatting LittleFS...");
+    log_msg("FORMAT_FILESYSTEM flag detected - formatting LittleFS...", LOG_WARNING);
     if (LittleFS.format()) {
-      log_msg("LittleFS formatted successfully");
+      log_msg("LittleFS formatted successfully", LOG_INFO);
     } else {
-      log_msg("ERROR: LittleFS format failed");
+      log_msg("LittleFS format failed", LOG_ERROR);
     }
   #endif
 
   if (!LittleFS.begin()) {
-    log_msg("LittleFS mount failed, formatting...");
+    log_msg("LittleFS mount failed, formatting...", LOG_WARNING);
     if (LittleFS.format()) {
-      log_msg("LittleFS formatted successfully");
+      log_msg("LittleFS formatted successfully", LOG_INFO);
       if (LittleFS.begin()) {
-        log_msg("LittleFS mounted after format");
+        log_msg("LittleFS mounted after format", LOG_INFO);
       } else {
-        log_msg("ERROR: LittleFS mount failed even after format");
+        log_msg("LittleFS mount failed even after format", LOG_ERROR);
         return;
       }
     } else {
-      log_msg("ERROR: LittleFS format failed");
+      log_msg("LittleFS format failed", LOG_ERROR);
       return;
     }
   } else {
-    log_msg("LittleFS mounted successfully");
+    log_msg("LittleFS mounted successfully", LOG_INFO);
   }
 
   // Load configuration from file (this may override defaults including usb_mode)
-  log_msg("Loading configuration...");
+  log_msg("Loading configuration...", LOG_INFO);
   config_load(&config);
-  log_msg("Configuration loaded");
+  log_msg("Configuration loaded", LOG_INFO);
 
   // Update global usbMode after loading config
   usbMode = config.usb_mode;
@@ -173,56 +127,51 @@ void setup() {
   crashlog_check_and_save();
 
   // Initialize hardware
-  log_msg("Initializing pins...");
+  log_msg("Initializing pins...", LOG_INFO);
   initPins();
   leds_init();
-  log_msg("Hardware initialized");
+  log_msg("Hardware initialized", LOG_INFO);
 
   // Detect boot mode
-  log_msg("Detecting boot mode...");
+  log_msg("Detecting boot mode...", LOG_INFO);
   detectMode();
-  log_msg("Mode detected: " + String(currentMode == MODE_NORMAL ? "Normal" : "Config"));
+  log_msg("Mode detected: " + String(currentMode == MODE_NORMAL ? "Normal" : "Config"), LOG_INFO);
 
   // Mode-specific initialization
   if (currentMode == MODE_NORMAL) {
-    if (DEBUG_MODE == 1) {
-      log_msg("WARNING: Debug mode enabled - UART forwarding disabled!");
-      log_msg("UART task will only read GPIO pins without data transfer");
-    } else {
-      log_msg("Starting normal mode - UART bridge active");
-    }
-    log_msg("Use triple-click BOOT to enter config mode");
-    log_msg("Blue LED will flash on data activity");
+    log_msg("Starting normal mode - UART bridge active", LOG_INFO);
+    log_msg("Use triple-click BOOT to enter config mode", LOG_INFO);
+    log_msg("Blue LED will flash on data activity", LOG_INFO);
     initNormalMode();
   } else if (currentMode == MODE_CONFIG) {
-    log_msg("Starting WiFi config mode...");
-    log_msg("Purple LED will stay ON during WiFi config mode");
+    log_msg("Starting WiFi config mode...", LOG_INFO);
+    log_msg("Purple LED will stay ON during WiFi config mode", LOG_INFO);
     initConfigMode();
   }
 
   // Create FreeRTOS tasks
   createTasks();
 
-  log_msg("Setup complete!");
+  log_msg("Setup complete!", LOG_INFO);
 }
 
 void loop() {
   // Process LED updates from main thread - MUST be first
   led_process_updates();
 
-  // Debug output (memory stats, heartbeat) - only in debug mode
-  debugOutput();
+  // System diagnostics (memory stats, heartbeat)
+  systemDiagnostics();
 
   // Handle all button interactions
   handleButtonInput();
 
   // Update crash log RTC variables
-  updateCrashLogVariables();
+  crashlog_update_variables();
 
   // Check WiFi timeout in config mode
   if (currentMode == MODE_CONFIG) {
     if (checkWiFiTimeout()) {
-      log_msg("WiFi timeout - switching to normal mode");
+      log_msg("WiFi timeout - switching to normal mode", LOG_INFO);
       ESP.restart();
     }
   }
@@ -241,7 +190,7 @@ void initPins() {
   // Attach interrupt for button clicks on correct pin
   attachInterrupt(digitalPinToInterrupt(BOOT_BUTTON_PIN), bootButtonISR, FALLING);
 
-  log_msg("BOOT button configured on GPIO" + String(BOOT_BUTTON_PIN));
+  log_msg("BOOT button configured on GPIO" + String(BOOT_BUTTON_PIN), LOG_DEBUG);
 }
 
 void detectMode() {
@@ -251,7 +200,7 @@ void detectMode() {
   preferences.end();
 
   if (wifiModeRequested) {
-    log_msg("WiFi mode requested via preferences - entering config mode");
+    log_msg("WiFi mode requested via preferences - entering config mode", LOG_INFO);
     // Clear the flag
     preferences.begin("uartbridge", false);
     preferences.putBool("wifi_mode", false);
@@ -260,24 +209,24 @@ void detectMode() {
     return;
   }
 
-  log_msg("Click count at startup: " + String(systemState.clickCount));
+  log_msg("Click count at startup: " + String(systemState.clickCount), LOG_DEBUG);
 
   // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode
   // and this code won't run at all.
 
   // Check for triple click (config mode)
-  log_msg("Waiting for potential clicks...");
+  log_msg("Waiting for potential clicks...", LOG_DEBUG);
   vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
-  log_msg("Final click count: " + String(systemState.clickCount));
+  log_msg("Final click count: " + String(systemState.clickCount), LOG_DEBUG);
 
   if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS) {
-    log_msg("Triple click detected - entering config mode");
+    log_msg("Triple click detected - entering config mode", LOG_INFO);
     currentMode = MODE_CONFIG;
     systemState.clickCount = 0;
     return;
   }
 
-  log_msg("Entering normal mode");
+  log_msg("Entering normal mode", LOG_INFO);
   currentMode = MODE_NORMAL;
 }
 
@@ -289,39 +238,33 @@ void initNormalMode() {
   usbMode = config.usb_mode;
 
   // Create USB interface based on configuration
-  if (DEBUG_MODE == 0) {
-    switch(config.usb_mode) {
-      case USB_MODE_HOST:
-        log_msg("Creating USB Host interface");
-        usbInterface = createUsbHost(config.baudrate);
-        break;
-      case USB_MODE_AUTO:
-        log_msg("Creating USB Auto-detect interface");
-        usbInterface = createUsbAuto(config.baudrate);
-        break;
-      case USB_MODE_DEVICE:
-      default:
-        log_msg("Creating USB Device interface");
-        usbInterface = createUsbDevice(config.baudrate);
-        break;
-    }
+  switch(config.usb_mode) {
+    case USB_MODE_HOST:
+      log_msg("Creating USB Host interface", LOG_INFO);
+      usbInterface = createUsbHost(config.baudrate);
+      break;
+    case USB_MODE_AUTO:
+      log_msg("Creating USB Auto-detect interface", LOG_INFO);
+      usbInterface = createUsbAuto(config.baudrate);
+      break;
+    case USB_MODE_DEVICE:
+    default:
+      log_msg("Creating USB Device interface", LOG_INFO);
+      usbInterface = createUsbDevice(config.baudrate);
+      break;
+  }
 
-    if (usbInterface) {
-      usbInterface->init();
-      log_msg("USB interface initialized");
-    } else {
-      log_msg("ERROR: Failed to create USB interface");
-    }
+  if (usbInterface) {
+    usbInterface->init();
+    log_msg("USB interface initialized", LOG_INFO);
+  } else {
+    log_msg("Failed to create USB interface", LOG_ERROR);
   }
 
   // Initialize UART bridge
   uartbridge_init(&uartBridgeSerial, &config, &uartStats, usbInterface);
 
-  if (DEBUG_MODE == 0) {
-    log_msg("UART Bridge ready - transparent forwarding active");
-  } else {
-    log_msg("DEBUG MODE: UART task will only read pins (no data forwarding)");
-  }
+  log_msg("UART Bridge ready - transparent forwarding active", LOG_INFO);
 }
 
 void initConfigMode() {
@@ -332,29 +275,27 @@ void initConfigMode() {
   usbMode = config.usb_mode;
 
   // Create USB interface even in config mode (for bridge functionality)
-  if (DEBUG_MODE == 0) {
-    switch(config.usb_mode) {
-      case USB_MODE_HOST:
-        log_msg("Creating USB Host interface in WiFi mode");
-        usbInterface = createUsbHost(config.baudrate);
-        break;
-      case USB_MODE_AUTO:
-        log_msg("Creating USB Auto-detect interface in WiFi mode");
-        usbInterface = createUsbAuto(config.baudrate);
-        break;
-      case USB_MODE_DEVICE:
-      default:
-        log_msg("Creating USB Device interface in WiFi mode");
-        usbInterface = createUsbDevice(config.baudrate);
-        break;
-    }
-    
-    if (usbInterface) {
-      usbInterface->init();
-      log_msg("USB interface initialized in WiFi mode");
-    } else {
-      log_msg("ERROR: Failed to create USB interface in WiFi mode");
-    }
+  switch(config.usb_mode) {
+    case USB_MODE_HOST:
+      log_msg("Creating USB Host interface in WiFi mode", LOG_INFO);
+      usbInterface = createUsbHost(config.baudrate);
+      break;
+    case USB_MODE_AUTO:
+      log_msg("Creating USB Auto-detect interface in WiFi mode", LOG_INFO);
+      usbInterface = createUsbAuto(config.baudrate);
+      break;
+    case USB_MODE_DEVICE:
+    default:
+      log_msg("Creating USB Device interface in WiFi mode", LOG_INFO);
+      usbInterface = createUsbDevice(config.baudrate);
+      break;
+  }
+  
+  if (usbInterface) {
+    usbInterface->init();
+    log_msg("USB interface initialized in WiFi mode", LOG_INFO);
+  } else {
+    log_msg("Failed to create USB interface in WiFi mode", LOG_ERROR);
   }
 
   // Initialize UART bridge even in config mode (for statistics)
@@ -383,7 +324,7 @@ void handleButtonInput() {
   // Check for click timeout
   if (systemState.clickCount > 0 && millis() - systemState.lastClickTime >= CLICK_TIMEOUT) {
     log_msg("Click timeout expired, resetting clickCount from " +
-            String(systemState.clickCount) + " to 0");
+            String(systemState.clickCount) + " to 0", LOG_DEBUG);
     systemState.clickCount = 0;
   }
 
@@ -408,7 +349,7 @@ void handleButtonInput() {
   if (buttonCurrentlyPressed && buttonHoldStart > 0) {
     if (!buttonHoldDetected && (millis() - buttonHoldStart > 5000)) {
       buttonHoldDetected = true;
-      log_msg("Button held for 5 seconds - resetting WiFi to defaults");
+      log_msg("Button held for 5 seconds - resetting WiFi to defaults", LOG_INFO);
 
       // Reset to default WiFi settings
       config.ssid = DEFAULT_AP_SSID;
@@ -419,8 +360,8 @@ void handleButtonInput() {
       led_rapid_blink(10, LED_WIFI_RESET_BLINK_MS);
 
       log_msg("WiFi reset to defaults: SSID=" + String(DEFAULT_AP_SSID) +
-              ", Password=" + String(DEFAULT_AP_PASSWORD));
-      log_msg("Restarting...");
+              ", Password=" + String(DEFAULT_AP_PASSWORD), LOG_INFO);
+      log_msg("Restarting...", LOG_INFO);
       vTaskDelay(pdMS_TO_TICKS(2000));  // Wait for LED blink to complete
       ESP.restart();
     }
@@ -436,16 +377,16 @@ void handleButtonInput() {
 
     log_msg("Button click detected! Time: " + String(currentTime) +
             ", Last: " + String(systemState.lastClickTime) +
-            ", Diff: " + String(currentTime - systemState.lastClickTime));
+            ", Diff: " + String(currentTime - systemState.lastClickTime), LOG_DEBUG);
 
     if (systemState.lastClickTime == 0 || (currentTime - systemState.lastClickTime < CLICK_TIMEOUT)) {
       systemState.clickCount = systemState.clickCount + 1;
-      log_msg("Click registered, count: " + String(systemState.clickCount));
+      log_msg("Click registered, count: " + String(systemState.clickCount), LOG_DEBUG);
 
       // Check for triple click
       if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS && currentMode == MODE_NORMAL) {
-        log_msg("*** TRIPLE CLICK DETECTED! Activating WiFi Config Mode ***");
-        log_msg("*** Setting WiFi mode flag and restarting ***");
+        log_msg("*** TRIPLE CLICK DETECTED! Activating WiFi Config Mode ***", LOG_INFO);
+        log_msg("*** Setting WiFi mode flag and restarting ***", LOG_INFO);
 
         preferences.begin("uartbridge", false);
         preferences.putBool("wifi_mode", true);
@@ -456,7 +397,7 @@ void handleButtonInput() {
       }
     } else {
       log_msg("Click timeout exceeded (" + String(currentTime - systemState.lastClickTime) +
-              " ms), resetting to 1");
+              " ms), resetting to 1", LOG_DEBUG);
       systemState.clickCount = 1;
     }
 
@@ -475,90 +416,6 @@ void handleButtonInput() {
 }
 
 //================================================================
-// SYSTEM FUNCTIONS
-//================================================================
-
-void printBootInfo() {
-  if (DEBUG_MODE != 1) return;
-  
-  // Initialize Serial for boot info
-  Serial.begin(115200);
-  vTaskDelay(pdMS_TO_TICKS(100));
-
-  // Get reset reason
-  esp_reset_reason_t reason = esp_reset_reason();
-
-  Serial.println("\n\n=== BOOT INFO ===");
-  Serial.print("Reset reason: ");
-  Serial.println(reason);
-  Serial.print("Reset reason text: ");
-
-  switch(reason) {
-    case ESP_RST_UNKNOWN: Serial.println("UNKNOWN"); break;
-    case ESP_RST_POWERON: Serial.println("POWERON"); break;
-    case ESP_RST_SW: Serial.println("SW_RESET"); break;
-    case ESP_RST_PANIC: Serial.println("PANIC"); break;
-    case ESP_RST_INT_WDT: Serial.println("INT_WDT"); break;
-    case ESP_RST_TASK_WDT: Serial.println("TASK_WDT"); break;
-    case ESP_RST_WDT: Serial.println("WDT"); break;
-    case ESP_RST_DEEPSLEEP: Serial.println("DEEPSLEEP"); break;
-    case ESP_RST_BROWNOUT: Serial.println("BROWNOUT"); break;
-    case ESP_RST_SDIO: Serial.println("SDIO"); break;
-    default: Serial.println("Unknown code: " + String(reason)); break;
-  }
-
-  // Stack check at panic
-  if (reason == ESP_RST_PANIC || reason == ESP_RST_INT_WDT || reason == ESP_RST_TASK_WDT) {
-    Serial.println("CRASH DETECTED!");
-  }
-
-  Serial.println("===================\n");
-  Serial.flush();  // Ensure all data is sent
-
-  // Close Serial to allow proper initialization later
-  Serial.end();
-  vTaskDelay(pdMS_TO_TICKS(50));  // Small delay to ensure Serial closes properly
-}
-
-void debugOutput() {
-  if (DEBUG_MODE != 1) return;
-
-  // Memory diagnostics
-  static unsigned long lastMemoryCheck = 0;
-  if (millis() - lastMemoryCheck > 10000) {
-    log_msg("=== System Memory Status ===");
-    log_msg("Free heap: " + String(ESP.getFreeHeap()) + " bytes");
-    log_msg("Largest free block: " + String(ESP.getMaxAllocHeap()) + " bytes");
-    log_msg("Min free heap: " + String(ESP.getMinFreeHeap()) + " bytes");
-    lastMemoryCheck = millis();
-  }
-
-  // Debug heartbeat
-  static unsigned long lastHeartbeat = 0;
-  if (millis() - lastHeartbeat > 10000) {
-    log_msg("System heartbeat: clickCount=" + String(systemState.clickCount) +
-            ", currentMode=" + String(currentMode) +
-            ", uptime=" + String(millis()/1000) + "s");
-    lastHeartbeat = millis();
-  }
-}
-
-void updateCrashLogVariables() {
-  static unsigned long lastRtcUpdate = 0;
-  if (millis() - lastRtcUpdate > CRASHLOG_UPDATE_INTERVAL_MS) {
-    g_last_heap = ESP.getFreeHeap();
-    g_last_uptime = millis() / 1000;
-
-    // Track minimum heap
-    if (g_last_heap < g_min_heap) {
-      g_min_heap = g_last_heap;
-    }
-
-    lastRtcUpdate = millis();
-  }
-}
-
-//================================================================
 // TASK MANAGEMENT
 //================================================================
 
@@ -566,64 +423,42 @@ void createMutexes() {
   // Create logging mutex
   logMutex = xSemaphoreCreateMutex();
   if (logMutex == NULL) {
-    if (DEBUG_MODE == 1) {
-      Serial.println("Failed to create logging mutex!");
-    }
+    // Cannot use log_msg here as logging system not initialized
     return;
   }
 }
 
 void createTasks() {
-  // Create UART bridge task with increased stack size
-  #ifdef CONFIG_FREERTOS_UNICORE
-    xTaskCreate(
-      uartBridgeTask,        // Task function
-      "UART_Bridge_Task",    // Task name
-      16384,                 // Stack size (increased from 8192)
-      NULL,                  // Parameters
-      UART_TASK_PRIORITY,    // Priority
-      &uartBridgeTaskHandle  // Task handle
-    );
-  #else
-    xTaskCreatePinnedToCore(
-      uartBridgeTask,        // Task function
-      "UART_Bridge_Task",    // Task name
-      16384,                 // Stack size (increased from 8192)
-      NULL,                  // Parameters
-      UART_TASK_PRIORITY,    // Priority
-      &uartBridgeTaskHandle, // Task handle
-      0                      // Core 0 (dedicated for UART bridge)
-    );
-  #endif
+  // Create UART bridge task on core 0 (multi-core ESP32)
+  xTaskCreatePinnedToCore(
+    uartBridgeTask,        // Task function
+    "UART_Bridge_Task",    // Task name
+    16384,                 // Stack size (increased from 8192)
+    NULL,                  // Parameters
+    UART_TASK_PRIORITY,    // Priority
+    &uartBridgeTaskHandle, // Task handle
+    UART_TASK_CORE         // Core 0 (dedicated for UART bridge)
+  );
 
-  log_msg("UART Bridge task created (priority " + String(UART_TASK_PRIORITY) + ")");
-  log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized");
-  log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance");
+  log_msg("UART Bridge task created on core " + String(UART_TASK_CORE) + 
+          " (priority " + String(UART_TASK_PRIORITY) + ")", LOG_INFO);
+  log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized", LOG_INFO);
+  log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance", LOG_INFO);
 
-  // Create web server task only in CONFIG mode with increased stack size
+  // Create web server task only in CONFIG mode on core 1
   if (currentMode == MODE_CONFIG) {
     disableBrownout();
-    #ifdef CONFIG_FREERTOS_UNICORE
-      xTaskCreate(
-        webServerTask,         // Task function
-        "Web_Server_Task",     // Task name
-        16384,                 // Stack size (increased from 8192)
-        NULL,                  // Parameters
-        WEB_TASK_PRIORITY,     // Priority
-        &webServerTaskHandle   // Task handle
-      );
-    #else
-      xTaskCreatePinnedToCore(
-        webServerTask,
-        "Web_Server_Task",
-        32768,
-        NULL,
-        WEB_TASK_PRIORITY,
-        &webServerTaskHandle,
-        1
-      );
-    #endif
+    xTaskCreatePinnedToCore(
+      webServerTask,         // Task function
+      "Web_Server_Task",     // Task name
+      32768,                 // Stack size (increased from 16384)
+      NULL,                  // Parameters
+      WEB_TASK_PRIORITY,     // Priority
+      &webServerTaskHandle,  // Task handle
+      WEB_TASK_CORE          // Core 1 (separate core for web server)
+    );
 
-    log_msg("Web Server task created (priority " + String(WEB_TASK_PRIORITY) + ")");
+    log_msg("Web Server task created on core " + String(WEB_TASK_CORE) + 
+            " (priority " + String(WEB_TASK_PRIORITY) + ")", LOG_INFO);
   }
 }

@@ -4,10 +4,11 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-// External RTC variables from main.cpp
-extern RTC_DATA_ATTR uint32_t g_last_heap;
-extern RTC_DATA_ATTR uint32_t g_last_uptime;
-extern RTC_DATA_ATTR uint32_t g_min_heap;
+// RTC variables for crash logging (survive reset but not power loss)
+// Moved from main.cpp
+RTC_NOINIT_ATTR uint32_t g_last_heap;
+RTC_NOINIT_ATTR uint32_t g_last_uptime;
+RTC_NOINIT_ATTR uint32_t g_min_heap;
 
 // Check reset reason and save crash if needed
 void crashlog_check_and_save() {
@@ -17,7 +18,7 @@ void crashlog_check_and_save() {
     if (reason == ESP_RST_PANIC || reason == ESP_RST_TASK_WDT ||
         reason == ESP_RST_INT_WDT || reason == ESP_RST_WDT) {
 
-        log_msg("System recovered from crash: " + crashlog_get_reset_reason_string(reason));
+        log_msg("System recovered from crash: " + crashlog_get_reset_reason_string(reason), LOG_ERROR);
 
         // Check if file exists, create if not
         if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
@@ -40,7 +41,7 @@ void crashlog_check_and_save() {
         if (file) {
             // Check file size protection
             if (file.size() > 4096) {
-                log_msg("Crashlog too large, truncating");
+                log_msg("Crashlog too large, truncating", LOG_WARNING);
                 file.close();
                 LittleFS.remove(CRASHLOG_FILE_PATH);
 
@@ -52,7 +53,7 @@ void crashlog_check_and_save() {
                 file.close();
 
                 if (error) {
-                    log_msg("Crashlog corrupted, reinitializing: " + String(error.c_str()));
+                    log_msg("Crashlog corrupted, reinitializing: " + String(error.c_str()), LOG_WARNING);
                     LittleFS.remove(CRASHLOG_FILE_PATH);
 
                     // Create new structure
@@ -95,9 +96,9 @@ void crashlog_check_and_save() {
         if (file) {
             serializeJson(doc, file);
             file.close();
-            log_msg("Crash #" + String(totalCrashes) + " logged successfully");
+            log_msg("Crash #" + String(totalCrashes) + " logged successfully", LOG_INFO);
         } else {
-            log_msg("ERROR: Cannot write crashlog file");
+            log_msg("Cannot write crashlog file", LOG_ERROR);
         }
 
         // Reset min heap tracking for new session
@@ -136,7 +137,7 @@ String crashlog_get_json() {
 void crashlog_clear() {
     if (LittleFS.exists(CRASHLOG_FILE_PATH)) {
         LittleFS.remove(CRASHLOG_FILE_PATH);
-        log_msg("Crash history cleared");
+        log_msg("Crash history cleared", LOG_INFO);
     }
 
     // Create empty file
@@ -177,5 +178,21 @@ String crashlog_format_uptime(uint32_t seconds) {
         uint32_t hours = seconds / 3600;
         uint32_t minutes = (seconds % 3600) / 60;
         return String(hours) + "h " + String(minutes) + "m";
+    }
+}
+
+// Update RTC variables periodically (moved from main.cpp)
+void crashlog_update_variables() {
+    static unsigned long lastRtcUpdate = 0;
+    if (millis() - lastRtcUpdate > CRASHLOG_UPDATE_INTERVAL_MS) {
+        g_last_heap = ESP.getFreeHeap();
+        g_last_uptime = millis() / 1000;
+
+        // Track minimum heap
+        if (g_last_heap < g_min_heap) {
+            g_min_heap = g_last_heap;
+        }
+
+        lastRtcUpdate = millis();
     }
 }

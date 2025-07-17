@@ -31,7 +31,6 @@ extern Config config;
 extern UartStats uartStats;
 extern SystemState systemState;
 extern DeviceMode currentMode;
-extern const int DEBUG_MODE;
 extern Preferences preferences;
 
 // Local objects - created on demand
@@ -43,7 +42,7 @@ static bool webServerInitialized = false;
 
 // Initialize web server in CONFIG mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
-  log_msg("Starting WiFi Configuration Mode");
+  log_msg("Starting WiFi Configuration Mode", LOG_INFO);
 
   // Always disable USB CDC before Wi-Fi initialization to avoid conflicts
   Serial.flush();
@@ -70,18 +69,14 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   dnsServer = new DNSServer();
   dnsServer->start(53, "*", WiFi.softAPIP());
 
-  log_msg("WiFi AP started: " + config->ssid);
-  log_msg("IP address: " + WiFi.softAPIP().toString());
-  log_msg("Captive Portal DNS server started");
+  log_msg("WiFi AP started: " + config->ssid, LOG_INFO);
+  log_msg("IP address: " + WiFi.softAPIP().toString(), LOG_INFO);
+  log_msg("Captive Portal DNS server started", LOG_INFO);
 
-  // Re-enable USB CDC after Wi-Fi is active
-  if (DEBUG_MODE == 1) {
-    Serial.begin(115200);  // Debug mode fixed rate
-  } else {
-    Serial.begin(config->baudrate);  // Configured bridge rate
-  }
+  // Re-enable USB CDC after Wi-Fi is active at configured bridge rate
+  Serial.begin(config->baudrate);
   vTaskDelay(pdMS_TO_TICKS(100));
-  log_msg("Serial USB reinitialized in config mode");
+  log_msg("Serial USB reinitialized in config mode", LOG_DEBUG);
 
   // Create web server
   server = new WebServer(80);
@@ -101,7 +96,7 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
 
   server->begin();
-  log_msg("Web server started on port 80");
+  log_msg("Web server started on port 80", LOG_INFO);
   webServerInitialized = true;
 
   // Signal that the web server is initialized
@@ -114,28 +109,29 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 // Web server task for FreeRTOS
 void webServerTask(void* parameter) {
   // Wait for Web Server initialization to complete
-  log_msg("Waiting for web server initialization...");
+  log_msg("Waiting for web server initialization...", LOG_DEBUG);
   if (webServerReadySemaphore) {
     xSemaphoreTake(webServerReadySemaphore, portMAX_DELAY);
   }
 
-  log_msg("Web task started on core " + String(xPortGetCoreID()));
+  log_msg("Web task started on core " + String(xPortGetCoreID()), LOG_DEBUG);
   vTaskDelay(pdMS_TO_TICKS(1000));
+
+  // Stack diagnostics timer
+  static unsigned long lastStackCheck = 0;
+
   while (1) {
-    // Stack diagnostics in debug mode only
-    if (DEBUG_MODE == 1) {
-      static unsigned long lastDiagnostic = 0;
-      if (millis() - lastDiagnostic > 5000) {  // Every 5 seconds
-        UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-        log_msg("Web task: Stack free=" + String(stackFree * 4) +
-                " bytes, Heap free=" + String(ESP.getFreeHeap()) +
-                " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes");
-        lastDiagnostic = millis();
-      }
+    // Stack diagnostics every 5 seconds
+    if (millis() - lastStackCheck > 5000) {
+      UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
+      log_msg("Web task: Stack free=" + String(stackFree * 4) +
+              " bytes, Heap free=" + String(ESP.getFreeHeap()) +
+              " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
+      lastStackCheck = millis();
     }
 
     if (server && !webServerInitialized) {
-      log_msg("Warning: server not started");
+      log_msg("Server not started", LOG_WARNING);
     } else if (server) {
       server->handleClient();
     }
@@ -147,7 +143,7 @@ void webServerTask(void* parameter) {
 
     // Check for WiFi timeout
     if (checkWiFiTimeout()) {
-      log_msg("WiFi timeout - switching to normal mode");
+      log_msg("WiFi timeout - switching to normal mode", LOG_INFO);
       ESP.restart();
     }
   }
@@ -255,7 +251,7 @@ void handleNotFound() {
 
 // Handle reboot request
 void handleReboot() {
-  log_msg("Device reboot requested via web interface");
+  log_msg("Device reboot requested via web interface", LOG_INFO);
   server->send(200, "text/html", "<h1>Rebooting...</h1>");
   vTaskDelay(pdMS_TO_TICKS(1000));
   ESP.restart();

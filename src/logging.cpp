@@ -3,16 +3,33 @@
 #include "types.h"
 #include "usb_interface.h"
 
-// External mutex and flags
+// External mutex
 extern SemaphoreHandle_t logMutex;
-extern const int DEBUG_MODE;
-extern UsbMode usbMode;
 
 // Logging system internal data
 static String logBuffer[LOG_BUFFER_SIZE];
 static int logIndex = 0;
 static int logCount = 0;
 static bool initialized = false;
+
+// Global logging configuration
+static LogConfig logConfig;
+
+// Get configuration for external access
+LogConfig* logging_get_config() {
+    return &logConfig;
+}
+
+// Helper function to get short level name
+const char* getLogLevelName(LogLevel level) {
+    switch(level) {
+        case LOG_ERROR:   return "ERR";
+        case LOG_WARNING: return "WRN";  
+        case LOG_INFO:    return "INF";
+        case LOG_DEBUG:   return "DBG";
+        default:          return "???";
+    }
+}
 
 // Initialize logging system
 void logging_init() {
@@ -27,10 +44,11 @@ void logging_init() {
   logCount = 0;
 }
 
-// Thread-safe log with optional Serial output
-void log_msg(String message) {
+// Main logging function with log level
+void log_msg(String message, LogLevel level) {
   if (!message || message.length() == 0) return;
 
+  // Always save to buffer for web interface
   if (xSemaphoreTake(logMutex, 0) == pdTRUE) {
     if (message.length() > 120) {
       message = message.substring(0, 120) + "...";
@@ -39,8 +57,11 @@ void log_msg(String message) {
     unsigned long uptimeMs = millis();
     unsigned long seconds = uptimeMs / 1000;
     unsigned long ms = uptimeMs % 1000;
+    
+    // Add level to timestamp
     String timestamp = "[" + String(seconds) + "." +
-                      String(ms / 100) + "s] ";
+                      String(ms / 100) + "s][" + 
+                      String(getLogLevelName(level)) + "] ";
 
     logBuffer[logIndex].clear();
     logBuffer[logIndex] = timestamp + message;
@@ -52,13 +73,15 @@ void log_msg(String message) {
     xSemaphoreGive(logMutex);
   }
 
-  // Conditionally forward log to Serial
-  if (DEBUG_MODE == 1 && usbMode != USB_MODE_HOST) {
-    Serial.println(message);
-  } else if (DEBUG_MODE == 1 && usbMode == USB_MODE_HOST) {
-    // Serial output suppressed in USB Host mode
-    // Could add web-only logging indicator here if needed
-  }
+  // TODO: Add UART output (Device 3) when role system implemented
+  // if (logConfig.uartEnabled && level <= logConfig.uartLevel) {
+  //     // Output to UART on GPIO 11
+  // }
+  
+  // TODO: Add Network output (Device 4) when role system implemented  
+  // if (logConfig.networkEnabled && level <= logConfig.networkLevel) {
+  //     // Send via UDP
+  // }
 }
 
 // Return logs for web interface
