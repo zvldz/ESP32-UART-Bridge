@@ -16,7 +16,6 @@ static SemaphoreHandle_t ledMutex = NULL;
 
 // External objects from main.cpp
 extern DeviceMode currentMode;
-extern const int DEBUG_MODE;
 
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
@@ -62,7 +61,7 @@ void leds_init() {
  // Create mutex first
  ledMutex = xSemaphoreCreateMutex();
  if (ledMutex == NULL) {
-   log_msg("ERROR: Failed to create LED mutex!");
+   log_msg("Failed to create LED mutex!", LOG_ERROR);
    return;
  }
 
@@ -72,7 +71,7 @@ void leds_init() {
  FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
 
  // Rainbow startup effect
- log_msg("Starting rainbow effect...");
+ log_msg("Starting rainbow effect...", LOG_DEBUG);
  unsigned long startTime = millis();
 
  // Complete 3 full rainbow cycles in 1 second
@@ -97,7 +96,7 @@ void leds_init() {
 
  unsigned long effectDuration = millis() - startTime;
  log_msg("WS2812 RGB LED initialized on GPIO" + String(LED_PIN1) +
-         " (rainbow effect took " + String(effectDuration) + "ms)");
+         " (rainbow effect took " + String(effectDuration) + "ms)", LOG_INFO);
 }
 
 // Set LED mode
@@ -120,7 +119,7 @@ void led_set_mode(LedMode mode) {
        ledUpdateNeeded = true;
        xSemaphoreGive(ledMutex);
      }
-     log_msg("LED forced ON (purple) for WiFi config mode");
+     log_msg("LED forced ON (purple) for WiFi config mode", LOG_DEBUG);
      break;
 
    case LED_MODE_DATA_FLASH:

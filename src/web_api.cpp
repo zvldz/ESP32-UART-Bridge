@@ -15,7 +15,6 @@ extern Config config;
 extern UartStats uartStats;
 extern SystemState systemState;
 extern DeviceMode currentMode;
-extern const int DEBUG_MODE;
 extern SemaphoreHandle_t logMutex;
 
 // Helper function to safely read protected unsigned long value using critical sections
@@ -82,9 +81,6 @@ String mainPageProcessor(const String& var) {
     }
   }
 
-  if (var == "DEBUG_MODE") {
-    return String(DEBUG_MODE == 0 ? "Production (Bridge Active)" : "Debug (Bridge Disabled)");
-  }
   if (var == "LOG_DISPLAY_COUNT") return String(LOG_DISPLAY_COUNT);
   if (var == "BAUDRATE") return String(config.baudrate);
   if (var == "DATABITS") return String(config.databits);
@@ -167,7 +163,7 @@ void handleSave() {
   WebServer* server = getWebServer();
   if (!server) return;
 
-  log_msg("Saving new configuration...");
+  log_msg("Saving new configuration...", LOG_INFO);
 
   // Parse form data
   bool configChanged = false;
@@ -178,7 +174,7 @@ void handleSave() {
     if (newBaudrate != config.baudrate) {
       config.baudrate = newBaudrate;
       configChanged = true;
-      log_msg("UART baudrate changed to " + String(newBaudrate));
+      log_msg("UART baudrate changed to " + String(newBaudrate), LOG_INFO);
     }
   }
 
@@ -187,7 +183,7 @@ void handleSave() {
     if (newDatabits != config.databits) {
       config.databits = newDatabits;
       configChanged = true;
-      log_msg("UART data bits changed to " + String(newDatabits));
+      log_msg("UART data bits changed to " + String(newDatabits), LOG_INFO);
     }
   }
 
@@ -196,7 +192,7 @@ void handleSave() {
     if (newParity != config.parity) {
       config.parity = newParity;
       configChanged = true;
-      log_msg("UART parity changed to " + newParity);
+      log_msg("UART parity changed to " + newParity, LOG_INFO);
     }
   }
 
@@ -205,7 +201,7 @@ void handleSave() {
     if (newStopbits != config.stopbits) {
       config.stopbits = newStopbits;
       configChanged = true;
-      log_msg("UART stop bits changed to " + String(newStopbits));
+      log_msg("UART stop bits changed to " + String(newStopbits), LOG_INFO);
     }
   }
 
@@ -213,7 +209,7 @@ void handleSave() {
   if (newFlowcontrol != config.flowcontrol) {
     config.flowcontrol = newFlowcontrol;
     configChanged = true;
-    log_msg("Flow control " + String(newFlowcontrol ? "enabled" : "disabled"));
+    log_msg("Flow control " + String(newFlowcontrol ? "enabled" : "disabled"), LOG_INFO);
   }
 
   // USB mode settings
@@ -229,7 +225,7 @@ void handleSave() {
     if (newMode != config.usb_mode) {
       config.usb_mode = newMode;
       configChanged = true;
-      log_msg("USB mode changed to " + mode);
+      log_msg("USB mode changed to " + mode, LOG_INFO);
     }
   }
 
@@ -239,7 +235,7 @@ void handleSave() {
     if (newSSID.length() > 0 && newSSID != config.ssid) {
       config.ssid = newSSID;
       configChanged = true;
-      log_msg("WiFi SSID changed to " + newSSID);
+      log_msg("WiFi SSID changed to " + newSSID, LOG_INFO);
     }
   }
 
@@ -248,14 +244,14 @@ void handleSave() {
     if (newPassword.length() >= 8 && newPassword != config.password) {
       config.password = newPassword;
       configChanged = true;
-      log_msg("WiFi password updated");
+      log_msg("WiFi password updated", LOG_INFO);
     }
   }
 
   if (configChanged) {
     config_save(&config);
     server->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
-    server->client().flush();  // Ensure response is sent
+    server->client().clear();  // Ensure response is sent
     vTaskDelay(pdMS_TO_TICKS(3000));  // Match the 3 seconds shown in HTML
     ESP.restart();
   } else {
@@ -268,7 +264,7 @@ void handleResetStats() {
   WebServer* server = getWebServer();
   if (!server) return;
 
-  log_msg("Resetting statistics and logs...");
+  log_msg("Resetting statistics and logs...", LOG_INFO);
   resetStatistics(&uartStats);
   logging_clear();
 

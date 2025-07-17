@@ -26,7 +26,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.2.0"
+#define DEVICE_VERSION "2.3.0"
 
 // Hardware pins
 #define BOOT_BUTTON_PIN 0
@@ -66,18 +66,12 @@ these features but is not justified for current requirements.
 #define CRASHLOG_MIN_HEAP_WARNING 15000      // Show warning if heap < 15KB
 #define CRASHLOG_UPDATE_INTERVAL_MS 5000     // How often to update RTC variables
 
-// FreeRTOS priorities based on core count
-#ifdef CONFIG_FREERTOS_UNICORE
-    // Single core - UART below WiFi (WiFi typically at configMAX_PRIORITIES-2)
-    #define UART_TASK_PRIORITY (configMAX_PRIORITIES - 3)
-    #define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 20)
-#else
-    // Multi core - UART highest priority
-    #define UART_TASK_PRIORITY (configMAX_PRIORITIES - 1)
-    #define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 15)
-#endif
+// FreeRTOS priorities for multi-core ESP32
+#define UART_TASK_PRIORITY (configMAX_PRIORITIES - 1)  // Highest priority for UART
+#define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 15) // Lower priority for web server
 
-// Debug mode - 0 = production UART bridge, 1 = debug only (no bridge functionality)
-extern const int DEBUG_MODE;
+// Core assignments for multi-core ESP32
+#define UART_TASK_CORE 0  // Dedicated core for UART bridge
+#define WEB_TASK_CORE 1   // Separate core for web server
 
 #endif // DEFINES_H

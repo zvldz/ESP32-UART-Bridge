@@ -41,7 +41,6 @@ const char HTML_SYSTEM_INFO_TABLE[] PROGMEM = R"rawliteral(
 <tr><td><strong>WiFi SSID:</strong></td><td>%WIFI_SSID%</td></tr>
 <tr><td><strong>Current UART:</strong></td><td>%UART_CONFIG%</td></tr>
 <tr><td><strong>Flow Control:</strong></td><td>%FLOW_CONTROL%</td></tr>
-<tr><td><strong>Debug Mode:</strong></td><td>%DEBUG_MODE%</td></tr>
 </table>
 )rawliteral";
 

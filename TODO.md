@@ -53,6 +53,23 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
 - **Web logs (GUI)** — full DEBUG by default (only shown in UI)
 - **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
 
+## Completed ✅
+
+- [x] **Remove DEBUG_MODE** - Completed in v2.3.0
+  - Removed all DEBUG_MODE checks from code
+  - Bridge always active in all modes
+  - Diagnostics converted to log levels
+  
+- [x] **Remove CONFIG_FREERTOS_UNICORE** - Completed in v2.3.0
+  - Now only supports multi-core ESP32
+  - UART task on core 0, Web task on core 1
+  
+- [x] **Code Organization** - Completed in v2.3.0
+  - Extracted diagnostics to separate module (diagnostics.cpp/h)
+  - Moved system utilities to system_utils.cpp/h
+  - Moved RTC variables and crash update to crashlog.cpp/h
+  - main.cpp reduced from ~600 to ~450 lines
+
 ## Priority 2 - Future Features
 
 - [ ] **Alternative Data Modes**
@@ -85,20 +102,11 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - Import/Export configuration files
   - Configuration profiles for common use cases
 
-- [ ] **Diagnostic System Refactoring**
-  - Make diagnostic levels configurable via web interface
-  - Separate production vs debug diagnostics
-  - Add performance metrics display
-  - Memory usage trends over time
-
-- [ ] **Code Cleanup and Size Reduction**
-  - Check all files for remaining TODO comments
-  - Review for any commented-out code blocks
-  - Remove unused function declarations
-  - main.cpp is getting large (~600 lines)
-  - Consider extracting button handling to separate module
+- [ ] **Code Cleanup and Optimization**
+  - Consider extracting button handling to separate module (button_handler.cpp/h)
   - Review uartbridge.cpp for potential optimizations
   - HTML templates could be compressed or minified
+  - Consider using LittleFS compression for web resources
 
 ## Notes
 
@@ -106,3 +114,4 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
 - USB Auto mode needs VBUS detection implementation
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
+- Version 2.3.0 provides clean foundation for Priority 1 implementation

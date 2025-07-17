@@ -72,7 +72,7 @@ void config_load(Config* config) {
 
 // Save configuration to LittleFS
 void config_save(Config* config) {
-  log_msg("Saving configuration to LittleFS...");
+  log_msg("Saving configuration to LittleFS...", LOG_INFO);
 
   // Create backup of current config
   if (LittleFS.exists("/config.json")) {
@@ -113,14 +113,14 @@ void config_save(Config* config) {
 
   File file = LittleFS.open("/config.json", "w");
   if (!file) {
-    log_msg("ERROR: Failed to create config file");
+    log_msg("Failed to create config file", LOG_ERROR);
     return;
   }
 
   if (serializeJson(doc, file) == 0) {
-    log_msg("ERROR: Failed to write config file");
+    log_msg("Failed to write config file", LOG_ERROR);
   } else {
-    log_msg("Configuration saved successfully");
+    log_msg("Configuration saved successfully", LOG_INFO);
   }
 
   file.close();
