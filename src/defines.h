@@ -24,6 +24,11 @@ these features but is not justified for current requirements.
 
 */
 
+// Ensure multi-core ESP32 only
+#if CONFIG_FREERTOS_UNICORE == 1
+    #error "This firmware requires a multi-core ESP32. Single-core variants are not supported."
+#endif
+
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
 #define DEVICE_VERSION "2.3.0"
