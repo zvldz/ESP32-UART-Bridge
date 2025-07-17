@@ -172,6 +172,9 @@ const char HTML_DEVICE_SETTINGS[] PROGMEM = R"rawliteral(
   <option value="host">Host (Connect USB Modem)</option>
   <option value="auto" disabled>(Auto - not supported)</option>
 </select>
+<small class="text-warning">
+    Note: After changing USB mode, physically reconnect the device or press RESET button for changes to take effect properly.
+</small>
 </div>
 <h4 style="margin-top: 20px;">WiFi Configuration</h4>
 <label for="ssid">WiFi SSID:</label>
