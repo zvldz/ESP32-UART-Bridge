@@ -14,6 +14,12 @@
 #include "crashlog.h"
 #include "usb_interface.h"
 
+#ifdef CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+   #include "hal/usb_serial_jtag_ll.h"
+   #include "soc/usb_serial_jtag_reg.h"
+   #include "soc/usb_serial_jtag_struct.h"
+#endif
+
 // Global constants
 #ifndef DEBUG_MODE_BUILD
   #define DEBUG_MODE_BUILD 0
@@ -76,6 +82,13 @@ void disableBrownout() {
 //================================================================
 
 void setup() {
+    // Disable USB Serial/JTAG peripheral interrupts to reduce spurious resets
+    // VSCode/esptool can still upload firmware using standard DTR/RTS sequence
+    #ifdef CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
+        usb_serial_jtag_ll_disable_intr_mask(0xFFFFFFFF);
+        USB_SERIAL_JTAG.conf0.usb_pad_enable = 0;
+    #endif
+
   // Print boot info first
   printBootInfo();
 
