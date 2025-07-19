@@ -9,14 +9,17 @@
 void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, UsbInterface* usb);
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
 
+// Device 3 task
+void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations
+
 // Flow control functions
 void detectFlowControl();     // TODO: Enhanced Flow Control diagnostics
 String getFlowControlStatus();
 
-// Thread-safe statistics update
-void updateSharedStats(unsigned long uartToUsb, unsigned long usbToUart, unsigned long activity);
+// Device 2 functions
+void initDevice2UART();
 
-// Statistics reset
-void resetStatistics(UartStats* stats);
+// Device 3 functions
+void initDevice3(uint8_t role);  // Initialize based on role (mirror/bridge)
 
 #endif // UARTBRIDGE_H

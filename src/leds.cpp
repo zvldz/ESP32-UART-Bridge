@@ -30,6 +30,8 @@ static volatile ActivityType lastActivity = ACTIVITY_NONE;
 // Activity counters
 static volatile uint32_t uartRxCounter = 0;
 static volatile uint32_t usbRxCounter = 0;
+static volatile uint32_t device3TxCounter = 0;
+static volatile uint32_t device3RxCounter = 0;
 
 // Rapid blink state
 static volatile bool rapidBlinkActive = false;
@@ -137,6 +139,14 @@ void led_notify_usb_rx() {
  usbRxCounter = usbRxCounter + 1;
 }
 
+void led_notify_device3_tx() {
+ device3TxCounter = device3TxCounter + 1;
+}
+
+void led_notify_device3_rx() {
+ device3RxCounter = device3RxCounter + 1;
+}
+
 // Flash LED for data activity
 static void led_flash_activity(ActivityType activity) {
  if (currentMode == MODE_NORMAL && ledMutex != NULL) {
@@ -146,8 +156,21 @@ static void led_flash_activity(ActivityType activity) {
      // Check if LED is still on from previous activity
      if (ledOffTime > now && ledIsOn && activity != lastActivity) {
        // Different activity while LED is on - mix colors
-       pendingColorValue = (uint32_t)CRGB::Cyan;
-       lastActivity = ACTIVITY_BOTH;
+       // Check for mixed activities
+       if ((lastActivity == ACTIVITY_UART_RX || lastActivity == ACTIVITY_USB_RX) &&
+           (activity == ACTIVITY_DEVICE3_TX || activity == ACTIVITY_DEVICE3_RX)) {
+         // Main channel + Device 3 = White
+         pendingColorValue = (uint32_t)CRGB::White;
+       } else if ((lastActivity == ACTIVITY_DEVICE3_TX || lastActivity == ACTIVITY_DEVICE3_RX) &&
+                  (activity == ACTIVITY_UART_RX || activity == ACTIVITY_USB_RX)) {
+         // Device 3 + Main channel = White
+         pendingColorValue = (uint32_t)CRGB::White;
+       } else if (lastActivity == ACTIVITY_UART_RX && activity == ACTIVITY_USB_RX) {
+         pendingColorValue = (uint32_t)CRGB::Cyan;
+       } else if (lastActivity == ACTIVITY_DEVICE3_TX && activity == ACTIVITY_DEVICE3_RX) {
+         pendingColorValue = (uint32_t)CRGB::Orange;
+       }
+       lastActivity = ACTIVITY_BOTH;  // Generic "multiple activities"
      } else {
        // Single activity or LED is off
        switch(activity) {
@@ -159,6 +182,15 @@ static void led_flash_activity(ActivityType activity) {
            break;
          case ACTIVITY_BOTH:
            pendingColorValue = (uint32_t)CRGB::Cyan;
+           break;
+         case ACTIVITY_DEVICE3_TX:
+           pendingColorValue = COLOR_MAGENTA;  // Defined in defines.h
+           break;
+         case ACTIVITY_DEVICE3_RX:
+           pendingColorValue = COLOR_YELLOW;   // Defined in defines.h
+           break;
+         case ACTIVITY_DEVICE3_BOTH:
+           pendingColorValue = (uint32_t)CRGB::Orange;
            break;
          default:
            pendingColorValue = (uint32_t)CRGB::Black;
@@ -290,25 +322,42 @@ void led_process_updates() {
  // Normal mode - check data activity
  static uint32_t lastUartCount = 0;
  static uint32_t lastUsbCount = 0;
+ static uint32_t lastDevice3TxCount = 0;
+ static uint32_t lastDevice3RxCount = 0;
 
  // Check activity
  bool uartActivity = (uartRxCounter != lastUartCount);
  bool usbActivity = (usbRxCounter != lastUsbCount);
+ bool device3TxActivity = (device3TxCounter != lastDevice3TxCount);
+ bool device3RxActivity = (device3RxCounter != lastDevice3RxCount);
 
- if (uartActivity || usbActivity) {
-   ActivityType activity;
-   if (uartActivity && usbActivity) {
-     activity = ACTIVITY_BOTH;
-   } else if (uartActivity) {
-     activity = ACTIVITY_UART_RX;
-   } else {
-     activity = ACTIVITY_USB_RX;
-   }
+ // Determine activity type
+ ActivityType activity = ACTIVITY_NONE;
+ 
+ // Check Device 3 activity first
+ if (device3TxActivity && device3RxActivity) {
+   activity = ACTIVITY_DEVICE3_BOTH;
+ } else if (device3TxActivity) {
+   activity = ACTIVITY_DEVICE3_TX;
+ } else if (device3RxActivity) {
+   activity = ACTIVITY_DEVICE3_RX;
+ } 
+ // Then check main channel activity
+ else if (uartActivity && usbActivity) {
+   activity = ACTIVITY_BOTH;
+ } else if (uartActivity) {
+   activity = ACTIVITY_UART_RX;
+ } else if (usbActivity) {
+   activity = ACTIVITY_USB_RX;
+ }
 
+ if (activity != ACTIVITY_NONE) {
    led_flash_activity(activity);
 
    lastUartCount = uartRxCounter;
    lastUsbCount = usbRxCounter;
+   lastDevice3TxCount = device3TxCounter;
+   lastDevice3RxCount = device3RxCounter;
  }
 
  // Handle automatic LED off

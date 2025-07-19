@@ -1,0 +1,199 @@
+/* ESP32 UART Bridge Styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f0f0f0;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #333;
+    text-align: center;
+}
+
+.section {
+    margin: 20px 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+label {
+    display: block;
+    margin: 10px 0 5px 0;
+    font-weight: bold;
+}
+
+input, select {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 5px;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+.status {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    background-color: #e7f3ff;
+    border-left: 4px solid #2196F3;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    border: 2px solid #333;
+    table-layout: fixed;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    word-wrap: break-word;
+}
+
+th {
+    background-color: #f2f2f2;
+}
+
+td:first-child {
+    width: 45%;
+}
+
+td:last-child {
+    width: 55%;
+    text-align: right;
+}
+
+table tr:nth-child(even) {
+    background-color: #f1f3f4;
+}
+
+table tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+.log-container {
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background-color: #e9ecef;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.log-entry {
+    margin: 2px 0;
+}
+
+.warning {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.success {
+    background-color: #d4edda;
+    border-left: 4px solid #28a745;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+pre {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+/* Crash log styles */
+#crashClear:hover {
+    opacity: 1 !important;
+    transform: scale(1.1);
+}
+
+#crashClear:hover svg {
+    stroke: #f44336;
+}
+
+.badge.warning {
+    background: #ff9800 !important;
+}
+
+.badge.danger {
+    background: #f44336 !important;
+}
+
+.crash-panic {
+    color: #d32f2f;
+    font-weight: bold;
+}
+
+.crash-wdt {
+    color: #f57c00;
+    font-weight: bold;
+}
+
+.heap-critical {
+    background: #fff3cd;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    .container {
+        padding: 15px;
+        margin: 10px;
+    }
+    
+    td:first-child {
+        width: 40%;
+        font-size: 14px;
+    }
+    
+    td:last-child {
+        width: 60%;
+        font-size: 14px;
+    }
+    
+    button {
+        padding: 12px 16px !important;
+        font-size: 16px !important;
+        min-height: 44px;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+    
+    h3 {
+        font-size: 18px;
+    }
+}

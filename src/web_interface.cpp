@@ -16,10 +16,8 @@
 #include "config.h"
 #include "defines.h"
 
-// HTML template includes
-#include "html_common.h"
-#include "html_main_page.h"
-#include "html_help_page.h"
+// Include generated web content
+#include "generated/web_content.h"
 
 #include "freertos/semphr.h"
 #include "esp_wifi.h"
@@ -39,6 +37,29 @@ DNSServer* dnsServer = nullptr;
 
 // Indicates whether the web server was successfully started
 static bool webServerInitialized = false;
+
+// New template processor for {{}} placeholders
+String processTemplate(const String& html, std::function<String(const String&)> processor) {
+    String result = html;
+    int start = 0;
+    
+    while ((start = result.indexOf("{{", start)) != -1) {
+        int end = result.indexOf("}}", start + 2);
+        if (end == -1) break;
+        
+        String var = result.substring(start + 2, end);
+        String value = processor(var);
+        
+        if (value.length() > 0) {
+            result = result.substring(0, start) + value + result.substring(end + 2);
+            start += value.length();
+        } else {
+            start = end + 2;
+        }
+    }
+    
+    return result;
+}
 
 // Initialize web server in CONFIG mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
@@ -75,6 +96,8 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 
   // Re-enable USB CDC after Wi-Fi is active at configured bridge rate
   Serial.begin(config->baudrate);
+  Serial.setRxBufferSize(1024); // !!!
+  Serial.setTxBufferSize(1024); // !!!
   vTaskDelay(pdMS_TO_TICKS(100));
   log_msg("Serial USB reinitialized in config mode", LOG_DEBUG);
 
@@ -92,6 +115,12 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/success", handleSuccess);
   server->on("/crashlog_json", handleCrashLogJson);
   server->on("/clear_crashlog", handleClearCrashLog);
+  
+  // Serve static files
+  server->on("/style.css", handleCSS);
+  server->on("/main.js", handleMainJS);
+  server->on("/crash-log.js", handleCrashJS);
+  
   server->onNotFound(handleNotFound);
   server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
 
@@ -138,7 +167,12 @@ void webServerTask(void* parameter) {
     vTaskDelay(pdMS_TO_TICKS(5)); // Give other tasks a chance
 
     if (dnsServer) {
-      dnsServer->processNextRequest();
+      // Process DNS only every 50ms instead of every 5ms
+      static unsigned long lastDnsProcess = 0;
+      if (millis() - lastDnsProcess > 50) {
+        dnsServer->processNextRequest();
+        lastDnsProcess = millis();
+      }
     }
 
     // Check for WiFi timeout
@@ -173,74 +207,50 @@ bool checkWiFiTimeout() {
 
 // Handle root page
 void handleRoot() {
-  String html;
-
-  // Build page using new structure
-  html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
-  html += loadTemplate(HTML_MAIN_TITLE);      // Page-specific title
-  html += loadTemplate(HTML_STYLES);          // Common styles
-  html += loadTemplate(HTML_COMMON_JS);       // Common JavaScript utilities
-  html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
-  html += loadTemplate(HTML_MAIN_HEADING);    // Page heading
-  html += loadTemplate(HTML_QUICK_GUIDE);
-
-  // System Status section
-  html += loadTemplate(HTML_SYSTEM_STATUS_START);
-
-  // Group 1: System Information
-  html += processTemplate(loadTemplate(HTML_SYSTEM_INFO_TABLE), mainPageProcessor);
-
-  // Group 2: Traffic Volume
-  html += processTemplate(loadTemplate(HTML_TRAFFIC_STATS), mainPageProcessor);
-
-  // System Logs section
-  html += processTemplate(loadTemplate(HTML_SYSTEM_LOGS), mainPageProcessor);
-
-  // Crash History section
-  html += loadTemplate(HTML_CRASH_HISTORY);
-
-  // Combined Device Settings section
-  html += processTemplate(loadTemplate(HTML_DEVICE_SETTINGS), mainPageProcessor);
-
-  // Firmware Update section
-  html += loadTemplate(HTML_FIRMWARE_UPDATE);
-
-  // JavaScript to set current values and auto-refresh
-  html += processTemplate(loadTemplate(HTML_JAVASCRIPT), mainPageProcessor);
-
-  html += loadTemplate(HTML_FOOTER);
-
+  String html = String(FPSTR(HTML_INDEX));
+  
+  // Process template with configuration JSON
+  html = processTemplate(html, [](const String& var) {
+    if (var == "CONFIG_JSON") {
+      return getConfigJson();
+    }
+    return String();
+  });
+  
   server->send(200, "text/html", html);
 }
 
 // Handle help page
 void handleHelp() {
-  String html;
+  server->send(200, "text/html", FPSTR(HTML_HELP));
+}
 
-  // Build page using new structure
-  html += loadTemplate(HTML_DOCTYPE_META);    // Common DOCTYPE and meta
-  html += loadTemplate(HTML_HELP_TITLE);      // Page-specific title
-  html += loadTemplate(HTML_STYLES);          // Common styles
-  html += loadTemplate(HTML_BODY_CONTAINER);  // Common container
-  html += loadTemplate(HTML_HELP_HEADING);    // Page heading
+// Handle CSS request
+void handleCSS() {
+  server->send(200, "text/css", FPSTR(CSS_STYLE));
+}
 
-  // Add all help sections from templates
-  html += loadTemplate(HTML_HELP_PROTOCOL_INFO);
-  html += loadTemplate(HTML_HELP_PIN_TABLE);
-  html += loadTemplate(HTML_HELP_LED_BEHAVIOR);
-  html += loadTemplate(HTML_HELP_CONNECTION_GUIDE);
-  html += loadTemplate(HTML_HELP_SETUP_INSTRUCTIONS);
-  html += loadTemplate(HTML_HELP_TROUBLESHOOTING);
+// Handle main.js request
+void handleMainJS() {
+  server->send(200, "application/javascript", FPSTR(JS_MAIN));
+}
 
-  html += loadTemplate(HTML_HELP_BUTTONS);
-  html += loadTemplate(HTML_FOOTER);
-
-  server->send(200, "text/html", html);
+// Handle crash-log.js request
+void handleCrashJS() {
+  // We have a separate crash-log.js file
+  server->send(200, "application/javascript", FPSTR(JS_CRASH_LOG));
 }
 
 // Handle success page for captive portal
 void handleSuccess() {
-  server->send(200, "text/html", loadTemplate(HTML_SUCCESS_PAGE));
+  const char successPage[] = R"(
+<!DOCTYPE html><html><head><title>Connected</title></head>
+<body><h1>Successfully Connected!</h1>
+<p>You can now configure your UART Bridge.</p>
+<script>setTimeout(function(){window.location='/';}, 2000);</script>
+</body></html>
+)";
+  server->send(200, "text/html", successPage);
 }
 
 // Handle not found - redirect to main page (Captive Portal)

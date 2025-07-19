@@ -4,6 +4,9 @@
 #include "esp_system.h"
 #include <Arduino.h>
 
+// External object from main.cpp
+extern UartStats uartStats;
+
 // Print boot information to Serial (only for critical reset reasons)
 void printBootInfo() {
     // Get reset reason
@@ -42,8 +45,61 @@ void systemDiagnostics() {
         } else {
             log_msg("Memory: Free=" + String(freeHeap) + " bytes, Min=" + String(minFreeHeap) + " bytes", LOG_DEBUG);
         }
-        
-        log_msg("Uptime: " + String(millis()/1000) + "s", LOG_DEBUG);
+
         lastCheck = millis();
     }
+}
+
+// Helper function for device2 role names
+const char* getDevice2RoleName(uint8_t role) {
+  switch(role) {
+    case D2_NONE: return "Disabled";
+    case D2_UART2: return "UART2";
+    case D2_USB: return "USB";
+    default: return "Unknown";
+  }
+}
+
+// Helper function for device3 role names
+const char* getDevice3RoleName(uint8_t role) {
+  switch(role) {
+    case D3_NONE: return "Disabled";
+    case D3_UART3_MIRROR: return "UART3 Mirror";
+    case D3_UART3_BRIDGE: return "UART3 Bridge";
+    case D3_UART3_LOG: return "UART3 Logger";
+    default: return "Unknown";
+  }
+}
+
+// Thread-safe function to update shared statistics using critical sections
+void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
+                      unsigned long device2Rx, unsigned long device2Tx,
+                      unsigned long device3Rx, unsigned long device3Tx,
+                      unsigned long lastActivity) {
+  enterStatsCritical();
+  uartStats.device1RxBytes = device1Rx;
+  uartStats.device1TxBytes = device1Tx;
+  uartStats.device2RxBytes = device2Rx;
+  uartStats.device2TxBytes = device2Tx;
+  uartStats.device3RxBytes = device3Rx;
+  uartStats.device3TxBytes = device3Tx;
+  if (lastActivity > 0) {
+    uartStats.lastActivityTime = lastActivity;
+  }
+  exitStatsCritical();
+}
+
+// Reset all statistics using critical sections
+void resetStatistics(UartStats* stats) {
+  enterStatsCritical();
+  stats->device1RxBytes = 0;
+  stats->device1TxBytes = 0;
+  stats->device2RxBytes = 0;
+  stats->device2TxBytes = 0;
+  stats->device3RxBytes = 0;
+  stats->device3TxBytes = 0;
+  stats->lastActivityTime = 0;
+  stats->deviceStartTime = millis();
+  stats->totalUartPackets = 0;
+  exitStatsCritical();
 }

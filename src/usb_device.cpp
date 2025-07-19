@@ -11,10 +11,9 @@ public:
     void init() override {
         Serial.begin(baudrate);
 
-        // Increase RX buffer for better performance at high speeds
-        if (baudrate >= 115200) {
-            Serial.setRxBufferSize(1024);
-        }
+        // Increase RX/TX buffer for better performance
+        Serial.setRxBufferSize(1024);
+        Serial.setTxBufferSize(1024);
 
         // Wait for USB connection (maximum 2 seconds)
         unsigned long startTime = millis();

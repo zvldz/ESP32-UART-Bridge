@@ -29,6 +29,7 @@ UsbMode usbMode = USB_MODE_DEVICE;
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t webServerTaskHandle = NULL;
+TaskHandle_t device3TaskHandle = NULL;
 
 // USB interface
 UsbInterface* usbInterface = NULL;
@@ -48,6 +49,11 @@ void bootButtonISR();
 void createMutexes();
 void createTasks();
 void handleButtonInput();
+void initDevices();
+
+// Helper functions for device role names
+const char* getDevice2RoleName(uint8_t role);
+const char* getDevice3RoleName(uint8_t role);
 
 // FIRST thing - disable brownout using constructor attribute
 void disableBrownout() __attribute__((constructor));
@@ -83,7 +89,7 @@ void setup() {
   // Initialize logging system
   logging_init();
 
-  log_msg(config.device_name + " v" + config.version + " starting", LOG_INFO);
+  log_msg(config.device_name + " v" + config.device_version + " starting", LOG_INFO);
 
   // Initialize filesystem
   log_msg("Initializing LittleFS...", LOG_INFO);
@@ -122,6 +128,9 @@ void setup() {
 
   // Update global usbMode after loading config
   usbMode = config.usb_mode;
+  
+  // Initialize devices based on configuration
+  initDevices();
 
   // Check for crash and log if needed
   crashlog_check_and_save();
@@ -237,28 +246,32 @@ void initNormalMode() {
   // Set global USB mode based on configuration
   usbMode = config.usb_mode;
 
-  // Create USB interface based on configuration
-  switch(config.usb_mode) {
-    case USB_MODE_HOST:
-      log_msg("Creating USB Host interface", LOG_INFO);
-      usbInterface = createUsbHost(config.baudrate);
-      break;
-    case USB_MODE_AUTO:
-      log_msg("Creating USB Auto-detect interface", LOG_INFO);
-      usbInterface = createUsbAuto(config.baudrate);
-      break;
-    case USB_MODE_DEVICE:
-    default:
-      log_msg("Creating USB Device interface", LOG_INFO);
-      usbInterface = createUsbDevice(config.baudrate);
-      break;
-  }
+  // Create USB interface based on configuration (only if Device 2 is USB)
+  if (config.device2.role == D2_USB) {
+    switch(config.usb_mode) {
+      case USB_MODE_HOST:
+        log_msg("Creating USB Host interface", LOG_INFO);
+        usbInterface = createUsbHost(config.baudrate);
+        break;
+      case USB_MODE_AUTO:
+        log_msg("Creating USB Auto-detect interface", LOG_INFO);
+        usbInterface = createUsbAuto(config.baudrate);
+        break;
+      case USB_MODE_DEVICE:
+      default:
+        log_msg("Creating USB Device interface", LOG_INFO);
+        usbInterface = createUsbDevice(config.baudrate);
+        break;
+    }
 
-  if (usbInterface) {
-    usbInterface->init();
-    log_msg("USB interface initialized", LOG_INFO);
+    if (usbInterface) {
+      usbInterface->init();
+      log_msg("USB interface initialized", LOG_INFO);
+    } else {
+      log_msg("Failed to create USB interface", LOG_ERROR);
+    }
   } else {
-    log_msg("Failed to create USB interface", LOG_ERROR);
+    log_msg("Device 2 is not configured for USB, skipping USB initialization", LOG_INFO);
   }
 
   // Initialize UART bridge
@@ -271,31 +284,35 @@ void initConfigMode() {
   // Set LED mode for WiFi config
   led_set_mode(LED_MODE_WIFI_ON);
 
-  // Use configured USB mode (from config file)
+  // Use configured USB mode (from config file) - only if Device 2 is USB
   usbMode = config.usb_mode;
 
   // Create USB interface even in config mode (for bridge functionality)
-  switch(config.usb_mode) {
-    case USB_MODE_HOST:
-      log_msg("Creating USB Host interface in WiFi mode", LOG_INFO);
-      usbInterface = createUsbHost(config.baudrate);
-      break;
-    case USB_MODE_AUTO:
-      log_msg("Creating USB Auto-detect interface in WiFi mode", LOG_INFO);
-      usbInterface = createUsbAuto(config.baudrate);
-      break;
-    case USB_MODE_DEVICE:
-    default:
-      log_msg("Creating USB Device interface in WiFi mode", LOG_INFO);
-      usbInterface = createUsbDevice(config.baudrate);
-      break;
-  }
-  
-  if (usbInterface) {
-    usbInterface->init();
-    log_msg("USB interface initialized in WiFi mode", LOG_INFO);
+  if (config.device2.role == D2_USB) {
+    switch(config.usb_mode) {
+      case USB_MODE_HOST:
+        log_msg("Creating USB Host interface in WiFi mode", LOG_INFO);
+        usbInterface = createUsbHost(config.baudrate);
+        break;
+      case USB_MODE_AUTO:
+        log_msg("Creating USB Auto-detect interface in WiFi mode", LOG_INFO);
+        usbInterface = createUsbAuto(config.baudrate);
+        break;
+      case USB_MODE_DEVICE:
+      default:
+        log_msg("Creating USB Device interface in WiFi mode", LOG_INFO);
+        usbInterface = createUsbDevice(config.baudrate);
+        break;
+    }
+    
+    if (usbInterface) {
+      usbInterface->init();
+      log_msg("USB interface initialized in WiFi mode", LOG_INFO);
+    } else {
+      log_msg("Failed to create USB interface in WiFi mode", LOG_ERROR);
+    }
   } else {
-    log_msg("Failed to create USB interface in WiFi mode", LOG_ERROR);
+    log_msg("Device 2 is not configured for USB in WiFi mode", LOG_INFO);
   }
 
   // Initialize UART bridge even in config mode (for statistics)
@@ -303,6 +320,37 @@ void initConfigMode() {
 
   // Initialize web server
   webserver_init(&config, &uartStats, &systemState);
+}
+
+void initDevices() {
+  // Log device configuration using helper functions
+  log_msg("Device configuration:", LOG_INFO);
+  log_msg("- Device 1: Main UART Bridge (always enabled)", LOG_INFO);
+  
+  // Device 2 with role name
+  String d2Info = "- Device 2: " + String(getDevice2RoleName(config.device2.role));
+  if (config.device2.role == D2_USB) {
+    d2Info += " (" + String(config.usb_mode == USB_MODE_HOST ? "Host" : "Device") + " mode)";
+  }
+  log_msg(d2Info, LOG_INFO);
+  
+  // Device 3 with role name
+  log_msg("- Device 3: " + String(getDevice3RoleName(config.device3.role)), LOG_INFO);
+  
+  // Device 4
+  log_msg("- Device 4: " + String(config.device4.role == D4_NONE ? "Disabled" : "Future feature"), LOG_INFO);
+  
+  // Initialize UART logger if Device 3 is configured for logging
+  if (config.device3.role == D3_UART3_LOG) {
+    logging_init_uart();
+  }
+  
+  // Log logging configuration
+  log_msg("Logging configuration:", LOG_INFO);
+  log_msg("- Web logs: " + String(getLogLevelName(config.log_level_web)), LOG_INFO);
+  log_msg("- UART logs: " + String(getLogLevelName(config.log_level_uart)) + 
+          (config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)"), LOG_INFO);
+  log_msg("- Network logs: " + String(getLogLevelName(config.log_level_network)) + " (future)", LOG_INFO);
 }
 
 //================================================================
@@ -444,6 +492,22 @@ void createTasks() {
           " (priority " + String(UART_TASK_PRIORITY) + ")", LOG_INFO);
   log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized", LOG_INFO);
   log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance", LOG_INFO);
+
+  // Create Device 3 task only if needed
+  if (config.device3.role != D3_NONE && config.device3.role != D3_UART3_LOG) {
+    xTaskCreatePinnedToCore(
+      device3Task,           // Task function
+      "Device3_Task",        // Task name
+      4096,                  // Stack size
+      NULL,                  // Parameters
+      UART_TASK_PRIORITY-1,  // Slightly lower priority than main UART
+      &device3TaskHandle,    // Task handle
+      DEVICE3_TASK_CORE      // Same core as UART (core 0)
+    );
+    
+    log_msg("Device 3 task created on core " + String(DEVICE3_TASK_CORE) + 
+            " for " + String(config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge") + " mode", LOG_INFO);
+  }
 
   // Create web server task only in CONFIG mode on core 1
   if (currentMode == MODE_CONFIG) {
