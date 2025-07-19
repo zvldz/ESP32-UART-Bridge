@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include <WebServer.h>
+#include <functional>
 
 // Web server interface
 void webserver_init(Config* config, UartStats* stats, SystemState* state);
@@ -16,6 +17,14 @@ void handleHelp();
 void handleSuccess();
 void handleNotFound();
 void handleReboot();
+
+// Static file handlers
+void handleCSS();
+void handleMainJS();
+void handleCrashJS();
+
+// Template processing
+String processTemplate(const String& html, std::function<String(const String&)> processor);
 
 // Get server instance for other modules
 WebServer* getWebServer();

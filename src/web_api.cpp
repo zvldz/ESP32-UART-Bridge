@@ -4,8 +4,8 @@
 #include "config.h"
 #include "uartbridge.h"
 #include "defines.h"
-#include "html_common.h"
 #include "crashlog.h"
+#include "diagnostics.h"
 #include <Arduino.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
@@ -27,83 +27,86 @@ unsigned long getProtectedULongValue(unsigned long* valuePtr) {
     return result;
 }
 
-// Template processor for main page
-String mainPageProcessor(const String& var) {
-  if (var == "DEVICE_NAME") return config.device_name;
-  if (var == "VERSION") return config.version;
-  if (var == "FREE_RAM") return String(ESP.getFreeHeap());
-
-  // Protected access to uartStats.deviceStartTime
-  if (var == "UPTIME") {
+// Generate complete configuration JSON for initial page load
+String getConfigJson() {
+    JsonDocument doc;
+    
+    // System info
+    doc["deviceName"] = config.device_name;
+    doc["version"] = config.device_version;
+    doc["freeRam"] = ESP.getFreeHeap();
+    
+    // Calculate uptime
     unsigned long startTime = getProtectedULongValue(&uartStats.deviceStartTime);
-    return String((millis() - startTime) / 1000);
-  }
-
-  if (var == "WIFI_SSID") return config.ssid;
-  if (var == "WIFI_PASSWORD") return config.password;
-  if (var == "UART_CONFIG") {
-    return String(config.baudrate) + " baud, " +
-           String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
-  }
-  if (var == "FLOW_CONTROL") return getFlowControlStatus();
-
-  // Protected access to uartStats.bytesUartToUsb
-  if (var == "UART_TO_USB") {
-    return String(getProtectedULongValue(&uartStats.bytesUartToUsb));
-  }
-
-  // Protected access to uartStats.bytesUsbToUart
-  if (var == "USB_TO_UART") {
-    return String(getProtectedULongValue(&uartStats.bytesUsbToUart));
-  }
-
-  // Protected access to total traffic
-  if (var == "TOTAL_TRAFFIC") {
-    unsigned long total = 0;
+    doc["uptime"] = (millis() - startTime) / 1000;
+    
+    // Current configuration
+    doc["baudrate"] = config.baudrate;
+    doc["databits"] = config.databits;
+    doc["parity"] = config.parity;
+    doc["stopbits"] = config.stopbits;
+    doc["flowcontrol"] = config.flowcontrol;
+    
+    // WiFi
+    doc["ssid"] = config.ssid;
+    doc["password"] = config.password;
+    
+    // USB mode
+    doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
+    
+    // Device roles
+    doc["device2Role"] = String(config.device2.role);
+    doc["device3Role"] = String(config.device3.role);
+    doc["device4Role"] = String(config.device4.role);
+    
+    // Device role names
+    doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
+    doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
+    
+    // Log levels
+    doc["logLevelWeb"] = (int)config.log_level_web;
+    doc["logLevelUart"] = (int)config.log_level_uart;
+    doc["logLevelNetwork"] = (int)config.log_level_network;
+    
+    // UART configuration string
+    String uartConfig = String(config.baudrate) + " baud, " +
+                       String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
+    doc["uartConfig"] = uartConfig;
+    
+    // Flow control status
+    doc["flowControl"] = getFlowControlStatus();
+    
+    // Statistics
+    doc["device1Rx"] = getProtectedULongValue(&uartStats.device1RxBytes);
+    doc["device1Tx"] = getProtectedULongValue(&uartStats.device1TxBytes);
+    doc["device2Rx"] = getProtectedULongValue(&uartStats.device2RxBytes);
+    doc["device2Tx"] = getProtectedULongValue(&uartStats.device2TxBytes);
+    doc["device3Rx"] = getProtectedULongValue(&uartStats.device3RxBytes);
+    doc["device3Tx"] = getProtectedULongValue(&uartStats.device3TxBytes);
+    
+    // Total traffic
+    unsigned long totalTraffic = 0;
     enterStatsCritical();
-    total = uartStats.bytesUartToUsb + uartStats.bytesUsbToUart;
+    totalTraffic = uartStats.device1RxBytes + uartStats.device1TxBytes +
+                   uartStats.device2RxBytes + uartStats.device2TxBytes +
+                   uartStats.device3RxBytes + uartStats.device3TxBytes;
     exitStatsCritical();
-    return String(total);
-  }
-
-  // FIXED: Protected access to lastActivityTime with proper "Never" handling
-  if (var == "LAST_ACTIVITY") {
-    unsigned long lastActivity;
-    enterStatsCritical();
-    lastActivity = uartStats.lastActivityTime;
-    exitStatsCritical();
-
+    doc["totalTraffic"] = totalTraffic;
+    
+    // Last activity
+    unsigned long lastActivity = getProtectedULongValue(&uartStats.lastActivityTime);
     if (lastActivity == 0) {
-      return String("Never");
+        doc["lastActivity"] = "Never";
     } else {
-      unsigned long secondsAgo = (millis() - lastActivity) / 1000;
-      return String(secondsAgo);
+        doc["lastActivity"] = String((millis() - lastActivity) / 1000) + " seconds ago";
     }
-  }
-
-  if (var == "LOG_DISPLAY_COUNT") return String(LOG_DISPLAY_COUNT);
-  if (var == "BAUDRATE") return String(config.baudrate);
-  if (var == "DATABITS") return String(config.databits);
-  if (var == "PARITY") return config.parity;
-  if (var == "STOPBITS") return String(config.stopbits);
-  if (var == "FLOWCONTROL") return config.flowcontrol ? "true" : "false";
-  if (var == "UART_FULL_CONFIG") {
-    return String(config.baudrate) + " baud, " +
-           String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
-  }
-  if (var == "FLOW_CONTROL_TEXT") {
-    return String(config.flowcontrol ? "Enabled" : "Disabled");
-  }
-  if (var == "USB_MODE") {
-    switch(config.usb_mode) {
-      case USB_MODE_HOST: return "host";
-      case USB_MODE_AUTO: return "auto";
-      case USB_MODE_DEVICE:
-      default: return "device";
-    }
-  }
-
-  return String(); // Return empty string if variable not found
+    
+    // Log display count
+    doc["logDisplayCount"] = LOG_DISPLAY_COUNT;
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
 }
 
 // Handle status request with critical sections
@@ -119,13 +122,35 @@ void handleStatus() {
   localStats = uartStats;
   exitStatsCritical();
 
-  // Work with local copy
+  // System info
   doc["freeRam"] = ESP.getFreeHeap();
   doc["uptime"] = (millis() - localStats.deviceStartTime) / 1000;
-  doc["uartToUsb"] = localStats.bytesUartToUsb;
-  doc["usbToUart"] = localStats.bytesUsbToUart;
-  doc["totalTraffic"] = localStats.bytesUartToUsb + localStats.bytesUsbToUart;
 
+  // Device 1 stats
+  doc["device1Rx"] = localStats.device1RxBytes;
+  doc["device1Tx"] = localStats.device1TxBytes;
+
+  // Device 2 stats (only if enabled)
+  if (config.device2.role != D2_NONE) {
+    doc["device2Rx"] = localStats.device2RxBytes;
+    doc["device2Tx"] = localStats.device2TxBytes;
+    doc["device2Role"] = getDevice2RoleName(config.device2.role);
+  }
+
+  // Device 3 stats (only if enabled)
+  if (config.device3.role != D3_NONE) {
+    doc["device3Rx"] = localStats.device3RxBytes;
+    doc["device3Tx"] = localStats.device3TxBytes;
+    doc["device3Role"] = getDevice3RoleName(config.device3.role);
+  }
+
+  // Total traffic
+  unsigned long totalTraffic = localStats.device1RxBytes + localStats.device1TxBytes +
+                               localStats.device2RxBytes + localStats.device2TxBytes +
+                               localStats.device3RxBytes + localStats.device3TxBytes;
+  doc["totalTraffic"] = totalTraffic;
+
+  // Last activity
   if (localStats.lastActivityTime == 0) {
     doc["lastActivity"] = "Never";
   } else {
@@ -229,6 +254,82 @@ void handleSave() {
     }
   }
 
+  // Device 2 role
+  if (server->hasArg("device2_role")) {
+    int role = server->arg("device2_role").toInt();
+    if (role >= D2_NONE && role <= D2_USB) {
+      if (role != config.device2.role) {
+        config.device2.role = role;
+        configChanged = true;
+        log_msg("Device 2 role changed to " + String(role), LOG_INFO);
+      }
+    }
+  }
+
+  // Device 3 role
+  if (server->hasArg("device3_role")) {
+    int role = server->arg("device3_role").toInt();
+    if (role >= D3_NONE && role <= D3_UART3_LOG) {
+      if (role != config.device3.role) {
+        config.device3.role = role;
+        configChanged = true;
+        log_msg("Device 3 role changed to " + String(role), LOG_INFO);
+      }
+    }
+  }
+
+  // Device 4 role
+  if (server->hasArg("device4_role")) {
+    int role = server->arg("device4_role").toInt();
+    if (role >= D4_NONE && role <= D4_LOG_NETWORK) {
+      if (role != config.device4.role) {
+        config.device4.role = role;
+        configChanged = true;
+        log_msg("Device 4 role changed to " + String(role), LOG_INFO);
+      }
+    }
+  }
+
+  // Log levels
+  if (server->hasArg("log_level_web")) {
+    int level = server->arg("log_level_web").toInt();
+    if (server->arg("log_level_web") == "-1") level = LOG_OFF;
+    
+    if (level >= LOG_OFF && level <= LOG_DEBUG) {
+      if (level != config.log_level_web) {
+        config.log_level_web = (LogLevel)level;
+        configChanged = true;
+        log_msg("Web log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+      }
+    }
+  }
+
+  if (server->hasArg("log_level_uart")) {
+    int level = server->arg("log_level_uart").toInt();
+    if (server->arg("log_level_uart") == "-1") level = LOG_OFF;
+    
+    if (level >= LOG_OFF && level <= LOG_DEBUG) {
+      if (level != config.log_level_uart) {
+        config.log_level_uart = (LogLevel)level;
+        configChanged = true;
+        log_msg("UART log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+      }
+    }
+  }
+
+  if (server->hasArg("log_level_network")) {
+    int level = server->arg("log_level_network").toInt();
+    if (server->arg("log_level_network") == "-1") level = LOG_OFF;
+    
+    if (level >= LOG_OFF && level <= LOG_DEBUG) {
+      if (level != config.log_level_network) {
+        config.log_level_network = (LogLevel)level;
+        configChanged = true;
+        log_msg("Network log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+      }
+    }
+  }
+
   // WiFi settings
   if (server->hasArg("ssid")) {
     String newSSID = server->arg("ssid");
@@ -268,7 +369,13 @@ void handleResetStats() {
   resetStatistics(&uartStats);
   logging_clear();
 
-  server->send(200, "text/html", loadTemplate(HTML_RESET_SUCCESS));
+  server->send(200, "text/html", R"(
+<html><head><title>Statistics Reset</title></head><body>
+<h1>Statistics and Logs Reset</h1>
+<p>Traffic statistics and logs have been reset.</p>
+<p><a href='/'>Back to Settings</a></p>
+</body></html>
+)");
 }
 
 // Handle crash log JSON request

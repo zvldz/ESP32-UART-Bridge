@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <title>ESP32 UART Bridge</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
+    <link rel="stylesheet" href="/style.css">
+    <script type="application/json" id="config">{{CONFIG_JSON}}</script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 ESP32 UART Bridge</h1>
+        
+        <!-- Quick Guide -->
+        <div class="section" style="padding: 10px 15px;">
+            <h3 style="margin: 10px 0 5px 0;">📡 Quick Connection Guide</h3>
+            <p style="margin: 5px 0;"><strong>UART Device → ESP32-S3:</strong> TX→GPIO4, RX→GPIO5, GND→GND</p>
+            <p style="margin: 5px 0;"><strong>USB Host:</strong> USB cable to ESP32-S3 (for any USB application)</p>
+            <div class="status" style="font-size: 13px; margin: 10px 0 5px 0;">
+                <strong>📌 Mission Planner Users:</strong><br>
+                Enable "Disable RTS resets on ESP32 SerialUSB" in connection options to prevent reset loops.
+            </div>
+            <p style="margin: 5px 0;"><a href='/help' target='_blank'>📋 Detailed wiring diagram & troubleshooting</a></p>
+        </div>
+        
+        <!-- System Status -->
+        <div class="section">
+            <h3>System Status</h3>
+            <div id="systemInfo"></div>
+            <div id="deviceStats"></div>
+        </div>
+        
+        <!-- System Logs -->
+        <div class="section">
+            <h3>System Logs</h3>
+            <div style="position: relative;">
+                <span id="copyBtn" onclick="copyLogs()" style="position: absolute; top: 5px; right: 15px; cursor: pointer; user-select: none; display: flex; align-items: center; padding: 5px;" title="Copy logs to clipboard">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5">
+                        <rect x="6" y="6" width="10" height="12" rx="1"></rect>
+                        <path d="M14 4V3a1 1 0 00-1-1H5a1 1 0 00-1 1v12a1 1 0 001 1h1"></path>
+                    </svg>
+                </span>
+                <div class="log-container" id="logContainer">
+                    <div id="logEntries">Loading logs...</div>
+                </div>
+            </div>
+            <p><small>Showing last <span id="logCount">50</span> entries. Auto-updates every 5 seconds.</small></p>
+        </div>
+        
+        <!-- Crash History -->
+        <div class="section" style="padding: 10px 15px;">
+            <h3 style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin: 10px 0;" onclick="toggleCrashLog()">
+                <span>💥 Crash History</span>
+                <span style="display: flex; align-items: center; gap: 10px;">
+                    <span id="crashBadge" class="badge" style="background: #4CAF50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px; font-weight: bold; min-width: 20px; text-align: center;">0</span>
+                    <span id="crashClear" onclick="event.stopPropagation(); clearCrashHistory();" title="Clear all crash history" style="cursor: pointer; display: none; opacity: 0.6; padding: 4px; transition: all 0.2s;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M3 3h10l-1 10H4L3 3z"></path>
+                            <path d="M6 3V2a1 1 0 011-1h2a1 1 0 011 1v1"></path>
+                            <path d="M2 3h12"></path>
+                            <path d="M6 6v4M10 6v4"></path>
+                        </svg>
+                    </span>
+                    <span id="crashArrow" style="user-select: none; font-size: 18px; transition: transform 0.3s;">▼</span>
+                </span>
+            </h3>
+            <div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;">
+                <div class="log-container" style="height: 150px;">
+                    <table style="width: 100%; font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 10%;">#</th>
+                                <th style="width: 25%;">Type</th>
+                                <th style="width: 25%;">Uptime</th>
+                                <th style="width: 20%;">Heap</th>
+                                <th style="width: 20%;">Min</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crashTableBody">
+                            <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings Form -->
+        <form id="settingsForm" action="/save" method="POST">
+            <div class="section">
+                <h3>Device Settings</h3>
+                
+                <h4>UART Configuration</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                    <div>
+                        <label for="baudrate">Baud Rate:</label>
+                        <select name="baudrate" id="baudrate" style="width: 100px;"></select>
+                    </div>
+                    <div>
+                        <label for="databits">Data:</label>
+                        <select name="databits" id="databits" style="width: 60px;"></select>
+                    </div>
+                    <div>
+                        <label for="parity">Parity:</label>
+                        <select name="parity" id="parity" style="width: 80px;"></select>
+                    </div>
+                    <div>
+                        <label for="stopbits">Stop:</label>
+                        <select name="stopbits" id="stopbits" style="width: 60px;"></select>
+                    </div>
+                    <div>
+                        <label><input type="checkbox" name="flowcontrol" id="flowcontrol" value="1"> Flow Control</label>
+                    </div>
+                </div>
+                
+                <h4 style="margin-top: 20px;">USB Mode</h4>
+                <div style="margin: 10px 0;">
+                    <select name="usbmode" id="usbmode" style="width: 200px;">
+                        <option value="device">Device</option>
+                        <option value="host">Host</option>
+                        <option value="auto" disabled>Auto (not supported)</option>
+                    </select>
+                    <small class="text-warning">Used for Device 2 in USB role</small>
+                </div>
+                
+                <!-- Device Configuration -->
+                <div id="deviceConfig"></div>
+                
+                <!-- WiFi Configuration -->
+                <div class="section" style="margin-top: 20px; padding: 15px;">
+                    <h4 style="margin: 0 0 10px 0; cursor: pointer;" onclick="toggleWifiConfig()">
+                        WiFi Configuration 
+                        <span id="wifiArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
+                    </h4>
+                    <div id="wifiConfigContent" style="display: none;">
+                        <label for="ssid">WiFi SSID:</label>
+                        <input type="text" name="ssid" id="ssid" maxlength="32">
+                        <label for="password">WiFi Password:</label>
+                        <div style="position: relative;">
+                            <input type="password" name="password" id="password" maxlength="64" style="padding-right: 40px;">
+                            <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+                                    <circle cx="10" cy="10" r="3"></circle>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
+                </div>
+            </div>
+        </form>
+        
+        <!-- Firmware Update -->
+        <div class="section">
+            <h3 style="cursor: pointer;" onclick="toggleFirmwareUpdate()">
+                Firmware Update
+                <span id="firmwareArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
+            </h3>
+            <div id="firmwareUpdateContent" style="display: none;">
+                <form method='POST' action='/update' enctype='multipart/form-data'>
+                    <input type='file' name='update' accept='.bin'><br><br>
+                    <input type='submit' value='Update Firmware' onclick='return confirm("Are you sure you want to update firmware?");'>
+                </form>
+                <p><small>Select .bin firmware file. Device will restart automatically after update.</small></p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/main.js"></script>
+    <script src="/crash-log.js"></script>
+</body>
+</html>

@@ -23,8 +23,54 @@ enum UsbMode {
     USB_MODE_AUTO
 };
 
+// Log levels
+enum LogLevel {
+    LOG_OFF     = -1, // Logging disabled
+    LOG_ERROR   = 0,  // Critical errors only
+    LOG_WARNING = 1,  // Warnings and important events
+    LOG_INFO    = 2,  // General information
+    LOG_DEBUG   = 3   // Detailed debug information
+};
+
+// Device 1 role
+// TODO: Add SBUS support in future versions (2.4.x)
+// Will require hardware signal inversion and special packet handling
+enum Device1Role {
+    D1_UART1 = 0      // Standard UART bridge
+};
+
+// Device 2 role
+enum Device2Role {
+    D2_NONE = 0,
+    D2_UART2 = 1,
+    D2_USB = 2
+};
+
+// Device 3 role
+enum Device3Role {
+    D3_NONE = 0,
+    D3_UART3_MIRROR = 1,
+    D3_UART3_BRIDGE = 2,
+    D3_UART3_LOG = 3
+};
+
+// Device 4 role
+enum Device4Role {
+    D4_NONE = 0,
+    D4_NETWORK_BRIDGE = 1,  // Future: Network Bridge
+    D4_LOG_NETWORK = 2      // Future: Network Logger
+};
+
+// Device configuration
+typedef struct {
+  uint8_t role;
+} DeviceConfig;
+
 // Configuration structure
 typedef struct {
+  // Version for migration
+  uint16_t config_version;
+  
   // UART settings
   uint32_t baudrate;
   uint8_t databits;
@@ -37,17 +83,35 @@ typedef struct {
   String password;
 
   // System info
-  String version;
+  String device_version;
   String device_name;
 
   // USB mode
-  UsbMode usb_mode = USB_MODE_DEVICE;
+  UsbMode usb_mode;
+
+  // Device configurations
+  DeviceConfig device1;  // For future SBUS
+  DeviceConfig device2;
+  DeviceConfig device3;
+  DeviceConfig device4;
+  
+  // Log levels
+  LogLevel log_level_web;
+  LogLevel log_level_uart;
+  LogLevel log_level_network;
 } Config;
 
 // Traffic statistics
 typedef struct {
-  unsigned long bytesUartToUsb;
-  unsigned long bytesUsbToUart;
+  // Per-device byte counters
+  unsigned long device1RxBytes;  // Device 1 RX (from external device)
+  unsigned long device1TxBytes;  // Device 1 TX (to external device)
+  unsigned long device2RxBytes;  // Device 2 RX
+  unsigned long device2TxBytes;  // Device 2 TX
+  unsigned long device3RxBytes;  // Device 3 RX (Bridge mode only)
+  unsigned long device3TxBytes;  // Device 3 TX (Mirror/Bridge/Log)
+  
+  // General statistics
   unsigned long lastActivityTime;
   unsigned long deviceStartTime;
   unsigned long totalUartPackets;

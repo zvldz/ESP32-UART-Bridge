@@ -2,15 +2,8 @@
 #define LOGGING_H
 
 #include <Arduino.h>
+#include "types.h"      // For LogLevel enum
 #include "defines.h"
-
-// Log levels
-enum LogLevel {
-    LOG_ERROR   = 0,  // Critical errors only
-    LOG_WARNING = 1,  // Warnings and important events
-    LOG_INFO    = 2,  // General information (default)
-    LOG_DEBUG   = 3   // Detailed debug information
-};
 
 // Logging configuration structure
 struct LogConfig {
@@ -32,9 +25,11 @@ void logging_init();
 void logging_get_recent_logs(String* buffer, int maxCount, int* actualCount);
 void logging_clear();
 
-// Overloaded log functions
-void log_msg(String message);                    // Old function for compatibility
-void log_msg(String message, LogLevel level);    // New function with level
+// Log function
+void log_msg(String message, LogLevel level);    // Main logging function
+
+// UART logging initialization
+void logging_init_uart();
 
 // Helper function to get level name
 const char* getLogLevelName(LogLevel level);

@@ -3,8 +3,8 @@
 
 #include <Arduino.h>
 
-// Template processor
-String mainPageProcessor(const String& var);
+// Generate configuration JSON
+String getConfigJson();
 
 // API handlers
 void handleStatus();

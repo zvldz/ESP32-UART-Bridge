@@ -2,9 +2,11 @@
 #include <Arduino.h>
 #include "types.h"
 #include "usb_interface.h"
+#include "config.h"
 
-// External mutex
+// External objects
 extern SemaphoreHandle_t logMutex;
+extern Config config;
 
 // Logging system internal data
 static String logBuffer[LOG_BUFFER_SIZE];
@@ -15,6 +17,9 @@ static bool initialized = false;
 // Global logging configuration
 static LogConfig logConfig;
 
+// UART logger serial port
+static HardwareSerial* logSerial = nullptr;
+
 // Get configuration for external access
 LogConfig* logging_get_config() {
     return &logConfig;
@@ -23,6 +28,7 @@ LogConfig* logging_get_config() {
 // Helper function to get short level name
 const char* getLogLevelName(LogLevel level) {
     switch(level) {
+        case LOG_OFF:     return "OFF";
         case LOG_ERROR:   return "ERR";
         case LOG_WARNING: return "WRN";  
         case LOG_INFO:    return "INF";
@@ -44,12 +50,33 @@ void logging_init() {
   logCount = 0;
 }
 
+// Initialize UART logging on Device 3
+void logging_init_uart() {
+  // Check if Device 3 is configured for UART logging
+  if (config.device3.role != D3_UART3_LOG) {
+    return;
+  }
+  
+  // Create Serial2 for logging output
+  logSerial = new HardwareSerial(2);
+  if (logSerial) {
+    // Initialize UART on Device 3 pins (TX only for logging)
+    logSerial->begin(115200, SERIAL_8N1, -1, DEVICE3_UART_TX_PIN);
+    log_msg("UART logging initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + " at 115200 baud", LOG_INFO);
+  } else {
+    log_msg("Failed to create UART logger serial port", LOG_ERROR);
+  }
+}
+
 // Main logging function with log level
 void log_msg(String message, LogLevel level) {
   if (!message || message.length() == 0) return;
 
-  // Always save to buffer for web interface
-  if (xSemaphoreTake(logMutex, 0) == pdTRUE) {
+  // Check if this message should be logged to web interface
+  bool shouldLogToWeb = (config.log_level_web != LOG_OFF && level <= config.log_level_web);
+  
+  // Save to buffer for web interface only if level is appropriate
+  if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
     if (message.length() > 120) {
       message = message.substring(0, 120) + "...";
     }
@@ -73,15 +100,22 @@ void log_msg(String message, LogLevel level) {
     xSemaphoreGive(logMutex);
   }
 
-  // TODO: Add UART output (Device 3) when role system implemented
-  // if (logConfig.uartEnabled && level <= logConfig.uartLevel) {
-  //     // Output to UART on GPIO 11
-  // }
-  
-  // TODO: Add Network output (Device 4) when role system implemented  
-  // if (logConfig.networkEnabled && level <= logConfig.networkLevel) {
-  //     // Send via UDP
-  // }
+  // Output to UART if Device 3 is configured as logger
+  if (logSerial && config.device3.role == D3_UART3_LOG && 
+      config.log_level_uart != LOG_OFF && level <= config.log_level_uart) {
+    // Non-blocking write to avoid slowing down main thread
+    if (logSerial->availableForWrite() > message.length() + 20) {
+      unsigned long uptimeMs = millis();
+      unsigned long seconds = uptimeMs / 1000;
+      unsigned long ms = uptimeMs % 1000;
+      
+      String logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
+                       String(getLogLevelName(level)) + "] " + message + "\r\n";
+      
+      logSerial->print(logLine);
+    }
+    // If buffer full - skip this log to avoid blocking
+  }
 }
 
 // Return logs for web interface

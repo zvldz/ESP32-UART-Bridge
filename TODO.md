@@ -53,22 +53,70 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
 - **Web logs (GUI)** — full DEBUG by default (only shown in UI)
 - **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
 
+### Device 3 Adaptive Buffering Optimization
+- **Current state**: Device 3 uses simple byte-by-byte transfer without adaptive buffering
+- **TODO**: Implement adaptive buffering for Device 3 Mirror/Bridge modes similar to Device 2
+- **Benefits**: Better packet boundary preservation for protocols like MAVLink
+- **Implementation**: Add buffering logic in device3Task() with configurable thresholds
+
 ## Completed ✅
 
-- [x] **Remove DEBUG_MODE** - Completed in v2.3.0
+### v2.3.0
+- [x] **Remove DEBUG_MODE** - Completed
   - Removed all DEBUG_MODE checks from code
   - Bridge always active in all modes
   - Diagnostics converted to log levels
   
-- [x] **Remove CONFIG_FREERTOS_UNICORE** - Completed in v2.3.0
+- [x] **Remove CONFIG_FREERTOS_UNICORE** - Completed
   - Now only supports multi-core ESP32
   - UART task on core 0, Web task on core 1
   
-- [x] **Code Organization** - Completed in v2.3.0
+- [x] **Code Organization** - Completed
   - Extracted diagnostics to separate module (diagnostics.cpp/h)
   - Moved system utilities to system_utils.cpp/h
   - Moved RTC variables and crash update to crashlog.cpp/h
   - main.cpp reduced from ~600 to ~450 lines
+
+### v2.3.1
+- [x] **Update Statistics System** - Completed
+  - Replaced old `bytesUartToUsb`/`bytesUsbToUart` with per-device counters
+  - Added `device1RxBytes`/`device1TxBytes`, `device2RxBytes`/`device2TxBytes`, `device3RxBytes`/`device3TxBytes`
+  - Updated web interface to show statistics for all active devices
+  - Shows device roles in statistics display
+
+- [x] **Code Cleanup** - Completed
+  - Moved `updateSharedStats` and `resetStatistics` to diagnostics module
+  - Removed legacy `if (currentMode == MODE_NORMAL || currentMode == MODE_CONFIG)` check
+  - Fixed deprecated ArduinoJson `containsKey()` warning
+  - Added helper functions `getDevice2RoleName()` and `getDevice3RoleName()`
+
+- [x] **Web Interface Updates** - Completed
+  - Updated traffic statistics table to show per-device data
+  - Dynamic show/hide of device rows based on active roles
+  - Updated JavaScript to handle new JSON structure from `/status` endpoint
+  - Fixed "Never" display for last activity
+
+### v2.3.2 (Web Interface Migration)
+- [x] **Web Interface Refactoring** - Completed
+  - Migrated from embedded HTML strings to separate HTML/CSS/JS files
+  - Created build-time processing with `embed_html.py` script
+  - Reduced placeholders from 40+ to just {{CONFIG_JSON}}
+  - Separated JavaScript into main.js and crash-log.js
+  - HTML/CSS/JS files now editable with proper IDE support
+  - C++ code reduced by ~3000 lines
+
+### v2.3.3 (Performance Optimization)
+- [x] **UART Bridge Performance Fix** - Completed
+  - Fixed packet drops during MAVLink parameter downloads
+  - Optimized device role checks with cached flags
+  - Removed repeated config.deviceX.role comparisons in critical loop
+  - Improved performance at 115200 baud and higher
+
+- [x] **Buffer Size Optimization** - Completed
+  - Increased UART_BUFFER_SIZE from 256 to 1024 bytes
+  - Added Serial.setTxBufferSize(1024) for USB interface
+  - Removed baudrate condition - always use 1KB buffers
+  - Reduced WiFi yield time from 5ms to 3ms
 
 ## Priority 2 - Future Features
 
@@ -81,7 +129,7 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
     - Authentication options
 
 - [ ] **High-Speed UART Optimization** *(For 921600+ baud)*
-  - Consider increasing adaptive buffer beyond 256 bytes
+  - Consider increasing adaptive buffer beyond 1024 bytes
   - Profile current implementation at maximum speeds
   - Evaluate DMA benefits (requires more ESP-IDF integration)
   - Note: Current implementation works well up to 500000 baud
@@ -115,3 +163,6 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
 - Version 2.3.0 provides clean foundation for Priority 1 implementation
+- Version 2.3.1 completes the statistics system refactoring
+- Version 2.3.2 provides modern web interface architecture
+- Version 2.3.3 resolves critical performance issues with MAVLink

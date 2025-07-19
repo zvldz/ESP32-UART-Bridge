@@ -6,6 +6,9 @@
 
 // Initialize configuration with defaults
 void config_init(Config* config) {
+  // Set configuration version
+  config->config_version = CURRENT_CONFIG_VERSION;
+  
   // Set default values
   config->baudrate = 115200;
   config->databits = 8;
@@ -14,9 +17,46 @@ void config_init(Config* config) {
   config->flowcontrol = false;
   config->ssid = DEFAULT_AP_SSID;
   config->password = DEFAULT_AP_PASSWORD;
-  config->version = DEVICE_VERSION;
+  config->device_version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
   config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
+  
+  // Device roles defaults
+  config->device1.role = D1_UART1;    // Main bridge always
+  config->device2.role = D2_USB;      // USB by default
+  config->device3.role = D3_NONE;     // Disabled
+  config->device4.role = D4_NONE;     // Disabled
+  
+  // Log levels defaults
+  config->log_level_web = LOG_WARNING;
+  config->log_level_uart = LOG_WARNING;
+  config->log_level_network = LOG_OFF;
+}
+
+// Migrate configuration from old versions
+void config_migrate(Config* config) {
+  if (config->config_version < 2) {
+    log_msg("Migrating config from version " + String(config->config_version) + " to 2", LOG_INFO);
+    
+    // Set defaults for new fields
+    config->device1.role = D1_UART1;
+    config->device2.role = D2_USB;
+    config->device3.role = D3_NONE;
+    config->device4.role = D4_NONE;
+    
+    // Keep existing usb_mode or default
+    if (config->usb_mode != USB_MODE_DEVICE && 
+        config->usb_mode != USB_MODE_HOST) {
+      config->usb_mode = USB_MODE_DEVICE;
+    }
+    
+    // Default log levels
+    config->log_level_web = LOG_WARNING;
+    config->log_level_uart = LOG_WARNING;
+    config->log_level_network = LOG_OFF;
+    
+    config->config_version = 2;
+  }
 }
 
 // Load configuration from LittleFS
@@ -37,6 +77,13 @@ void config_load(Config* config) {
 
   if (error) {
     return;
+  }
+
+  // Check if this is old format (no config_version field)
+  if (!doc["config_version"].is<int>()) {
+    config->config_version = 1;  // Old format
+  } else {
+    config->config_version = doc["config_version"] | CURRENT_CONFIG_VERSION;
   }
 
   // Load UART settings
@@ -66,8 +113,28 @@ void config_load(Config* config) {
     }
   }
 
-  // System settings like version and device_name are NOT loaded from file
+  // Load device roles (new in v2)
+  if (doc["devices"].is<JsonObject>()) {
+    config->device1.role = doc["devices"]["device1"] | D1_UART1;
+    config->device2.role = doc["devices"]["device2"] | D2_USB;
+    config->device3.role = doc["devices"]["device3"] | D3_NONE;
+    config->device4.role = doc["devices"]["device4"] | D4_NONE;
+  }
+
+  // Load log levels (new in v2)
+  if (doc["logging"].is<JsonObject>()) {
+    config->log_level_web = (LogLevel)(doc["logging"]["web"] | LOG_WARNING);
+    config->log_level_uart = (LogLevel)(doc["logging"]["uart"] | LOG_WARNING);
+    config->log_level_network = (LogLevel)(doc["logging"]["network"] | LOG_OFF);
+  }
+
+  // System settings like device_version and device_name are NOT loaded from file
   // They always use compiled-in values from defines.h
+  config->device_version = DEVICE_VERSION;
+  config->device_name = DEVICE_NAME;
+
+  // Migrate if needed
+  config_migrate(config);
 }
 
 // Save configuration to LittleFS
@@ -83,6 +150,9 @@ void config_save(Config* config) {
   }
 
   JsonDocument doc;
+
+  // Configuration version
+  doc["config_version"] = CURRENT_CONFIG_VERSION;
 
   // UART settings
   doc["uart"]["baudrate"] = config->baudrate;
@@ -109,7 +179,18 @@ void config_save(Config* config) {
       break;
   }
 
-  // Note: version and device_name are NOT saved - always use compiled values
+  // Device roles
+  doc["devices"]["device1"] = config->device1.role;
+  doc["devices"]["device2"] = config->device2.role;
+  doc["devices"]["device3"] = config->device3.role;
+  doc["devices"]["device4"] = config->device4.role;
+
+  // Log levels
+  doc["logging"]["web"] = config->log_level_web;
+  doc["logging"]["uart"] = config->log_level_uart;
+  doc["logging"]["network"] = config->log_level_network;
+
+  // Note: device_version and device_name are NOT saved - always use compiled values
 
   File file = LittleFS.open("/config.json", "w");
   if (!file) {
