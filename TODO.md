@@ -309,6 +309,13 @@ Version 2.5.1 includes:
 
 ## Priority 3 - Future Features
 
+- [ ] **USB Backpressure Implementation**
+  - Prevent UART reading when USB buffer is full
+  - Reduce data loss at high speeds without flow control
+  - Add dynamic threshold based on baud rate
+  - Show warnings for high-speed configurations without flow control
+  - Consider: `if (usbInterface->availableForWrite() < bufferIndex) skip_uart_read();`
+
 - [ ] **Alternative Data Modes**
   - **UDP Bridge Mode** - UART over WiFi UDP
     - Configure target IP and port
