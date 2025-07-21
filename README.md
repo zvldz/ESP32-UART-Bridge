@@ -13,17 +13,16 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
-- **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and zero packet loss
-- **Smart Protocol Detection**: Adaptive buffering automatically optimizes for different data patterns
-  - Binary protocols (MAVLink, Modbus RTU): Preserves packet boundaries
-  - Text protocols (NMEA, AT commands): Line-based optimization
+- **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
+- **Adaptive Buffering**: Automatically adjusts based on data patterns and timing
+  - Binary protocols (MAVLink, Modbus RTU): Time-based packet detection
   - Stream protocols: Minimal latency mode
 - **Dynamic Buffer Sizing**: Automatically adjusts buffer size based on baud rate (256-2048 bytes)
 - **USB Host/Device Modes**: 
   - Device mode: Connect ESP32 to PC as USB serial device
   - Host mode: Connect USB modems or serial adapters to ESP32
   - Configurable via web interface
-- **High Performance**: Hardware packet detection and event-driven architecture
+- **High Performance**: Hardware packet detection and event-driven architecture (Device 1)
 - **Web Configuration**: Easy setup via WiFi access point
 - **Visual Feedback**: RGB LED shows data flow direction and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
@@ -31,6 +30,14 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Crash Logging**: Automatic crash detection and logging for diagnostics
 - **Flexible Logging**: Multi-level logging system with web interface
 - **OTA Updates**: Firmware updates via web interface
+
+## Current Limitations
+
+- **Device 3 Adaptive Buffering**: Not yet implemented (uses simple 64-byte blocks)
+- **Packet Boundaries**: Currently preserved only for Device 1 → Device 2 path
+- **Protocol Detection**: No automatic protocol detection (uses timing-based optimization)
+- **USB Buffer**: Can overflow at very high sustained data rates
+- **Device 2/3**: Use polling mode instead of event-driven architecture
 
 ## Hardware
 
