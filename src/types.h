@@ -2,6 +2,7 @@
 #define TYPES_H
 
 #include <Arduino.h>
+#include "driver/uart.h"
 
 // Device modes
 typedef enum {
@@ -71,11 +72,11 @@ typedef struct {
   // Version for migration
   uint16_t config_version;
   
-  // UART settings
+  // UART settings - now using ESP-IDF types
   uint32_t baudrate;
-  uint8_t databits;
-  String parity;     // "none", "even", "odd"
-  uint8_t stopbits;
+  uart_word_length_t databits;     // ESP-IDF enum instead of uint8_t
+  uart_parity_t parity;             // ESP-IDF enum instead of String
+  uart_stop_bits_t stopbits;        // ESP-IDF enum instead of uint8_t
   bool flowcontrol;
 
   // WiFi settings

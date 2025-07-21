@@ -14,14 +14,21 @@
 #include "diagnostics.h"
 #include "system_utils.h"
 
+// DMA support - always enabled
+#include "uart_interface.h"
+#include "uart_dma.h"
+
 // Global objects
 Config config;
 UartStats uartStats = {0};
 SystemState systemState = {0};
 DeviceMode currentMode = MODE_NORMAL;
 Preferences preferences;
-HardwareSerial uartBridgeSerial(1);  // UART1
 FlowControlStatus flowControlStatus = {false, false};
+
+// UART serial objects - always DMA
+static UartDMA* uartBridgeSerialDMA = nullptr;
+UartInterface* uartBridgeSerial = nullptr;
 
 // Global USB mode variable
 UsbMode usbMode = USB_MODE_DEVICE;
@@ -63,30 +70,22 @@ void disableBrownout() __attribute__((constructor));
 //================================================================
 
 void setup() {
-  // Disable USB Serial/JTAG peripheral interrupts to reduce spurious resets
+  // Disable USB Serial/JTAG peripheral interrupts
   disableUsbJtagInterrupts();
 
-  // Print boot info first
+  // Print boot info
   printBootInfo();
 
-  // Initialize configuration first to get defaults
+  // Initialize configuration
   config_init(&config);
 
-  // Production mode - suppress logs and clear buffer
-  #if defined(CORE_DEBUG_LEVEL) && CORE_DEBUG_LEVEL == 0
-    esp_log_level_set("*", ESP_LOG_NONE);
-  #endif
-  
-  // Clear bootloader messages from serial buffer
+  // Clear bootloader messages
   clearBootloaderSerialBuffer();
 
-  // Create mutexes for thread safety
+  // Create mutexes FIRST!
   createMutexes();
 
-  // Record device start time
-  uartStats.deviceStartTime = millis();
-
-  // Initialize logging system
+  // NOW initialize logging
   logging_init();
 
   log_msg(config.device_name + " v" + config.device_version + " starting", LOG_INFO);
@@ -246,6 +245,13 @@ void initNormalMode() {
   // Set global USB mode based on configuration
   usbMode = config.usb_mode;
 
+  // Initialize UART DMA - always use DMA implementation
+  if (!uartBridgeSerialDMA) {
+    uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
+    uartBridgeSerial = uartBridgeSerialDMA;
+    log_msg("UART DMA interface created", LOG_INFO);
+  }
+
   // Create USB interface based on configuration (only if Device 2 is USB)
   if (config.device2.role == D2_USB) {
     switch(config.usb_mode) {
@@ -275,7 +281,7 @@ void initNormalMode() {
   }
 
   // Initialize UART bridge
-  uartbridge_init(&uartBridgeSerial, &config, &uartStats, usbInterface);
+  uartbridge_init(uartBridgeSerial, &config, &uartStats, usbInterface);
 
   log_msg("UART Bridge ready - transparent forwarding active", LOG_INFO);
 }
@@ -286,6 +292,13 @@ void initConfigMode() {
 
   // Use configured USB mode (from config file) - only if Device 2 is USB
   usbMode = config.usb_mode;
+
+  // Initialize UART DMA - always use DMA implementation
+  if (!uartBridgeSerialDMA) {
+    uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
+    uartBridgeSerial = uartBridgeSerialDMA;
+    log_msg("UART DMA interface created for config mode", LOG_INFO);
+  }
 
   // Create USB interface even in config mode (for bridge functionality)
   if (config.device2.role == D2_USB) {
@@ -316,7 +329,7 @@ void initConfigMode() {
   }
 
   // Initialize UART bridge even in config mode (for statistics)
-  uartbridge_init(&uartBridgeSerial, &config, &uartStats, usbInterface);
+  uartbridge_init(uartBridgeSerial, &config, &uartStats, usbInterface);
 
   // Initialize web server
   webserver_init(&config, &uartStats, &systemState);
@@ -490,8 +503,6 @@ void createTasks() {
 
   log_msg("UART Bridge task created on core " + String(UART_TASK_CORE) + 
           " (priority " + String(UART_TASK_PRIORITY) + ")", LOG_INFO);
-  log_msg("Adaptive buffering: " + String(UART_BUFFER_SIZE) + " byte buffer, protocol optimized", LOG_INFO);
-  log_msg("Thresholds: 200μs/1ms/5ms/15ms for optimal performance", LOG_INFO);
 
   // Create Device 3 task only if needed
   if (config.device3.role != D3_NONE && config.device3.role != D3_UART3_LOG) {
@@ -511,7 +522,6 @@ void createTasks() {
 
   // Create web server task only in CONFIG mode on core 1
   if (currentMode == MODE_CONFIG) {
-    disableBrownout();
     xTaskCreatePinnedToCore(
       webServerTask,         // Task function
       "Web_Server_Task",     // Task name

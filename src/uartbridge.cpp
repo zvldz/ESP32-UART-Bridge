@@ -3,67 +3,69 @@
 #include "leds.h"
 #include "defines.h"
 #include "diagnostics.h"  // For updateSharedStats
+#include "config.h"  // For conversion functions
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 
+// DMA support includes
+#include "uart_interface.h"
+#include "uart_dma.h"
+
 // External objects from main.cpp
-extern HardwareSerial uartBridgeSerial;
 extern DeviceMode currentMode;
 extern Config config;
 extern UartStats uartStats;
 extern FlowControlStatus flowControlStatus;
+extern UartInterface* uartBridgeSerial;
 
 // USB interface pointer (set by uartbridge_init)
 static UsbInterface* g_usbInterface = nullptr;
 
 // Device 2 UART (when configured as Secondary UART)
-static HardwareSerial* device2Serial = nullptr;
+static UartInterface* device2Serial = nullptr;
 
-// Device 3 UART (for Mirror/Bridge modes)
-static HardwareSerial* device3Serial = nullptr;
+// Device 3 UART (for Mirror/Bridge modes) - made non-static for OTA access
+UartInterface* device3Serial = nullptr;
 
 // Shared buffers for Device 3 operations
 static uint8_t device3TxBuffer[DEVICE3_UART_BUFFER_SIZE];
 static uint8_t device3RxBuffer[DEVICE3_UART_BUFFER_SIZE];
-static volatile int device3TxHead = 0;
-static volatile int device3TxTail = 0;
-static volatile int device3RxHead = 0;
-static volatile int device3RxTail = 0;
+// Buffer indices protected by mutex - no need for volatile
+static int device3TxHead = 0;
+static int device3TxTail = 0;
+static int device3RxHead = 0;
+static int device3RxTail = 0;
 
 // Mutex for Device 3 buffer access
 static SemaphoreHandle_t device3Mutex = nullptr;
 
-// Initialize UART bridge
-void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, UsbInterface* usb) {
+// Initialize UART bridge - always uses UartInterface
+void uartbridge_init(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb) {
   // Store USB interface pointer
   g_usbInterface = usb;
   
   // Configure UART with loaded settings
-  uint32_t serialConfig = SERIAL_8N1;
-
   pinMode(UART_RX_PIN, INPUT_PULLUP);
 
-  // Set data bits, parity, stop bits
-  if (config->databits == 7) {
-    serialConfig = config->stopbits == 2 ? SERIAL_7N2 : SERIAL_7N1;
-  } else {
-    serialConfig = config->stopbits == 2 ? SERIAL_8N2 : SERIAL_8N1;
-  }
+  // Create UartConfig from global Config
+  UartConfig uartCfg = {
+    .baudrate = config->baudrate,
+    .databits = config->databits,
+    .parity = config->parity,
+    .stopbits = config->stopbits,
+    .flowcontrol = config->flowcontrol
+  };
 
-  if (config->parity == "even") {
-    serialConfig = config->databits == 7 ?
-      (config->stopbits == 2 ? SERIAL_7E2 : SERIAL_7E1) :
-      (config->stopbits == 2 ? SERIAL_8E2 : SERIAL_8E1);
-  } else if (config->parity == "odd") {
-    serialConfig = config->databits == 7 ?
-      (config->stopbits == 2 ? SERIAL_7O2 : SERIAL_7O1) :
-      (config->stopbits == 2 ? SERIAL_8O2 : SERIAL_8O1);
-  }
+  // Initialize serial port with full configuration
+  serial->begin(uartCfg, UART_RX_PIN, UART_TX_PIN);
 
-  serial->begin(config->baudrate, serialConfig, UART_RX_PIN, UART_TX_PIN);
-
+  // Log configuration
   log_msg("UART configured: " + String(config->baudrate) + " baud, " +
-          String(config->databits) + "d" + config->parity.substring(0,1) + String(config->stopbits), LOG_INFO);
+          word_length_to_string(config->databits) + 
+          parity_to_string(config->parity)[0] +  // First char only
+          stop_bits_to_string(config->stopbits), LOG_INFO);
+
+  log_msg("Using DMA-accelerated UART", LOG_INFO);
 
   // Detect flow control if enabled
   if (config->flowcontrol) {
@@ -92,31 +94,32 @@ void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, U
 
 // Initialize Device 2 as Secondary UART
 void initDevice2UART() {
-  device2Serial = new HardwareSerial(2);
+  // Create UART configuration (Device 2 doesn't use flow control)
+  UartConfig uartCfg = {
+    .baudrate = config.baudrate,
+    .databits = config.databits,
+    .parity = config.parity,
+    .stopbits = config.stopbits,
+    .flowcontrol = false  // Device 2 doesn't use flow control
+  };
+  
+  // Use UartDMA with polling mode for Device 2
+  UartDMA::DmaConfig dmaCfg = {
+    .useEventTask = false,     // Polling mode - no separate event task
+    .dmaRxBufSize = 4096,     // Smaller buffers for secondary device
+    .dmaTxBufSize = 4096,
+    .ringBufSize = 8192       // Adequate for most protocols
+  };
+  
+  device2Serial = new UartDMA(UART_NUM_2, dmaCfg);
+  
   if (device2Serial) {
-    uint32_t serialConfig = SERIAL_8N1;
+    // Initialize with full UART configuration
+    device2Serial->begin(uartCfg, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
     
-    // Use same config as Device 1 for now
-    // TODO: Allow independent configuration in future
-    if (config.databits == 7) {
-      serialConfig = config.stopbits == 2 ? SERIAL_7N2 : SERIAL_7N1;
-    } else {
-      serialConfig = config.stopbits == 2 ? SERIAL_8N2 : SERIAL_8N1;
-    }
-    
-    if (config.parity == "even") {
-      serialConfig = config.databits == 7 ?
-        (config.stopbits == 2 ? SERIAL_7E2 : SERIAL_7E1) :
-        (config.stopbits == 2 ? SERIAL_8E2 : SERIAL_8E1);
-    } else if (config.parity == "odd") {
-      serialConfig = config.databits == 7 ?
-        (config.stopbits == 2 ? SERIAL_7O2 : SERIAL_7O1) :
-        (config.stopbits == 2 ? SERIAL_8O2 : SERIAL_8O1);
-    }
-    
-    device2Serial->begin(config.baudrate, serialConfig, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
     log_msg("Device 2 UART initialized on GPIO" + String(DEVICE2_UART_RX_PIN) + "/" + 
-            String(DEVICE2_UART_TX_PIN) + " at " + String(config.baudrate) + " baud", LOG_INFO);
+            String(DEVICE2_UART_TX_PIN) + " at " + String(config.baudrate) + 
+            " baud (DMA polling mode)", LOG_INFO);
   } else {
     log_msg("Failed to create Device 2 UART", LOG_ERROR);
   }
@@ -124,37 +127,37 @@ void initDevice2UART() {
 
 // Initialize Device 3 based on role
 void initDevice3(uint8_t role) {
-  device3Serial = new HardwareSerial(1);  // Use UART1 for Device 3
+  // Create UART configuration (Device 3 doesn't use flow control)
+  UartConfig uartCfg = {
+    .baudrate = config.baudrate,
+    .databits = config.databits,
+    .parity = config.parity,
+    .stopbits = config.stopbits,
+    .flowcontrol = false  // Device 3 doesn't use flow control
+  };
+  
+  // Use UartDMA with polling mode for Device 3
+  UartDMA::DmaConfig dmaCfg = {
+    .useEventTask = false,     // Polling mode - no separate event task
+    .dmaRxBufSize = 4096,     // Smaller buffers for secondary device
+    .dmaTxBufSize = 4096,
+    .ringBufSize = 8192       // Adequate for most protocols
+  };
+  
+  device3Serial = new UartDMA(UART_NUM_0, dmaCfg);
+  
   if (device3Serial) {
-    uint32_t serialConfig = SERIAL_8N1;
-    
-    // Use same config as Device 1 for now
-    if (config.databits == 7) {
-      serialConfig = config.stopbits == 2 ? SERIAL_7N2 : SERIAL_7N1;
-    } else {
-      serialConfig = config.stopbits == 2 ? SERIAL_8N2 : SERIAL_8N1;
-    }
-    
-    if (config.parity == "even") {
-      serialConfig = config.databits == 7 ?
-        (config.stopbits == 2 ? SERIAL_7E2 : SERIAL_7E1) :
-        (config.stopbits == 2 ? SERIAL_8E2 : SERIAL_8E1);
-    } else if (config.parity == "odd") {
-      serialConfig = config.databits == 7 ?
-        (config.stopbits == 2 ? SERIAL_7O2 : SERIAL_7O1) :
-        (config.stopbits == 2 ? SERIAL_8O2 : SERIAL_8O1);
-    }
-    
     if (role == D3_UART3_MIRROR) {
       // Mirror mode - TX only
-      device3Serial->begin(config.baudrate, serialConfig, -1, DEVICE3_UART_TX_PIN);
+      device3Serial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
       log_msg("Device 3 Mirror mode initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + 
-              " (TX only) at " + String(config.baudrate) + " baud", LOG_INFO);
+              " (TX only) at " + String(config.baudrate) + " baud (UART0, DMA polling)", LOG_INFO);
     } else if (role == D3_UART3_BRIDGE) {
       // Bridge mode - full duplex
-      device3Serial->begin(config.baudrate, serialConfig, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+      device3Serial->begin(uartCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
       log_msg("Device 3 Bridge mode initialized on GPIO" + String(DEVICE3_UART_RX_PIN) + "/" + 
-              String(DEVICE3_UART_TX_PIN) + " at " + String(config.baudrate) + " baud", LOG_INFO);
+              String(DEVICE3_UART_TX_PIN) + " at " + String(config.baudrate) + 
+              " baud (UART0, DMA polling)", LOG_INFO);
     }
   } else {
     log_msg("Failed to create Device 3 UART", LOG_ERROR);
@@ -177,26 +180,41 @@ void device3Task(void* parameter) {
   static unsigned long lastDevice3RxLed = 0;
   const unsigned long LED_NOTIFY_INTERVAL = 10;
   
+  // Buffer for batch operations
+  const int UART_BLOCK_SIZE = 64;
+  uint8_t readBuffer[UART_BLOCK_SIZE];
+  
   while (1) {
+    // Poll DMA events for Device 3
+    if (device3Serial) {
+      static_cast<UartDMA*>(device3Serial)->pollEvents();
+    }
+    
     if (config.device3.role == D3_UART3_MIRROR) {
       // Mirror mode - copy data from buffer to Device 3 TX
       if (xSemaphoreTake(device3Mutex, 0) == pdTRUE) {
-        while (device3TxHead != device3TxTail) {
-          if (device3Serial && device3Serial->availableForWrite() > 0) {
-            device3Serial->write(device3TxBuffer[device3TxTail]);
-            device3TxTail = (device3TxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
-            localDevice3TxBytes++;
-            
-            // LED notification with rate limiting
-            if (millis() - lastDevice3TxLed > LED_NOTIFY_INTERVAL) {
-              led_notify_device3_tx();
-              lastDevice3TxLed = millis();
-            }
-          } else {
-            break;  // No space in TX buffer, try again later
+        // Process in blocks for efficiency
+        int bytesToWrite = 0;
+        uint8_t writeBuffer[UART_BLOCK_SIZE];
+        
+        while (device3TxHead != device3TxTail && bytesToWrite < UART_BLOCK_SIZE) {
+          writeBuffer[bytesToWrite++] = device3TxBuffer[device3TxTail];
+          device3TxTail = (device3TxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
+        }
+        
+        xSemaphoreGive(device3Mutex);
+        
+        // Write collected data
+        if (bytesToWrite > 0 && device3Serial) {
+          int written = device3Serial->write(writeBuffer, bytesToWrite);
+          localDevice3TxBytes += written;
+          
+          // LED notification with rate limiting
+          if (millis() - lastDevice3TxLed > LED_NOTIFY_INTERVAL) {
+            led_notify_device3_tx();
+            lastDevice3TxLed = millis();
           }
         }
-        xSemaphoreGive(device3Mutex);
       }
     }
     else if (config.device3.role == D3_UART3_BRIDGE) {
@@ -205,46 +223,66 @@ void device3Task(void* parameter) {
       // Device 3 RX -> Buffer (to be sent to Device 1)
       if (device3Serial && device3Serial->available()) {
         if (xSemaphoreTake(device3Mutex, 0) == pdTRUE) {
-          while (device3Serial->available()) {
-            int nextHead = (device3RxHead + 1) % DEVICE3_UART_BUFFER_SIZE;
-            if (nextHead != device3RxTail) {  // Buffer not full
-              device3RxBuffer[device3RxHead] = device3Serial->read();
-              device3RxHead = nextHead;
-              localDevice3RxBytes++;
-              
-              // LED notification with rate limiting
-              if (millis() - lastDevice3RxLed > LED_NOTIFY_INTERVAL) {
-                led_notify_device3_rx();
-                lastDevice3RxLed = millis();
-              }
-            } else {
-              // Buffer full, drop data
-              device3Serial->read();  // Read and discard
-              log_msg("Device 3 RX buffer full, dropping data", LOG_INFO);
+          // Read in blocks for efficiency
+          int toRead = min(device3Serial->available(), UART_BLOCK_SIZE);
+          toRead = min(toRead, (int)sizeof(readBuffer));
+          
+          int actuallyRead = 0;
+          for (int i = 0; i < toRead; i++) {
+            int byte = device3Serial->read();
+            if (byte >= 0) {
+              readBuffer[actuallyRead++] = (uint8_t)byte;
             }
           }
+          
+          // Store in circular buffer
+          for (int i = 0; i < actuallyRead; i++) {
+            int nextHead = (device3RxHead + 1) % DEVICE3_UART_BUFFER_SIZE;
+            if (nextHead != device3RxTail) {  // Buffer not full
+              device3RxBuffer[device3RxHead] = readBuffer[i];
+              device3RxHead = nextHead;
+              localDevice3RxBytes++;
+            } else {
+              // Buffer full
+              log_msg("Device 3 RX buffer full, dropping data", LOG_WARNING);
+              break;
+            }
+          }
+          
           xSemaphoreGive(device3Mutex);
+          
+          // LED notification with rate limiting
+          if (actuallyRead > 0 && millis() - lastDevice3RxLed > LED_NOTIFY_INTERVAL) {
+            led_notify_device3_rx();
+            lastDevice3RxLed = millis();
+          }
         }
       }
       
       // Buffer -> Device 3 TX (from Device 1)
       if (xSemaphoreTake(device3Mutex, 0) == pdTRUE) {
-        while (device3TxHead != device3TxTail) {
-          if (device3Serial && device3Serial->availableForWrite() > 0) {
-            device3Serial->write(device3TxBuffer[device3TxTail]);
-            device3TxTail = (device3TxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
-            localDevice3TxBytes++;
-            
-            // LED notification
-            if (millis() - lastDevice3TxLed > LED_NOTIFY_INTERVAL) {
-              led_notify_device3_tx();
-              lastDevice3TxLed = millis();
-            }
-          } else {
-            break;
+        // Process in blocks for efficiency
+        int bytesToWrite = 0;
+        uint8_t writeBuffer[UART_BLOCK_SIZE];
+        
+        while (device3TxHead != device3TxTail && bytesToWrite < UART_BLOCK_SIZE) {
+          writeBuffer[bytesToWrite++] = device3TxBuffer[device3TxTail];
+          device3TxTail = (device3TxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
+        }
+        
+        xSemaphoreGive(device3Mutex);
+        
+        // Write collected data
+        if (bytesToWrite > 0 && device3Serial) {
+          int written = device3Serial->write(writeBuffer, bytesToWrite);
+          localDevice3TxBytes += written;
+          
+          // LED notification
+          if (millis() - lastDevice3TxLed > LED_NOTIFY_INTERVAL) {
+            led_notify_device3_tx();
+            lastDevice3TxLed = millis();
           }
         }
-        xSemaphoreGive(device3Mutex);
       }
     }
     
@@ -270,6 +308,23 @@ void uartBridgeTask(void* parameter) {
 
   log_msg("UART task started on core " + String(xPortGetCoreID()), LOG_INFO);
 
+  // Dynamic buffer allocation based on baudrate
+  const size_t adaptiveBufferSize = 
+    (config.baudrate > 460800) ? 2048 :
+    (config.baudrate > 115200) ? 1024 :
+    (config.baudrate > 19200)  ? 512  : 256;
+
+  uint8_t* adaptiveBuffer = (uint8_t*)pvPortMalloc(adaptiveBufferSize);
+  if (!adaptiveBuffer) {
+    log_msg("Failed to allocate adaptive buffer!", LOG_ERROR);
+    vTaskDelete(NULL);
+    return;
+  }
+
+  log_msg("Adaptive buffering: " + String(adaptiveBufferSize) + 
+          " byte buffer for " + String(config.baudrate) + " baud", LOG_INFO);
+  log_msg("Thresholds: 200μs/1ms/5ms/15ms for protocol optimization", LOG_INFO);
+
   // Local counters for all devices
   unsigned long localDevice1RxBytes = 0;
   unsigned long localDevice1TxBytes = 0;
@@ -280,16 +335,12 @@ void uartBridgeTask(void* parameter) {
   unsigned long localLastActivity = 0;
 
   // Adaptive buffering variables (optimized for UART protocols)
-  uint8_t adaptiveBuffer[UART_BUFFER_SIZE];  // Use defined constant
   int bufferIndex = 0;
   unsigned long lastByteTime = 0;
   unsigned long bufferStartTime = 0;
 
   // Timer for WiFi mode yielding (replaces counter)
   static unsigned long lastWifiYield = 0;
-
-  // WDT protection
-  static unsigned long lastWdtFeed = 0;
 
   // Diagnostic counters for dropped data
   static unsigned long droppedBytes = 0;
@@ -319,6 +370,10 @@ void uartBridgeTask(void* parameter) {
   bool device2IsUART2 = (config.device2.role == D2_UART2 && device2Serial);
   bool device3IsBridge = (config.device3.role == D3_UART3_BRIDGE);
 
+  // Buffer for batch UART operations
+  const int UART_BLOCK_SIZE = 64;
+  uint8_t uartReadBuffer[UART_BLOCK_SIZE];
+
   log_msg("UART Bridge Task started", LOG_INFO);
   log_msg("Device optimization: D2 USB=" + String(device2IsUSB) + ", D2 UART2=" + String(device2IsUART2) + 
           ", D3 Active=" + String(device3Active) + ", D3 Bridge=" + String(device3IsBridge), LOG_DEBUG);
@@ -340,6 +395,19 @@ void uartBridgeTask(void* parameter) {
               " bytes, Heap free=" + String(ESP.getFreeHeap()) +
               " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
       lastStackCheck = millis();
+      
+      // Add DMA diagnostics
+      UartDMA* dma = static_cast<UartDMA*>(uartBridgeSerial);
+      if (dma && dma->isInitialized()) {
+        log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
+                " TX=" + String(dma->getTxBytesTotal()) +
+                ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+      }
+    }
+
+    // Poll Device 2 UART if configured
+    if (device2IsUART2 && device2Serial) {
+      static_cast<UartDMA*>(device2Serial)->pollEvents();
     }
 
     // Yield CPU time to WiFi stack periodically in config mode
@@ -351,14 +419,15 @@ void uartBridgeTask(void* parameter) {
     // Device 1 UART → Device 2 (USB or UART2) - adaptive buffering
     unsigned long currentTime = micros();
 
-    while (uartBridgeSerial.available()) {
+    // DMA version uses UartInterface pointer
+    while (uartBridgeSerial->available()) {
       // Notify LED with rate limiting
       if (currentMode == MODE_NORMAL && millis() - lastUartLedNotify > LED_NOTIFY_INTERVAL) {
         led_notify_uart_rx();
         lastUartLedNotify = millis();
       }
 
-      uint8_t data = uartBridgeSerial.read();
+      uint8_t data = uartBridgeSerial->read();
       localDevice1RxBytes++;
       
       // Copy to Device 3 if in Mirror or Bridge mode (using cached flag)
@@ -393,12 +462,17 @@ void uartBridgeTask(void* parameter) {
         unsigned long timeInBuffer = currentTime - bufferStartTime;
 
         // Calculate pause since last byte (only if we have previous timing)
-        if (lastByteTime > 0 && !uartBridgeSerial.available()) {
+        if (lastByteTime > 0 && !uartBridgeSerial->available()) {
           // Small delay to detect real pause vs processing delay
           delayMicroseconds(50);
-          if (!uartBridgeSerial.available()) {
+          if (!uartBridgeSerial->available()) {
             timeSinceLastByte = micros() - lastByteTime;
           }
+        }
+
+        // Check if DMA detected packet boundary
+        if (uartBridgeSerial->hasPacketTimeout()) {
+          shouldTransmit = true;  // Hardware detected pause
         }
 
         // Transmission decision logic (prioritized for low latency):
@@ -420,7 +494,7 @@ void uartBridgeTask(void* parameter) {
           shouldTransmit = true;
         }
         // 5. Buffer safety limit (prevent overflow)
-        else if (bufferIndex >= sizeof(adaptiveBuffer)) {
+        else if (bufferIndex >= adaptiveBufferSize) {
           shouldTransmit = true;
         }
 
@@ -443,7 +517,7 @@ void uartBridgeTask(void* parameter) {
             bufferIndex -= availableSpace;
           } else {
             // No space available - USB buffer completely full
-            if (bufferIndex >= sizeof(adaptiveBuffer)) {
+            if (bufferIndex >= adaptiveBufferSize) {
               // Must drop data to prevent our buffer overflow
               droppedBytes += bufferIndex;
               totalDroppedBytes += bufferIndex;
@@ -471,10 +545,37 @@ void uartBridgeTask(void* parameter) {
           }
         }
       } else if (device2IsUART2) {
-        // Device 2 is UART2 - direct byte transfer
-        if (device2Serial->availableForWrite() > 0) {
-          device2Serial->write(data);
-          localDevice2TxBytes++;
+        // Device 2 is UART2 - batch transfer for efficiency
+        // Collect data for batch write
+        int batchSize = 0;
+        uint8_t batchBuffer[UART_BLOCK_SIZE];
+        
+        // Read up to UART_BLOCK_SIZE bytes
+        batchBuffer[batchSize++] = data;
+        while (uartBridgeSerial->available() && batchSize < UART_BLOCK_SIZE) {
+          int nextByte = uartBridgeSerial->read();
+          if (nextByte >= 0) {
+            batchBuffer[batchSize++] = (uint8_t)nextByte;
+            localDevice1RxBytes++;
+            
+            // Also copy to Device 3 if needed
+            if (device3Active) {
+              if (xSemaphoreTake(device3Mutex, 0) == pdTRUE) {
+                int nextHead = (device3TxHead + 1) % DEVICE3_UART_BUFFER_SIZE;
+                if (nextHead != device3TxTail) {
+                  device3TxBuffer[device3TxHead] = (uint8_t)nextByte;
+                  device3TxHead = nextHead;
+                }
+                xSemaphoreGive(device3Mutex);
+              }
+            }
+          }
+        }
+        
+        // Write batch to Device 2
+        if (batchSize > 0 && device2Serial->availableForWrite() >= batchSize) {
+          device2Serial->write(batchBuffer, batchSize);
+          localDevice2TxBytes += batchSize;
         }
       }
 
@@ -484,16 +585,22 @@ void uartBridgeTask(void* parameter) {
     // Device 3 Bridge mode - handle RX data from Device 3
     if (device3IsBridge) {
       if (xSemaphoreTake(device3Mutex, 0) == pdTRUE) {
-        while (device3RxHead != device3RxTail) {
-          if (uartBridgeSerial.availableForWrite() > 0) {
-            uartBridgeSerial.write(device3RxBuffer[device3RxTail]);
-            device3RxTail = (device3RxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
-            localDevice1TxBytes++;
-          } else {
-            break;  // No space in TX buffer
-          }
+        // Process in blocks for efficiency
+        int bytesToWrite = 0;
+        uint8_t writeBuffer[UART_BLOCK_SIZE];
+        
+        while (device3RxHead != device3RxTail && bytesToWrite < UART_BLOCK_SIZE) {
+          writeBuffer[bytesToWrite++] = device3RxBuffer[device3RxTail];
+          device3RxTail = (device3RxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
         }
+        
         xSemaphoreGive(device3Mutex);
+        
+        // Write collected data to Device 1
+        if (bytesToWrite > 0 && uartBridgeSerial->availableForWrite() >= bytesToWrite) {
+          uartBridgeSerial->write(writeBuffer, bytesToWrite);
+          localDevice1TxBytes += bytesToWrite;
+        }
       }
     }
 
@@ -553,7 +660,10 @@ void uartBridgeTask(void* parameter) {
     // Device 2 → Device 1 UART (USB or UART2 to main UART)
     if (device2IsUSB) {
       // USB → UART (immediate forwarding for commands)
-      while (g_usbInterface->available()) {
+      int bytesRead = 0;
+      const int maxBytesPerLoop = 256;  // Limit bytes per loop iteration
+      
+      while (g_usbInterface->available() && bytesRead < maxBytesPerLoop) {
         // Notify LED with rate limiting
         if (currentMode == MODE_NORMAL && millis() - lastUsbLedNotify > LED_NOTIFY_INTERVAL) {
           led_notify_usb_rx();
@@ -563,10 +673,11 @@ void uartBridgeTask(void* parameter) {
         // Commands from GCS are critical - immediate byte-by-byte transfer
         int data = g_usbInterface->read();
         if (data >= 0) {
-          uartBridgeSerial.write((uint8_t)data);
+          uartBridgeSerial->write((uint8_t)data);
           localDevice1TxBytes++;
           localDevice2RxBytes++;
           localLastActivity = millis();
+          bytesRead++;
           
           // Also send to Device 3 if in Bridge mode (using cached flag)
           if (device3IsBridge) {
@@ -578,15 +689,29 @@ void uartBridgeTask(void* parameter) {
         }
       }
     } else if (device2IsUART2) {
-      // UART2 → UART1
-      while (device2Serial->available()) {
-        uint8_t data = device2Serial->read();
-        localDevice2RxBytes++;
+      // UART2 → UART1 - batch transfer for efficiency
+      int available = device2Serial->available();
+      if (available > 0) {
+        // Read in blocks
+        int toRead = min(available, UART_BLOCK_SIZE);
+        int actuallyRead = 0;
         
-        if (uartBridgeSerial.availableForWrite() > 0) {
-          uartBridgeSerial.write(data);
-          localDevice1TxBytes++;
-          localLastActivity = millis();
+        for (int i = 0; i < toRead; i++) {
+          int byte = device2Serial->read();
+          if (byte >= 0) {
+            uartReadBuffer[actuallyRead++] = (uint8_t)byte;
+          }
+        }
+        
+        if (actuallyRead > 0) {
+          localDevice2RxBytes += actuallyRead;
+          
+          // Write to Device 1
+          if (uartBridgeSerial->availableForWrite() >= actuallyRead) {
+            uartBridgeSerial->write(uartReadBuffer, actuallyRead);
+            localDevice1TxBytes += actuallyRead;
+            localLastActivity = millis();
+          }
         }
       }
     }
@@ -604,6 +729,10 @@ void uartBridgeTask(void* parameter) {
     // Fixed delay for multi-core systems (always 1ms)
     vTaskDelay(pdMS_TO_TICKS(1));
   }
+  
+  // This point is never reached in normal operation
+  // But if task ever exits, free the allocated buffer
+  vPortFree(adaptiveBuffer);
 }
 
 // Detect flow control hardware presence
@@ -631,8 +760,7 @@ void detectFlowControl() {
   flowControlStatus.flowControlDetected = (ctsHigh != ctsLow);
 
   if (flowControlStatus.flowControlDetected) {
-    // Configure UART with hardware flow control
-    uartBridgeSerial.setPins(UART_RX_PIN, UART_TX_PIN, CTS_PIN, RTS_PIN);
+    // Flow control is configured in UartDMA::begin()
     flowControlStatus.flowControlActive = true;
     log_msg("Flow control detected and activated", LOG_INFO);
   } else {

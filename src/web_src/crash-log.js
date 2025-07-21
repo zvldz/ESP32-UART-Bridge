@@ -1,113 +1,159 @@
-// ESP32 UART Bridge - Crash Log Functions
+// ESP32 UART Bridge - Crash Log Module
 
-// Toggle crash log visibility
-function toggleCrashLog() {
-    const content = document.getElementById('crashContent');
-    const arrow = document.getElementById('crashArrow');
+const CrashLog = {
+    elements: null,
     
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        arrow.style.transform = 'rotate(180deg)';
-        loadCrashLog();
-    } else {
-        content.style.display = 'none';
-        arrow.style.transform = 'rotate(0deg)';
-    }
-}
-
-// Load crash log from server
-function loadCrashLog() {
-    safeFetch('/crashlog_json', function(data) {
-        const tbody = document.getElementById('crashTableBody');
-        const badge = document.getElementById('crashBadge');
-        const clearBtn = document.getElementById('crashClear');
+    init() {
+        this.elements = this.cacheElements();
+        this.updateCount();
+    },
+    
+    cacheElements() {
+        return {
+            content: document.getElementById('crashContent'),
+            arrow: document.getElementById('crashArrow'),
+            badge: document.getElementById('crashBadge'),
+            clearBtn: document.getElementById('crashClear'),
+            tbody: document.getElementById('crashTableBody')
+        };
+    },
+    
+    toggle() {
+        if (!this.elements.content || !this.elements.arrow) return;
         
-        // Update badge
-        const count = data.total || 0;
-        badge.textContent = count;
+        const isOpening = this.elements.content.style.display === 'none';
         
-        // Update badge color
-        if (count === 0) {
-            badge.className = 'badge';
-            clearBtn.style.display = 'none';
-        } else if (count <= 5) {
-            badge.className = 'badge warning';
-            clearBtn.style.display = 'inline-flex';
+        if (isOpening) {
+            this.elements.content.style.display = 'block';
+            this.elements.arrow.style.transform = 'rotate(180deg)';
+            this.load();
         } else {
-            badge.className = 'badge danger';
-            clearBtn.style.display = 'inline-flex';
+            this.elements.content.style.display = 'none';
+            this.elements.arrow.style.transform = 'rotate(0deg)';
         }
-        
-        // Update table
-        if (data.entries && data.entries.length > 0) {
-            tbody.innerHTML = '';
-            data.entries.forEach(function(entry) {
-                const heapClass = entry.heap < 15000 ? ' class="heap-critical"' : '';
-                const typeClass = entry.reason === 'PANIC' ? 'crash-panic' : 'crash-wdt';
-                
-                const row = '<tr' + heapClass + '>' +
-                    '<td>' + entry.num + '</td>' +
-                    '<td class="' + typeClass + '">' + entry.reason + '</td>' +
-                    '<td>' + formatUptime(entry.uptime) + '</td>' +
-                    '<td>' + formatBytes(entry.heap) + '</td>' +
-                    '<td>' + formatBytes(entry.min_heap) + '</td>' +
-                    '</tr>';
-                tbody.innerHTML += row;
-            });
-        } else {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No crashes recorded</td></tr>';
-        }
-    });
-}
-
-// Clear crash history
-function clearCrashHistory() {
-    if (confirm('Clear all crash history?\nThis action cannot be undone.')) {
-        safeFetch('/clear_crashlog', function() {
-            // Update UI
-            document.getElementById('crashBadge').textContent = '0';
-            document.getElementById('crashBadge').className = 'badge';
-            document.getElementById('crashClear').style.display = 'none';
-            
-            // Reload table if open
-            if (document.getElementById('crashContent').style.display !== 'none') {
-                loadCrashLog();
-            }
+    },
+    
+    load() {
+        Utils.safeFetch('/crashlog_json', (data) => {
+            this.updateBadge(data.total || 0);
+            this.updateTable(data.entries || []);
         });
-    }
-}
-
-// Update crash count on page load
-function updateCrashCount() {
-    safeFetch('/crashlog_json', function(data) {
-        const count = data.total || 0;
-        const badge = document.getElementById('crashBadge');
-        const clearBtn = document.getElementById('crashClear');
+    },
+    
+    updateCount() {
+        Utils.safeFetch('/crashlog_json', (data) => {
+            this.updateBadge(data.total || 0);
+        }, (error) => {
+            // Silent fail - crash log is not critical
+            console.log('Could not load crash count');
+        });
+    },
+    
+    updateBadge(count) {
+        if (!this.elements.badge || !this.elements.clearBtn) return;
         
-        badge.textContent = count;
+        this.elements.badge.textContent = count;
+        
+        // Update badge appearance based on count
         if (count === 0) {
-            badge.className = 'badge';
-            clearBtn.style.display = 'none';
+            this.elements.badge.style.background = '#4CAF50';
+            this.elements.clearBtn.style.display = 'none';
         } else if (count <= 5) {
-            badge.className = 'badge warning';
-            clearBtn.style.display = 'inline-flex';
+            this.elements.badge.style.background = '#ff9800';
+            this.elements.clearBtn.style.display = 'inline-flex';
         } else {
-            badge.className = 'badge danger';
-            clearBtn.style.display = 'inline-flex';
+            this.elements.badge.style.background = '#f44336';
+            this.elements.clearBtn.style.display = 'inline-flex';
         }
-    });
+    },
+    
+    updateTable(entries) {
+        if (!this.elements.tbody) return;
+        
+        if (entries.length > 0) {
+            let html = '';
+            
+            entries.forEach(entry => {
+                const heapClass = entry.heap < 15000 ? ' class="heap-critical"' : '';
+                const typeClass = entry.reason === 'PANIC' ? 'crash-panic' : 
+                                 entry.reason.includes('WDT') ? 'crash-wdt' : 'crash-other';
+                
+                html += `
+                    <tr${heapClass}>
+                        <td>${entry.num}</td>
+                        <td class="${typeClass}">${this.formatReason(entry.reason)}</td>
+                        <td>${Utils.formatUptime(entry.uptime)}</td>
+                        <td>${Utils.formatBytes(entry.heap)}</td>
+                        <td>${Utils.formatBytes(entry.min_heap)}</td>
+                    </tr>
+                `;
+            });
+            
+            this.elements.tbody.innerHTML = html;
+        } else {
+            this.elements.tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No crashes recorded</td></tr>';
+        }
+    },
+    
+    formatReason(reason) {
+        // Make crash reasons more readable
+        const reasonMap = {
+            'PANIC': 'Panic',
+            'TASK_WDT': 'Task WDT',
+            'INT_WDT': 'Int WDT',
+            'SW_RESET': 'SW Reset',
+            'POWERON': 'Power On',
+            'BROWNOUT': 'Brownout',
+            'DEEPSLEEP': 'Deep Sleep'
+        };
+        
+        return reasonMap[reason] || reason;
+    },
+    
+    clear() {
+        if (!confirm('Clear all crash history?\nThis action cannot be undone.')) {
+            return;
+        }
+        
+        Utils.safeFetch('/clear_crashlog', () => {
+            // Update UI
+            this.updateBadge(0);
+            
+            // Update table if visible
+            if (this.elements.content && this.elements.content.style.display !== 'none') {
+                this.updateTable([]);
+            }
+            
+            // Show feedback
+            const badge = this.elements.badge;
+            if (badge) {
+                const originalText = badge.textContent;
+                badge.textContent = '✓';
+                setTimeout(() => {
+                    badge.textContent = originalText;
+                }, 1500);
+            }
+        }, (error) => {
+            alert('Failed to clear crash history');
+        });
+    },
+    
+    // Auto-refresh crash count if section is open
+    startAutoRefresh() {
+        // This can be called from main.js if needed
+        if (this.elements.content && this.elements.content.style.display !== 'none') {
+            this.load();
+        } else {
+            this.updateCount();
+        }
+    }
+};
+
+// Global functions for onclick handlers
+function toggleCrashLog() {
+    CrashLog.toggle();
 }
 
-// Format uptime from seconds
-function formatUptime(seconds) {
-    if (!seconds || seconds === 0) return '0s';
-    if (seconds < 60) return seconds + 's';
-    if (seconds < 3600) return Math.floor(seconds/60) + 'm';
-    return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
-}
-
-// Format bytes to KB
-function formatBytes(bytes) {
-    if (!bytes || bytes === 0) return '0';
-    return Math.floor(bytes/1024) + 'KB';
+function clearCrashHistory() {
+    CrashLog.clear();
 }

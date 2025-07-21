@@ -3,17 +3,17 @@
 
 #include "types.h"
 #include "usb_interface.h"
-#include <HardwareSerial.h>
+#include "uart_interface.h"
 
-// UART bridge interface
-void uartbridge_init(HardwareSerial* serial, Config* config, UartStats* stats, UsbInterface* usb);
+// UART bridge interface - always uses UartInterface
+void uartbridge_init(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb);
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
 
 // Device 3 task
 void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations
 
 // Flow control functions
-void detectFlowControl();     // TODO: Enhanced Flow Control diagnostics
+void detectFlowControl();
 String getFlowControlStatus();
 
 // Device 2 functions

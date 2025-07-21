@@ -14,7 +14,7 @@
         <div class="section">
             <h3>📡 Protocol Optimization</h3>
             <div class="success">
-                <strong>Universal UART Bridge:</strong> This bridge works with any UART protocol. It uses adaptive buffering that automatically optimizes for different data patterns. The system is particularly well-tuned for MAVLink protocol used by drone autopilots (ArduPilot, PX4), but works efficiently with any serial communication protocol.
+                <strong>Universal UART Bridge:</strong> This bridge works with any UART protocol. It uses hardware DMA (Direct Memory Access) with adaptive buffering that automatically optimizes for different data patterns. The system is particularly well-tuned for MAVLink protocol used by drone autopilots (ArduPilot, PX4), but works efficiently with any serial communication protocol.
             </div>
             <p><strong>Supported protocols:</strong></p>
             <ul style="margin-left: 20px;">
@@ -25,8 +25,7 @@
                 <li><strong>Firmata</strong> - Low latency for microcontroller communication</li>
                 <li><strong>and other UART-based protocols</strong></li>
             </ul>
-            <p style="margin-top: 10px;"><small>The adaptive buffering (200μs to 15ms) ensures optimal performance across different protocols and data rates.</small></p>
-            <p style="margin-top: 5px;"><small><strong>Note:</strong> The bridge works efficiently at all supported speeds. For MAVLink specifically, protocol-aware parsing could provide up to 20% improvement at very high speeds (≥460800 baud), though the current implementation already delivers excellent performance across the entire range.</small></p>
+            <p style="margin-top: 10px;"><small>The bridge uses ESP-IDF DMA drivers with hardware packet detection and dynamic buffer sizing (256-2048 bytes based on baud rate) for optimal performance across different protocols and data rates.</small></p>
         </div>
         
         <div class="section">

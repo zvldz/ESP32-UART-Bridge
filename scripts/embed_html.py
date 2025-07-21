@@ -26,26 +26,22 @@ def process_html_files(source, target, env):
         print(f"ERROR: {web_src} directory not found!")
         env.Exit(1)
     
+    # Define all JavaScript files to process
+    js_files = [
+        "main.js",
+        "crash-log.js",
+        "utils.js",
+        "device-config.js",
+        "form-utils.js",
+        "status-updates.js"
+    ]
+    
     # Read CSS file
     css_content = ""
     css_file = web_src / "style.css"
     if css_file.exists():
         css_content = css_file.read_text(encoding='utf-8')
         print(f"  Found {css_file.name}")
-    
-    # Read main.js file
-    js_main_content = ""
-    js_main_file = web_src / "main.js"
-    if js_main_file.exists():
-        js_main_content = js_main_file.read_text(encoding='utf-8')
-        print(f"  Found {js_main_file.name}")
-    
-    # Read crash-log.js file
-    js_crash_content = ""
-    js_crash_file = web_src / "crash-log.js"
-    if js_crash_file.exists():
-        js_crash_content = js_crash_file.read_text(encoding='utf-8')
-        print(f"  Found {js_crash_file.name}")
     
     # Generate web_content.h
     with open(generated / "web_content.h", "w", encoding='utf-8') as f:
@@ -76,15 +72,20 @@ def process_html_files(source, target, env):
             f.write('\n)rawliteral";\n\n')
         
         # Write JS constants
-        if js_main_content:
-            f.write('const char JS_MAIN[] PROGMEM = R"rawliteral(\n')
-            f.write(js_main_content)
-            f.write('\n)rawliteral";\n\n')
-        
-        if js_crash_content:
-            f.write('const char JS_CRASH_LOG[] PROGMEM = R"rawliteral(\n')
-            f.write(js_crash_content)
-            f.write('\n)rawliteral";\n\n')
+        for js_name in js_files:
+            js_file = web_src / js_name
+            if js_file.exists():
+                js_content = js_file.read_text(encoding='utf-8')
+                print(f"  Found {js_file.name}")
+                
+                # Generate constant name (replace - with _)
+                const_name = f"JS_{js_file.stem.replace('-', '_').upper()}"
+                
+                f.write(f'const char {const_name}[] PROGMEM = R"rawliteral(\n')
+                f.write(js_content)
+                f.write('\n)rawliteral";\n\n')
+            else:
+                print(f"  WARNING: {js_name} not found!")
         
         f.write("#endif // WEB_CONTENT_H\n")
     
