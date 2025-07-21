@@ -15,6 +15,8 @@
 #include "logging.h"
 #include "config.h"
 #include "defines.h"
+#include "uart_interface.h"
+#include "usb_interface.h"
 
 // Include generated web content
 #include "generated/web_content.h"
@@ -30,6 +32,7 @@ extern UartStats uartStats;
 extern SystemState systemState;
 extern DeviceMode currentMode;
 extern Preferences preferences;
+extern UsbInterface* usbInterface;
 
 // Local objects - created on demand
 WebServer* server = nullptr;
@@ -65,10 +68,15 @@ String processTemplate(const String& html, std::function<String(const String&)> 
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   log_msg("Starting WiFi Configuration Mode", LOG_INFO);
 
-  // Always disable USB CDC before Wi-Fi initialization to avoid conflicts
-  Serial.flush();
-  Serial.end();
-  vTaskDelay(pdMS_TO_TICKS(100));
+  // Temporarily pause USB operations if Device 2 is using USB
+  // This helps prevent brownout during WiFi initialization power spike
+  bool usbWasPaused = false;
+  if (config->device2.role == D2_USB && usbInterface) {
+    log_msg("Temporarily pausing USB for WiFi startup", LOG_DEBUG);
+    Serial.flush();
+    vTaskDelay(pdMS_TO_TICKS(50)); // Small delay to ensure flush completes
+    usbWasPaused = true;
+  }
 
   state->wifiAPActive = true;
   state->wifiStartTime = millis();
@@ -94,12 +102,11 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   log_msg("IP address: " + WiFi.softAPIP().toString(), LOG_INFO);
   log_msg("Captive Portal DNS server started", LOG_INFO);
 
-  // Re-enable USB CDC after Wi-Fi is active at configured bridge rate
-  Serial.begin(config->baudrate);
-  Serial.setRxBufferSize(1024); // !!!
-  Serial.setTxBufferSize(1024); // !!!
-  vTaskDelay(pdMS_TO_TICKS(100));
-  log_msg("Serial USB reinitialized in config mode", LOG_DEBUG);
+  // Resume USB operations if they were paused
+  if (usbWasPaused) {
+    vTaskDelay(pdMS_TO_TICKS(100)); // Let WiFi stabilize
+    log_msg("WiFi startup complete, USB operations continue normally", LOG_DEBUG);
+  }
 
   // Create web server
   server = new WebServer(80);
@@ -120,6 +127,10 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/style.css", handleCSS);
   server->on("/main.js", handleMainJS);
   server->on("/crash-log.js", handleCrashJS);
+  server->on("/utils.js", handleUtilsJS);
+  server->on("/device-config.js", handleDeviceConfigJS);
+  server->on("/form-utils.js", handleFormUtilsJS);
+  server->on("/status-updates.js", handleStatusUpdatesJS);
   
   server->onNotFound(handleNotFound);
   server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
@@ -237,8 +248,27 @@ void handleMainJS() {
 
 // Handle crash-log.js request
 void handleCrashJS() {
-  // We have a separate crash-log.js file
   server->send(200, "application/javascript", FPSTR(JS_CRASH_LOG));
+}
+
+// Handle utils.js request
+void handleUtilsJS() {
+  server->send(200, "application/javascript", FPSTR(JS_UTILS));
+}
+
+// Handle device-config.js request
+void handleDeviceConfigJS() {
+  server->send(200, "application/javascript", FPSTR(JS_DEVICE_CONFIG));
+}
+
+// Handle form-utils.js request
+void handleFormUtilsJS() {
+  server->send(200, "application/javascript", FPSTR(JS_FORM_UTILS));
+}
+
+// Handle status-updates.js request
+void handleStatusUpdatesJS() {
+  server->send(200, "application/javascript", FPSTR(JS_STATUS_UPDATES));
 }
 
 // Handle success page for captive portal

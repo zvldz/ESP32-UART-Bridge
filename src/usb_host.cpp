@@ -1,12 +1,10 @@
-#include "usb_interface.h"
+#include "usb_base.h"
 #include "logging.h"
 #include "types.h"
-#include <Arduino.h>
 
 // ESP-IDF USB Host includes
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "usb/usb_host.h"
 #include "usb/usb_types_ch9.h"
@@ -21,30 +19,12 @@ extern UsbMode usbMode;
 #define USB_CDC_DATA_INTERFACE_CLASS 0x0A
 
 // USB Host implementation using ESP-IDF
-class UsbHost : public UsbInterface {
+class UsbHost : public UsbBase {
 private:
-    uint32_t baudrate;
-    bool initialized;
-    bool is_connected;
     usb_device_handle_t device_handle;
     uint8_t interface_num;  // Track which interface we claimed
     
-    // Ring buffers for data
-    static const size_t RX_BUFFER_SIZE = 1024;
-    static const size_t TX_BUFFER_SIZE = 1024;
-    uint8_t rx_buffer[RX_BUFFER_SIZE];
-    uint8_t tx_buffer[TX_BUFFER_SIZE];
-    volatile size_t rx_head;
-    volatile size_t rx_tail;
-    volatile size_t tx_head;
-    volatile size_t tx_tail;
-    
-    // Synchronization
-    SemaphoreHandle_t rx_mutex;
-    SemaphoreHandle_t tx_mutex;
-    
-    // USB Host task handle
-    TaskHandle_t usb_host_task_handle;
+    // USB Host specific
     usb_host_client_handle_t client_handle;
     
     // Static instance for callbacks
@@ -57,19 +37,14 @@ private:
     usb_transfer_t *out_transfer;
 
 public:
-    UsbHost(uint32_t baud) : baudrate(baud), initialized(false), is_connected(false),
-                             device_handle(NULL), interface_num(0), rx_head(0), rx_tail(0), 
-                             tx_head(0), tx_tail(0), bulk_in_ep(0), bulk_out_ep(0),
+    UsbHost(uint32_t baud) : UsbBase(baud), device_handle(NULL), interface_num(0),
+                             client_handle(NULL), bulk_in_ep(0), bulk_out_ep(0),
                              in_transfer(NULL), out_transfer(NULL) {
         instance = this;
-        rx_mutex = xSemaphoreCreateMutex();
-        tx_mutex = xSemaphoreCreateMutex();
     }
     
     ~UsbHost() {
         end();
-        if (rx_mutex) vSemaphoreDelete(rx_mutex);
-        if (tx_mutex) vSemaphoreDelete(tx_mutex);
     }
     
     void init() override {
@@ -118,9 +93,9 @@ public:
         
         // Create USB Host task
         BaseType_t task_created = xTaskCreate(usb_host_task, "usb_host", USB_HOST_STACK_SIZE, this, 
-                                             USB_HOST_PRIORITY, &usb_host_task_handle);
+                                             USB_HOST_PRIORITY, &task_handle);
         
-        if (task_created != pdPASS || usb_host_task_handle == NULL) {
+        if (task_created != pdPASS || task_handle == NULL) {
             log_msg("USB Host: Failed to create task", LOG_ERROR);
             usb_host_client_deregister(this->client_handle);
             usb_host_uninstall();
@@ -146,85 +121,14 @@ public:
         log_msg("USB Host: Initialized", LOG_INFO);
     }
     
-    int available() override {
-        if (!is_connected) return 0;
-        
-        xSemaphoreTake(rx_mutex, portMAX_DELAY);
-        int count = (rx_head >= rx_tail) ? 
-                    (rx_head - rx_tail) : 
-                    (RX_BUFFER_SIZE - rx_tail + rx_head);
-        xSemaphoreGive(rx_mutex);
-        
-        return count;
-    }
-    
-    int availableForWrite() override {
-        if (!is_connected) return 0;
-        
-        xSemaphoreTake(tx_mutex, portMAX_DELAY);
-        int space = (tx_tail > tx_head) ? 
-                    (tx_tail - tx_head - 1) : 
-                    (TX_BUFFER_SIZE - tx_head + tx_tail - 1);
-        xSemaphoreGive(tx_mutex);
-        
-        return space;
-    }
-    
-    int read() override {
-        if (!is_connected || available() == 0) return -1;
-        
-        xSemaphoreTake(rx_mutex, portMAX_DELAY);
-        uint8_t data = rx_buffer[rx_tail];
-        rx_tail = (rx_tail + 1) % RX_BUFFER_SIZE;
-        xSemaphoreGive(rx_mutex);
-        
-        return data;
-    }
-    
-    size_t write(uint8_t data) override {
-        if (!is_connected || availableForWrite() == 0) return 0;
-        
-        xSemaphoreTake(tx_mutex, portMAX_DELAY);
-        tx_buffer[tx_head] = data;
-        tx_head = (tx_head + 1) % TX_BUFFER_SIZE;
-        xSemaphoreGive(tx_mutex);
-        
-        return 1;
-    }
-    
-    size_t write(const uint8_t* buffer, size_t size) override {
-        if (!is_connected) return 0;
-        
-        size_t written = 0;
-        for (size_t i = 0; i < size; i++) {
-            if (write(buffer[i]) == 0) break;
-            written++;
-        }
-        
-        return written;
-    }
-    
-    bool connected() override {
-        return initialized && is_connected;
-    }
-    
-    void flush() override {
-        if (!is_connected) return;
-        
-        // Wait for TX buffer to empty
-        while (tx_head != tx_tail) {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-    }
-    
     void end() override {
         log_msg("USB Host: Shutting down...", LOG_INFO);
         
         is_connected = false;
         
-        if (usb_host_task_handle) {
-            vTaskDelete(usb_host_task_handle);
-            usb_host_task_handle = NULL;
+        if (task_handle) {
+            vTaskDelete(task_handle);
+            task_handle = NULL;
         }
         
         if (device_handle) {
@@ -233,11 +137,21 @@ public:
         }
         
         if (initialized) {
-            usb_host_client_deregister(this->client_handle);
+            if (client_handle) {
+                usb_host_client_deregister(client_handle);
+                client_handle = NULL;
+            }
             usb_host_uninstall();
         }
         
         initialized = false;
+    }
+
+protected:
+    // Implementation of abstract method from base class
+    void flushHardware() override {
+        // USB Host doesn't have specific hardware flush
+        // Data is sent immediately via transfers
     }
 
 private:
@@ -257,8 +171,8 @@ private:
             // Process USB Host library events
             usb_host_lib_handle_events(pdMS_TO_TICKS(10), &event_flags);
             
-            // Handle TX data - this is important for transmitting data!
-            if (instance && instance->is_connected && instance->tx_head != instance->tx_tail) {
+            // Handle TX data
+            if (instance && instance->is_connected && instance->availableForWrite() < TX_BUFFER_SIZE) {
                 instance->transmitPendingData();
             }
             
@@ -457,18 +371,10 @@ private:
         UsbHost* self = (UsbHost*)transfer->context;
         
         if (transfer->status == USB_TRANSFER_STATUS_COMPLETED) {
-            // Copy data to ring buffer
-            xSemaphoreTake(self->rx_mutex, portMAX_DELAY);
-            
-            for (int i = 0; i < transfer->actual_num_bytes; i++) {
-                size_t next_head = (self->rx_head + 1) % RX_BUFFER_SIZE;
-                if (next_head != self->rx_tail) {
-                    self->rx_buffer[self->rx_head] = transfer->data_buffer[i];
-                    self->rx_head = next_head;
-                }
+            // Copy data to ring buffer using base class helper
+            if (!self->addToRxBuffer(transfer->data_buffer, transfer->actual_num_bytes)) {
+                log_msg("USB Host RX buffer overflow", LOG_WARNING);
             }
-            
-            xSemaphoreGive(self->rx_mutex);
             
             // Resubmit transfer
             if (self->is_connected) {
@@ -484,20 +390,14 @@ private:
     
     // Transmit pending data
     void transmitPendingData() {
-        if (!out_transfer || tx_head == tx_tail) return;
+        if (!out_transfer || !is_connected) return;
         
-        xSemaphoreTake(tx_mutex, portMAX_DELAY);
-        
-        // Copy data to transfer buffer
-        size_t count = 0;
-        while (tx_tail != tx_head && count < 64) {
-            out_transfer->data_buffer[count++] = tx_buffer[tx_tail];
-            tx_tail = (tx_tail + 1) % TX_BUFFER_SIZE;
-        }
-        
-        xSemaphoreGive(tx_mutex);
+        // Get data from TX buffer using base class helper
+        uint8_t temp_buffer[64];
+        size_t count = getFromTxBuffer(temp_buffer, sizeof(temp_buffer));
         
         if (count > 0) {
+            memcpy(out_transfer->data_buffer, temp_buffer, count);
             out_transfer->device_handle = device_handle;
             out_transfer->bEndpointAddress = bulk_out_ep;
             out_transfer->num_bytes = count;

@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.5.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -13,15 +13,17 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
+- **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and zero packet loss
 - **Smart Protocol Detection**: Adaptive buffering automatically optimizes for different data patterns
- - Binary protocols (MAVLink, Modbus RTU): Preserves packet boundaries
- - Text protocols (NMEA, AT commands): Line-based optimization
- - Stream protocols: Minimal latency mode
+  - Binary protocols (MAVLink, Modbus RTU): Preserves packet boundaries
+  - Text protocols (NMEA, AT commands): Line-based optimization
+  - Stream protocols: Minimal latency mode
+- **Dynamic Buffer Sizing**: Automatically adjusts buffer size based on baud rate (256-2048 bytes)
 - **USB Host/Device Modes**: 
- - Device mode: Connect ESP32 to PC as USB serial device
- - Host mode: Connect USB modems or serial adapters to ESP32
- - Configurable via web interface
-- **High Performance**: Adaptive buffering (200μs to 15ms) for optimal throughput
+  - Device mode: Connect ESP32 to PC as USB serial device
+  - Host mode: Connect USB modems or serial adapters to ESP32
+  - Configurable via web interface
+- **High Performance**: Hardware packet detection and event-driven architecture
 - **Web Configuration**: Easy setup via WiFi access point
 - **Visual Feedback**: RGB LED shows data flow direction and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
@@ -33,56 +35,56 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Hardware
 
 - **Recommended Board**: [Waveshare ESP32-S3-Zero](https://www.waveshare.com/wiki/ESP32-S3-Zero)
- - Compact size (25x24mm)
- - Built-in WS2812 RGB LED
- - USB-C connector with native USB support
- - 4MB Flash
- - Dual-core processor (required)
+  - Compact size (25x24mm)
+  - Built-in WS2812 RGB LED
+  - USB-C connector with native USB support
+  - 4MB Flash
+  - Dual-core processor (required)
 - **Alternative**: Compatible ESP32-S3 boards
- - Must have ESP32-S3 chip with native USB support (for USB Host mode)
- - **Must be dual-core variant** (single-core ESP32 not supported)
- - USB-C or micro-USB with data lines connected to ESP32-S3
- - Similar pinout and features to ESP32-S3-Zero
- - Note: May require code modifications for different LED pins or missing components
+  - Must have ESP32-S3 chip with native USB support (for USB Host mode)
+  - **Must be dual-core variant** (single-core ESP32 not supported)
+  - USB-C or micro-USB with data lines connected to ESP32-S3
+  - Similar pinout and features to ESP32-S3-Zero
+  - Note: May require code modifications for different LED pins or missing components
 - **Connections**:
- - GPIO4: UART RX (connect to device TX)
- - GPIO5: UART TX (connect to device RX)  
- - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
- - GPIO0: BOOT button (built-in)
- - GPIO6/7: RTS/CTS (optional flow control)
+  - GPIO4: UART RX (connect to device TX)
+  - GPIO5: UART TX (connect to device RX)  
+  - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
+  - GPIO0: BOOT button (built-in)
+  - GPIO6/7: RTS/CTS (optional flow control)
 
 ## Quick Start
 
 1. **Connect Hardware**:
-  - Device TX → ESP32 GPIO4
-  - Device RX → ESP32 GPIO5
-  - Device GND → ESP32 GND
-  - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
+   - Device TX → ESP32 GPIO4
+   - Device RX → ESP32 GPIO5
+   - Device GND → ESP32 GND
+   - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
 
 2. **Power On**:
-  - Connect USB-C cable to computer
-  - Rainbow LED effect indicates successful boot
+   - Connect USB-C cable to computer
+   - Rainbow LED effect indicates successful boot
 
 3. **Configure** (first time only):
-  - Triple-click BOOT button (LED turns solid purple)
-  - Connect to WiFi network "ESP-Bridge" (password: 12345678)
-  - Open web browser to 192.168.4.1
-  - Set your UART parameters and WiFi credentials
-  - Choose USB mode (Device/Host)
-  - Click "Save & Reboot"
+   - Triple-click BOOT button (LED turns solid purple)
+   - Connect to WiFi network "ESP-Bridge" (password: 12345678)
+   - Open web browser to 192.168.4.1
+   - Set your UART parameters and WiFi credentials
+   - Choose USB mode (Device/Host)
+   - Click "Save & Reboot"
 
 4. **Use**:
-  - **Device Mode**: ESP32 appears as COM port on computer
-    - Terminal software (PuTTY, CoolTerm, etc.)
-    - Industrial HMI software
-    - GPS utilities
-    - Ground control stations
-    - Custom applications
-  - **Host Mode**: Connect USB devices to ESP32's USB port
-  - LED flashes indicate data flow:
-    - Blue: Device → Computer
-    - Green: Computer → Device
-    - Cyan: Bidirectional
+   - **Device Mode**: ESP32 appears as COM port on computer
+     - Terminal software (PuTTY, CoolTerm, etc.)
+     - Industrial HMI software
+     - GPS utilities
+     - Ground control stations
+     - Custom applications
+   - **Host Mode**: Connect USB devices to ESP32's USB port
+   - LED flashes indicate data flow:
+     - Blue: Device → Computer
+     - Green: Computer → Device
+     - Cyan: Bidirectional
 
 ## Common Use Cases
 
@@ -175,8 +177,8 @@ The web interface allows configuration of:
 1. Clone repository
 2. Open in VSCode with PlatformIO
 3. Select environment:
-  - `production` - For normal use (no debug output)
-  - `debug` - With crash diagnostics and logging
+   - `production` - For normal use (no debug output)
+   - `debug` - With crash diagnostics and logging
 4. Build and upload
 
 ### Build Environments
@@ -224,10 +226,10 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 
 ## Performance Notes
 
-The bridge features intelligent adaptive buffering (200μs to 15ms) that automatically detects and optimizes for your protocol:
+The bridge features DMA-accelerated UART communication with intelligent adaptive buffering that automatically detects and optimizes for your protocol:
 
 **Binary/Packet Protocols:**
-- MAVLink: Detects message boundaries for efficient telemetry and parameter transfer
+- MAVLink: Hardware packet boundary detection for efficient telemetry and parameter transfer
 - Modbus RTU: Maintains critical 3.5 character silence periods
 - Custom binary: Learns packet patterns automatically
 
@@ -236,12 +238,18 @@ The bridge features intelligent adaptive buffering (200μs to 15ms) that automat
 - AT commands: Optimizes for command/response patterns
 - Debug output: Preserves line endings
 
-**How it works:** The algorithm analyzes data patterns in real-time and adjusts buffering strategy without user intervention. No configuration needed - just connect and it adapts.
+**Technical Details:**
+- ESP-IDF native drivers with hardware DMA
+- Dynamic buffer allocation (256-2048 bytes based on baud rate)
+- Zero-copy ring buffers (16KB for main UART)
+- Hardware packet timeout detection
+- Event-driven architecture for minimal latency
 
 Current implementation achieves:
-- 95%+ efficiency for most protocols
-- Reliable operation up to 500000 baud
-- Typical latency under 1ms for small packets
+- Zero packet loss under normal conditions
+- Sub-millisecond latency for small packets
+- Reliable operation up to 1000000 baud
+- Minimal CPU usage thanks to DMA
 
 ## Advanced Features
 
@@ -255,13 +263,16 @@ The device automatically logs system crashes including:
 View crash history in web interface under "Crash History" section.
 
 ### Logging System
-Version 2.3.0 introduces a flexible logging system with multiple levels:
+The bridge includes a flexible logging system with multiple levels:
 - **ERROR**: Critical errors only
 - **WARNING**: Important warnings
 - **INFO**: General information
 - **DEBUG**: Detailed diagnostic information
 
-Logs are viewable through the web interface. Future versions will support additional logging outputs (UART, network).
+Logs are viewable through the web interface. The system supports multiple output channels:
+- **Web Interface**: View logs in real-time through the browser
+- **UART Output**: Optional logging to Device 3 UART TX pin
+- **Network Logging**: Future support for UDP log streaming
 
 ### Adaptive Buffering Technology
 

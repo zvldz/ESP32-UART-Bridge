@@ -14,14 +14,7 @@
         
         <!-- Quick Guide -->
         <div class="section" style="padding: 10px 15px;">
-            <h3 style="margin: 10px 0 5px 0;">📡 Quick Connection Guide</h3>
-            <p style="margin: 5px 0;"><strong>UART Device → ESP32-S3:</strong> TX→GPIO4, RX→GPIO5, GND→GND</p>
-            <p style="margin: 5px 0;"><strong>USB Host:</strong> USB cable to ESP32-S3 (for any USB application)</p>
-            <div class="status" style="font-size: 13px; margin: 10px 0 5px 0;">
-                <strong>📌 Mission Planner Users:</strong><br>
-                Enable "Disable RTS resets on ESP32 SerialUSB" in connection options to prevent reset loops.
-            </div>
-            <p style="margin: 5px 0;"><a href='/help' target='_blank'>📋 Detailed wiring diagram & troubleshooting</a></p>
+            <p style="margin: 5px 0; text-align: center;"><a href='/help' target='_blank' style="font-size: 16px;">📋 Connection Guide & Troubleshooting</a></p>
         </div>
         
         <!-- System Status -->
@@ -170,7 +163,11 @@
         </div>
     </div>
     
-    <script src="/main.js"></script>
+    <script src="/utils.js"></script>
+    <script src="/device-config.js"></script>
+    <script src="/form-utils.js"></script>
+    <script src="/status-updates.js"></script>
     <script src="/crash-log.js"></script>
+    <script src="/main.js"></script>
 </body>
 </html>

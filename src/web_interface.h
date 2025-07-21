@@ -22,6 +22,10 @@ void handleReboot();
 void handleCSS();
 void handleMainJS();
 void handleCrashJS();
+void handleUtilsJS();
+void handleDeviceConfigJS();
+void handleFormUtilsJS();
+void handleStatusUpdatesJS();
 
 // Template processing
 String processTemplate(const String& html, std::function<String(const String&)> processor);

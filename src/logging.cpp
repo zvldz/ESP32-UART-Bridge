@@ -3,6 +3,9 @@
 #include "types.h"
 #include "usb_interface.h"
 #include "config.h"
+#include "uart_interface.h"
+#include "uart_dma.h"
+#include "defines.h"
 
 // External objects
 extern SemaphoreHandle_t logMutex;
@@ -17,8 +20,8 @@ static bool initialized = false;
 // Global logging configuration
 static LogConfig logConfig;
 
-// UART logger serial port
-static HardwareSerial* logSerial = nullptr;
+// UART logger interface - now using UartInterface instead of HardwareSerial
+static UartInterface* logSerial = nullptr;
 
 // Get configuration for external access
 LogConfig* logging_get_config() {
@@ -57,14 +60,34 @@ void logging_init_uart() {
     return;
   }
   
-  // Create Serial2 for logging output
-  logSerial = new HardwareSerial(2);
+  // Create UartDMA for logging output with minimal buffers
+  UartDMA::DmaConfig dmaCfg = {
+    .useEventTask = false,     // Polling mode for logging
+    .dmaRxBufSize = 1024,     // Small RX buffer (not used for TX-only)
+    .dmaTxBufSize = DEVICE3_LOG_BUFFER_SIZE * 2,  // Adequate TX buffer for logging
+    .ringBufSize = 1024,      // Small ring buffer (not used for TX-only)
+    .eventTaskPriority = 10,  // Low priority
+    .eventQueueSize = 10      // Small queue
+  };
+  
+  logSerial = new UartDMA(UART_NUM_0, dmaCfg);
+  
   if (logSerial) {
+    // Create UART configuration for logging (fixed at 115200 8N1)
+    UartConfig uartCfg = {
+      .baudrate = 115200,
+      .databits = UART_DATA_8_BITS,
+      .parity = UART_PARITY_DISABLE,
+      .stopbits = UART_STOP_BITS_1,
+      .flowcontrol = false
+    };
+    
     // Initialize UART on Device 3 pins (TX only for logging)
-    logSerial->begin(115200, SERIAL_8N1, -1, DEVICE3_UART_TX_PIN);
-    log_msg("UART logging initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + " at 115200 baud", LOG_INFO);
+    logSerial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
+    log_msg("UART logging initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + 
+            " at 115200 baud (UART0, DMA)", LOG_INFO);
   } else {
-    log_msg("Failed to create UART logger serial port", LOG_ERROR);
+    log_msg("Failed to create UART logger interface", LOG_ERROR);
   }
 }
 
@@ -112,7 +135,8 @@ void log_msg(String message, LogLevel level) {
       String logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
                        String(getLogLevelName(level)) + "] " + message + "\r\n";
       
-      logSerial->print(logLine);
+      // Write the log line as bytes
+      logSerial->write((const uint8_t*)logLine.c_str(), logLine.length());
     }
     // If buffer full - skip this log to avoid blocking
   }

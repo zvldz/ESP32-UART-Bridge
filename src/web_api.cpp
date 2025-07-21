@@ -40,11 +40,11 @@ String getConfigJson() {
     unsigned long startTime = getProtectedULongValue(&uartStats.deviceStartTime);
     doc["uptime"] = (millis() - startTime) / 1000;
     
-    // Current configuration
+    // Current configuration - convert ESP-IDF enums to web-compatible values
     doc["baudrate"] = config.baudrate;
-    doc["databits"] = config.databits;
-    doc["parity"] = config.parity;
-    doc["stopbits"] = config.stopbits;
+    doc["databits"] = atoi(word_length_to_string(config.databits));  // Convert to number
+    doc["parity"] = parity_to_string(config.parity);                 // Convert to string
+    doc["stopbits"] = atoi(stop_bits_to_string(config.stopbits));    // Convert to number
     doc["flowcontrol"] = config.flowcontrol;
     
     // WiFi
@@ -68,9 +68,11 @@ String getConfigJson() {
     doc["logLevelUart"] = (int)config.log_level_uart;
     doc["logLevelNetwork"] = (int)config.log_level_network;
     
-    // UART configuration string
+    // UART configuration string - build from ESP-IDF enums
     String uartConfig = String(config.baudrate) + " baud, " +
-                       String(config.databits) + config.parity.substring(0,1) + String(config.stopbits);
+                       word_length_to_string(config.databits) + 
+                       parity_to_string(config.parity)[0] +  // First char only (N/E/O)
+                       stop_bits_to_string(config.stopbits);
     doc["uartConfig"] = uartConfig;
     
     // Flow control status
@@ -193,7 +195,7 @@ void handleSave() {
   // Parse form data
   bool configChanged = false;
 
-  // UART settings
+  // UART settings - convert from web format to ESP-IDF enums
   if (server->hasArg("baudrate")) {
     uint32_t newBaudrate = server->arg("baudrate").toInt();
     if (newBaudrate != config.baudrate) {
@@ -205,8 +207,9 @@ void handleSave() {
 
   if (server->hasArg("databits")) {
     uint8_t newDatabits = server->arg("databits").toInt();
-    if (newDatabits != config.databits) {
-      config.databits = newDatabits;
+    uart_word_length_t newWordLength = string_to_word_length(newDatabits);
+    if (newWordLength != config.databits) {
+      config.databits = newWordLength;
       configChanged = true;
       log_msg("UART data bits changed to " + String(newDatabits), LOG_INFO);
     }
@@ -214,8 +217,9 @@ void handleSave() {
 
   if (server->hasArg("parity")) {
     String newParity = server->arg("parity");
-    if (newParity != config.parity) {
-      config.parity = newParity;
+    uart_parity_t newParityEnum = string_to_parity(newParity.c_str());
+    if (newParityEnum != config.parity) {
+      config.parity = newParityEnum;
       configChanged = true;
       log_msg("UART parity changed to " + newParity, LOG_INFO);
     }
@@ -223,8 +227,9 @@ void handleSave() {
 
   if (server->hasArg("stopbits")) {
     uint8_t newStopbits = server->arg("stopbits").toInt();
-    if (newStopbits != config.stopbits) {
-      config.stopbits = newStopbits;
+    uart_stop_bits_t newStopBitsEnum = string_to_stop_bits(newStopbits);
+    if (newStopBitsEnum != config.stopbits) {
+      config.stopbits = newStopBitsEnum;
       configChanged = true;
       log_msg("UART stop bits changed to " + String(newStopbits), LOG_INFO);
     }
@@ -369,13 +374,8 @@ void handleResetStats() {
   resetStatistics(&uartStats);
   logging_clear();
 
-  server->send(200, "text/html", R"(
-<html><head><title>Statistics Reset</title></head><body>
-<h1>Statistics and Logs Reset</h1>
-<p>Traffic statistics and logs have been reset.</p>
-<p><a href='/'>Back to Settings</a></p>
-</body></html>
-)");
+  // Return JSON response for AJAX request
+  server->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Statistics and logs cleared\"}");
 }
 
 // Handle crash log JSON request

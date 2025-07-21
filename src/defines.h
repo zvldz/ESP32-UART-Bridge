@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.3.1"
+#define DEVICE_VERSION "2.5.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -65,7 +65,6 @@ these features but is not justified for current requirements.
 #define LOG_DISPLAY_COUNT 50
 
 // UART buffering
-#define UART_BUFFER_SIZE 256
 #define DEVICE2_UART_BUFFER_SIZE 2048
 #define DEVICE3_UART_BUFFER_SIZE 2048
 #define DEVICE3_LOG_BUFFER_SIZE 256  // For UART logger TX only
