@@ -209,6 +209,68 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - Removed unused `lastWdtFeed` variable from `uartbridge.cpp`
   - Fixed legacy code remnants
 
+### v2.5.2 (Phase 1 Code Refactoring) - COMPLETED ✅ (July 2025)
+- [x] **Refactor Large uartbridge.cpp File** - Phase 1 Complete
+  - Original size: ~700 lines, reduced to ~555 lines
+  - Created modular structure without breaking functionality
+  
+- [x] **Flow Control Module** - Completed
+  - Created `flow_control.h` and `flow_control.cpp`
+  - Extracted `detectFlowControl()` and `getFlowControlStatus()` functions
+  - ~50 lines of code moved to separate module
+  - Clean separation of flow control logic
+
+- [x] **Device Initialization Module** - Completed
+  - Created `device_init.h` and `device_init.cpp`
+  - Extracted `initDevice2UART()` and `initDevice3()` functions
+  - ~85 lines of code moved to separate module
+  - Fixed linkage issues with proper extern declarations
+
+- [x] **Build System Verification** - Completed
+  - Fixed static/extern conflicts for device2Serial
+  - Added proper extern declarations in uartbridge.h
+  - Project compiles successfully with new structure
+  - All functionality preserved
+
+### v2.5.3 (Phase 2 Code Refactoring - Hybrid Approach) - COMPLETED ✅ (July 2025)
+- [x] **Phase 2 Refactoring - Hybrid Approach** - Completed
+  - Further refactored uartbridge.cpp from ~555 to ~250 lines
+  - Created BridgeContext structure for clean parameter passing
+  - Maintained performance with static inline functions
+  
+- [x] **Extended types.h** - Completed
+  - Added comprehensive BridgeContext structure
+  - Groups all task-local variables logically
+  - Added inline initBridgeContext() function
+  - Forward declarations for UartInterface/UsbInterface
+  
+- [x] **Enhanced Diagnostics Module** - Completed
+  - Moved periodic diagnostics from uartbridge.cpp
+  - Added logBridgeActivity(), logStackDiagnostics()
+  - Added logDmaStatistics(), logDroppedDataStats()
+  - Created updatePeriodicDiagnostics() main function
+  - ~150 lines moved to diagnostics module
+  
+- [x] **Created bridge_processing.h** - Completed
+  - All data processing logic as inline functions
+  - processDevice1Input(), processDevice2USB/UART()
+  - processDevice3BridgeInput()
+  - shouldYieldToWiFi() helper
+  - ~200 lines of processing logic extracted
+  
+- [x] **Created adaptive_buffer.h** - Completed
+  - All adaptive buffering logic in one place
+  - shouldTransmitBuffer(), transmitAdaptiveBuffer()
+  - handleBufferTimeout()
+  - calculateAdaptiveBufferSize() moved from device_init
+  - ~120 lines of buffering logic extracted
+  
+- [x] **Simplified Main Loop** - Completed
+  - Clean, readable main loop with function calls
+  - All complex logic in specialized modules
+  - Performance preserved with inline functions
+  - Ready for future extensions
+
 ## Current Status
 
 The project now uses a full ESP-IDF approach for all UART operations:
@@ -219,7 +281,7 @@ The project now uses a full ESP-IDF approach for all UART operations:
 - **USB Host**: ESP-IDF implementation ✅
 - **UART Logger**: ESP-IDF with DMA polling mode ✅
 
-Version 2.5.1 includes:
+Version 2.5.3 includes:
 - Complete ESP-IDF migration for all UART devices
 - Hardware DMA with packet boundary detection
 - Dynamic adaptive buffer sizing based on baud rate
@@ -227,25 +289,13 @@ Version 2.5.1 includes:
 - Minimal CPU usage and excellent performance up to 1Mbps
 - Modular web interface with separated JavaScript files
 - Safe OTA updates with Device 3 handling
+- **Phase 1 refactoring complete**: uartbridge.cpp reduced by 145 lines
+- **Phase 2 refactoring complete**: uartbridge.cpp reduced from ~555 to ~250 lines
+- Clean modular architecture with specialized headers
 
 ## Priority 2 - Next Phase
 
-- [x] **Resolve Device 2/3 UART Conflict** ✅
-  - Device 2 uses UART2 (GPIO 8/9)
-  - Device 3 uses UART0 (GPIO 11/12)
-  - No conflict exists - they use different UART peripherals
-
-- [ ] **Refactor Large uartbridge.cpp File** *(In Progress - July 2025)*
-  - Current size: ~700 lines, needs to be split for maintainability
-  - Phase 1: Minimal refactoring plan created (see refactoring_plan.md)
-    - Extract flow control functions (~50 lines)
-    - Extract device initialization (~80 lines)
-  - Phase 2: Hybrid refactoring plan created (see hybrid_refactoring_plan.md)
-    - Split monolithic uartBridgeTask into static inline functions
-    - Create BridgeContext structure for clean parameter passing
-  - Must maintain performance and avoid breaking critical timing
-
-- [ ] **Implement TaskScheduler** *(After refactoring completion)*
+- [ ] **Implement TaskScheduler** *(Next step)*
   - Replace all manual timer checks with TaskScheduler
   - Will simplify periodic tasks (diagnostics, statistics, LED updates)
   - Library: `arkhipenko/TaskScheduler@^3.7.0`
@@ -329,14 +379,36 @@ Version 2.5.1 includes:
     - Consider connection management and timeouts
 
 - [ ] **Protocol-Specific Optimizations**
-  - **MAVLink Mode** - Parse and optimize MAVLink packets
-    - Can reduce latency by sending complete packets immediately
+  - **MAVLink Mode** - Lightweight packet boundary detection
+    - Only detect packet boundaries, no full parsing
+    - ~30 lines of code vs ~50KB for full parser
+    - Reduces latency by sending complete packets immediately
     - Eliminates 5ms pause waiting for packet boundaries
-    - **Implementation**: Light MAVLink parser to detect packet boundaries
-  - **SBUS Mode** - RC receiver protocol support
-    - 100000 baud, 8E2, inverted signal
-    - Auto-detection and configuration
-    - **Note**: Requires hardware inverter for true SBUS compatibility
+    - **Implementation**: Simple header check to detect packet length
+    - No CRC validation, no message decoding - just boundaries
+    - Can be enabled/disabled via config option
+  - **SBUS Mode** - UART to/from SBUS converter
+    - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
+    - Convert SBUS to standard UART (configurable baud rate)
+    - **Roles to add**:
+      - `D1_UART_TO_SBUS`: Device 1 receives UART, Device 2 outputs SBUS
+      - `D1_SBUS_TO_UART`: Device 1 receives SBUS, Device 2 outputs UART
+    - **Use cases**:
+      - Connect non-SBUS flight controllers to SBUS-only receivers
+      - Use SBUS receivers with devices expecting standard UART
+      - Protocol conversion for legacy equipment
+      - **Remote SBUS over network**: Enable SBUS transmission over any network
+        - Transmit side: `SBUS receiver → ESP32 (SBUS→UART) → Network device → Internet`
+        - Receive side: `Internet → Network device → ESP32 (UART→SBUS) → Flight controller`
+        - ESP32 acts only as protocol converter, not network bridge
+        - Network transmission handled by external devices (4G modems, routers, etc.)
+        - Enables SBUS control over unlimited distances
+    - **Implementation**:
+      - Hardware inverter required for true SBUS signal
+      - SBUS frame parsing/generation (25 bytes, specific format)
+      - Configurable channel mapping
+      - Timing-critical on SBUS side, relaxed on UART side
+    - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
 
 - [ ] **Advanced Configuration**
   - Configurable GPIO pins via web interface
@@ -387,7 +459,8 @@ lib_deps =
 - USB Auto mode needs VBUS detection implementation
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
-- Version 2.5.1 completes full ESP-IDF migration with excellent performance
+- Version 2.5.2 completes Phase 1 refactoring with excellent maintainability
+- Version 2.5.3 completes Phase 2 refactoring with clean modular architecture
 - DMA implementation enables hardware-based packet detection and minimal packet loss
 - Web interface modularization improves maintainability and development workflow
 - Library selection focuses on well-maintained, performance-oriented solutions

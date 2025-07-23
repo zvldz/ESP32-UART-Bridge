@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include "driver/uart.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 // Device modes
 typedef enum {
@@ -144,6 +146,164 @@ inline void enterStatsCritical() {
 
 inline void exitStatsCritical() {
     taskEXIT_CRITICAL(&statsMux);
+}
+
+// Forward declarations for interface types
+class UartInterface;
+class UsbInterface;
+
+// Bridge operation context - contains pointers to local variables
+struct BridgeContext {
+    // Statistics (pointers to task-local variables)
+    struct {
+        unsigned long* device1RxBytes;
+        unsigned long* device1TxBytes;
+        unsigned long* device2RxBytes;
+        unsigned long* device2TxBytes;
+        unsigned long* device3RxBytes;
+        unsigned long* device3TxBytes;
+        unsigned long* lastActivity;
+        unsigned long* totalUartPackets;
+    } stats;
+    
+    // Adaptive buffering state
+    struct {
+        uint8_t* buffer;
+        size_t bufferSize;
+        int* bufferIndex;
+        unsigned long* lastByteTime;
+        unsigned long* bufferStartTime;
+    } adaptive;
+    
+    // Cached device flags (for performance)
+    struct {
+        bool device2IsUSB;
+        bool device2IsUART2;
+        bool device3Active;
+        bool device3IsBridge;
+    } devices;
+    
+    // Diagnostics counters
+    struct {
+        unsigned long* droppedBytes;
+        unsigned long* totalDroppedBytes;
+        unsigned long* dropEvents;
+        int* maxDropSize;
+        int* timeoutDropSizes;      // Array [10]
+        int* timeoutDropIndex;
+    } diagnostics;
+    
+    // External interfaces
+    struct {
+        UartInterface* uartBridgeSerial;
+        UsbInterface* usbInterface;
+        UartInterface* device2Serial;
+        UartInterface* device3Serial;
+    } interfaces;
+    
+    // Timing controls
+    struct {
+        unsigned long* lastUartLedNotify;
+        unsigned long* lastUsbLedNotify;
+        unsigned long* lastWifiYield;
+        unsigned long* lastDropLog;
+        unsigned long* lastPeriodicStats;
+        unsigned long* lastStackCheck;
+    } timing;
+    
+    // Mutexes and synchronization
+    struct {
+        SemaphoreHandle_t* device3Mutex;
+    } sync;
+    
+    // Current mode and configuration
+    struct {
+        DeviceMode* currentMode;
+        Config* config;
+        UartStats* globalStats;
+    } system;
+};
+
+// Initialize BridgeContext with all necessary pointers
+inline void initBridgeContext(BridgeContext* ctx,
+    // Statistics
+    unsigned long* device1RxBytes, unsigned long* device1TxBytes,
+    unsigned long* device2RxBytes, unsigned long* device2TxBytes,
+    unsigned long* device3RxBytes, unsigned long* device3TxBytes,
+    unsigned long* lastActivity, unsigned long* totalUartPackets,
+    // Adaptive buffer
+    uint8_t* buffer, size_t bufferSize, int* bufferIndex,
+    unsigned long* lastByteTime, unsigned long* bufferStartTime,
+    // Device flags
+    bool device2IsUSB, bool device2IsUART2, bool device3Active, bool device3IsBridge,
+    // Diagnostics
+    unsigned long* droppedBytes, unsigned long* totalDroppedBytes,
+    unsigned long* dropEvents, int* maxDropSize,
+    int* timeoutDropSizes, int* timeoutDropIndex,
+    // Interfaces
+    UartInterface* uartBridgeSerial, UsbInterface* usbInterface,
+    UartInterface* device2Serial, UartInterface* device3Serial,
+    // Timing
+    unsigned long* lastUartLedNotify, unsigned long* lastUsbLedNotify,
+    unsigned long* lastWifiYield, unsigned long* lastDropLog,
+    unsigned long* lastPeriodicStats, unsigned long* lastStackCheck,
+    // Sync
+    SemaphoreHandle_t* device3Mutex,
+    // System
+    DeviceMode* currentMode, Config* config, UartStats* globalStats)
+{
+    // Statistics
+    ctx->stats.device1RxBytes = device1RxBytes;
+    ctx->stats.device1TxBytes = device1TxBytes;
+    ctx->stats.device2RxBytes = device2RxBytes;
+    ctx->stats.device2TxBytes = device2TxBytes;
+    ctx->stats.device3RxBytes = device3RxBytes;
+    ctx->stats.device3TxBytes = device3TxBytes;
+    ctx->stats.lastActivity = lastActivity;
+    ctx->stats.totalUartPackets = totalUartPackets;
+    
+    // Adaptive buffer
+    ctx->adaptive.buffer = buffer;
+    ctx->adaptive.bufferSize = bufferSize;
+    ctx->adaptive.bufferIndex = bufferIndex;
+    ctx->adaptive.lastByteTime = lastByteTime;
+    ctx->adaptive.bufferStartTime = bufferStartTime;
+    
+    // Device flags
+    ctx->devices.device2IsUSB = device2IsUSB;
+    ctx->devices.device2IsUART2 = device2IsUART2;
+    ctx->devices.device3Active = device3Active;
+    ctx->devices.device3IsBridge = device3IsBridge;
+    
+    // Diagnostics
+    ctx->diagnostics.droppedBytes = droppedBytes;
+    ctx->diagnostics.totalDroppedBytes = totalDroppedBytes;
+    ctx->diagnostics.dropEvents = dropEvents;
+    ctx->diagnostics.maxDropSize = maxDropSize;
+    ctx->diagnostics.timeoutDropSizes = timeoutDropSizes;
+    ctx->diagnostics.timeoutDropIndex = timeoutDropIndex;
+    
+    // Interfaces
+    ctx->interfaces.uartBridgeSerial = uartBridgeSerial;
+    ctx->interfaces.usbInterface = usbInterface;
+    ctx->interfaces.device2Serial = device2Serial;
+    ctx->interfaces.device3Serial = device3Serial;
+    
+    // Timing
+    ctx->timing.lastUartLedNotify = lastUartLedNotify;
+    ctx->timing.lastUsbLedNotify = lastUsbLedNotify;
+    ctx->timing.lastWifiYield = lastWifiYield;
+    ctx->timing.lastDropLog = lastDropLog;
+    ctx->timing.lastPeriodicStats = lastPeriodicStats;
+    ctx->timing.lastStackCheck = lastStackCheck;
+    
+    // Sync
+    ctx->sync.device3Mutex = device3Mutex;
+    
+    // System
+    ctx->system.currentMode = currentMode;
+    ctx->system.config = config;
+    ctx->system.globalStats = globalStats;
 }
 
 #endif // TYPES_H
