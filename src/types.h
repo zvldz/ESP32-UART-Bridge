@@ -207,8 +207,6 @@ struct BridgeContext {
         unsigned long* lastUsbLedNotify;
         unsigned long* lastWifiYield;
         unsigned long* lastDropLog;
-        unsigned long* lastPeriodicStats;
-        unsigned long* lastStackCheck;
     } timing;
     
     // Mutexes and synchronization
@@ -246,7 +244,6 @@ inline void initBridgeContext(BridgeContext* ctx,
     // Timing
     unsigned long* lastUartLedNotify, unsigned long* lastUsbLedNotify,
     unsigned long* lastWifiYield, unsigned long* lastDropLog,
-    unsigned long* lastPeriodicStats, unsigned long* lastStackCheck,
     // Sync
     SemaphoreHandle_t* device3Mutex,
     // System
@@ -294,8 +291,6 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->timing.lastUsbLedNotify = lastUsbLedNotify;
     ctx->timing.lastWifiYield = lastWifiYield;
     ctx->timing.lastDropLog = lastDropLog;
-    ctx->timing.lastPeriodicStats = lastPeriodicStats;
-    ctx->timing.lastStackCheck = lastStackCheck;
     
     // Sync
     ctx->sync.device3Mutex = device3Mutex;

@@ -8,6 +8,14 @@
 
 // External object from main.cpp
 extern UartStats uartStats;
+extern DeviceMode currentMode;
+
+// Global access to context (for TaskScheduler callbacks)
+static BridgeContext* g_bridgeContext = nullptr;
+
+void setBridgeContext(BridgeContext* ctx) {
+    g_bridgeContext = ctx;
+}
 
 // Print boot information to Serial (only for critical reset reasons)
 void printBootInfo() {
@@ -34,21 +42,16 @@ void printBootInfo() {
 
 // System diagnostics - memory stats, uptime
 void systemDiagnostics() {
-    static unsigned long lastCheck = 0;
-    if (millis() - lastCheck > 10000) { // Every 10 seconds
-        uint32_t freeHeap = ESP.getFreeHeap();
-        uint32_t minFreeHeap = ESP.getMinFreeHeap();
-        
-        // Critical memory conditions
-        if (freeHeap < 10000) {
-            log_msg("CRITICAL: Low memory! Free: " + String(freeHeap) + " bytes", LOG_ERROR);
-        } else if (freeHeap < 20000) {
-            log_msg("Warning: Memory getting low. Free: " + String(freeHeap) + " bytes", LOG_WARNING);
-        } else {
-            log_msg("Memory: Free=" + String(freeHeap) + " bytes, Min=" + String(minFreeHeap) + " bytes", LOG_DEBUG);
-        }
-
-        lastCheck = millis();
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t minFreeHeap = ESP.getMinFreeHeap();
+    
+    // Critical memory conditions
+    if (freeHeap < 10000) {
+        log_msg("CRITICAL: Low memory! Free: " + String(freeHeap) + " bytes", LOG_ERROR);
+    } else if (freeHeap < 20000) {
+        log_msg("Warning: Memory getting low. Free: " + String(freeHeap) + " bytes", LOG_WARNING);
+    } else {
+        log_msg("Memory: Free=" + String(freeHeap) + " bytes, Min=" + String(minFreeHeap) + " bytes", LOG_DEBUG);
     }
 }
 
@@ -106,34 +109,122 @@ void resetStatistics(UartStats* stats) {
   exitStatsCritical();
 }
 
-// Log bridge activity periodically
-void logBridgeActivity(BridgeContext* ctx, DeviceMode currentMode) {
-  if (millis() - *ctx->timing.lastPeriodicStats > 30000) {
-    String mode = (currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
-    log_msg("UART bridge alive [" + mode + " mode]: D1 RX=" + String(*ctx->stats.device1RxBytes) +
-            " TX=" + String(*ctx->stats.device1TxBytes) + " bytes" +
-            (*ctx->diagnostics.totalDroppedBytes > 0 ? ", dropped=" + String(*ctx->diagnostics.totalDroppedBytes) : ""), LOG_DEBUG);
-    *ctx->timing.lastPeriodicStats = millis();
-  }
+// Separate functions for TaskScheduler
+
+void runBridgeActivityLog() {
+    if (!g_bridgeContext) return;
+    
+    String mode = (*g_bridgeContext->system.currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
+    log_msg("UART bridge alive [" + mode + " mode]: D1 RX=" + 
+            String(*g_bridgeContext->stats.device1RxBytes) +
+            " TX=" + String(*g_bridgeContext->stats.device1TxBytes) + " bytes" +
+            (*g_bridgeContext->diagnostics.totalDroppedBytes > 0 ? 
+             ", dropped=" + String(*g_bridgeContext->diagnostics.totalDroppedBytes) : ""), 
+            LOG_DEBUG);
 }
 
-// Log stack diagnostics
-void logStackDiagnostics(BridgeContext* ctx) {
-  if (millis() - *ctx->timing.lastStackCheck > 5000) {
+void runStackDiagnostics() {
+    if (!g_bridgeContext) return;
+    
     UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
     log_msg("UART task: Stack free=" + String(stackFree * 4) +
             " bytes, Heap free=" + String(ESP.getFreeHeap()) +
-            " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
-    *ctx->timing.lastStackCheck = millis();
+            " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", 
+            LOG_DEBUG);
     
     // Add DMA diagnostics if available
-    UartDMA* dma = static_cast<UartDMA*>(ctx->interfaces.uartBridgeSerial);
+    UartDMA* dma = static_cast<UartDMA*>(g_bridgeContext->interfaces.uartBridgeSerial);
     if (dma && dma->isInitialized()) {
-      log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
-              " TX=" + String(dma->getTxBytesTotal()) +
-              ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+        log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
+                " TX=" + String(dma->getTxBytesTotal()) +
+                ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
     }
-  }
+}
+
+void runDroppedDataStats() {
+    if (!g_bridgeContext) return;
+    
+    // Only log if there's something to report
+    if (*g_bridgeContext->diagnostics.droppedBytes > 0) {
+        // For regular drops (buffer full)
+        if (*g_bridgeContext->diagnostics.maxDropSize > 0) {
+            log_msg("USB buffer full: dropped " + String(*g_bridgeContext->diagnostics.droppedBytes) + " bytes in " +
+                    String(*g_bridgeContext->diagnostics.dropEvents) + " events (total: " + String(*g_bridgeContext->diagnostics.totalDroppedBytes) +
+                    " bytes), max packet: " + String(*g_bridgeContext->diagnostics.maxDropSize) + " bytes", LOG_INFO);
+            *g_bridgeContext->diagnostics.maxDropSize = 0;  // Reset for next period
+        }
+        
+        // For timeout drops
+        int* timeoutDropSizes = g_bridgeContext->diagnostics.timeoutDropSizes;
+        bool hasTimeoutDrops = false;
+        for (int i = 0; i < 10; i++) {
+            if (timeoutDropSizes[i] > 0) {
+                hasTimeoutDrops = true;
+                break;
+            }
+        }
+        
+        if (hasTimeoutDrops) {
+            // Build string with last 10 timeout drop sizes
+            String sizes = "Sizes: ";
+            int sizeCount = 0;
+            for (int i = 0; i < 10; i++) {
+                if (timeoutDropSizes[i] > 0) {
+                    if (sizeCount > 0) sizes += ", ";
+                    sizes += String(timeoutDropSizes[i]);
+                    sizeCount++;
+                }
+            }
+            
+            log_msg("USB timeout: dropped " + String(*g_bridgeContext->diagnostics.droppedBytes) + " bytes in " +
+                    String(*g_bridgeContext->diagnostics.dropEvents) + " events (total: " + String(*g_bridgeContext->diagnostics.totalDroppedBytes) +
+                    " bytes). " + sizes, LOG_INFO);
+            
+            // Clear timeout sizes for next period
+            for (int i = 0; i < 10; i++) {
+                timeoutDropSizes[i] = 0;
+            }
+        }
+        
+        *g_bridgeContext->timing.lastDropLog = millis();
+        *g_bridgeContext->diagnostics.droppedBytes = 0;
+        *g_bridgeContext->diagnostics.dropEvents = 0;
+    }
+}
+
+void runAllStacksDiagnostics() {
+    String msg = "Stack free: ";
+    
+    // Current task (main loop)
+    UBaseType_t currentStack = uxTaskGetStackHighWaterMark(NULL);
+    msg += "Main=" + String(currentStack * 4) + "B";
+    
+    // UART bridge task
+    extern TaskHandle_t uartBridgeTaskHandle;
+    if (uartBridgeTaskHandle) {
+        UBaseType_t uartStack = uxTaskGetStackHighWaterMark(uartBridgeTaskHandle);
+        msg += " UART=" + String(uartStack * 4) + "B";
+    }
+    
+    // Web server task (if exists)
+    extern TaskHandle_t webServerTaskHandle;
+    if (webServerTaskHandle) {
+        UBaseType_t webStack = uxTaskGetStackHighWaterMark(webServerTaskHandle);
+        msg += " Web=" + String(webStack * 4) + "B";
+    }
+    
+    // Device3 task (if exists)
+    extern TaskHandle_t device3TaskHandle;
+    if (device3TaskHandle) {
+        UBaseType_t device3Stack = uxTaskGetStackHighWaterMark(device3TaskHandle);
+        msg += " Dev3=" + String(device3Stack * 4) + "B";
+    }
+    
+    // Add heap info
+    msg += ", Heap=" + String(ESP.getFreeHeap()) + "B";
+    msg += ", MaxBlock=" + String(ESP.getMaxAllocHeap()) + "B";
+    
+    log_msg(msg, LOG_DEBUG);
 }
 
 // Log DMA statistics for a UART interface
@@ -144,66 +235,4 @@ void logDmaStatistics(UartInterface* uartSerial) {
             " TX=" + String(dma->getTxBytesTotal()) +
             ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
   }
-}
-
-// Log dropped data statistics
-void logDroppedDataStats(BridgeContext* ctx) {
-  // Check if we should log dropped data
-  if (*ctx->diagnostics.droppedBytes > 0 && millis() - *ctx->timing.lastDropLog > 5000) {
-    // For regular drops (buffer full)
-    if (*ctx->diagnostics.maxDropSize > 0) {
-      log_msg("USB buffer full: dropped " + String(*ctx->diagnostics.droppedBytes) + " bytes in " +
-              String(*ctx->diagnostics.dropEvents) + " events (total: " + String(*ctx->diagnostics.totalDroppedBytes) +
-              " bytes), max packet: " + String(*ctx->diagnostics.maxDropSize) + " bytes", LOG_INFO);
-      *ctx->diagnostics.maxDropSize = 0;  // Reset for next period
-    }
-    
-    // For timeout drops
-    int* timeoutDropSizes = ctx->diagnostics.timeoutDropSizes;
-    bool hasTimeoutDrops = false;
-    for (int i = 0; i < 10; i++) {
-      if (timeoutDropSizes[i] > 0) {
-        hasTimeoutDrops = true;
-        break;
-      }
-    }
-    
-    if (hasTimeoutDrops) {
-      // Build string with last 10 timeout drop sizes
-      String sizes = "Sizes: ";
-      int sizeCount = 0;
-      for (int i = 0; i < 10; i++) {
-        if (timeoutDropSizes[i] > 0) {
-          if (sizeCount > 0) sizes += ", ";
-          sizes += String(timeoutDropSizes[i]);
-          sizeCount++;
-        }
-      }
-      
-      log_msg("USB timeout: dropped " + String(*ctx->diagnostics.droppedBytes) + " bytes in " +
-              String(*ctx->diagnostics.dropEvents) + " events (total: " + String(*ctx->diagnostics.totalDroppedBytes) +
-              " bytes). " + sizes, LOG_INFO);
-      
-      // Clear timeout sizes for next period
-      for (int i = 0; i < 10; i++) {
-        timeoutDropSizes[i] = 0;
-      }
-    }
-    
-    *ctx->timing.lastDropLog = millis();
-    *ctx->diagnostics.droppedBytes = 0;
-    *ctx->diagnostics.dropEvents = 0;
-  }
-}
-
-// Main periodic diagnostics update function
-void updatePeriodicDiagnostics(BridgeContext* ctx, DeviceMode currentMode) {
-  // Log bridge activity every 30 seconds
-  logBridgeActivity(ctx, currentMode);
-  
-  // Log stack diagnostics every 5 seconds
-  logStackDiagnostics(ctx);
-  
-  // Log dropped data statistics if any
-  logDroppedDataStats(ctx);
 }

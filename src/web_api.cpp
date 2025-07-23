@@ -7,6 +7,7 @@
 #include "defines.h"
 #include "crashlog.h"
 #include "diagnostics.h"
+#include "scheduler_tasks.h"
 #include <Arduino.h>
 #include <WebServer.h>
 #include <ArduinoJson.h>
@@ -356,6 +357,9 @@ void handleSave() {
   }
 
   if (configChanged) {
+    // Cancel WiFi timeout when settings are saved successfully
+    cancelWiFiTimeout();
+    
     config_save(&config);
     server->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
     server->client().clear();  // Ensure response is sent

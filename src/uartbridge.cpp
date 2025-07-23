@@ -8,6 +8,7 @@
 #include "leds.h"
 #include "defines.h"
 #include "config.h"
+#include "scheduler_tasks.h"
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 
@@ -42,6 +43,30 @@ int device3RxTail = 0;
 
 // Mutex for Device 3 buffer access
 static SemaphoreHandle_t device3Mutex = nullptr;
+
+// Static variables for stats functions
+static unsigned long* s_device1RxBytes = nullptr;
+static unsigned long* s_device1TxBytes = nullptr;
+static unsigned long* s_device2RxBytes = nullptr;
+static unsigned long* s_device2TxBytes = nullptr;
+static unsigned long* s_device3RxBytes = nullptr;
+static unsigned long* s_device3TxBytes = nullptr;
+static unsigned long* s_lastActivity = nullptr;
+
+// Function implementations for scheduler
+void updateMainStats() {
+    if (!s_device1RxBytes) return;  // Not initialized yet
+    
+    updateSharedStats(*s_device1RxBytes, *s_device1TxBytes,
+                     *s_device2RxBytes, *s_device2TxBytes,
+                     *s_device3RxBytes, *s_device3TxBytes,
+                     *s_lastActivity);
+}
+
+void updateDevice3Stats() {
+    // This function is called from TaskScheduler for Device 3 stats
+    // The actual update happens in device3Task() itself
+}
 
 // Initialize UART bridge - always uses UartInterface
 void uartbridge_init(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb) {
@@ -218,16 +243,11 @@ void device3Task(void* parameter) {
       }
     }
     
-    // Update statistics periodically (less frequently than main task)
-    static unsigned long lastDevice3StatsUpdate = 0;
-    if (millis() - lastDevice3StatsUpdate > UART_STATS_UPDATE_INTERVAL_MS * 2) {
-      // Update only Device 3 statistics
-      enterStatsCritical();
-      uartStats.device3TxBytes = localDevice3TxBytes;
-      uartStats.device3RxBytes = localDevice3RxBytes;
-      exitStatsCritical();
-      lastDevice3StatsUpdate = millis();
-    }
+    // Update statistics - called by TaskScheduler instead
+    enterStatsCritical();
+    uartStats.device3TxBytes = localDevice3TxBytes;
+    uartStats.device3RxBytes = localDevice3RxBytes;
+    exitStatsCritical();
     
     vTaskDelay(pdMS_TO_TICKS(1));
   }
@@ -250,8 +270,8 @@ void uartBridgeTask(void* parameter) {
   }
 
   log_msg("Adaptive buffering: " + String(adaptiveBufferSize) + 
-          " byte buffer for " + String(config.baudrate) + " baud", LOG_INFO);
-  log_msg("Thresholds: 200μs/1ms/5ms/15ms for protocol optimization", LOG_INFO);
+          " bytes (for " + String(config.baudrate) + " baud). " +
+          "Thresholds: 200μs/1ms/5ms/15ms", LOG_INFO);
 
   // Local counters for all devices
   unsigned long localDevice1RxBytes = 0;
@@ -263,6 +283,15 @@ void uartBridgeTask(void* parameter) {
   unsigned long localLastActivity = 0;
   unsigned long localTotalUartPackets = 0;
 
+  // Store pointers for stats functions
+  s_device1RxBytes = &localDevice1RxBytes;
+  s_device1TxBytes = &localDevice1TxBytes;
+  s_device2RxBytes = &localDevice2RxBytes;
+  s_device2TxBytes = &localDevice2TxBytes;
+  s_device3RxBytes = &localDevice3RxBytes;
+  s_device3TxBytes = &localDevice3TxBytes;
+  s_lastActivity = &localLastActivity;
+
   // Adaptive buffering variables
   int bufferIndex = 0;
   unsigned long lastByteTime = 0;
@@ -272,8 +301,6 @@ void uartBridgeTask(void* parameter) {
   unsigned long lastWifiYield = 0;
   unsigned long lastUartLedNotify = 0;
   unsigned long lastUsbLedNotify = 0;
-  unsigned long lastPeriodicStats = 0;
-  unsigned long lastStackCheck = 0;
 
   // Diagnostic counters
   unsigned long droppedBytes = 0;
@@ -313,21 +340,27 @@ void uartBridgeTask(void* parameter) {
     // Timing
     &lastUartLedNotify, &lastUsbLedNotify,
     &lastWifiYield, &lastDropLog,
-    &lastPeriodicStats, &lastStackCheck,
     // Sync
     &device3Mutex,
     // System
     &currentMode, &config, &uartStats
   );
 
+  // Set bridge context for diagnostics
+  setBridgeContext(&ctx);
+
   log_msg("UART Bridge Task started", LOG_INFO);
   log_msg("Device optimization: D2 USB=" + String(device2IsUSB) + ", D2 UART2=" + String(device2IsUART2) + 
           ", D3 Active=" + String(device3Active) + ", D3 Bridge=" + String(device3IsBridge), LOG_DEBUG);
 
+  // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+  // Added to diagnose FIFO overflow issue 
+  //static unsigned long maxProcessTime = 0;
+  //static unsigned long totalProcessTime = 0;
+  //static unsigned long processCount = 0;
+  // ===== END TEMPORARY DIAGNOSTIC CODE =====
+
   while (1) {
-    // Periodic diagnostics
-    updatePeriodicDiagnostics(&ctx, currentMode);
-    
     // Poll Device 2 UART if configured
     if (device2IsUART2 && device2Serial) {
       static_cast<UartDMA*>(device2Serial)->pollEvents();
@@ -338,8 +371,29 @@ void uartBridgeTask(void* parameter) {
       vTaskDelay(pdMS_TO_TICKS(5));
     }
 
-    // Process Device 1 input
+    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+    /*
+    unsigned long processStart = micros();
     processDevice1Input(&ctx);
+    unsigned long processTime = micros() - processStart;
+
+    totalProcessTime += processTime;
+    processCount++;
+    if (processTime > maxProcessTime) {
+        maxProcessTime = processTime;
+    }
+
+    static unsigned long lastProcessLog = 0;
+    if (millis() - lastProcessLog > 5000 && processCount > 0) {
+        log_msg("[TEMP DIAG] processDevice1Input: avg=" + String(totalProcessTime / processCount) + 
+                "us, max=" + String(maxProcessTime) + "us, count=" + String(processCount), LOG_WARNING);
+        maxProcessTime = 0;
+        totalProcessTime = 0;
+        processCount = 0;
+        lastProcessLog = millis();
+    }
+    */
+    // ===== END TEMPORARY DIAGNOSTIC CODE =====
     
     // Process Device 2 based on type
     if (device2IsUSB) {
@@ -356,16 +410,6 @@ void uartBridgeTask(void* parameter) {
     // Handle any remaining data in buffer (timeout-based flush) for USB
     if (device2IsUSB && bufferIndex > 0) {
       handleBufferTimeout(&ctx);
-    }
-
-    // Update shared statistics periodically
-    static unsigned long lastStatsUpdate = 0;
-    if (millis() - lastStatsUpdate > UART_STATS_UPDATE_INTERVAL_MS) {
-      updateSharedStats(localDevice1RxBytes, localDevice1TxBytes,
-                       localDevice2RxBytes, localDevice2TxBytes,
-                       localDevice3RxBytes, localDevice3TxBytes,
-                       localLastActivity);
-      lastStatsUpdate = millis();
     }
 
     // Fixed delay for multi-core systems (always 1ms)

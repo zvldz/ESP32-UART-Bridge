@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "uart_interface.h"
 #include "usb_interface.h"
+#include "scheduler_tasks.h"
 
 // Include generated web content
 #include "generated/web_content.h"
@@ -157,40 +158,13 @@ void webServerTask(void* parameter) {
   log_msg("Web task started on core " + String(xPortGetCoreID()), LOG_DEBUG);
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  // Stack diagnostics timer
-  static unsigned long lastStackCheck = 0;
-
   while (1) {
-    // Stack diagnostics every 5 seconds
-    if (millis() - lastStackCheck > 5000) {
-      UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-      log_msg("Web task: Stack free=" + String(stackFree * 4) +
-              " bytes, Heap free=" + String(ESP.getFreeHeap()) +
-              " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
-      lastStackCheck = millis();
-    }
-
     if (server && !webServerInitialized) {
       log_msg("Server not started", LOG_WARNING);
     } else if (server) {
       server->handleClient();
     }
     vTaskDelay(pdMS_TO_TICKS(5)); // Give other tasks a chance
-
-    if (dnsServer) {
-      // Process DNS only every 50ms instead of every 5ms
-      static unsigned long lastDnsProcess = 0;
-      if (millis() - lastDnsProcess > 50) {
-        dnsServer->processNextRequest();
-        lastDnsProcess = millis();
-      }
-    }
-
-    // Check for WiFi timeout
-    if (checkWiFiTimeout()) {
-      log_msg("WiFi timeout - switching to normal mode", LOG_INFO);
-      ESP.restart();
-    }
   }
 }
 
