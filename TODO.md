@@ -271,7 +271,7 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - Performance preserved with inline functions
   - Ready for future extensions
 
-### v2.5.4 (TaskScheduler Implementation) - Completed ✅ (January 2025)
+### v2.5.4 (TaskScheduler Implementation) - Completed ✅ (July 2025)
 - [x] **Implement TaskScheduler** - Completed
   - Added TaskScheduler library to replace manual timer checks
   - Created `scheduler_tasks.cpp/h` for centralized task management
@@ -285,7 +285,7 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - All tasks properly distributed in time to prevent simultaneous execution
   - Mode-specific task management (Runtime vs Setup modes)
 
-### v2.5.5 (Adaptive Buffer Optimization) - Completed ✅ (January 2025)
+### v2.5.5 (Adaptive Buffer Optimization) - Completed ✅ (July 2025)
 - [x] **Fix FIFO Overflow at 115200 baud** - Completed
   - Identified root cause: increased buffer size (512 bytes) causing USB bottleneck
   - Created graduated buffer sizing for smoother performance:
@@ -306,6 +306,56 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - Removed ~55 lines of duplicated code
   - Added temporary diagnostics (marked for removal after testing)
 
+### v2.5.6 (Bridge Mode Renaming) - Completed ✅ (July 2025)
+- [x] **Rename Device Modes to Bridge Modes** - Completed
+  - Renamed `DeviceMode` enum to `BridgeMode`
+  - Renamed `MODE_NORMAL` to `BRIDGE_STANDALONE`
+  - Renamed `MODE_CONFIG` to `BRIDGE_NET`
+  - Updated all references across 11 source files
+  - Benefits:
+    - Clear separation of bridge functionality vs network state
+    - Future-ready for Device 4 permanent network modes
+    - Better naming that accurately describes functionality
+    - Flexible design supporting different network configurations
+
+- [x] **Update SystemState Structure** - Completed
+  - Renamed `wifiAPActive` to `networkActive`
+  - Renamed `wifiStartTime` to `networkStartTime`
+  - Added `isTemporaryNetwork` flag for future Device 4 support
+  - Allows differentiation between setup AP (temporary) and permanent network modes
+
+- [x] **Update All User-Visible Text** - Completed
+  - Changed "normal mode" to "standalone mode" throughout
+  - Changed "config mode" to "network mode" throughout
+  - Changed "WiFi configuration" to "network setup" where appropriate
+  - Simplified to just "Network Mode" (without "setup") for universal usage
+  - Updated help documentation and web interface
+
+- [x] **Implementation Details** - Completed
+  - Total changes: ~60 occurrences across 11 files
+  - Added critical comment for `_TASK_INLINE` macro in scheduler_tasks.h
+  - All mode checks updated to use new enum values
+  - Function names updated (initNormalMode → initStandaloneMode, etc.)
+  - TaskScheduler functions renamed (enableRuntimeTasks → enableStandaloneTasks)
+  - Network timeout only active when `isTemporaryNetwork=true`
+
+### v2.5.7 (Device Init Refactoring) - Completed ✅ (July 2025)
+- [x] **Refactor Device Initialization** - Completed
+  - Migrated `uartbridge_init()` from `uartbridge.cpp` to `device_init.cpp`
+  - Renamed `uartbridge_init()` to `initMainUART()` for consistency
+  - Migrated `initDevices()` from `main.cpp` to `device_init.cpp`
+  - Updated all function calls in `main.cpp` (2 occurrences)
+  - Removed function declarations from original locations
+  - Benefits:
+    - Better code organization with all device init functions in one module
+    - Consistent naming convention for initialization functions
+    - Reduced file sizes: uartbridge.cpp (~55 lines), main.cpp (~30 lines)
+  - Technical details:
+    - Added necessary includes: `usb_interface.h`, `flow_control.h`, `freertos/semphr.h`
+    - Made `g_usbInterface` global (was static) for cross-module access
+    - Added `diagnostics.h` include for helper functions
+    - Total lines moved: ~85 lines to device_init module
+
 ## Current Status
 
 The project now uses a full ESP-IDF approach for all UART operations:
@@ -315,18 +365,6 @@ The project now uses a full ESP-IDF approach for all UART operations:
 - **USB Device**: Arduino Serial (proven stable) ✅
 - **USB Host**: ESP-IDF implementation ✅
 - **UART Logger**: ESP-IDF with DMA polling mode ✅
-
-Version 2.5.5 includes:
-- Complete ESP-IDF migration for all UART devices
-- Hardware DMA with packet boundary detection
-- Optimized adaptive buffer sizing based on baud rate
-- Zero packet loss under normal conditions
-- Minimal CPU usage and excellent performance up to 1Mbps
-- Modular web interface with separated JavaScript files
-- Safe OTA updates with Device 3 handling
-- **TaskScheduler for all periodic tasks**
-- **Optimized buffer sizes for different baud rates**
-- Clean modular architecture with specialized headers
 
 ## Priority 2 - Next Phase
 
@@ -352,6 +390,26 @@ Version 2.5.5 includes:
     - Add to hybrid refactoring structure
     - Support both client and server modes
     - Configure via web interface (target IP, port)
+
+- [ ] **Hardware Packet Detection Improvements**
+  - Current: Fixed 10 character timeout for idle detection
+  - Improvements:
+    - **Dynamic timeout based on protocol hints**:
+      - MAVLink: 5 character periods (tighter packets)
+      - Modbus RTU: 35 character periods (3.5 char standard)
+      - NMEA: Pattern detection on '\n' character
+      - Default: Current 10 character periods
+    - **Pattern detection for text protocols**:
+      - Use `uart_enable_pattern_det_baud_intr()` for line endings
+      - Combine with idle timeout for robust detection
+    - **Adaptive timeout adjustment**:
+      - Monitor packet statistics
+      - Adjust `rx_timeout_thresh` based on observed patterns
+      - Could improve latency for specific protocols
+    - **FIFO threshold optimization**:
+      - Set `rxfifo_full_thresh` for large packet handling
+      - Reduce latency for bulk transfers
+  - Implementation in `uart_dma.cpp` configuration
 
 - [ ] **Fix Memory Leaks** *(Low priority - objects live for entire runtime)*
   - Add cleanup/shutdown functions for Device 2 and Device 3
@@ -486,3 +544,4 @@ lib_deps =
 - Web interface modularization improves maintainability and development workflow
 - TaskScheduler implementation significantly simplifies periodic task management
 - Library selection focuses on well-maintained, performance-oriented solutions
+- Bridge mode renaming provides clearer architecture for future expansion

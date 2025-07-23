@@ -1,26 +1,24 @@
 #ifndef SCHEDULER_TASKS_H
 #define SCHEDULER_TASKS_H
 
-#define _TASK_INLINE inline  // Force inline to avoid multiple definitions
+// CRITICAL: DO NOT REMOVE - Required for TaskScheduler to avoid multiple definition errors
+#define _TASK_INLINE inline
+
 #include <TaskScheduler.h>
 
-// Global scheduler
+// Global scheduler instance
 extern Scheduler taskScheduler;
 
-// Initialize all tasks
+// Initialize the task scheduler
 void initializeScheduler();
 
-// Mode control
-void enableRuntimeTasks();      // Enable tasks for normal/bridge mode
-void enableSetupTasks();        // Enable tasks for WiFi config mode
+// Task control functions
+void enableStandaloneTasks();      // Enable tasks for standalone mode
+void enableNetworkTasks(bool temporaryNetwork);  // Enable tasks for network mode
 void disableAllTasks();
 
 // WiFi timeout control
 void startWiFiTimeout();
 void cancelWiFiTimeout();
-
-// Statistics update functions (implemented in other files)
-extern void updateMainStats();     // Implemented in uartbridge.cpp
-extern void updateDevice3Stats();  // Implemented in uartbridge.cpp
 
 #endif // SCHEDULER_TASKS_H

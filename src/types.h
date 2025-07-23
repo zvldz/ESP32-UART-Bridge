@@ -6,17 +6,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-// Device modes
+// Bridge modes
 typedef enum {
-  MODE_NORMAL,
-  MODE_CONFIG
-} DeviceMode;
+  BRIDGE_STANDALONE,  // Standalone UART bridge mode
+  BRIDGE_NET         // Network setup mode
+} BridgeMode;
 
 // LED modes
 typedef enum {
   LED_MODE_OFF,
-  LED_MODE_WIFI_ON,      // Constantly ON in WiFi config mode
-  LED_MODE_DATA_FLASH    // Flash on data activity in normal mode
+  LED_MODE_WIFI_ON,      // Constantly ON in network setup mode
+  LED_MODE_DATA_FLASH    // Flash on data activity in standalone mode
 } LedMode;
 
 // USB operation modes
@@ -122,8 +122,9 @@ typedef struct {
 
 // System state
 typedef struct {
-  bool wifiAPActive;
-  unsigned long wifiStartTime;
+  bool networkActive;              // Network mode is active
+  bool isTemporaryNetwork;         // True for setup AP, false for permanent network
+  unsigned long networkStartTime;  // When network mode started
   volatile int clickCount;
   volatile unsigned long lastClickTime;
   volatile bool buttonPressed;
@@ -216,7 +217,7 @@ struct BridgeContext {
     
     // Current mode and configuration
     struct {
-        DeviceMode* currentMode;
+        BridgeMode* bridgeMode;  // Current bridge operation mode
         Config* config;
         UartStats* globalStats;
     } system;
@@ -247,7 +248,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     // Sync
     SemaphoreHandle_t* device3Mutex,
     // System
-    DeviceMode* currentMode, Config* config, UartStats* globalStats)
+    BridgeMode* bridgeMode, Config* config, UartStats* globalStats)
 {
     // Statistics
     ctx->stats.device1RxBytes = device1RxBytes;
@@ -296,7 +297,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->sync.device3Mutex = device3Mutex;
     
     // System
-    ctx->system.currentMode = currentMode;
+    ctx->system.bridgeMode = bridgeMode;
     ctx->system.config = config;
     ctx->system.globalStats = globalStats;
 }

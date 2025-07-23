@@ -5,8 +5,7 @@
 #include "usb_interface.h"
 #include "uart_interface.h"
 
-// UART bridge interface - always uses UartInterface
-void uartbridge_init(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb);
+// UART bridge task function
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
 
 // Device 3 task

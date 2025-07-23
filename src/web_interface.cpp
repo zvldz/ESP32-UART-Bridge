@@ -31,7 +31,7 @@ SemaphoreHandle_t webServerReadySemaphore = nullptr;
 extern Config config;
 extern UartStats uartStats;
 extern SystemState systemState;
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 extern Preferences preferences;
 extern UsbInterface* usbInterface;
 
@@ -65,9 +65,9 @@ String processTemplate(const String& html, std::function<String(const String&)> 
     return result;
 }
 
-// Initialize web server in CONFIG mode
+// Initialize web server in NETWORK mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
-  log_msg("Starting WiFi Configuration Mode", LOG_INFO);
+  log_msg("Starting Network Mode", LOG_INFO);
 
   // Temporarily pause USB operations if Device 2 is using USB
   // This helps prevent brownout during WiFi initialization power spike
@@ -79,8 +79,9 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
     usbWasPaused = true;
   }
 
-  state->wifiAPActive = true;
-  state->wifiStartTime = millis();
+  state->networkActive = true;
+  state->networkStartTime = millis();
+  state->isTemporaryNetwork = true;  // Setup AP is temporary
 
   // Start WiFi Access Point
   WiFi.mode(WIFI_AP);
@@ -184,7 +185,9 @@ void webserver_cleanup() {
 
 // Check WiFi timeout
 bool checkWiFiTimeout() {
-  if (systemState.wifiAPActive && (millis() - systemState.wifiStartTime > WIFI_TIMEOUT)) {
+  if (systemState.networkActive && 
+      systemState.isTemporaryNetwork &&
+      (millis() - systemState.networkStartTime > WIFI_TIMEOUT)) {
     return true;
   }
   return false;

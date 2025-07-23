@@ -1,17 +1,79 @@
 #include "device_init.h"
 #include "uart_dma.h"
 #include "uart_interface.h"
+#include "usb_interface.h"
+#include "flow_control.h"
+#include "diagnostics.h"
 #include "defines.h"
 #include "logging.h"
 #include "config.h"
 #include "types.h"
+#include <freertos/semphr.h>
 
 // External objects from main.cpp
 extern Config config;
+extern FlowControlStatus flowControlStatus;
 
 // External objects from uartbridge.cpp
 extern UartInterface* device2Serial;
 extern UartInterface* device3Serial;
+extern SemaphoreHandle_t device3Mutex;
+
+// Global variable for USB interface (used in uartbridge.cpp)
+UsbInterface* g_usbInterface = nullptr;
+
+// Initialize main UART bridge (Device 1)
+void initMainUART(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb) {
+  // Store USB interface pointer
+  g_usbInterface = usb;
+  
+  // Configure UART with loaded settings
+  pinMode(UART_RX_PIN, INPUT_PULLUP);
+
+  // Create UartConfig from global Config
+  UartConfig uartCfg = {
+    .baudrate = config->baudrate,
+    .databits = config->databits,
+    .parity = config->parity,
+    .stopbits = config->stopbits,
+    .flowcontrol = config->flowcontrol
+  };
+
+  // Initialize serial port with full configuration
+  serial->begin(uartCfg, UART_RX_PIN, UART_TX_PIN);
+
+  // Log configuration
+  log_msg("UART configured: " + String(config->baudrate) + " baud, " +
+          word_length_to_string(config->databits) + 
+          parity_to_string(config->parity)[0] +  // First char only
+          stop_bits_to_string(config->stopbits), LOG_INFO);
+
+  log_msg("Using DMA-accelerated UART", LOG_INFO);
+
+  // Detect flow control if enabled
+  if (config->flowcontrol) {
+    pinMode(CTS_PIN, INPUT_PULLUP);
+    detectFlowControl();
+  } else {
+    pinMode(CTS_PIN, INPUT_PULLUP);
+    pinMode(RTS_PIN, INPUT_PULLUP);
+  }
+  
+  // Initialize Device 2 if configured
+  if (config->device2.role == D2_UART2) {
+    initDevice2UART();
+  }
+  
+  // Initialize Device 3 if configured
+  if (config->device3.role != D3_NONE && config->device3.role != D3_UART3_LOG) {
+    initDevice3(config->device3.role);
+  }
+  
+  // Create mutex for Device 3 operations
+  if (device3Mutex == nullptr) {
+    device3Mutex = xSemaphoreCreateMutex();
+  }
+}
 
 // Initialize Device 2 as Secondary UART
 void initDevice2UART() {
@@ -83,4 +145,36 @@ void initDevice3(uint8_t role) {
   } else {
     log_msg("Failed to create Device 3 UART", LOG_ERROR);
   }
+}
+
+// Initialize and log device configuration
+void initDevices() {
+  // Log device configuration using helper functions
+  log_msg("Device configuration:", LOG_INFO);
+  log_msg("- Device 1: Main UART Bridge (always enabled)", LOG_INFO);
+  
+  // Device 2 with role name
+  String d2Info = "- Device 2: " + String(getDevice2RoleName(config.device2.role));
+  if (config.device2.role == D2_USB) {
+    d2Info += " (" + String(config.usb_mode == USB_MODE_HOST ? "Host" : "Device") + " mode)";
+  }
+  log_msg(d2Info, LOG_INFO);
+  
+  // Device 3 with role name
+  log_msg("- Device 3: " + String(getDevice3RoleName(config.device3.role)), LOG_INFO);
+  
+  // Device 4
+  log_msg("- Device 4: " + String(config.device4.role == D4_NONE ? "Disabled" : "Future feature"), LOG_INFO);
+  
+  // Initialize UART logger if Device 3 is configured for logging
+  if (config.device3.role == D3_UART3_LOG) {
+    logging_init_uart();
+  }
+  
+  // Log logging configuration
+  log_msg("Logging configuration:", LOG_INFO);
+  log_msg("- Web logs: " + String(getLogLevelName(config.log_level_web)), LOG_INFO);
+  log_msg("- UART logs: " + String(getLogLevelName(config.log_level_uart)) + 
+          (config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)"), LOG_INFO);
+  log_msg("- Network logs: " + String(getLogLevelName(config.log_level_network)) + " (future)", LOG_INFO);
 }

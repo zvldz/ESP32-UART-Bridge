@@ -14,6 +14,7 @@
 #include "diagnostics.h"
 #include "system_utils.h"
 #include "scheduler_tasks.h"
+#include "device_init.h"
 
 // DMA support - always enabled
 #include "uart_interface.h"
@@ -23,7 +24,7 @@
 Config config;
 UartStats uartStats = {0};
 SystemState systemState = {0};
-DeviceMode currentMode = MODE_NORMAL;
+BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
 FlowControlStatus flowControlStatus = {false, false};
 
@@ -51,13 +52,12 @@ portMUX_TYPE statsMux = portMUX_INITIALIZER_UNLOCKED;
 // Function declarations
 void initPins();
 void detectMode();
-void initNormalMode();
-void initConfigMode();
+void initStandaloneMode();
+void initNetworkMode();
 void bootButtonISR();
 void createMutexes();
 void createTasks();
 void handleButtonInput();
-void initDevices();
 
 // Helper functions for device role names
 const char* getDevice2RoleName(uint8_t role);
@@ -144,25 +144,25 @@ void setup() {
   // Detect boot mode
   log_msg("Detecting boot mode...", LOG_INFO);
   detectMode();
-  log_msg("Mode detected: " + String(currentMode == MODE_NORMAL ? "Normal" : "Config"), LOG_INFO);
+  log_msg("Mode detected: " + String(bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network"), LOG_INFO);
 
   // Initialize TaskScheduler
   initializeScheduler();
 
   // Mode-specific initialization
-  if (currentMode == MODE_NORMAL) {
-    log_msg("Starting normal mode - UART bridge active", LOG_INFO);
-    log_msg("Use triple-click BOOT to enter config mode", LOG_INFO);
+  if (bridgeMode == BRIDGE_STANDALONE) {
+    log_msg("Starting standalone mode - UART bridge active", LOG_INFO);
+    log_msg("Use triple-click BOOT to enter network setup mode", LOG_INFO);
     log_msg("Blue LED will flash on data activity", LOG_INFO);
-    initNormalMode();
+    initStandaloneMode();
     // Enable mode-specific tasks
-    enableRuntimeTasks();
-  } else if (currentMode == MODE_CONFIG) {
-    log_msg("Starting WiFi config mode...", LOG_INFO);
-    log_msg("Purple LED will stay ON during WiFi config mode", LOG_INFO);
-    initConfigMode();
+    enableStandaloneTasks();
+  } else if (bridgeMode == BRIDGE_NET) {
+    log_msg("Starting network mode...", LOG_INFO);
+    log_msg("Purple LED will stay ON during network mode", LOG_INFO);
+    initNetworkMode();
     // Enable mode-specific tasks
-    enableSetupTasks();
+    enableNetworkTasks(systemState.isTemporaryNetwork);
   }
 
   // Create FreeRTOS tasks
@@ -205,12 +205,13 @@ void detectMode() {
   preferences.end();
 
   if (wifiModeRequested) {
-    log_msg("WiFi mode requested via preferences - entering config mode", LOG_INFO);
+    log_msg("WiFi mode requested via preferences - entering network mode", LOG_INFO);
     // Clear the flag
     preferences.begin("uartbridge", false);
     preferences.putBool("wifi_mode", false);
     preferences.end();
-    currentMode = MODE_CONFIG;
+    bridgeMode = BRIDGE_NET;
+    systemState.isTemporaryNetwork = true;  // Setup AP is temporary
     return;
   }
 
@@ -219,23 +220,24 @@ void detectMode() {
   // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode
   // and this code won't run at all.
 
-  // Check for triple click (config mode)
+  // Check for triple click (network mode)
   log_msg("Waiting for potential clicks...", LOG_DEBUG);
   vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
   log_msg("Final click count: " + String(systemState.clickCount), LOG_DEBUG);
 
   if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS) {
-    log_msg("Triple click detected - entering config mode", LOG_INFO);
-    currentMode = MODE_CONFIG;
+    log_msg("Triple click detected - entering network mode", LOG_INFO);
+    bridgeMode = BRIDGE_NET;
+    systemState.isTemporaryNetwork = true;  // Setup AP is temporary
     systemState.clickCount = 0;
     return;
   }
 
-  log_msg("Entering normal mode", LOG_INFO);
-  currentMode = MODE_NORMAL;
+  log_msg("Entering standalone mode", LOG_INFO);
+  bridgeMode = BRIDGE_STANDALONE;
 }
 
-void initNormalMode() {
+void initStandaloneMode() {
   // Set LED mode for data flash explicitly
   led_set_mode(LED_MODE_DATA_FLASH);
 
@@ -278,13 +280,13 @@ void initNormalMode() {
   }
 
   // Initialize UART bridge
-  uartbridge_init(uartBridgeSerial, &config, &uartStats, usbInterface);
+  initMainUART(uartBridgeSerial, &config, &uartStats, usbInterface);
 
   log_msg("UART Bridge ready - transparent forwarding active", LOG_INFO);
 }
 
-void initConfigMode() {
-  // Set LED mode for WiFi config
+void initNetworkMode() {
+  // Set LED mode for network setup
   led_set_mode(LED_MODE_WIFI_ON);
 
   // Use configured USB mode (from config file) - only if Device 2 is USB
@@ -294,73 +296,42 @@ void initConfigMode() {
   if (!uartBridgeSerialDMA) {
     uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
     uartBridgeSerial = uartBridgeSerialDMA;
-    log_msg("UART DMA interface created for config mode", LOG_INFO);
+    log_msg("UART DMA interface created for network mode", LOG_INFO);
   }
 
-  // Create USB interface even in config mode (for bridge functionality)
+  // Create USB interface even in network mode (for bridge functionality)
   if (config.device2.role == D2_USB) {
     switch(config.usb_mode) {
       case USB_MODE_HOST:
-        log_msg("Creating USB Host interface in WiFi mode", LOG_INFO);
+        log_msg("Creating USB Host interface in network mode", LOG_INFO);
         usbInterface = createUsbHost(config.baudrate);
         break;
       case USB_MODE_AUTO:
-        log_msg("Creating USB Auto-detect interface in WiFi mode", LOG_INFO);
+        log_msg("Creating USB Auto-detect interface in network mode", LOG_INFO);
         usbInterface = createUsbAuto(config.baudrate);
         break;
       case USB_MODE_DEVICE:
       default:
-        log_msg("Creating USB Device interface in WiFi mode", LOG_INFO);
+        log_msg("Creating USB Device interface in network mode", LOG_INFO);
         usbInterface = createUsbDevice(config.baudrate);
         break;
     }
     
     if (usbInterface) {
       usbInterface->init();
-      log_msg("USB interface initialized in WiFi mode", LOG_INFO);
+      log_msg("USB interface initialized in network mode", LOG_INFO);
     } else {
-      log_msg("Failed to create USB interface in WiFi mode", LOG_ERROR);
+      log_msg("Failed to create USB interface in network mode", LOG_ERROR);
     }
   } else {
-    log_msg("Device 2 is not configured for USB in WiFi mode", LOG_INFO);
+    log_msg("Device 2 is not configured for USB in network mode", LOG_INFO);
   }
 
-  // Initialize UART bridge even in config mode (for statistics)
-  uartbridge_init(uartBridgeSerial, &config, &uartStats, usbInterface);
+  // Initialize UART bridge even in network mode (for statistics)
+  initMainUART(uartBridgeSerial, &config, &uartStats, usbInterface);
 
   // Initialize web server
   webserver_init(&config, &uartStats, &systemState);
-}
-
-void initDevices() {
-  // Log device configuration using helper functions
-  log_msg("Device configuration:", LOG_INFO);
-  log_msg("- Device 1: Main UART Bridge (always enabled)", LOG_INFO);
-  
-  // Device 2 with role name
-  String d2Info = "- Device 2: " + String(getDevice2RoleName(config.device2.role));
-  if (config.device2.role == D2_USB) {
-    d2Info += " (" + String(config.usb_mode == USB_MODE_HOST ? "Host" : "Device") + " mode)";
-  }
-  log_msg(d2Info, LOG_INFO);
-  
-  // Device 3 with role name
-  log_msg("- Device 3: " + String(getDevice3RoleName(config.device3.role)), LOG_INFO);
-  
-  // Device 4
-  log_msg("- Device 4: " + String(config.device4.role == D4_NONE ? "Disabled" : "Future feature"), LOG_INFO);
-  
-  // Initialize UART logger if Device 3 is configured for logging
-  if (config.device3.role == D3_UART3_LOG) {
-    logging_init_uart();
-  }
-  
-  // Log logging configuration
-  log_msg("Logging configuration:", LOG_INFO);
-  log_msg("- Web logs: " + String(getLogLevelName(config.log_level_web)), LOG_INFO);
-  log_msg("- UART logs: " + String(getLogLevelName(config.log_level_uart)) + 
-          (config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)"), LOG_INFO);
-  log_msg("- Network logs: " + String(getLogLevelName(config.log_level_network)) + " (future)", LOG_INFO);
 }
 
 //================================================================
@@ -387,7 +358,7 @@ void handleButtonInput() {
   }
 
   // Update LED feedback only when click count changes
-  if (currentMode == MODE_NORMAL && systemState.clickCount != lastLedClickCount) {
+  if (bridgeMode == BRIDGE_STANDALONE && systemState.clickCount != lastLedClickCount) {
     if (systemState.clickCount > 0) {
       led_blink_click_feedback(systemState.clickCount);
     }
@@ -442,8 +413,8 @@ void handleButtonInput() {
       log_msg("Click registered, count: " + String(systemState.clickCount), LOG_DEBUG);
 
       // Check for triple click
-      if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS && currentMode == MODE_NORMAL) {
-        log_msg("*** TRIPLE CLICK DETECTED! Activating WiFi Config Mode ***", LOG_INFO);
+      if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS && bridgeMode == BRIDGE_STANDALONE) {
+        log_msg("*** TRIPLE CLICK DETECTED! Activating Network Mode ***", LOG_INFO);
         log_msg("*** Setting WiFi mode flag and restarting ***", LOG_INFO);
 
         preferences.begin("uartbridge", false);
@@ -517,8 +488,8 @@ void createTasks() {
             " for " + String(config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge") + " mode", LOG_INFO);
   }
 
-  // Create web server task only in CONFIG mode on core 1
-  if (currentMode == MODE_CONFIG) {
+  // Create web server task only in NETWORK mode on core 1
+  if (bridgeMode == BRIDGE_NET) {
     xTaskCreatePinnedToCore(
       webServerTask,         // Task function
       "Web_Server_Task",     // Task name

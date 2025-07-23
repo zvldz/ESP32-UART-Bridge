@@ -8,13 +8,11 @@
 // Logging configuration structure
 struct LogConfig {
     // Channel enable flags
-    bool serialEnabled = true;     // Temporary, will be removed after Priority 1
     bool webEnabled = true;        // Always enabled for web interface
     bool uartEnabled = false;      // Device 3 - GPIO 11/12
     bool networkEnabled = false;   // Device 4 - UDP
     
     // Log levels for each channel
-    LogLevel serialLevel = LOG_INFO;    // Temporary for compatibility
     LogLevel webLevel = LOG_DEBUG;      // Web shows everything
     LogLevel uartLevel = LOG_DEBUG;     // UART logger - most verbose
     LogLevel networkLevel = LOG_ERROR;  // Network - minimal traffic
