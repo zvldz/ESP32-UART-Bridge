@@ -19,8 +19,8 @@ extern int device3RxHead;
 extern int device3RxTail;
 
 // Check if we should yield to WiFi task
-static inline bool shouldYieldToWiFi(BridgeContext* ctx, DeviceMode mode) {
-    if (mode == MODE_CONFIG && millis() - *ctx->timing.lastWifiYield > 50) {
+static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
+    if (mode == BRIDGE_NET && millis() - *ctx->timing.lastWifiYield > 50) {
         *ctx->timing.lastWifiYield = millis();
         return true;
     }
@@ -36,7 +36,7 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     
     while (ctx->interfaces.uartBridgeSerial->available()) {
         // Notify LED with rate limiting
-        if (*ctx->system.currentMode == MODE_NORMAL && 
+        if (*ctx->system.bridgeMode == BRIDGE_STANDALONE && 
             millis() - *ctx->timing.lastUartLedNotify > LED_NOTIFY_INTERVAL) {
             led_notify_uart_rx();
             *ctx->timing.lastUartLedNotify = millis();
@@ -107,7 +107,7 @@ static inline void processDevice2USB(BridgeContext* ctx) {
     
     while (ctx->interfaces.usbInterface->available() && bytesRead < maxBytesPerLoop) {
         // Notify LED with rate limiting
-        if (*ctx->system.currentMode == MODE_NORMAL && 
+        if (*ctx->system.bridgeMode == BRIDGE_STANDALONE && 
             millis() - *ctx->timing.lastUsbLedNotify > LED_NOTIFY_INTERVAL) {
             led_notify_usb_rx();
             *ctx->timing.lastUsbLedNotify = millis();

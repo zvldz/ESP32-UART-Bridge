@@ -161,10 +161,12 @@ static inline void handleBufferTimeout(BridgeContext* ctx) {
 
 // Process adaptive buffering for a single byte
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, unsigned long currentTime) {
-    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+    // ===== TEMPORARY DIAGNOSTIC CODE =====
     // Added to diagnose FIFO overflow issue
-    //static unsigned long delayCount = 0;
-    //static unsigned long lastDelayLog = 0;
+    /*
+    static unsigned long delayCount = 0;
+    static unsigned long lastDelayLog = 0;
+    */
     // ===== END TEMPORARY DIAGNOSTIC CODE =====
     
     // Start buffer timing on first byte
@@ -196,13 +198,15 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, u
         transmitAdaptiveBuffer(ctx);
     }
     
-    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
-    //if (millis() - lastDelayLog > 5000 && delayCount > 0) {
-    //    log_msg("[TEMP DIAG] Adaptive delays: " + String(delayCount) + 
-    //            " times (50us each = " + String(delayCount * 50 / 1000) + "ms total)", LOG_WARNING);
-    //    delayCount = 0;
-    //    lastDelayLog = millis();
-    //}
+    // ===== TEMPORARY DIAGNOSTIC CODE =====
+    /*
+    if (millis() - lastDelayLog > 5000 && delayCount > 0) {
+        log_msg("[TEMP DIAG] Adaptive delays: " + String(delayCount) + 
+                " times (50us each = " + String(delayCount * 50 / 1000) + "ms total)", LOG_WARNING);
+        delayCount = 0;
+        lastDelayLog = millis();
+    }
+    */
     // ===== END TEMPORARY DIAGNOSTIC CODE =====
 }
 

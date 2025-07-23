@@ -17,14 +17,14 @@
 #include "uart_dma.h"
 
 // External objects from main.cpp
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 extern Config config;
 extern UartStats uartStats;
 extern FlowControlStatus flowControlStatus;
 extern UartInterface* uartBridgeSerial;
 
-// USB interface pointer (set by uartbridge_init)
-static UsbInterface* g_usbInterface = nullptr;
+// External USB interface pointer from device_init.cpp
+extern UsbInterface* g_usbInterface;
 
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
@@ -42,7 +42,7 @@ int device3RxHead = 0;
 int device3RxTail = 0;
 
 // Mutex for Device 3 buffer access
-static SemaphoreHandle_t device3Mutex = nullptr;
+SemaphoreHandle_t device3Mutex = nullptr;
 
 // Static variables for stats functions
 static unsigned long* s_device1RxBytes = nullptr;
@@ -66,59 +66,6 @@ void updateMainStats() {
 void updateDevice3Stats() {
     // This function is called from TaskScheduler for Device 3 stats
     // The actual update happens in device3Task() itself
-}
-
-// Initialize UART bridge - always uses UartInterface
-void uartbridge_init(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb) {
-  // Store USB interface pointer
-  g_usbInterface = usb;
-  
-  // Configure UART with loaded settings
-  pinMode(UART_RX_PIN, INPUT_PULLUP);
-
-  // Create UartConfig from global Config
-  UartConfig uartCfg = {
-    .baudrate = config->baudrate,
-    .databits = config->databits,
-    .parity = config->parity,
-    .stopbits = config->stopbits,
-    .flowcontrol = config->flowcontrol
-  };
-
-  // Initialize serial port with full configuration
-  serial->begin(uartCfg, UART_RX_PIN, UART_TX_PIN);
-
-  // Log configuration
-  log_msg("UART configured: " + String(config->baudrate) + " baud, " +
-          word_length_to_string(config->databits) + 
-          parity_to_string(config->parity)[0] +  // First char only
-          stop_bits_to_string(config->stopbits), LOG_INFO);
-
-  log_msg("Using DMA-accelerated UART", LOG_INFO);
-
-  // Detect flow control if enabled
-  if (config->flowcontrol) {
-    pinMode(CTS_PIN, INPUT_PULLUP);
-    detectFlowControl();
-  } else {
-    pinMode(CTS_PIN, INPUT_PULLUP);
-    pinMode(RTS_PIN, INPUT_PULLUP);
-  }
-  
-  // Initialize Device 2 if configured
-  if (config->device2.role == D2_UART2) {
-    initDevice2UART();
-  }
-  
-  // Initialize Device 3 if configured
-  if (config->device3.role != D3_NONE && config->device3.role != D3_UART3_LOG) {
-    initDevice3(config->device3.role);
-  }
-  
-  // Create mutex for Device 3 operations
-  if (device3Mutex == nullptr) {
-    device3Mutex = xSemaphoreCreateMutex();
-  }
 }
 
 // Device 3 Task - runs on Core 0 with UART task
@@ -343,7 +290,7 @@ void uartBridgeTask(void* parameter) {
     // Sync
     &device3Mutex,
     // System
-    &currentMode, &config, &uartStats
+    &bridgeMode, &config, &uartStats
   );
 
   // Set bridge context for diagnostics
@@ -353,11 +300,13 @@ void uartBridgeTask(void* parameter) {
   log_msg("Device optimization: D2 USB=" + String(device2IsUSB) + ", D2 UART2=" + String(device2IsUART2) + 
           ", D3 Active=" + String(device3Active) + ", D3 Bridge=" + String(device3IsBridge), LOG_DEBUG);
 
-  // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+  // ===== TEMPORARY DIAGNOSTIC CODE =====
   // Added to diagnose FIFO overflow issue 
-  //static unsigned long maxProcessTime = 0;
-  //static unsigned long totalProcessTime = 0;
-  //static unsigned long processCount = 0;
+  /*
+  static unsigned long maxProcessTime = 0;
+  static unsigned long totalProcessTime = 0;
+  static unsigned long processCount = 0;
+  */
   // ===== END TEMPORARY DIAGNOSTIC CODE =====
 
   while (1) {
@@ -366,15 +315,21 @@ void uartBridgeTask(void* parameter) {
       static_cast<UartDMA*>(device2Serial)->pollEvents();
     }
 
-    // Yield CPU time to WiFi stack periodically in config mode
-    if (shouldYieldToWiFi(&ctx, currentMode)) {
+    // Yield CPU time to WiFi stack periodically in network mode
+    if (shouldYieldToWiFi(&ctx, bridgeMode)) {
       vTaskDelay(pdMS_TO_TICKS(5));
     }
 
-    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+    // ===== TEMPORARY DIAGNOSTIC CODE =====
     /*
     unsigned long processStart = micros();
+    */
+    // ===== END TEMPORARY DIAGNOSTIC CODE =====
+
     processDevice1Input(&ctx);
+
+    // ===== TEMPORARY DIAGNOSTIC CODE =====
+    /*    
     unsigned long processTime = micros() - processStart;
 
     totalProcessTime += processTime;

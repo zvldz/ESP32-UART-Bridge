@@ -16,7 +16,7 @@
 extern Config config;
 extern UartStats uartStats;
 extern SystemState systemState;
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
 
 // Helper function to safely read protected unsigned long value using critical sections

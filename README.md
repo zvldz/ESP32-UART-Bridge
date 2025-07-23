@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.5.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.5.6-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -14,15 +14,15 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
 - **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
-- **Adaptive Buffering**: Automatically adjusts based on data patterns and timing
-  - Binary protocols (MAVLink, Modbus RTU): Time-based packet detection
-  - Stream protocols: Minimal latency mode
+- **Adaptive Buffering**: Automatically adjusts based on baud rate and inter-byte timing
+  - Uses configurable timeout thresholds (200μs/1ms/5ms/15ms)
+  - Groups bytes into packets based on inter-byte gaps
 - **Dynamic Buffer Sizing**: Automatically adjusts buffer size based on baud rate (256-2048 bytes)
 - **USB Host/Device Modes**: 
   - Device mode: Connect ESP32 to PC as USB serial device
   - Host mode: Connect USB modems or serial adapters to ESP32
   - Configurable via web interface
-- **High Performance**: Hardware packet detection and event-driven architecture (Device 1)
+- **High Performance**: Hardware packet detection (UART idle timeout) and event-driven architecture (Device 1)
 - **Web Configuration**: Easy setup via WiFi access point
 - **Visual Feedback**: RGB LED shows data flow direction and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
@@ -138,7 +138,7 @@ ESP32 acts as USB host for serial devices:
 (Some boards have protection diodes that allow dual power, but verify your board's schematic first. Use at your own risk!)
 
 ### Changing Settings
-To enter WiFi configuration mode and change settings (including USB mode):
+To enter network mode and change settings (including USB mode):
 - Power ONLY via USB-C (disconnect external power)
 - OR power ONLY via external pins (disconnect USB-C)
 - The USB mode setting doesn't matter for configuration
@@ -162,7 +162,7 @@ The web interface allows configuration of:
 | Blue | Flash | Data from device (UART RX) |
 | Green | Flash | Data from computer (USB RX) |
 | Cyan | Flash | Bidirectional data transfer |
-| Purple | Solid | WiFi configuration mode |
+| Purple | Solid | Network mode |
 | Purple | Rapid blink | WiFi reset confirmation |
 | White | Blinks | Button click feedback |
 | Rainbow | 1 second | Boot sequence |
@@ -170,7 +170,7 @@ The web interface allows configuration of:
 
 ## Button Functions
 
-- **Triple-click**: Enter WiFi configuration mode
+- **Triple-click**: Enter network mode
 - **Hold 5+ seconds**: Reset WiFi to defaults (SSID: ESP-Bridge, Password: 12345678)
 - **Hold during power-on**: Enter bootloader mode for firmware flashing
 
@@ -216,47 +216,55 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 - **MAVLink devices**: Ensure baud rate matches autopilot settings (typically 57600 or 115200)
 - **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud
 - **AT command modems**: May require specific line endings (CR, LF, or CR+LF)
-- **Modbus RTU**: Requires precise inter-frame timing (automatically handled)
+- **Modbus RTU**: Uses strict timing requirements - the bridge's timeout-based buffering may work at some baud rates but is not specifically optimized for Modbus
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | No data activity | Check TX/RX connections, verify baud rate matches device |
-| LED solid purple | Device is in WiFi config mode - connect to "ESP-Bridge" network |
+| LED solid purple | Device is in network mode - connect to "ESP-Bridge" network |
 | Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
 | Connection drops | Enable flow control if supported by device |
 | USB device not recognized | In Host mode, only CDC devices are supported |
 | Application can't connect | Check USB cable, try different COM port settings |
 | Connection resets repeatedly | Application toggling DTR/RTS - disable hardware flow control |
-| Partial or corrupted data | Protocol timing requirements - try different buffer modes |
+| Partial or corrupted data | Check baud rate settings, verify wire quality and grounding |
 
 ## Performance Notes
 
-The bridge features DMA-accelerated UART communication with intelligent adaptive buffering that automatically detects and optimizes for your protocol:
+The bridge features DMA-accelerated UART communication with adaptive buffering based on baud rate:
 
-**Binary/Packet Protocols:**
-- MAVLink: Hardware packet boundary detection for efficient telemetry and parameter transfer
-- Modbus RTU: Maintains critical 3.5 character silence periods
-- Custom binary: Learns packet patterns automatically
+**What it actually does:**
+- Uses hardware DMA for efficient data transfer without CPU involvement
+- Dynamically adjusts buffer size based on baud rate (256-2048 bytes)
+- Implements time-based packet detection using inter-byte gaps
+- Works with any UART protocol without protocol-specific knowledge
 
-**Text/Line Protocols:**
-- NMEA sentences: Buffers complete lines ($GPGGA...*checksum)
-- AT commands: Optimizes for command/response patterns
-- Debug output: Preserves line endings
+**Buffer sizing:**
+- ≤19200 baud: 256 bytes
+- 115200 baud: 288 bytes (optimized to reduce USB bottlenecks)
+- 230400 baud: 768 bytes
+- 460800 baud: 1024 bytes
+- ≥921600 baud: 2048 bytes
 
-**Technical Details:**
+**Technical implementation:**
 - ESP-IDF native drivers with hardware DMA
-- Dynamic buffer allocation (256-2048 bytes based on baud rate)
-- Zero-copy ring buffers (16KB for main UART)
-- Hardware packet timeout detection
-- Event-driven architecture for minimal latency
+- Hardware idle detection (10 character periods timeout)
+- Event-driven architecture for Device 1 (main UART)
+- Polling mode for Device 2/3 (secondary channels)
+- Zero-copy ring buffers (16KB)
+- Software timeout thresholds (200μs/1ms/5ms/15ms) for adaptive buffering
+
+The hardware idle detection works in conjunction with software buffering - the UART controller detects inter-packet gaps and triggers DMA transfers, while the software layer groups these transfers based on timing for optimal USB transmission.
 
 Current implementation achieves:
-- Zero packet loss under normal conditions
-- Sub-millisecond latency for small packets
+- Minimal packet loss under normal conditions
+- Low latency for small packets
 - Reliable operation up to 1000000 baud
-- Minimal CPU usage thanks to DMA
+- Reduced CPU usage thanks to DMA
+
+**Note:** The bridge does NOT parse or understand specific protocols. It uses timing-based heuristics to group bytes into packets, which works well for most protocols but is not protocol-aware.
 
 ## Advanced Features
 
@@ -283,13 +291,13 @@ Logs are viewable through the web interface. The system supports multiple output
 
 ### Adaptive Buffering Technology
 
-The bridge continuously monitors data patterns and adjusts its behavior:
-- Detects packet boundaries in binary protocols
-- Recognizes line endings in text protocols  
-- Measures inter-byte gaps for timeout-sensitive protocols
-- Switches between latency and throughput optimization modes
+The bridge uses time-based buffering that groups bytes into packets based on inter-byte gaps:
+- Monitors timing between received bytes
+- Groups bytes that arrive close together (within timeout thresholds)
+- Sends grouped data when gaps exceed the threshold
+- Buffer size automatically adjusts based on configured baud rate
 
-This means optimal performance whether you're transferring MAVLink parameters, streaming GPS coordinates, or controlling industrial equipment.
+This approach works well for many protocols without requiring protocol-specific knowledge. The timing thresholds (200μs/1ms/5ms/15ms) help preserve packet boundaries for protocols that use inter-frame gaps.
 
 ## Acknowledgments
 

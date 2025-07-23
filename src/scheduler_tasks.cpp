@@ -10,7 +10,7 @@
 
 // External objects
 extern Config config;
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 extern DNSServer* dnsServer;
 
 // Global scheduler instance
@@ -54,7 +54,7 @@ void initializeScheduler() {
     });
     
     tWiFiTimeout.set(WIFI_TIMEOUT, TASK_ONCE, []{ 
-        log_msg("WiFi timeout - switching to normal mode", LOG_INFO);
+        log_msg("WiFi timeout - switching to standalone mode", LOG_INFO);
         ESP.restart();
     });
     
@@ -98,8 +98,8 @@ void initializeScheduler() {
     tUpdateStatsDevice3.delay(250);    // Start after 0.25 seconds
 }
 
-void enableRuntimeTasks() {
-    // Enable tasks for runtime/bridge mode
+void enableStandaloneTasks() {
+    // Enable tasks for standalone bridge mode
     tBridgeActivity.enable();
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
@@ -110,17 +110,21 @@ void enableRuntimeTasks() {
         tUpdateStatsDevice3.enable();
     }
     
-    // Disable setup mode tasks
+    // Disable network mode tasks
     tDnsProcess.disable();
     tWiFiTimeout.disable();
 }
 
-void enableSetupTasks() {
-    // Enable tasks for WiFi setup mode
+void enableNetworkTasks(bool temporaryNetwork) {
+    // Enable tasks for network setup mode
     tDnsProcess.enable();
-    startWiFiTimeout();
     
-    // Runtime tasks continue to work in setup mode
+    // Only start timeout for temporary network (setup AP)
+    if (temporaryNetwork) {
+        startWiFiTimeout();
+    }
+    
+    // Bridge tasks continue to work in network mode
     tBridgeActivity.enable();
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();

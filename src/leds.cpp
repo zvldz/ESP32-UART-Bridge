@@ -15,7 +15,7 @@ static CRGB leds[NUM_LEDS];
 static SemaphoreHandle_t ledMutex = NULL;
 
 // External objects from main.cpp
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
@@ -115,13 +115,13 @@ void led_set_mode(LedMode mode) {
      break;
 
    case LED_MODE_WIFI_ON:
-     // Force LED ON for WiFi config mode - purple
+     // Force LED ON for network mode - purple
      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
        pendingColorValue = (uint32_t)CRGB::Purple;
        ledUpdateNeeded = true;
        xSemaphoreGive(ledMutex);
      }
-     log_msg("LED forced ON (purple) for WiFi config mode", LOG_DEBUG);
+     log_msg("LED forced ON (purple) for network mode", LOG_DEBUG);
      break;
 
    case LED_MODE_DATA_FLASH:
@@ -149,7 +149,7 @@ void led_notify_device3_rx() {
 
 // Flash LED for data activity
 static void led_flash_activity(ActivityType activity) {
- if (currentMode == MODE_NORMAL && ledMutex != NULL) {
+ if (bridgeMode == BRIDGE_STANDALONE && ledMutex != NULL) {
    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
      unsigned long now = millis();
 
@@ -223,7 +223,7 @@ void led_rapid_blink(int count, int delay_ms) {
 
 // Visual indication of click count
 void led_blink_click_feedback(int clickCount) {
- if (currentMode == MODE_NORMAL && clickCount > 0) {
+ if (bridgeMode == BRIDGE_STANDALONE && clickCount > 0) {
    if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
      buttonBlinkCount = clickCount;
      buttonBlinkActive = true;
@@ -249,8 +249,8 @@ void led_process_updates() {
    }
  }
 
- // WiFi mode - purple constant, only rapid blink can interrupt
- if (currentMode == MODE_CONFIG) {
+ // Network mode - purple constant, only rapid blink can interrupt
+ if (bridgeMode == BRIDGE_NET) {
    // Handle rapid blink if active
    if (rapidBlinkActive && millis() >= rapidBlinkNextTime) {
      if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
@@ -260,7 +260,7 @@ void led_process_updates() {
          rapidBlinkCount = rapidBlinkCount - 1;
          if (rapidBlinkCount <= 0) {
            rapidBlinkActive = false;
-           // Return to purple for WiFi mode
+           // Return to purple for network mode
            leds[0] = CRGB::Purple;
          }
        } else {
@@ -272,7 +272,7 @@ void led_process_updates() {
        xSemaphoreGive(ledMutex);
      }
    }
-   // Skip data activity in WiFi mode
+   // Skip data activity in network mode
    return;
  }
 
@@ -319,7 +319,7 @@ void led_process_updates() {
    return;  // Skip data activity during button feedback
  }
 
- // Normal mode - check data activity
+ // Standalone mode - check data activity
  static uint32_t lastUartCount = 0;
  static uint32_t lastUsbCount = 0;
  static uint32_t lastDevice3TxCount = 0;

@@ -68,7 +68,7 @@
                 - <strong>Blue flashes</strong> - Data from device (UART RX)<br>
                 - <strong>Green flashes</strong> - Data from computer (USB RX)<br>
                 - <strong>Cyan flashes</strong> - Bidirectional data transfer<br>
-                - <strong>Solid purple</strong> - WiFi configuration mode<br>
+                - <strong>Solid purple</strong> - Network mode<br>
                 - <strong>White blinks</strong> - Button click feedback (1-2 clicks)<br>
                 - <strong>Purple rapid blinking</strong> - WiFi reset confirmation (5s hold)<br>
                 - <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
@@ -76,8 +76,8 @@
             </div>
             <table>
                 <tr><th>Mode</th><th>LED State</th><th>Description</th></tr>
-                <tr><td>Normal Mode</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
-                <tr><td>WiFi Config Mode</td><td>Solid purple</td><td>Constantly ON while in configuration mode</td></tr>
+                <tr><td>Standalone Mode</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
+                <tr><td>Network Mode</td><td>Solid purple</td><td>Constantly ON while in network mode</td></tr>
                 <tr><td>Boot Sequence</td><td>Rainbow effect</td><td>Colorful startup animation for 1 second</td></tr>
                 <tr><td>Button clicks</td><td>White blinks</td><td>Shows click count (100ms per blink)</td></tr>
             </table>
@@ -128,8 +128,8 @@
                 <tr><td>Application can't connect</td><td>Check USB connection, try different baud rate</td></tr>
                 <tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
                 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
-                <tr><td>No WiFi config</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
-                <tr><td>LED solid purple</td><td>Device is in WiFi config mode - normal behavior</td></tr>
+                <tr><td>No network mode</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
+                <tr><td>LED solid purple</td><td>Device is in network mode - normal behavior</td></tr>
                 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
                 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
                 <tr><td>Mission Planner reset loops</td><td>Enable "Disable RTS resets on ESP32 SerialUSB" in Mission Planner connection settings. ESP32-S3's native USB outputs bootloader messages that can confuse some applications.</td></tr>
@@ -140,7 +140,7 @@
             <h3>🔘 Button Functions</h3>
             <div class="success">
                 <strong>BOOT Button (GPIO0) Functions:</strong><br>
-                - <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter WiFi configuration mode<br>
+                - <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter network mode<br>
                 - <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
                 - <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
                 <br>

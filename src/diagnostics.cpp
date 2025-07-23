@@ -8,7 +8,7 @@
 
 // External object from main.cpp
 extern UartStats uartStats;
-extern DeviceMode currentMode;
+extern BridgeMode bridgeMode;
 
 // Global access to context (for TaskScheduler callbacks)
 static BridgeContext* g_bridgeContext = nullptr;
@@ -114,7 +114,7 @@ void resetStatistics(UartStats* stats) {
 void runBridgeActivityLog() {
     if (!g_bridgeContext) return;
     
-    String mode = (*g_bridgeContext->system.currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
+    String mode = (*g_bridgeContext->system.bridgeMode == BRIDGE_NET) ? "Network" : "Standalone";
     log_msg("UART bridge alive [" + mode + " mode]: D1 RX=" + 
             String(*g_bridgeContext->stats.device1RxBytes) +
             " TX=" + String(*g_bridgeContext->stats.device1TxBytes) + " bytes" +
