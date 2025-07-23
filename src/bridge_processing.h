@@ -7,6 +7,7 @@
 #include "defines.h"
 #include "uart_interface.h"
 #include "usb_interface.h"
+#include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
 #include <Arduino.h>
 
 // External buffer variables from uartbridge.cpp
@@ -58,78 +59,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
 
         // Route to Device 2 based on its role
         if (ctx->devices.device2IsUSB) {
-            // Device 2 is USB - use adaptive buffering
+            // Device 2 is USB - use adaptive buffering from adaptive_buffer.h
             (*ctx->stats.totalUartPackets)++;
-
-            // Start buffer timing on first byte
-            if (*ctx->adaptive.bufferIndex == 0) {
-                *ctx->adaptive.bufferStartTime = currentTime;
-            }
-
-            // Add byte to buffer
-            ctx->adaptive.buffer[(*ctx->adaptive.bufferIndex)++] = data;
-            *ctx->adaptive.lastByteTime = currentTime;
-
-            // Determine if we should transmit the buffer
-            bool shouldTransmit = false;
-            unsigned long timeSinceLastByte = 0;
-            unsigned long timeInBuffer = currentTime - *ctx->adaptive.bufferStartTime;
-
-            // Calculate pause since last byte
-            if (*ctx->adaptive.lastByteTime > 0 && !ctx->interfaces.uartBridgeSerial->available()) {
-                delayMicroseconds(50);
-                if (!ctx->interfaces.uartBridgeSerial->available()) {
-                    timeSinceLastByte = micros() - *ctx->adaptive.lastByteTime;
-                }
-            }
-
-            // Check if DMA detected packet boundary
-            if (ctx->interfaces.uartBridgeSerial->hasPacketTimeout()) {
-                shouldTransmit = true;
-            }
-
-            // Transmission decision logic
-            if (*ctx->adaptive.bufferIndex <= 12 && timeSinceLastByte >= 200) {
-                shouldTransmit = true;
-            } else if (*ctx->adaptive.bufferIndex <= 64 && timeSinceLastByte >= 1000) {
-                shouldTransmit = true;
-            } else if (timeSinceLastByte >= 5000) {
-                shouldTransmit = true;
-            } else if (timeInBuffer >= 15000) {
-                shouldTransmit = true;
-            } else if (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize) {
-                shouldTransmit = true;
-            }
-
-            // Transmit accumulated data if conditions met
-            if (shouldTransmit) {
-                int availableSpace = ctx->interfaces.usbInterface->availableForWrite();
-
-                if (availableSpace >= *ctx->adaptive.bufferIndex) {
-                    ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, *ctx->adaptive.bufferIndex);
-                    *ctx->stats.device2TxBytes += *ctx->adaptive.bufferIndex;
-                    *ctx->adaptive.bufferIndex = 0;
-                } else if (availableSpace > 0) {
-                    ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, availableSpace);
-                    *ctx->stats.device2TxBytes += availableSpace;
-                    memmove(ctx->adaptive.buffer, ctx->adaptive.buffer + availableSpace, 
-                           *ctx->adaptive.bufferIndex - availableSpace);
-                    *ctx->adaptive.bufferIndex -= availableSpace;
-                } else {
-                    // No space available - handle overflow
-                    if (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize) {
-                        *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
-                        *ctx->diagnostics.totalDroppedBytes += *ctx->adaptive.bufferIndex;
-                        (*ctx->diagnostics.dropEvents)++;
-
-                        if (*ctx->adaptive.bufferIndex > *ctx->diagnostics.maxDropSize) {
-                            *ctx->diagnostics.maxDropSize = *ctx->adaptive.bufferIndex;
-                        }
-
-                        *ctx->adaptive.bufferIndex = 0;
-                    }
-                }
-            }
+            processAdaptiveBufferByte(ctx, data, currentTime);
         } else if (ctx->devices.device2IsUART2) {
             // Device 2 is UART2 - batch transfer
             uint8_t batchBuffer[UART_BLOCK_SIZE];

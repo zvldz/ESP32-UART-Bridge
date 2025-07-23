@@ -13,6 +13,7 @@
 #include "usb_interface.h"
 #include "diagnostics.h"
 #include "system_utils.h"
+#include "scheduler_tasks.h"
 
 // DMA support - always enabled
 #include "uart_interface.h"
@@ -145,16 +146,23 @@ void setup() {
   detectMode();
   log_msg("Mode detected: " + String(currentMode == MODE_NORMAL ? "Normal" : "Config"), LOG_INFO);
 
+  // Initialize TaskScheduler
+  initializeScheduler();
+
   // Mode-specific initialization
   if (currentMode == MODE_NORMAL) {
     log_msg("Starting normal mode - UART bridge active", LOG_INFO);
     log_msg("Use triple-click BOOT to enter config mode", LOG_INFO);
     log_msg("Blue LED will flash on data activity", LOG_INFO);
     initNormalMode();
+    // Enable mode-specific tasks
+    enableRuntimeTasks();
   } else if (currentMode == MODE_CONFIG) {
     log_msg("Starting WiFi config mode...", LOG_INFO);
     log_msg("Purple LED will stay ON during WiFi config mode", LOG_INFO);
     initConfigMode();
+    // Enable mode-specific tasks
+    enableSetupTasks();
   }
 
   // Create FreeRTOS tasks
@@ -167,22 +175,11 @@ void loop() {
   // Process LED updates from main thread - MUST be first
   led_process_updates();
 
-  // System diagnostics (memory stats, heartbeat)
-  systemDiagnostics();
-
   // Handle all button interactions
   handleButtonInput();
 
-  // Update crash log RTC variables
-  crashlog_update_variables();
-
-  // Check WiFi timeout in config mode
-  if (currentMode == MODE_CONFIG) {
-    if (checkWiFiTimeout()) {
-      log_msg("WiFi timeout - switching to normal mode", LOG_INFO);
-      ESP.restart();
-    }
-  }
+  // Execute all scheduled tasks
+  taskScheduler.execute();
 
   // Small delay to prevent watchdog issues
   vTaskDelay(pdMS_TO_TICKS(10));

@@ -19,9 +19,10 @@
 
 // Calculate adaptive buffer size based on baud rate
 static inline size_t calculateAdaptiveBufferSize(uint32_t baudrate) {
-    if (baudrate > 460800) return 2048;
-    if (baudrate > 115200) return 1024;
-    if (baudrate > 19200) return 512;
+    if (baudrate >= 921600) return 2048;
+    if (baudrate >= 460800) return 1024;
+    if (baudrate >= 230400) return 768;
+    if (baudrate >= 115200) return 288;
     return 256;
 }
 
@@ -160,6 +161,12 @@ static inline void handleBufferTimeout(BridgeContext* ctx) {
 
 // Process adaptive buffering for a single byte
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, unsigned long currentTime) {
+    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+    // Added to diagnose FIFO overflow issue
+    //static unsigned long delayCount = 0;
+    //static unsigned long lastDelayLog = 0;
+    // ===== END TEMPORARY DIAGNOSTIC CODE =====
+    
     // Start buffer timing on first byte
     if (*ctx->adaptive.bufferIndex == 0) {
         *ctx->adaptive.bufferStartTime = currentTime;
@@ -174,6 +181,11 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, u
     if (*ctx->adaptive.lastByteTime > 0 && !ctx->interfaces.uartBridgeSerial->available()) {
         // Small delay to detect real pause vs processing delay
         delayMicroseconds(50);
+        
+        // ===== TEMPORARY DIAGNOSTIC CODE =====
+        //delayCount++;
+        // ===== END TEMPORARY DIAGNOSTIC CODE =====
+        
         if (!ctx->interfaces.uartBridgeSerial->available()) {
             timeSinceLastByte = micros() - *ctx->adaptive.lastByteTime;
         }
@@ -183,6 +195,15 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, u
     if (shouldTransmitBuffer(ctx, currentTime, timeSinceLastByte)) {
         transmitAdaptiveBuffer(ctx);
     }
+    
+    // ===== TEMPORARY DIAGNOSTIC CODE - REMOVE AFTER DEBUGGING =====
+    //if (millis() - lastDelayLog > 5000 && delayCount > 0) {
+    //    log_msg("[TEMP DIAG] Adaptive delays: " + String(delayCount) + 
+    //            " times (50us each = " + String(delayCount * 50 / 1000) + "ms total)", LOG_WARNING);
+    //    delayCount = 0;
+    //    lastDelayLog = millis();
+    //}
+    // ===== END TEMPORARY DIAGNOSTIC CODE =====
 }
 
 #endif // ADAPTIVE_BUFFER_H

@@ -5,7 +5,6 @@
 #include <ArduinoJson.h>
 
 // RTC variables for crash logging (survive reset but not power loss)
-// Moved from main.cpp
 RTC_NOINIT_ATTR uint32_t g_last_heap;
 RTC_NOINIT_ATTR uint32_t g_last_uptime;
 RTC_NOINIT_ATTR uint32_t g_min_heap;
@@ -181,18 +180,13 @@ String crashlog_format_uptime(uint32_t seconds) {
     }
 }
 
-// Update RTC variables periodically (moved from main.cpp)
+// Update RTC variables periodically
 void crashlog_update_variables() {
-    static unsigned long lastRtcUpdate = 0;
-    if (millis() - lastRtcUpdate > CRASHLOG_UPDATE_INTERVAL_MS) {
-        g_last_heap = ESP.getFreeHeap();
-        g_last_uptime = millis() / 1000;
+    g_last_heap = ESP.getFreeHeap();
+    g_last_uptime = millis() / 1000;
 
-        // Track minimum heap
-        if (g_last_heap < g_min_heap) {
-            g_min_heap = g_last_heap;
-        }
-
-        lastRtcUpdate = millis();
+    // Track minimum heap
+    if (g_last_heap < g_min_heap) {
+        g_min_heap = g_last_heap;
     }
 }
