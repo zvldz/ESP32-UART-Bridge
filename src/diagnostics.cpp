@@ -2,6 +2,8 @@
 #include "logging.h"
 #include "crashlog.h"
 #include "esp_system.h"
+#include "uart_dma.h"
+#include "types.h"
 #include <Arduino.h>
 
 // External object from main.cpp
@@ -102,4 +104,106 @@ void resetStatistics(UartStats* stats) {
   stats->deviceStartTime = millis();
   stats->totalUartPackets = 0;
   exitStatsCritical();
+}
+
+// Log bridge activity periodically
+void logBridgeActivity(BridgeContext* ctx, DeviceMode currentMode) {
+  if (millis() - *ctx->timing.lastPeriodicStats > 30000) {
+    String mode = (currentMode == MODE_CONFIG) ? "WiFi" : "Normal";
+    log_msg("UART bridge alive [" + mode + " mode]: D1 RX=" + String(*ctx->stats.device1RxBytes) +
+            " TX=" + String(*ctx->stats.device1TxBytes) + " bytes" +
+            (*ctx->diagnostics.totalDroppedBytes > 0 ? ", dropped=" + String(*ctx->diagnostics.totalDroppedBytes) : ""), LOG_DEBUG);
+    *ctx->timing.lastPeriodicStats = millis();
+  }
+}
+
+// Log stack diagnostics
+void logStackDiagnostics(BridgeContext* ctx) {
+  if (millis() - *ctx->timing.lastStackCheck > 5000) {
+    UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
+    log_msg("UART task: Stack free=" + String(stackFree * 4) +
+            " bytes, Heap free=" + String(ESP.getFreeHeap()) +
+            " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", LOG_DEBUG);
+    *ctx->timing.lastStackCheck = millis();
+    
+    // Add DMA diagnostics if available
+    UartDMA* dma = static_cast<UartDMA*>(ctx->interfaces.uartBridgeSerial);
+    if (dma && dma->isInitialized()) {
+      log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
+              " TX=" + String(dma->getTxBytesTotal()) +
+              ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+    }
+  }
+}
+
+// Log DMA statistics for a UART interface
+void logDmaStatistics(UartInterface* uartSerial) {
+  UartDMA* dma = static_cast<UartDMA*>(uartSerial);
+  if (dma && dma->isInitialized()) {
+    log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
+            " TX=" + String(dma->getTxBytesTotal()) +
+            ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+  }
+}
+
+// Log dropped data statistics
+void logDroppedDataStats(BridgeContext* ctx) {
+  // Check if we should log dropped data
+  if (*ctx->diagnostics.droppedBytes > 0 && millis() - *ctx->timing.lastDropLog > 5000) {
+    // For regular drops (buffer full)
+    if (*ctx->diagnostics.maxDropSize > 0) {
+      log_msg("USB buffer full: dropped " + String(*ctx->diagnostics.droppedBytes) + " bytes in " +
+              String(*ctx->diagnostics.dropEvents) + " events (total: " + String(*ctx->diagnostics.totalDroppedBytes) +
+              " bytes), max packet: " + String(*ctx->diagnostics.maxDropSize) + " bytes", LOG_INFO);
+      *ctx->diagnostics.maxDropSize = 0;  // Reset for next period
+    }
+    
+    // For timeout drops
+    int* timeoutDropSizes = ctx->diagnostics.timeoutDropSizes;
+    bool hasTimeoutDrops = false;
+    for (int i = 0; i < 10; i++) {
+      if (timeoutDropSizes[i] > 0) {
+        hasTimeoutDrops = true;
+        break;
+      }
+    }
+    
+    if (hasTimeoutDrops) {
+      // Build string with last 10 timeout drop sizes
+      String sizes = "Sizes: ";
+      int sizeCount = 0;
+      for (int i = 0; i < 10; i++) {
+        if (timeoutDropSizes[i] > 0) {
+          if (sizeCount > 0) sizes += ", ";
+          sizes += String(timeoutDropSizes[i]);
+          sizeCount++;
+        }
+      }
+      
+      log_msg("USB timeout: dropped " + String(*ctx->diagnostics.droppedBytes) + " bytes in " +
+              String(*ctx->diagnostics.dropEvents) + " events (total: " + String(*ctx->diagnostics.totalDroppedBytes) +
+              " bytes). " + sizes, LOG_INFO);
+      
+      // Clear timeout sizes for next period
+      for (int i = 0; i < 10; i++) {
+        timeoutDropSizes[i] = 0;
+      }
+    }
+    
+    *ctx->timing.lastDropLog = millis();
+    *ctx->diagnostics.droppedBytes = 0;
+    *ctx->diagnostics.dropEvents = 0;
+  }
+}
+
+// Main periodic diagnostics update function
+void updatePeriodicDiagnostics(BridgeContext* ctx, DeviceMode currentMode) {
+  // Log bridge activity every 30 seconds
+  logBridgeActivity(ctx, currentMode);
+  
+  // Log stack diagnostics every 5 seconds
+  logStackDiagnostics(ctx);
+  
+  // Log dropped data statistics if any
+  logDroppedDataStats(ctx);
 }

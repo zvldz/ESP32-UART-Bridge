@@ -23,4 +23,13 @@ void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
 // Statistics reset
 void resetStatistics(UartStats* stats);
 
+// Bridge diagnostics functions
+void logBridgeActivity(BridgeContext* ctx, DeviceMode currentMode);
+void logStackDiagnostics(BridgeContext* ctx);
+void logDmaStatistics(class UartInterface* uartSerial);
+void logDroppedDataStats(BridgeContext* ctx);
+
+// Main periodic diagnostics update function
+void updatePeriodicDiagnostics(BridgeContext* ctx, DeviceMode currentMode);
+
 #endif // DIAGNOSTICS_H

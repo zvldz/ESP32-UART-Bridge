@@ -12,14 +12,8 @@ void uartBridgeTask(void* parameter);  // FreeRTOS task function
 // Device 3 task
 void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations
 
-// Flow control functions
-void detectFlowControl();
-String getFlowControlStatus();
-
-// Device 2 functions
-void initDevice2UART();
-
-// Device 3 functions
-void initDevice3(uint8_t role);  // Initialize based on role (mirror/bridge)
+// External device serial interfaces (defined in uartbridge.cpp)
+extern UartInterface* device2Serial;
+extern UartInterface* device3Serial;
 
 #endif // UARTBRIDGE_H

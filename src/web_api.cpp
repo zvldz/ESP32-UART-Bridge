@@ -3,6 +3,7 @@
 #include "logging.h"
 #include "config.h"
 #include "uartbridge.h"
+#include "flow_control.h"
 #include "defines.h"
 #include "crashlog.h"
 #include "diagnostics.h"
