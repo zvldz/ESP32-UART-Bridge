@@ -69,6 +69,9 @@ const FormUtils = {
         const flowControl = document.getElementById('flowcontrol');
         if (flowControl) flowControl.checked = this.config.flowcontrol;
         
+        const permanent = document.getElementById('permanent_wifi');
+        if (permanent) permanent.checked = this.config.permanentWifi;
+        
         // USB mode
         this.setSelectValue('usbmode', this.config.usbMode);
         

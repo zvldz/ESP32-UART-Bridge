@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.5.6-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.5.8-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -24,6 +24,8 @@ Universal UART to USB bridge with web configuration interface for any serial com
   - Configurable via web interface
 - **High Performance**: Hardware packet detection (UART idle timeout) and event-driven architecture (Device 1)
 - **Web Configuration**: Easy setup via WiFi access point
+  - **Permanent Network Mode**: Wi-Fi remains active permanently for always-on access
+  - **Temporary Setup Mode**: Wi-Fi timeout for quick configuration (triple-click activation)
 - **Visual Feedback**: RGB LED shows data flow direction and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
@@ -72,13 +74,21 @@ Universal UART to USB bridge with web configuration interface for any serial com
    - Connect USB-C cable to computer
    - Rainbow LED effect indicates successful boot
 
-3. **Configure** (first time only):
+3. **Configure**:
+   
+   **Option A: Temporary Setup (traditional method)**
    - Triple-click BOOT button (LED turns solid purple)
    - Connect to WiFi network "ESP-Bridge" (password: 12345678)
    - Open web browser to 192.168.4.1
+   - Configure settings and click "Save & Reboot"
+   - Device returns to standalone mode after timeout
+   
+   **Option B: Permanent Network Mode (new in v2.5.8)**
+   - Use temporary setup to access web interface
+   - Enable "Permanent Network Mode" checkbox in WiFi Configuration
    - Set your UART parameters and WiFi credentials
-   - Choose USB mode (Device/Host)
    - Click "Save & Reboot"
+   - Device will maintain Wi-Fi connection permanently for remote access
 
 4. **Use**:
    - **Device Mode**: ESP32 appears as COM port on computer
@@ -93,6 +103,28 @@ Universal UART to USB bridge with web configuration interface for any serial com
      - Green: Computer → Device
      - Cyan: Bidirectional
 
+## Network Operation Modes
+
+### Temporary Setup Mode (Triple-Click)
+- Activated by triple-clicking BOOT button
+- Wi-Fi AP active for limited time (default timeout)
+- Designed for quick configuration changes
+- Returns to standalone mode automatically
+- LED: Solid purple during network mode
+
+### Permanent Network Mode (New in v2.5.8)
+- Configured via web interface checkbox
+- Wi-Fi remains active indefinitely
+- No timeout - stays connected until manually disabled
+- Ideal for remote monitoring and configuration
+- Connects to your existing Wi-Fi network
+- LED: Solid purple when network active
+
+### Switching Between Modes
+- **To Temporary**: Triple-click BOOT button anytime
+- **To Permanent**: Enable via web interface in WiFi Configuration
+- **To Standalone**: Disable permanent mode via web interface
+
 ## Common Use Cases
 
 - **Industrial Automation**: Connect Modbus RTU devices to modern systems
@@ -101,6 +133,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Marine Electronics**: NMEA GPS/AIS data bridging
 - **Legacy Equipment**: Modernize RS232/RS485 equipment
 - **Development**: Debug embedded systems with USB convenience
+- **Remote Monitoring**: Permanent Wi-Fi access for remote diagnostics
 
 ## USB Modes
 
@@ -154,6 +187,7 @@ The web interface allows configuration of:
 - **Flow Control**: None or RTS/CTS
 - **WiFi Settings**: SSID and password for your network
 - **USB Mode**: Device (default) or Host mode
+- **Network Mode**: Temporary setup or permanent Wi-Fi operation
 
 ## LED Indicators
 
@@ -162,7 +196,7 @@ The web interface allows configuration of:
 | Blue | Flash | Data from device (UART RX) |
 | Green | Flash | Data from computer (USB RX) |
 | Cyan | Flash | Bidirectional data transfer |
-| Purple | Solid | Network mode |
+| Purple | Solid | Network mode (temporary or permanent) |
 | Purple | Rapid blink | WiFi reset confirmation |
 | White | Blinks | Button click feedback |
 | Rainbow | 1 second | Boot sequence |
@@ -170,7 +204,7 @@ The web interface allows configuration of:
 
 ## Button Functions
 
-- **Triple-click**: Enter network mode
+- **Triple-click**: Enter temporary network mode
 - **Hold 5+ seconds**: Reset WiFi to defaults (SSID: ESP-Bridge, Password: 12345678)
 - **Hold during power-on**: Enter bootloader mode for firmware flashing
 
@@ -223,13 +257,14 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 | Problem | Solution |
 |---------|----------|
 | No data activity | Check TX/RX connections, verify baud rate matches device |
-| LED solid purple | Device is in network mode - connect to "ESP-Bridge" network |
+| LED solid purple | Device is in network mode - connect to "ESP-Bridge" network or your configured WiFi |
 | Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
 | Connection drops | Enable flow control if supported by device |
 | USB device not recognized | In Host mode, only CDC devices are supported |
 | Application can't connect | Check USB cable, try different COM port settings |
 | Connection resets repeatedly | Application toggling DTR/RTS - disable hardware flow control |
 | Partial or corrupted data | Check baud rate settings, verify wire quality and grounding |
+| Can't access permanent network | Triple-click BOOT to enter temporary mode, then reconfigure |
 
 ## Performance Notes
 
@@ -298,6 +333,14 @@ The bridge uses time-based buffering that groups bytes into packets based on int
 - Buffer size automatically adjusts based on configured baud rate
 
 This approach works well for many protocols without requiring protocol-specific knowledge. The timing thresholds (200μs/1ms/5ms/15ms) help preserve packet boundaries for protocols that use inter-frame gaps.
+
+## Version History
+
+### v2.5.8 (July 2025)
+- **NEW**: Permanent Network Mode - Wi-Fi stays active permanently when enabled
+- **NEW**: Automatic version synchronization between firmware and documentation
+- **IMPROVED**: Network mode selection with clear temporary vs permanent operation
+- **FIXED**: Build system issue preventing firmware upload after documentation updates
 
 ## Acknowledgments
 

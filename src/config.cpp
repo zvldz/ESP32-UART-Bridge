@@ -66,6 +66,7 @@ void config_init(Config* config) {
   config->flowcontrol = false;
   config->ssid = DEFAULT_AP_SSID;
   config->password = DEFAULT_AP_PASSWORD;
+  config->permanent_network_mode = false;
   config->device_version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
   config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
@@ -114,6 +115,12 @@ void config_migrate(Config* config) {
     // These will be set from loaded values in config_load
     // Just update version here
     config->config_version = 3;
+  }
+  
+  if (config->config_version < 4) {
+    log_msg("Migrating config from version " + String(config->config_version) + " to 4", LOG_INFO);
+    config->permanent_network_mode = false;
+    config->config_version = 4;
   }
 }
 
@@ -178,6 +185,7 @@ void config_load(Config* config) {
   if (doc["wifi"].is<JsonObject>()) {
     config->ssid = doc["wifi"]["ssid"] | DEFAULT_AP_SSID;
     config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
+    config->permanent_network_mode = doc["wifi"]["permanent"] | false;
   }
 
   // Load USB settings
@@ -251,6 +259,7 @@ void config_save(Config* config) {
   // WiFi settings
   doc["wifi"]["ssid"] = config->ssid;
   doc["wifi"]["password"] = config->password;
+  doc["wifi"]["permanent"] = config->permanent_network_mode;
 
   // USB settings
   switch(config->usb_mode) {
