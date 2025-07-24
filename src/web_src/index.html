@@ -126,6 +126,13 @@
                         <span id="wifiArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
                     </h4>
                     <div id="wifiConfigContent" style="display: none;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; width: auto;">
+                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1" style="width: auto; margin: 0;">
+                                <span>Permanent Network Mode</span>
+                            </label>
+                            <small style="display: block; margin: 0; color: #666; font-size: 13px;">Wi-Fi stays active permanently when enabled</small>
+                        </div>
                         <label for="ssid">WiFi SSID:</label>
                         <input type="text" name="ssid" id="ssid" maxlength="32">
                         <label for="password">WiFi Password:</label>

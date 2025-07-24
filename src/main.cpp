@@ -215,6 +215,14 @@ void detectMode() {
     return;
   }
 
+  // Check for permanent network mode configuration
+  if (config.permanent_network_mode) {
+    log_msg("Permanent network mode enabled - entering network mode", LOG_INFO);
+    bridgeMode = BRIDGE_NET;
+    systemState.isTemporaryNetwork = false;  // Permanent network mode
+    return;
+  }
+
   log_msg("Click count at startup: " + String(systemState.clickCount), LOG_DEBUG);
 
   // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode

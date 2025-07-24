@@ -4,7 +4,7 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 3  // Increased from 2 to 3 for ESP-IDF enums
+#define CURRENT_CONFIG_VERSION 4  // Increased from 3 to 4 for permanent network mode
 
 // Configuration management interface
 void config_init(Config* config);

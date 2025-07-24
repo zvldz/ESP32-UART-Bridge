@@ -29,6 +29,31 @@
         </div>
         
         <div class="section">
+            <h3>🌐 Network Operation Modes</h3>
+            <div class="success">
+                <strong>The bridge supports two network operation modes:</strong><br><br>
+                <strong>🔄 Temporary Setup Mode (Traditional):</strong><br>
+                - Activated by triple-clicking BOOT button<br>
+                - Wi-Fi AP active for limited time with automatic timeout<br>
+                - Returns to standalone mode automatically<br>
+                - Use for quick configuration changes<br><br>
+                <strong>🔗 Permanent Network Mode (New in v2.5.8):</strong><br>
+                - Configured via web interface checkbox<br>
+                - Wi-Fi stays active permanently until manually disabled<br>
+                - No timeout - ideal for remote monitoring<br>
+                - Connects to your existing Wi-Fi network<br>
+                - Always accessible for configuration and diagnostics
+            </div>
+            <div class="warning">
+                <strong>💡 Network Mode Tips:</strong><br>
+                - <strong>LED Indicator:</strong> Solid purple in both network modes<br>
+                - <strong>Access:</strong> Connect to "ESP-Bridge" (temp) or your configured network (permanent)<br>
+                - <strong>Switching:</strong> Triple-click BOOT for temporary mode anytime<br>
+                - <strong>Security:</strong> Use strong WiFi passwords for permanent mode
+            </div>
+        </div>
+        
+        <div class="section">
             <h3>🔌 USB Modes</h3>
             <div class="success">
                 <strong>The bridge supports two USB operation modes:</strong><br>
@@ -68,7 +93,7 @@
                 - <strong>Blue flashes</strong> - Data from device (UART RX)<br>
                 - <strong>Green flashes</strong> - Data from computer (USB RX)<br>
                 - <strong>Cyan flashes</strong> - Bidirectional data transfer<br>
-                - <strong>Solid purple</strong> - Network mode<br>
+                - <strong>Solid purple</strong> - Network mode (temporary or permanent)<br>
                 - <strong>White blinks</strong> - Button click feedback (1-2 clicks)<br>
                 - <strong>Purple rapid blinking</strong> - WiFi reset confirmation (5s hold)<br>
                 - <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
@@ -113,6 +138,7 @@
                 <li><strong>Device Settings:</strong> Configure UART protocol and baud rate on your device</li>
                 <li><strong>Bridge Settings:</strong> Use this web interface to configure UART speed</li>
                 <li><strong>USB Mode:</strong> Select Device or Host mode based on your setup</li>
+                <li><strong>Network Mode:</strong> Choose temporary (triple-click) or permanent (web checkbox)</li>
                 <li><strong>USB Connection:</strong> Connect USB cable and select COM port in your application</li>
             </ol>
             <p style="margin-top: 15px;">
@@ -130,6 +156,7 @@
                 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
                 <tr><td>No network mode</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
                 <tr><td>LED solid purple</td><td>Device is in network mode - normal behavior</td></tr>
+                <tr><td>Can't access permanent network</td><td>Triple-click BOOT for temporary mode, then reconfigure</td></tr>
                 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
                 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
                 <tr><td>Mission Planner reset loops</td><td>Enable "Disable RTS resets on ESP32 SerialUSB" in Mission Planner connection settings. ESP32-S3's native USB outputs bootloader messages that can confuse some applications.</td></tr>
@@ -140,7 +167,7 @@
             <h3>🔘 Button Functions</h3>
             <div class="success">
                 <strong>BOOT Button (GPIO0) Functions:</strong><br>
-                - <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter network mode<br>
+                - <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter temporary network mode<br>
                 - <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
                 - <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
                 <br>
@@ -148,7 +175,12 @@
                 1. Press and hold BOOT button for at least 5 seconds<br>
                 2. LED will flash purple rapidly 10 times to confirm<br>
                 3. Device will restart with default WiFi settings<br>
-                4. Connect to "ESP-Bridge" network with password "12345678"
+                4. Connect to "ESP-Bridge" network with password "12345678"<br>
+                <br>
+                <strong>Network Mode Selection:</strong><br>
+                - <strong>Temporary Mode:</strong> Triple-click BOOT button anytime<br>
+                - <strong>Permanent Mode:</strong> Enable "Permanent Network Mode" checkbox in web interface<br>
+                - <strong>Back to Standalone:</strong> Disable permanent mode via web interface
             </div>
         </div>
         

@@ -52,6 +52,7 @@ String getConfigJson() {
     // WiFi
     doc["ssid"] = config.ssid;
     doc["password"] = config.password;
+    doc["permanentWifi"] = config.permanent_network_mode;
     
     // USB mode
     doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
@@ -353,6 +354,16 @@ void handleSave() {
       config.password = newPassword;
       configChanged = true;
       log_msg("WiFi password updated", LOG_INFO);
+    }
+  }
+
+  // Permanent WiFi mode
+  if (server->hasArg("permanent_wifi")) {
+    bool newPermanent = server->arg("permanent_wifi") == "1";
+    if (newPermanent != config.permanent_network_mode) {
+      config.permanent_network_mode = newPermanent;
+      configChanged = true;
+      log_msg("Permanent WiFi mode " + String(newPermanent ? "enabled" : "disabled"), LOG_INFO);
     }
   }
 

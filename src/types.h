@@ -84,6 +84,7 @@ typedef struct {
   // WiFi settings
   String ssid;
   String password;
+  bool permanent_network_mode;  // Wi-Fi remains active without timeout
 
   // System info
   String device_version;

@@ -356,6 +356,26 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
     - Added `diagnostics.h` include for helper functions
     - Total lines moved: ~85 lines to device_init module
 
+### v2.5.8 (Permanent Network Mode) - Completed ✅ (July 2025)
+- [x] **Permanent Network Mode Implementation** - Completed
+  - Added `permanent_network_mode` configuration parameter in Config structure
+  - Updated configuration version from 3 to 4 with automatic migration
+  - Web interface: Added checkbox in WiFi Configuration section
+  - Backend: Full configuration save/load support with proper validation
+  - Boot logic: Automatic permanent network mode detection in `detectMode()`
+  - Benefits:
+    - Wi-Fi access point remains active until manually disabled
+    - No timeout for permanent mode (only for triple-click temporary mode)
+    - Configurable via web interface with clear user feedback
+    - Backward compatible with existing configurations
+
+- [x] **Build System Enhancement** - Completed
+  - Added `update_readme_version.py` script for automatic version synchronization
+  - Script automatically updates README.md badge with version from defines.h
+  - Integrated into PlatformIO build process as pre-build script
+  - Prevents version mismatches between firmware and documentation
+  - **Fixed**: Removed blocking `exit(0)` that prevented compilation and upload
+
 ## Current Status
 
 The project now uses a full ESP-IDF approach for all UART operations:
@@ -365,6 +385,7 @@ The project now uses a full ESP-IDF approach for all UART operations:
 - **USB Device**: Arduino Serial (proven stable) ✅
 - **USB Host**: ESP-IDF implementation ✅
 - **UART Logger**: ESP-IDF with DMA polling mode ✅
+- **Permanent Network Mode**: Fully implemented and configurable ✅
 
 ## Priority 2 - Next Phase
 
@@ -539,9 +560,10 @@ lib_deps =
 - USB Auto mode needs VBUS detection implementation
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
-- Version 2.5.5 completes performance optimization with adaptive buffer tuning
+- Version 2.5.8 completes permanent network mode implementation
 - DMA implementation enables hardware-based packet detection and minimal packet loss
 - Web interface modularization improves maintainability and development workflow
 - TaskScheduler implementation significantly simplifies periodic task management
 - Library selection focuses on well-maintained, performance-oriented solutions
 - Bridge mode renaming provides clearer architecture for future expansion
+- Permanent network mode enables always-on Wi-Fi operation for production deployments
