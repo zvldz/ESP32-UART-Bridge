@@ -20,7 +20,7 @@
 #include "scheduler_tasks.h"
 
 // Include generated web content
-#include "generated/web_content.h"
+#include "webui_gen/web_content.h"
 
 #include "freertos/semphr.h"
 #include "esp_wifi.h"

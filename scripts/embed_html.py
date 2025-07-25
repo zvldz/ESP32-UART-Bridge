@@ -11,10 +11,10 @@ def process_html_files(source, target, env):
     """Embed HTML/CSS/JS files into C++ header"""
     print("Embedding web files...")
     
-    web_src = Path("src/web_src")
-    generated = Path("src/generated")
+    web_src = Path("src/webui_src")
+    generated = Path("src/webui_gen")
     
-    print(f"  Looking for web_src at: {web_src.absolute()}")
+    print(f"  Looking for webui_src at: {web_src.absolute()}")
     print(f"  Current directory: {os.getcwd()}")
     
     # Create generated directory
@@ -49,7 +49,7 @@ def process_html_files(source, target, env):
         f.write("#define WEB_CONTENT_H\n\n")
         f.write("#include <Arduino.h>\n\n")
         f.write("// Auto-generated file, do not edit manually!\n")
-        f.write("// Generated from files in src/web_src/\n\n")
+        f.write("// Generated from files in src/webui_src/\n\n")
         
         # Process HTML files
         for html_file in sorted(web_src.glob("*.html")):
@@ -90,7 +90,7 @@ def process_html_files(source, target, env):
         f.write("#endif // WEB_CONTENT_H\n")
     
     print("Web files embedded successfully!")
-    print("Generated: src/generated/web_content.h")
+    print("Generated: src/webui_gen/web_content.h")
 
 # Execute immediately during script load
 process_html_files(None, None, env)
