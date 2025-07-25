@@ -41,4 +41,4 @@ sdkconfig.production
 sdkconfig.debug
 managed_components
 src/CMakeLists.txt
-src/generated/
+src/webui_gen/

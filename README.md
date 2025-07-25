@@ -56,11 +56,21 @@ Universal UART to USB bridge with web configuration interface for any serial com
   - Similar pinout and features to ESP32-S3-Zero
   - Note: May require code modifications for different LED pins or missing components
 - **Connections**:
-  - GPIO4: UART RX (connect to device TX)
-  - GPIO5: UART TX (connect to device RX)  
-  - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
-  - GPIO0: BOOT button (built-in)
-  - GPIO6/7: RTS/CTS (optional flow control)
+  - **Device 1 (Main UART - Always Active)**:
+    - GPIO4: UART RX (connect to device TX)
+    - GPIO5: UART TX (connect to device RX)
+    - GPIO6: RTS (optional flow control)
+    - GPIO7: CTS (optional flow control)
+  - **Device 2 (Secondary UART - When UART2 Role Selected)**:
+    - GPIO8: UART RX 
+    - GPIO9: UART TX
+  - **Device 3 (Mirror/Bridge/Logger UART)**:
+    - GPIO11: UART RX (used only in Bridge mode)
+    - GPIO12: UART TX (used in all Device 3 modes)
+  - **System**:
+    - GPIO0: BOOT button (built-in) - triple-click for network mode
+    - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
+  - **⚠️ Warning**: ESP32-S3 supports only 3.3V logic levels!
 
 ## Quick Start
 
@@ -83,7 +93,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
    - Configure settings and click "Save & Reboot"
    - Device returns to standalone mode after timeout
    
-   **Option B: Permanent Network Mode (new in v2.5.8)**
+   **Option B: Permanent Network Mode**
    - Use temporary setup to access web interface
    - Enable "Permanent Network Mode" checkbox in WiFi Configuration
    - Set your UART parameters and WiFi credentials
@@ -112,11 +122,10 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - Returns to standalone mode automatically
 - LED: Solid purple during network mode
 
-### Permanent Network Mode (New in v2.5.8)
+### Permanent Network Mode
 - Configured via web interface checkbox
 - Wi-Fi remains active indefinitely
 - No timeout - stays connected until manually disabled
-- Ideal for remote monitoring and configuration
 - Connects to your existing Wi-Fi network
 - LED: Solid purple when network active
 
@@ -334,13 +343,10 @@ The bridge uses time-based buffering that groups bytes into packets based on int
 
 This approach works well for many protocols without requiring protocol-specific knowledge. The timing thresholds (200μs/1ms/5ms/15ms) help preserve packet boundaries for protocols that use inter-frame gaps.
 
-## Version History
+## Development
 
-### v2.5.8 (July 2025)
-- **NEW**: Permanent Network Mode - Wi-Fi stays active permanently when enabled
-- **NEW**: Automatic version synchronization between firmware and documentation
-- **IMPROVED**: Network mode selection with clear temporary vs permanent operation
-- **FIXED**: Build system issue preventing firmware upload after documentation updates
+- **[CHANGELOG.md](CHANGELOG.md)** - Detailed version history and technical implementation details
+- **[TODO.md](TODO.md)** - Future roadmap and current architecture documentation
 
 ## Acknowledgments
 

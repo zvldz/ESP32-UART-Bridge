@@ -12,20 +12,26 @@
         <h1>🔗 ESP32 UART Bridge - Connection Help</h1>
         
         <div class="section">
-            <h3>📡 Protocol Optimization</h3>
+            <h3>📡 Universal Protocol Support</h3>
             <div class="success">
-                <strong>Universal UART Bridge:</strong> This bridge works with any UART protocol. It uses hardware DMA (Direct Memory Access) with adaptive buffering that automatically optimizes for different data patterns. The system is particularly well-tuned for MAVLink protocol used by drone autopilots (ArduPilot, PX4), but works efficiently with any serial communication protocol.
+                <strong>Works with ANY UART protocol:</strong> This bridge is protocol-agnostic - it doesn't parse or understand specific protocols. Instead, it uses timing-based buffering with hardware DMA for efficient data transfer with any UART protocol.
             </div>
-            <p><strong>Supported protocols:</strong></p>
+            <p><strong>How it works:</strong></p>
             <ul style="margin-left: 20px;">
-                <li><strong>MAVLink</strong> - Optimized for telemetry and parameter transfer</li>
-                <li><strong>NMEA GPS</strong> - Clean message boundaries detection</li>
-                <li><strong>Modbus RTU</strong> - Preserves inter-frame gaps</li>
-                <li><strong>AT Commands</strong> - Fast response for modem control</li>
-                <li><strong>Firmata</strong> - Low latency for microcontroller communication</li>
-                <li><strong>and other UART-based protocols</strong></li>
+                <li><strong>Hardware DMA</strong> - ESP-IDF drivers with minimal CPU usage</li>
+                <li><strong>Adaptive Buffering</strong> - Groups bytes based on inter-byte gaps</li>
+                <li><strong>Dynamic Buffer Sizing</strong> - Automatically adjusts by baud rate:
+                    <ul style="margin-left: 20px; font-size: 0.9em;">
+                        <li>≤19200: 256 bytes</li>
+                        <li>115200: 288 bytes (optimized for MAVLink timing)</li>
+                        <li>230400: 768 bytes</li>
+                        <li>≥921600: 2048 bytes</li>
+                    </ul>
+                </li>
+                <li><strong>Timing Thresholds</strong> - 200μs/1ms/5ms/15ms for packet detection</li>
             </ul>
-            <p style="margin-top: 10px;"><small>The bridge uses ESP-IDF DMA drivers with hardware packet detection and dynamic buffer sizing (256-2048 bytes based on baud rate) for optimal performance across different protocols and data rates.</small></p>
+            <p><strong>Compatible with all protocols including:</strong> MAVLink (drone telemetry), NMEA (GPS), Modbus RTU (industrial), AT Commands (modems), and any other UART-based protocol.</p>
+            <p style="margin-top: 10px;"><small><strong>Note:</strong> While the bridge works with all protocols, the buffer sizing at 115200 baud (288 bytes) was specifically tuned to reduce packet loss during MAVLink parameter transfers.</small></p>
         </div>
         
         <div class="section">
@@ -37,7 +43,7 @@
                 - Wi-Fi AP active for limited time with automatic timeout<br>
                 - Returns to standalone mode automatically<br>
                 - Use for quick configuration changes<br><br>
-                <strong>🔗 Permanent Network Mode (New in v2.5.8):</strong><br>
+                <strong>🔗 Permanent Network Mode:</strong><br>
                 - Configured via web interface checkbox<br>
                 - Wi-Fi stays active permanently until manually disabled<br>
                 - No timeout - ideal for remote monitoring<br>
@@ -76,14 +82,25 @@
             <h3>Pin Connections</h3>
             <table>
                 <tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
-                <tr><td>GPIO4</td><td>UART RX</td><td>Device TX (UART/TELEM)</td><td>✅ Yes</td></tr>
-                <tr><td>GPIO5</td><td>UART TX</td><td>Device RX (UART/TELEM)</td><td>✅ Yes</td></tr>
+                <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 1 - Main UART (Always Active)</td></tr>
+                <tr><td>GPIO4</td><td>UART RX</td><td>Device TX</td><td>✅ Yes</td></tr>
+                <tr><td>GPIO5</td><td>UART TX</td><td>Device RX</td><td>✅ Yes</td></tr>
+                <tr><td>GPIO6</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+                <tr><td>GPIO7</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+                <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 2 - Secondary UART (When UART2 Role Selected)</td></tr>
+                <tr><td>GPIO8</td><td>UART RX</td><td>Device TX</td><td>📌 If enabled</td></tr>
+                <tr><td>GPIO9</td><td>UART TX</td><td>Device RX</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 3 - Mirror/Bridge/Logger</td></tr>
+                <tr><td>GPIO11</td><td>UART RX</td><td>Bridge mode only</td><td>📌 If bridge</td></tr>
+                <tr><td>GPIO12</td><td>UART TX</td><td>All Device 3 modes</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">System</td></tr>
                 <tr><td>GND</td><td>Ground</td><td>Device GND</td><td>✅ Yes</td></tr>
                 <tr><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
                 <tr><td>GPIO21</td><td>RGB LED</td><td>Built-in (WS2812)</td><td>✅ Yes</td></tr>
-                <tr><td>GPIO6</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
-                <tr><td>GPIO7</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
             </table>
+            <div class="warning" style="margin-top: 10px;">
+                <strong>📌 Note:</strong> Device 2 and Device 3 pins are only used when their respective roles are enabled in the configuration.
+            </div>
         </div>
         
         <div class="section">
@@ -109,9 +126,9 @@
         </div>
         
         <div class="section">
-            <h3>Connection Guide</h3>
+            <h3>Basic Connection Guide</h3>
             <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
-                <h4>Step 1: Connect UART wires</h4>
+                <h4>Minimal Setup - UART to USB Bridge</h4>
                 <p style="font-size: 18px; background: #e9ecef; padding: 10px; border-radius: 5px;">
                     Device TX → ESP32 GPIO4<br>
                     Device RX → ESP32 GPIO5<br>
@@ -122,6 +139,7 @@
                     ESP32 USB-C → Computer USB
                 </p>
                 <p><strong>Result:</strong> Transparent UART ↔ USB bridge ready!</p>
+                <p style="margin-top: 15px; font-size: 0.9em;"><em>For advanced configurations with Device 2/3, flow control, or USB Host mode, see the Pin Connections table above.</em></p>
             </div>
         </div>
         
