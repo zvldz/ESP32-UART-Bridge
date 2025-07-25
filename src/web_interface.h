@@ -2,35 +2,34 @@
 #define ESP32_BRIDGE_WEBSERVER_H
 
 #include "types.h"
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 #include <functional>
 
 // Web server interface
 void webserver_init(Config* config, UartStats* stats, SystemState* state);
-void webServerTask(void* parameter);  // FreeRTOS task function
 void webserver_cleanup();  // Resource cleanup
 bool checkWiFiTimeout();
 
 // Page handlers
-void handleRoot();
-void handleHelp();
-void handleSuccess();
-void handleNotFound();
-void handleReboot();
+void handleRoot(AsyncWebServerRequest *request);
+void handleHelp(AsyncWebServerRequest *request);
+void handleSuccess(AsyncWebServerRequest *request);
+void handleNotFound(AsyncWebServerRequest *request);
+void handleReboot(AsyncWebServerRequest *request);
 
 // Static file handlers
-void handleCSS();
-void handleMainJS();
-void handleCrashJS();
-void handleUtilsJS();
-void handleDeviceConfigJS();
-void handleFormUtilsJS();
-void handleStatusUpdatesJS();
+void handleCSS(AsyncWebServerRequest *request);
+void handleMainJS(AsyncWebServerRequest *request);
+void handleCrashJS(AsyncWebServerRequest *request);
+void handleUtilsJS(AsyncWebServerRequest *request);
+void handleDeviceConfigJS(AsyncWebServerRequest *request);
+void handleFormUtilsJS(AsyncWebServerRequest *request);
+void handleStatusUpdatesJS(AsyncWebServerRequest *request);
 
-// Template processing
-String processTemplate(const String& html, std::function<String(const String&)> processor);
+// Template processing for built-in AsyncWebServer processor
+String processor(const String& var);
 
 // Get server instance for other modules
-WebServer* getWebServer();
+AsyncWebServer* getWebServer();
 
 #endif // ESP32_BRIDGE_WEBSERVER_H

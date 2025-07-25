@@ -206,11 +206,23 @@ void runAllStacksDiagnostics() {
         msg += " UART=" + String(uartStack * 4) + "B";
     }
     
-    // Web server task (if exists)
-    extern TaskHandle_t webServerTaskHandle;
-    if (webServerTaskHandle) {
-        UBaseType_t webStack = uxTaskGetStackHighWaterMark(webServerTaskHandle);
-        msg += " Web=" + String(webStack * 4) + "B";
+    // AsyncWebServer monitoring (runs in WiFi/TCP context)
+    if (bridgeMode == BRIDGE_NET) {
+        msg += " Web=Active";
+        // Monitor WiFi task which handles AsyncWebServer requests
+        TaskHandle_t wifiTask = xTaskGetHandle("wifi");
+        if (wifiTask) {
+            UBaseType_t wifiStack = uxTaskGetStackHighWaterMark(wifiTask);
+            msg += ",WiFi=" + String(wifiStack * 4) + "B";
+        }
+        // Monitor TCP/IP task
+        TaskHandle_t tcpipTask = xTaskGetHandle("tcpip_thread");
+        if (tcpipTask) {
+            UBaseType_t tcpipStack = uxTaskGetStackHighWaterMark(tcpipTask);
+            msg += ",TCP=" + String(tcpipStack * 4) + "B";
+        }
+    } else {
+        msg += " Web=Off";
     }
     
     // Device3 task (if exists)

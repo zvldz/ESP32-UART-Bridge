@@ -3,7 +3,7 @@
 #include "logging.h"
 #include "uart_interface.h"
 #include <Update.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 
 // External objects from main.cpp
 extern UartInterface* uartBridgeSerial;
@@ -13,15 +13,14 @@ extern TaskHandle_t device3TaskHandle;
 // External Device 3 UART interface from uartbridge.cpp
 extern UartInterface* device3Serial;
 
-// Handle OTA update
-void handleOTA() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
-  HTTPUpload& upload = server->upload();
-
-  if (upload.status == UPLOAD_FILE_START) {
-    log_msg("Firmware update started: " + upload.filename, LOG_INFO);
+// Handle OTA update for async web server
+void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+  static bool updateStarted = false;
+  
+  if (!index) {
+    // File start - this is the first chunk
+    log_msg("Firmware update started: " + filename, LOG_INFO);
+    updateStarted = false;
 
     // Suspend UART tasks during update to prevent interference
     if (uartBridgeTaskHandle) {
@@ -60,11 +59,23 @@ void handleOTA() {
       }
       return;
     }
+    
+    updateStarted = true;
+  }
 
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // Flash firmware chunk
-    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+  if (len && updateStarted) {
+    // Write firmware chunk
+    if (Update.write(data, len) != len) {
       log_msg("Firmware write failed: " + String(Update.errorString()), LOG_ERROR);
+      updateStarted = false;
+      
+      // Resume tasks on write failure
+      if (uartBridgeTaskHandle) {
+        vTaskResume(uartBridgeTaskHandle);
+      }
+      if (device3TaskHandle) {
+        vTaskResume(device3TaskHandle);
+      }
       return;
     }
 
@@ -75,13 +86,17 @@ void handleOTA() {
       log_msg("Firmware update progress: " + String(progress) + " bytes", LOG_DEBUG);
       lastProgress = progress;
     }
+  }
 
-  } else if (upload.status == UPLOAD_FILE_END) {
+  if (final && updateStarted) {
+    // File end - finalize update
     if (Update.end(true)) { // True to set the size to the current progress
-      log_msg("Firmware update successful: " + String(upload.totalSize) + " bytes", LOG_INFO);
+      log_msg("Firmware update successful: " + String(index + len) + " bytes", LOG_INFO);
       log_msg("Rebooting device...", LOG_INFO);
+      updateStarted = false;
     } else {
       log_msg("Firmware update failed at end: " + String(Update.errorString()), LOG_ERROR);
+      updateStarted = false;
       
       // Resume tasks if update failed
       if (uartBridgeTaskHandle) {
@@ -91,31 +106,16 @@ void handleOTA() {
         vTaskResume(device3TaskHandle);
       }
     }
-
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    Update.end();
-    log_msg("Firmware update aborted", LOG_WARNING);
-    
-    // Resume tasks after abort
-    if (uartBridgeTaskHandle) {
-      vTaskResume(uartBridgeTaskHandle);
-    }
-    if (device3TaskHandle) {
-      vTaskResume(device3TaskHandle);
-    }
   }
 }
 
-// Handle update end
-void handleUpdateEnd() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
-  server->sendHeader("Connection", "close");
+// Handle update end for async web server
+void handleUpdateEnd(AsyncWebServerRequest *request) {
+  request->send(200, "text/plain", Update.hasError() ? 
+    ("Update failed: " + String(Update.errorString())) : 
+    "Update successful! Rebooting...");
   
   if (Update.hasError()) {
-    server->send(500, "text/plain", "Update failed: " + String(Update.errorString()));
-    
     // Resume tasks after failed update
     if (uartBridgeTaskHandle) {
       vTaskResume(uartBridgeTaskHandle);
@@ -124,7 +124,6 @@ void handleUpdateEnd() {
       vTaskResume(device3TaskHandle);
     }
   } else {
-    server->send(200, "text/plain", "Update successful! Rebooting...");
     vTaskDelay(pdMS_TO_TICKS(500)); // Give time for response to be sent
     ESP.restart();
   }

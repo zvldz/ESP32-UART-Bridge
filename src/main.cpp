@@ -37,7 +37,6 @@ UsbMode usbMode = USB_MODE_DEVICE;
 
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
-TaskHandle_t webServerTaskHandle = NULL;
 TaskHandle_t device3TaskHandle = NULL;
 
 // USB interface
@@ -494,21 +493,5 @@ void createTasks() {
     
     log_msg("Device 3 task created on core " + String(DEVICE3_TASK_CORE) + 
             " for " + String(config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge") + " mode", LOG_INFO);
-  }
-
-  // Create web server task only in NETWORK mode on core 1
-  if (bridgeMode == BRIDGE_NET) {
-    xTaskCreatePinnedToCore(
-      webServerTask,         // Task function
-      "Web_Server_Task",     // Task name
-      32768,                 // Stack size (increased from 16384)
-      NULL,                  // Parameters
-      WEB_TASK_PRIORITY,     // Priority
-      &webServerTaskHandle,  // Task handle
-      WEB_TASK_CORE          // Core 1 (separate core for web server)
-    );
-
-    log_msg("Web Server task created on core " + String(WEB_TASK_CORE) + 
-            " (priority " + String(WEB_TASK_PRIORITY) + ")", LOG_INFO);
   }
 }

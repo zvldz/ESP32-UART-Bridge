@@ -199,6 +199,7 @@ const StatusUpdates = {
         if (!button) return;
         
         const originalText = button.textContent;
+        const originalClass = button.className;
         
         button.disabled = true;
         button.textContent = 'Resetting...';
@@ -207,6 +208,13 @@ const StatusUpdates = {
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Reset failed');
+                }
+                return response.json(); // Parse JSON response
+            })
+            .then(data => {
+                // Check if response indicates success
+                if (data.status !== 'ok') {
+                    throw new Error(data.message || 'Reset failed');
                 }
                 
                 // Update UI immediately
@@ -228,8 +236,17 @@ const StatusUpdates = {
                     this.elements.logEntries.innerHTML = '<div class="log-entry">Statistics and logs cleared</div>';
                 }
                 
-                // Show success feedback
-                Utils.showButtonFeedback(button, 'Reset Complete ✓', 'success-button', 2000);
+                // Reset button state properly
+                button.disabled = false;
+                button.textContent = 'Reset Complete ✓';
+                button.style.backgroundColor = '#4CAF50';
+                
+                // Return to original state after 2 seconds
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.backgroundColor = '#ff9800';
+                    button.className = originalClass;
+                }, 2000);
                 
                 // Force immediate update
                 setTimeout(() => {
@@ -238,9 +255,20 @@ const StatusUpdates = {
             })
             .catch(error => {
                 console.error('Reset error:', error);
-                alert('Failed to reset statistics');
+                
+                // Reset button state on error
                 button.disabled = false;
-                button.textContent = originalText;
+                button.textContent = 'Error!';
+                button.style.backgroundColor = '#f44336';
+                
+                // Return to original state after 3 seconds
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.backgroundColor = '#ff9800';
+                    button.className = originalClass;
+                }, 3000);
+                
+                alert('Failed to reset statistics: ' + error.message);
             });
     },
     

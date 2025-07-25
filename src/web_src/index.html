@@ -6,7 +6,7 @@
     <title>ESP32 UART Bridge</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
     <link rel="stylesheet" href="/style.css">
-    <script type="application/json" id="config">{{CONFIG_JSON}}</script>
+    <script type="application/json" id="config">%CONFIG_JSON%</script>
 </head>
 <body>
     <div class="container">
@@ -138,7 +138,7 @@
                         <label for="password">WiFi Password:</label>
                         <div style="position: relative;">
                             <input type="password" name="password" id="password" maxlength="64" style="padding-right: 40px;">
-                            <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; user-select: none; display: flex; align-items: center;">
+                            <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
                                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
                                     <circle cx="10" cy="10" r="3"></circle>

@@ -115,27 +115,41 @@ const CrashLog = {
             return;
         }
         
-        Utils.safeFetch('/clear_crashlog', () => {
-            // Update UI
-            this.updateBadge(0);
-            
-            // Update table if visible
-            if (this.elements.content && this.elements.content.style.display !== 'none') {
-                this.updateTable([]);
-            }
-            
-            // Show feedback
-            const badge = this.elements.badge;
-            if (badge) {
-                const originalText = badge.textContent;
-                badge.textContent = '✓';
-                setTimeout(() => {
-                    badge.textContent = originalText;
-                }, 1500);
-            }
-        }, (error) => {
-            alert('Failed to clear crash history');
-        });
+        fetch('/clear_crashlog')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Clear failed');
+                }
+                return response.json(); // Parse JSON response
+            })
+            .then(data => {
+                // Check if response indicates success
+                if (data.status !== 'ok') {
+                    throw new Error('Clear operation failed');
+                }
+                
+                // Update UI
+                this.updateBadge(0);
+                
+                // Update table if visible
+                if (this.elements.content && this.elements.content.style.display !== 'none') {
+                    this.updateTable([]);
+                }
+                
+                // Show feedback
+                const badge = this.elements.badge;
+                if (badge) {
+                    const originalText = badge.textContent;
+                    badge.textContent = '✓';
+                    setTimeout(() => {
+                        badge.textContent = originalText;
+                    }, 1500);
+                }
+            })
+            .catch(error => {
+                console.error('Clear crash log error:', error);
+                alert('Failed to clear crash history: ' + error.message);
+            });
     },
     
     // Auto-refresh crash count if section is open

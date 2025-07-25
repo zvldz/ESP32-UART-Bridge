@@ -6,7 +6,7 @@
 #include <DNSServer.h>
 #include <LittleFS.h>
 #include <Preferences.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 
 // Local includes
 #include "web_interface.h"
@@ -25,8 +25,6 @@
 #include "freertos/semphr.h"
 #include "esp_wifi.h"
 
-SemaphoreHandle_t webServerReadySemaphore = nullptr;
-
 // External objects from main.cpp
 extern Config config;
 extern UartStats uartStats;
@@ -36,33 +34,18 @@ extern Preferences preferences;
 extern UsbInterface* usbInterface;
 
 // Local objects - created on demand
-WebServer* server = nullptr;
+AsyncWebServer* server = nullptr;
 DNSServer* dnsServer = nullptr;
 
 // Indicates whether the web server was successfully started
 static bool webServerInitialized = false;
 
-// New template processor for {{}} placeholders
-String processTemplate(const String& html, std::function<String(const String&)> processor) {
-    String result = html;
-    int start = 0;
-    
-    while ((start = result.indexOf("{{", start)) != -1) {
-        int end = result.indexOf("}}", start + 2);
-        if (end == -1) break;
-        
-        String var = result.substring(start + 2, end);
-        String value = processor(var);
-        
-        if (value.length() > 0) {
-            result = result.substring(0, start) + value + result.substring(end + 2);
-            start += value.length();
-        } else {
-            start = end + 2;
-        }
+// Built-in template processor for ESPAsyncWebServer
+String processor(const String& var) {
+    if (var == "CONFIG_JSON") {
+        return getConfigJson();
     }
-    
-    return result;
+    return String();
 }
 
 // Initialize web server in NETWORK mode
@@ -110,69 +93,57 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
     log_msg("WiFi startup complete, USB operations continue normally", LOG_DEBUG);
   }
 
-  // Create web server
-  server = new WebServer(80);
+  // Create async web server
+  server = new AsyncWebServer(80);
 
-  // Setup web server routes
-  server->on("/", handleRoot);
+  // Setup main page with template processing
+  server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", HTML_INDEX, processor);
+  });
+
+  // Setup API routes
   server->on("/save", HTTP_POST, handleSave);
-  server->on("/status", handleStatus);
-  server->on("/logs", handleLogs);
-  server->on("/reboot", handleReboot);
-  server->on("/reset_stats", handleResetStats);
-  server->on("/help", handleHelp);
-  server->on("/success", handleSuccess);
-  server->on("/crashlog_json", handleCrashLogJson);
-  server->on("/clear_crashlog", handleClearCrashLog);
+  server->on("/status", HTTP_GET, handleStatus);
+  server->on("/logs", HTTP_GET, handleLogs);
+  server->on("/reboot", HTTP_GET, handleReboot);
+  server->on("/reset_stats", HTTP_GET, handleResetStats);
+  server->on("/help", HTTP_GET, handleHelp);
+  server->on("/success", HTTP_GET, handleSuccess);
+  server->on("/crashlog_json", HTTP_GET, handleCrashLogJson);
+  server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
   
   // Serve static files
-  server->on("/style.css", handleCSS);
-  server->on("/main.js", handleMainJS);
-  server->on("/crash-log.js", handleCrashJS);
-  server->on("/utils.js", handleUtilsJS);
-  server->on("/device-config.js", handleDeviceConfigJS);
-  server->on("/form-utils.js", handleFormUtilsJS);
-  server->on("/status-updates.js", handleStatusUpdatesJS);
+  server->on("/style.css", HTTP_GET, handleCSS);
+  server->on("/main.js", HTTP_GET, handleMainJS);
+  server->on("/crash-log.js", HTTP_GET, handleCrashJS);
+  server->on("/utils.js", HTTP_GET, handleUtilsJS);
+  server->on("/device-config.js", HTTP_GET, handleDeviceConfigJS);
+  server->on("/form-utils.js", HTTP_GET, handleFormUtilsJS);
+  server->on("/status-updates.js", HTTP_GET, handleStatusUpdatesJS);
   
-  server->onNotFound(handleNotFound);
-  server->on("/update", HTTP_POST, handleUpdateEnd, handleOTA);
-
-  server->begin();
-  log_msg("Web server started on port 80", LOG_INFO);
-  webServerInitialized = true;
-
-  // Signal that the web server is initialized
-  if (!webServerReadySemaphore) {
-    webServerReadySemaphore = xSemaphoreCreateBinary();
-  }
-  xSemaphoreGive(webServerReadySemaphore);
-}
-
-// Web server task for FreeRTOS
-void webServerTask(void* parameter) {
-  // Wait for Web Server initialization to complete
-  log_msg("Waiting for web server initialization...", LOG_DEBUG);
-  if (webServerReadySemaphore) {
-    xSemaphoreTake(webServerReadySemaphore, portMAX_DELAY);
-  }
-
-  log_msg("Web task started on core " + String(xPortGetCoreID()), LOG_DEBUG);
-  vTaskDelay(pdMS_TO_TICKS(1000));
-
-  while (1) {
-    if (server && !webServerInitialized) {
-      log_msg("Server not started", LOG_WARNING);
-    } else if (server) {
-      server->handleClient();
+  // Setup OTA update with async handlers
+  server->on("/update", HTTP_POST, 
+    [](AsyncWebServerRequest *request) {
+      handleUpdateEnd(request);
+    },
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+      handleOTA(request, filename, index, data, len, final);
     }
-    vTaskDelay(pdMS_TO_TICKS(5)); // Give other tasks a chance
-  }
+  );
+
+  // Setup not found handler for captive portal
+  server->onNotFound(handleNotFound);
+
+  // Start the server
+  server->begin();
+  log_msg("Async web server started on port 80", LOG_INFO);
+  webServerInitialized = true;
 }
 
 // Cleanup resources
 void webserver_cleanup() {
   if (server != nullptr) {
-    server->stop();
+    server->end();
     delete server;
     server = nullptr;
   }
@@ -194,62 +165,52 @@ bool checkWiFiTimeout() {
 }
 
 // Handle root page
-void handleRoot() {
-  String html = String(FPSTR(HTML_INDEX));
-  
-  // Process template with configuration JSON
-  html = processTemplate(html, [](const String& var) {
-    if (var == "CONFIG_JSON") {
-      return getConfigJson();
-    }
-    return String();
-  });
-  
-  server->send(200, "text/html", html);
+void handleRoot(AsyncWebServerRequest *request) {
+  request->send_P(200, "text/html", HTML_INDEX, processor);
 }
 
 // Handle help page
-void handleHelp() {
-  server->send(200, "text/html", FPSTR(HTML_HELP));
+void handleHelp(AsyncWebServerRequest *request) {
+  request->send_P(200, "text/html", HTML_HELP);
 }
 
 // Handle CSS request
-void handleCSS() {
-  server->send(200, "text/css", FPSTR(CSS_STYLE));
+void handleCSS(AsyncWebServerRequest *request) {
+  request->send_P(200, "text/css", CSS_STYLE);
 }
 
 // Handle main.js request
-void handleMainJS() {
-  server->send(200, "application/javascript", FPSTR(JS_MAIN));
+void handleMainJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_MAIN);
 }
 
 // Handle crash-log.js request
-void handleCrashJS() {
-  server->send(200, "application/javascript", FPSTR(JS_CRASH_LOG));
+void handleCrashJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_CRASH_LOG);
 }
 
 // Handle utils.js request
-void handleUtilsJS() {
-  server->send(200, "application/javascript", FPSTR(JS_UTILS));
+void handleUtilsJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_UTILS);
 }
 
 // Handle device-config.js request
-void handleDeviceConfigJS() {
-  server->send(200, "application/javascript", FPSTR(JS_DEVICE_CONFIG));
+void handleDeviceConfigJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_DEVICE_CONFIG);
 }
 
 // Handle form-utils.js request
-void handleFormUtilsJS() {
-  server->send(200, "application/javascript", FPSTR(JS_FORM_UTILS));
+void handleFormUtilsJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_FORM_UTILS);
 }
 
 // Handle status-updates.js request
-void handleStatusUpdatesJS() {
-  server->send(200, "application/javascript", FPSTR(JS_STATUS_UPDATES));
+void handleStatusUpdatesJS(AsyncWebServerRequest *request) {
+  request->send_P(200, "application/javascript", JS_STATUS_UPDATES);
 }
 
 // Handle success page for captive portal
-void handleSuccess() {
+void handleSuccess(AsyncWebServerRequest *request) {
   const char successPage[] = R"(
 <!DOCTYPE html><html><head><title>Connected</title></head>
 <body><h1>Successfully Connected!</h1>
@@ -257,24 +218,23 @@ void handleSuccess() {
 <script>setTimeout(function(){window.location='/';}, 2000);</script>
 </body></html>
 )";
-  server->send(200, "text/html", successPage);
+  request->send(200, "text/html", successPage);
 }
 
 // Handle not found - redirect to main page (Captive Portal)
-void handleNotFound() {
-  server->sendHeader("Location", "/", true);
-  server->send(302, "text/plain", "Redirecting to configuration page");
+void handleNotFound(AsyncWebServerRequest *request) {
+  request->redirect("/");
 }
 
 // Handle reboot request
-void handleReboot() {
+void handleReboot(AsyncWebServerRequest *request) {
   log_msg("Device reboot requested via web interface", LOG_INFO);
-  server->send(200, "text/html", "<h1>Rebooting...</h1>");
+  request->send(200, "text/html", "<h1>Rebooting...</h1>");
   vTaskDelay(pdMS_TO_TICKS(1000));
   ESP.restart();
 }
 
 // Make server available to other modules
-WebServer* getWebServer() {
+AsyncWebServer* getWebServer() {
   return server;
 }

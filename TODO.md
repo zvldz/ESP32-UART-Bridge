@@ -1,67 +1,5 @@
 # TODO / Roadmap
 
-## Priority 1 — Logging System and Device Roles
-
-### Logging Channels
-
-There are three distinct logging channels, each with its own configurable verbosity level:
-
-- **Web (GUI) Logs** — displayed in the browser, optionally with filters.
-- **UART Logs** — output through UART (Device 3, TX pin 11).
-- **Network Logs** — transmitted over UDP when Wi-Fi is active (Device 4).
-
-Each channel can be enabled or disabled independently and can have its own log level (e.g. ERROR, WARNING, DEBUG).
-
-### Device Roles
-
-Each device can operate in one of several roles, or be disabled (`None`). Roles and pin assignments must be clearly configured through the web interface using a dropdown selector.
-
-#### Device 1 — Main UART Interface (Required)
-- **Always enabled**, uses fixed UART TX/RX on GPIO 4/5.
-- Protocol is generic UART (e.g. MAVLink, NMEA), not limited to MAVLink.
-- This device **does not participate in logging**.
-- **Now uses ESP-IDF DMA implementation exclusively** ✅
-
-#### Device 2 — Secondary Communication Channel
-- Can be:
-  - Disabled
-  - UART over GPIO 8/9 (**now uses UartDMA with polling**) ✅
-  - USB Device mode (uses Arduino Serial)
-  - USB Host mode (uses ESP-IDF USB Host API)
-- Can be a participant in a bidirectional UART bridge with Device 1.
-- Not used for logging.
-
-#### Device 3 — Logging or Mirror UART
-- Can be:
-  - Disabled
-  - Mirror of Device 1 (unidirectional 1 → 3)
-  - Full UART bridge with Device 1 (bidirectional)
-  - Dedicated UART log channel (TX only) at 115200 baud
-- Uses fixed UART pins 11/12.
-- **Now uses UartDMA with polling (including logger mode)** ✅
-
-#### Device 4 — Wi-Fi / Network Channel
-- Can be:
-  - Disabled
-  - Network bridge (e.g. MAVLink-over-UDP)
-  - Logging over Wi-Fi (UDP logs)
-- Wi-Fi must be active for this device to be used.
-- **Will use AsyncUDP (built into ESP32 Arduino Core) for implementation**
-
-**Note**: Only one role can be active per device. Conflicting configurations (e.g. enabling both mirror and log on Device 3) must be blocked in the UI.
-
-### Logging Policies (Default Suggestions)
-- **UART logs (Device 3)** — log only errors by default
-- **Network logs (Device 4)** — log only errors or be disabled
-- **Web logs (GUI)** — full DEBUG by default (only shown in UI)
-- **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
-
-### Device 3 Adaptive Buffering Optimization
-- **Current state**: Device 3 uses simple byte-by-byte transfer without adaptive buffering
-- **TODO**: Implement adaptive buffering for Device 3 Mirror/Bridge modes similar to Device 2
-- **Benefits**: Better packet boundary preservation for protocols like MAVLink
-- **Implementation**: Add buffering logic in device3Task() with configurable thresholds
-
 ## Completed ✅
 
 ### v2.3.0
@@ -376,9 +314,77 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
   - Prevents version mismatches between firmware and documentation
   - **Fixed**: Removed blocking `exit(0)` that prevented compilation and upload
 
+### v2.6.0 (ESPAsyncWebServer Migration) - Completed ✅ (July 2025)
+- [x] **Migrate to ESPAsyncWebServer** - Completed
+  - **Libraries**: Updated to ESPAsyncWebServer v3.7.10 + AsyncTCP v3.4.5
+  - **Template System**: Changed from custom `{{}}` to built-in `%PLACEHOLDER%` processor
+  - **API Migration**: Converted all handlers to async (request parameter access, response sending)
+  - **OTA Adaptation**: Redesigned file upload handling for async server
+  - **Architecture**: Removed webServerTask - AsyncWebServer works without dedicated task
+  - **Memory Benefits**: Better resource usage, no blocking operations
+  - **Performance**: Non-blocking request handling, improved concurrent connections
+  - **JavaScript Fixes**: Fixed Reset Statistics and Clear Crash History button handling
+  - **Diagnostics**: Enhanced stack monitoring for WiFi/TCP tasks instead of web server task
+
+### Priority 1 — Logging System and Device Roles ✅ COMPLETED
+
+#### Logging Channels
+
+There are three distinct logging channels, each with its own configurable verbosity level:
+
+- **Web (GUI) Logs** — displayed in the browser, optionally with filters.
+- **UART Logs** — output through UART (Device 3, TX pin 11).
+- **Network Logs** — transmitted over UDP when Wi-Fi is active (Device 4).
+
+Each channel can be enabled or disabled independently and can have its own log level (e.g. ERROR, WARNING, DEBUG).
+
+#### Device Roles
+
+Each device can operate in one of several roles, or be disabled (`None`). Roles and pin assignments must be clearly configured through the web interface using a dropdown selector.
+
+##### Device 1 — Main UART Interface (Required)
+- **Always enabled**, uses fixed UART TX/RX on GPIO 4/5.
+- Protocol is generic UART (e.g. MAVLink, NMEA), not limited to MAVLink.
+- This device **does not participate in logging**.
+- **Now uses ESP-IDF DMA implementation exclusively** ✅
+
+##### Device 2 — Secondary Communication Channel
+- Can be:
+  - Disabled
+  - UART over GPIO 8/9 (**now uses UartDMA with polling**) ✅
+  - USB Device mode (uses Arduino Serial)
+  - USB Host mode (uses ESP-IDF USB Host API)
+- Can be a participant in a bidirectional UART bridge with Device 1.
+- Not used for logging.
+
+##### Device 3 — Logging or Mirror UART
+- Can be:
+  - Disabled
+  - Mirror of Device 1 (unidirectional 1 → 3)
+  - Full UART bridge with Device 1 (bidirectional)
+  - Dedicated UART log channel (TX only) at 115200 baud
+- Uses fixed UART pins 11/12.
+- **Now uses UartDMA with polling (including logger mode)** ✅
+
+##### Device 4 — Wi-Fi / Network Channel
+- Can be:
+  - Disabled
+  - Network bridge (e.g. MAVLink-over-UDP)
+  - Logging over Wi-Fi (UDP logs)
+- Wi-Fi must be active for this device to be used.
+- **Will use AsyncUDP (built into ESP32 Arduino Core) for implementation**
+
+**Note**: Only one role can be active per device. Conflicting configurations (e.g. enabling both mirror and log on Device 3) must be blocked in the UI.
+
+#### Logging Policies (Default Suggestions)
+- **UART logs (Device 3)** — log only errors by default
+- **Network logs (Device 4)** — log only errors or be disabled
+- **Web logs (GUI)** — full DEBUG by default (only shown in UI)
+- **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
+
 ## Current Status
 
-The project now uses a full ESP-IDF approach for all UART operations:
+The project now uses a full ESP-IDF approach for all UART operations and modern AsyncWebServer:
 - **Device 1 (Main UART)**: Full ESP-IDF with DMA and event task ✅
 - **Device 2 (Secondary)**: ESP-IDF with DMA polling mode ✅
 - **Device 3 (Mirror/Bridge/Log)**: ESP-IDF with DMA polling mode ✅
@@ -386,81 +392,161 @@ The project now uses a full ESP-IDF approach for all UART operations:
 - **USB Host**: ESP-IDF implementation ✅
 - **UART Logger**: ESP-IDF with DMA polling mode ✅
 - **Permanent Network Mode**: Fully implemented and configurable ✅
+- **Web Server**: ESPAsyncWebServer for non-blocking operations ✅
 
-## Priority 2 - Next Phase
+## Priority 2 - Device 4 Network Implementation
 
-- [ ] **Migrate to ESPAsyncWebServer**
-  - Current: Synchronous WebServer
-  - Target: ESPAsyncWebServer for better performance
-  - Libraries needed:
-    - `https://github.com/ESP32Async/ESPAsyncWebServer.git`
-    - `https://github.com/ESP32Async/AsyncTCP.git`
-  - Benefits:
-    - Non-blocking web requests
-    - WebSocket support for real-time logs
-    - Server-Sent Events for live statistics
-    - Better suited for permanent WiFi mode
-  - Expected to save ~200 lines in web_interface.cpp
-
-- [ ] **Device 4 Network Implementation**
-  - UDP Bridge Mode for MAVLink-over-WiFi
-  - Network logging capabilities
+- [ ] **Device 4 Network Implementation** (implement as single unit)
+  - UDP Bridge Mode for MAVLink-over-WiFi (client + server)
+  - Network logging capabilities via UDP
   - Will use built-in AsyncUDP (no external library needed)
-  - Implementation approach:
+  - Configure via web interface (target IP, port, role selection)
+  - Integration with existing device role system
+  - **Implementation approach**:
     - Create device4_network.cpp/h
     - Add to hybrid refactoring structure
     - Support both client and server modes
-    - Configure via web interface (target IP, port)
+    - Add Device4Task for network packet handling
+  - **Future preparation**:
+    - Create base `NetworkChannel` class for future TCP support
+    - Design config structure with room for TCP parameters
+    - Abstract `LogTransport` interface for different transports
 
-- [ ] **Hardware Packet Detection Improvements**
-  - Current: Fixed 10 character timeout for idle detection
-  - Improvements:
-    - **Dynamic timeout based on protocol hints**:
-      - MAVLink: 5 character periods (tighter packets)
-      - Modbus RTU: 35 character periods (3.5 char standard)
-      - NMEA: Pattern detection on '\n' character
-      - Default: Current 10 character periods
-    - **Pattern detection for text protocols**:
-      - Use `uart_enable_pattern_det_baud_intr()` for line endings
-      - Combine with idle timeout for robust detection
-    - **Adaptive timeout adjustment**:
-      - Monitor packet statistics
-      - Adjust `rx_timeout_thresh` based on observed patterns
-      - Could improve latency for specific protocols
-    - **FIFO threshold optimization**:
-      - Set `rxfifo_full_thresh` for large packet handling
-      - Reduce latency for bulk transfers
-  - Implementation in `uart_dma.cpp` configuration
+### Alternative Captive Portal Implementation
+- **Current**: DNSServer + tDnsProcess task (150ms polling)  
+- **Alternative**: AsyncWebServer CaptiveRequestHandler class
+- **Benefits**: No separate DNS task, better async integration
+- **Implementation**:
+  ```cpp
+  class BridgeCaptiveHandler : public AsyncWebHandler {
+      bool canHandle(AsyncWebServerRequest *request) const override { return true; }
+      void handleRequest(AsyncWebServerRequest *request) { request->redirect("/"); }
+  };
+  server.addHandler(new BridgeCaptiveHandler()).setFilter(ON_AP_FILTER);
+  ```
+- **Device-specific endpoints**: /generate_204 (Android), /hotspot-detect.html (iOS)
+- **Priority**: After main ESPAsyncWebServer migration is stable
+
+## Priority 3 - WiFi Client Mode
+
+### 3.1 - Basic WiFi Client
+- [ ] **Basic WiFi Client Implementation**
+  - Connect ESP32 to existing WiFi network instead of creating AP
+  - Store WiFi credentials in LittleFS config file
+  - Web interface for WiFi network selection and password entry
+  - Basic connection status indication
+  - **Future preparation**: WiFi mode enum (AP, Client, AP+Client)
+
+### 3.2 - Auto-connect and Fallback
+- [ ] **Auto-connect and Fallback Logic**
+  - Auto-connect on boot with saved credentials
+  - Automatic fallback to AP mode on connection failure
+  - Configurable retry attempts and timeouts
+  - Advanced status indication (connected/disconnected/searching)
+  - **Future preparation**: State machine for network mode transitions
+
+## Priority 4 - Multi-Board Support
+
+- [ ] **ESP32-S3 Super Mini Support**
+  - Add board detection system with compile-time configuration
+  - Create separate PlatformIO environments for different boards:
+    - `waveshare-s3-zero` (full features including USB Host)
+    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
+  - Implement runtime USB Host capability checking
+  - Update web interface to hide USB Host option on unsupported boards
+  - Benefits:
+    - Broader hardware compatibility
+    - User choice between full features vs ultra-compact size
+    - Same codebase supports multiple popular ESP32-S3 boards
+  - **Board Comparison**:
+    - **Waveshare ESP32-S3-Zero**: 25x24mm, USB Host support, WS2812 LED (GPIO21)
+    - **ESP32-S3 Super Mini**: 22x18mm, 8MB PSRAM, RGB LED (GPIO48), no USB Host
+  - Implementation approach:
+    - Compile-time board detection via PlatformIO build flags
+    - Runtime validation of USB Host mode availability
+    - Conditional web interface options based on board capabilities
+    - Unified documentation with board-specific notes
+
+## Priority 5 - Protocol Optimizations
+
+### 5.1 - Protocol Detection Framework
+- [ ] **Protocol Detection Framework**
+  - Create base `ProtocolDetector` class
+  - Define interface for packet boundary detection
+  - Support for registering multiple detectors
+  - Integration points in main data flow
+  - **Future preparation**: Architecture ready for SBUS and other protocols
+
+### 5.2 - MAVLink Parser with Hardware Optimization
+- [ ] **MAVLink Packet Detection**
+  - Implement `MavlinkDetector` using Protocol Framework
+  - Simple header check to detect packet length (~30 lines)
+  - No CRC validation or message decoding - just boundaries
+  - **Hardware Packet Detection Integration**:
+    - Dynamic UART idle timeout based on MAVLink timing
+    - Pattern detection for MAVLink sync bytes
+    - Optimize `rx_timeout_thresh` for MAVLink packets
+  - Can be enabled/disabled via config option
+  - Reduces latency by eliminating timeout waiting
+
+### 5.3 - Device 3 Adaptive Buffering
+- [ ] **Device 3 Adaptive Buffering**
+  - Currently uses simple batch transfer (64-byte blocks)
+  - Implement adaptive buffering using Protocol Framework
+  - Apply protocol detectors for intelligent buffering
+  - Add packet boundary preservation for detected protocols
+  - Improve Mirror/Bridge mode performance for packet-based protocols
+  - Benefits for various use cases:
+    - **Industrial**: Modbus RTU frame timing preservation
+    - **Marine**: Complete NMEA sentences
+    - **IoT**: Protocol-aware routing
+    - **RS-485**: Intelligent gateway operation
+
+## Priority 6 - SBUS Protocol Support
+
+- [ ] **SBUS Mode** - UART to/from SBUS converter
+  - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
+  - Convert SBUS to standard UART (configurable baud rate)
+  - **Uses Protocol Framework from Priority 5.1**
+  - **Device Roles**:
+    - `D1_UART_TO_SBUS`: Device 1 receives UART, Device 2 outputs SBUS
+    - `D1_SBUS_TO_UART`: Device 1 receives SBUS, Device 2 outputs UART
+  - **Use cases**:
+    - Connect non-SBUS flight controllers to SBUS-only receivers
+    - Use SBUS receivers with devices expecting standard UART
+    - Protocol conversion for legacy equipment
+  - **Advanced Network Integration**:
+    - **Remote SBUS over Network Infrastructure**: 
+      - Transmit: `SBUS receiver → ESP32 (SBUS→UART) → Network device → Internet`
+      - Receive: `Internet → Network device → ESP32 (UART→SBUS) → Flight controller`
+      - ESP32 acts as protocol converter, network transmission via external devices
+      - Enables SBUS control over unlimited distances using existing network infrastructure
+  - **Technical Implementation**:
+    - Implement `SbusProtocol` class using Protocol Framework
+    - Hardware inverter required for true SBUS signal levels
+    - SBUS frame parsing/generation (25 bytes, specific format)
+    - Configurable channel mapping and signal processing
+    - Timing-critical operations on SBUS side, relaxed timing on UART side
+  - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
+
+## Priority 7 - TCP Client Mode
+
+- [ ] **TCP Client Mode**
+  - Connect to remote TCP servers
+  - Automatic reconnection on disconnect
+  - Configurable server address and port via web interface
+  - Connection status monitoring
+  - **Implementation**: Use AsyncTCP library
+  - Benefits: Reliable connection to remote servers
+  - Use cases: Cloud logging, remote monitoring systems
+
+## Out of Priority (Do when in the mood)
 
 - [ ] **Fix Memory Leaks** *(Low priority - objects live for entire runtime)*
   - Add cleanup/shutdown functions for Device 2 and Device 3
   - Add cleanup for UART logger in logging.cpp
   - Consider using smart pointers (unique_ptr) for serial objects
   - Note: Not critical as these objects are never destroyed during normal operation
-
-- [ ] **Device 3 Adaptive Buffering**
-  - Currently uses simple batch transfer (64-byte blocks)
-  - Implement adaptive buffering similar to main UART bridge task
-  - Add packet boundary detection for better protocol handling
-  - Would improve Mirror/Bridge mode performance for packet-based protocols
-  
-  **Analysis (July 2025)**: While initially considered low priority for MAVLink/drone use cases,
-  this feature becomes important when viewing ESP32 UART Bridge as a universal serial device router:
-  - **Industrial automation**: Modbus RTU requires precise inter-frame timing
-  - **Marine electronics**: NMEA 0183 needs complete sentence preservation  
-  - **IoT/Smart Home**: Bidirectional routing between coordinators and local controllers
-  - **RS-485 networks**: ESP32 as intelligent gateway between network segments
-  
-  **Recommendation**: Implement in future version, starting with simple packet boundary flags.
-  Current batch mode (64-byte blocks) is sufficient for most current use cases.
-
-- [ ] **High-Speed Testing**
-  - Test operation at 921600 and 1000000 baud
-  - Profile CPU usage and latency
-  - Verify packet integrity under load
-  - Document any limitations
-
-## Priority 3 - Future Features
 
 - [ ] **USB Backpressure Implementation**
   - Prevent UART reading when USB buffer is full
@@ -469,68 +555,43 @@ The project now uses a full ESP-IDF approach for all UART operations:
   - Show warnings for high-speed configurations without flow control
   - Consider: `if (usbInterface->availableForWrite() < bufferIndex) skip_uart_read();`
 
-- [ ] **Alternative Data Modes**
-  - **UDP Bridge Mode** - UART over WiFi UDP
-    - Configure target IP and port
-    - Useful for wireless telemetry
-    - **Implementation**: Use built-in AsyncUDP from ESP32 Arduino Core
-    - Support both unicast and broadcast modes
-  - **TCP Server Mode** - Accept TCP connections
-    - Multiple client support
-    - Authentication options
-    - **Implementation**: Use AsyncTCP library
-    - Consider connection management and timeouts
+## Future Considerations
 
-- [ ] **Protocol-Specific Optimizations**
-  - **MAVLink Mode** - Lightweight packet boundary detection
-    - Only detect packet boundaries, no full parsing
-    - ~30 lines of code vs ~50KB for full parser
-    - Reduces latency by sending complete packets immediately
-    - Eliminates 5ms pause waiting for packet boundaries
-    - **Implementation**: Simple header check to detect packet length
-    - No CRC validation, no message decoding - just boundaries
-    - Can be enabled/disabled via config option
-  - **SBUS Mode** - UART to/from SBUS converter
-    - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
-    - Convert SBUS to standard UART (configurable baud rate)
-    - **Roles to add**:
-      - `D1_UART_TO_SBUS`: Device 1 receives UART, Device 2 outputs SBUS
-      - `D1_SBUS_TO_UART`: Device 1 receives SBUS, Device 2 outputs UART
-    - **Use cases**:
-      - Connect non-SBUS flight controllers to SBUS-only receivers
-      - Use SBUS receivers with devices expecting standard UART
-      - Protocol conversion for legacy equipment
-      - **Remote SBUS over network**: Enable SBUS transmission over any network
-        - Transmit side: `SBUS receiver → ESP32 (SBUS→UART) → Network device → Internet`
-        - Receive side: `Internet → Network device → ESP32 (UART→SBUS) → Flight controller`
-        - ESP32 acts only as protocol converter, not network bridge
-        - Network transmission handled by external devices (4G modems, routers, etc.)
-        - Enables SBUS control over unlimited distances
-    - **Implementation**:
-      - Hardware inverter required for true SBUS signal
-      - SBUS frame parsing/generation (25 bytes, specific format)
-      - Configurable channel mapping
-      - Timing-critical on SBUS side, relaxed on UART side
-    - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
+- [ ] **Advanced Network Features**
+  - **TCP Server Mode** - Accept TCP connections
+    - Multiple client support with connection management
+    - Authentication options for secure access
+    - Connection timeout and cleanup handling
+    
+  - **WebSocket Real-time Interface** *(AsyncWebServer enables this)*
+    - Real-time log streaming via WebSocket
+    - Live statistics updates without polling
+    - Bidirectional communication for control commands
+    
+  - **Network Discovery**
+    - mDNS/Bonjour support for easy device discovery
+    - SSDP (Simple Service Discovery Protocol)
+    - Custom UDP broadcast announcement
 
 - [ ] **Advanced Configuration**
   - Configurable GPIO pins via web interface
   - Support for different ESP32 board variants
   - Import/Export configuration files
   - Configuration profiles for common use cases
-  - **Implementation**: Extended config structure with pin mapping
 
-- [ ] **WebSocket Real-time Interface** *(After ESPAsyncWebServer migration)*
-  - Real-time log streaming via WebSocket
-  - Live statistics updates without polling
-  - Bidirectional communication for control
-  - **Implementation**: Part of ESPAsyncWebServer features
+- [ ] **Hardware Packet Detection Improvements**
+  - Current: Fixed 10 character timeout for idle detection
+  - Improvements:
+    - Dynamic timeout based on protocol hints
+    - Pattern detection for text protocols
+    - Adaptive timeout adjustment
+    - FIFO threshold optimization
 
-- [ ] **Network Discovery**
-  - mDNS/Bonjour support for easy device discovery
-  - SSDP (Simple Service Discovery Protocol)
-  - Custom UDP broadcast announcement
-  - **Libraries**: Built-in mDNS support in ESP32
+- [ ] **High-Speed Testing**
+  - Test operation at 921600 and 1000000 baud
+  - Profile CPU usage and latency
+  - Verify packet integrity under load
+  - Document any limitations
 
 ## Libraries and Dependencies
 
@@ -540,15 +601,13 @@ lib_deps =
     bblanchon/ArduinoJson@^7.4.2      # JSON parsing and generation
     fastled/FastLED@^3.10.1            # WS2812 LED control
     arkhipenko/TaskScheduler@^3.7.0   # Task scheduling ✅
+    ESP32Async/ESPAsyncWebServer@^3.7.10  # Async web server ✅
+    ESP32Async/AsyncTCP@^3.4.5        # TCP support for async server ✅
 ```
 
 ### Planned Dependencies
 ```ini
 lib_deps =
-    # For async web server (Priority 2)
-    https://github.com/ESP32Async/ESPAsyncWebServer.git
-    https://github.com/ESP32Async/AsyncTCP.git
-    
     # Built-in libraries (no installation needed)
     # - AsyncUDP (included in ESP32 Arduino Core)
     # - mDNS (included in ESP32 Arduino Core)
@@ -560,10 +619,11 @@ lib_deps =
 - USB Auto mode needs VBUS detection implementation
 - Consider security implications before adding network streaming modes
 - Maintain backward compatibility with existing installations
-- Version 2.5.8 completes permanent network mode implementation
+- Version 2.6.0 introduces ESPAsyncWebServer for better performance and concurrent handling
 - DMA implementation enables hardware-based packet detection and minimal packet loss
 - Web interface modularization improves maintainability and development workflow
 - TaskScheduler implementation significantly simplifies periodic task management
 - Library selection focuses on well-maintained, performance-oriented solutions
 - Bridge mode renaming provides clearer architecture for future expansion
 - Permanent network mode enables always-on Wi-Fi operation for production deployments
+- AsyncWebServer migration improves memory usage and enables advanced features like WebSockets

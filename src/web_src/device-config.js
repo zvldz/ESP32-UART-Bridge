@@ -76,7 +76,7 @@ const DeviceConfig = {
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                 <div>
                     <label>Web Logs:</label>
-                    <select name="log_level_web" id="log_level_web" style="width: 100px;">
+                    <select name="log_level_web" id="log_level_web" style="width: 120px;">
                         <option value="-1">OFF</option>
                         <option value="0">ERROR</option>
                         <option value="1">WARNING</option>
@@ -86,7 +86,7 @@ const DeviceConfig = {
                 </div>
                 <div>
                     <label>UART Logs:</label>
-                    <select name="log_level_uart" id="log_level_uart" style="width: 100px;">
+                    <select name="log_level_uart" id="log_level_uart" style="width: 120px;">
                         <option value="-1">OFF</option>
                         <option value="0">ERROR</option>
                         <option value="1">WARNING</option>
@@ -96,7 +96,7 @@ const DeviceConfig = {
                 </div>
                 <div>
                     <label>Network Logs:</label>
-                    <select name="log_level_network" id="log_level_network" disabled style="width: 100px;">
+                    <select name="log_level_network" id="log_level_network" disabled style="width: 120px;">
                         <option value="-1">OFF</option>
                         <option value="0">ERROR</option>
                         <option value="1">WARNING</option>
