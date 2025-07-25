@@ -9,7 +9,7 @@
 #include "diagnostics.h"
 #include "scheduler_tasks.h"
 #include <Arduino.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 
 // External objects from main.cpp
@@ -115,10 +115,7 @@ String getConfigJson() {
 }
 
 // Handle status request with critical sections
-void handleStatus() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleStatus(AsyncWebServerRequest *request) {
   JsonDocument doc;
 
   // Copy all statistics in one critical section
@@ -164,14 +161,11 @@ void handleStatus() {
 
   String json;
   serializeJson(doc, json);
-  server->send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
 // Handle logs request
-void handleLogs() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleLogs(AsyncWebServerRequest *request) {
   JsonDocument doc;
   JsonArray logs = doc["logs"].to<JsonArray>();
 
@@ -185,22 +179,20 @@ void handleLogs() {
 
   String json;
   serializeJson(doc, json);
-  server->send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
 // Handle save configuration
-void handleSave() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleSave(AsyncWebServerRequest *request) {
   log_msg("Saving new configuration...", LOG_INFO);
 
   // Parse form data
   bool configChanged = false;
 
   // UART settings - convert from web format to ESP-IDF enums
-  if (server->hasArg("baudrate")) {
-    uint32_t newBaudrate = server->arg("baudrate").toInt();
+  if (request->hasParam("baudrate", true)) {
+    const AsyncWebParameter* p = request->getParam("baudrate", true);
+    uint32_t newBaudrate = p->value().toInt();
     if (newBaudrate != config.baudrate) {
       config.baudrate = newBaudrate;
       configChanged = true;
@@ -208,8 +200,9 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("databits")) {
-    uint8_t newDatabits = server->arg("databits").toInt();
+  if (request->hasParam("databits", true)) {
+    const AsyncWebParameter* p = request->getParam("databits", true);
+    uint8_t newDatabits = p->value().toInt();
     uart_word_length_t newWordLength = string_to_word_length(newDatabits);
     if (newWordLength != config.databits) {
       config.databits = newWordLength;
@@ -218,8 +211,9 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("parity")) {
-    String newParity = server->arg("parity");
+  if (request->hasParam("parity", true)) {
+    const AsyncWebParameter* p = request->getParam("parity", true);
+    String newParity = p->value();
     uart_parity_t newParityEnum = string_to_parity(newParity.c_str());
     if (newParityEnum != config.parity) {
       config.parity = newParityEnum;
@@ -228,8 +222,9 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("stopbits")) {
-    uint8_t newStopbits = server->arg("stopbits").toInt();
+  if (request->hasParam("stopbits", true)) {
+    const AsyncWebParameter* p = request->getParam("stopbits", true);
+    uint8_t newStopbits = p->value().toInt();
     uart_stop_bits_t newStopBitsEnum = string_to_stop_bits(newStopbits);
     if (newStopBitsEnum != config.stopbits) {
       config.stopbits = newStopBitsEnum;
@@ -238,7 +233,7 @@ void handleSave() {
     }
   }
 
-  bool newFlowcontrol = server->hasArg("flowcontrol");
+  bool newFlowcontrol = request->hasParam("flowcontrol", true);
   if (newFlowcontrol != config.flowcontrol) {
     config.flowcontrol = newFlowcontrol;
     configChanged = true;
@@ -246,8 +241,9 @@ void handleSave() {
   }
 
   // USB mode settings
-  if (server->hasArg("usbmode")) {
-    String mode = server->arg("usbmode");
+  if (request->hasParam("usbmode", true)) {
+    const AsyncWebParameter* p = request->getParam("usbmode", true);
+    String mode = p->value();
     UsbMode newMode = USB_MODE_DEVICE;
     if (mode == "host") {
       newMode = USB_MODE_HOST;
@@ -263,8 +259,9 @@ void handleSave() {
   }
 
   // Device 2 role
-  if (server->hasArg("device2_role")) {
-    int role = server->arg("device2_role").toInt();
+  if (request->hasParam("device2_role", true)) {
+    const AsyncWebParameter* p = request->getParam("device2_role", true);
+    int role = p->value().toInt();
     if (role >= D2_NONE && role <= D2_USB) {
       if (role != config.device2.role) {
         config.device2.role = role;
@@ -275,8 +272,9 @@ void handleSave() {
   }
 
   // Device 3 role
-  if (server->hasArg("device3_role")) {
-    int role = server->arg("device3_role").toInt();
+  if (request->hasParam("device3_role", true)) {
+    const AsyncWebParameter* p = request->getParam("device3_role", true);
+    int role = p->value().toInt();
     if (role >= D3_NONE && role <= D3_UART3_LOG) {
       if (role != config.device3.role) {
         config.device3.role = role;
@@ -287,8 +285,9 @@ void handleSave() {
   }
 
   // Device 4 role
-  if (server->hasArg("device4_role")) {
-    int role = server->arg("device4_role").toInt();
+  if (request->hasParam("device4_role", true)) {
+    const AsyncWebParameter* p = request->getParam("device4_role", true);
+    int role = p->value().toInt();
     if (role >= D4_NONE && role <= D4_LOG_NETWORK) {
       if (role != config.device4.role) {
         config.device4.role = role;
@@ -299,9 +298,10 @@ void handleSave() {
   }
 
   // Log levels
-  if (server->hasArg("log_level_web")) {
-    int level = server->arg("log_level_web").toInt();
-    if (server->arg("log_level_web") == "-1") level = LOG_OFF;
+  if (request->hasParam("log_level_web", true)) {
+    const AsyncWebParameter* p = request->getParam("log_level_web", true);
+    int level = p->value().toInt();
+    if (p->value() == "-1") level = LOG_OFF;
     
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_web) {
@@ -312,9 +312,10 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("log_level_uart")) {
-    int level = server->arg("log_level_uart").toInt();
-    if (server->arg("log_level_uart") == "-1") level = LOG_OFF;
+  if (request->hasParam("log_level_uart", true)) {
+    const AsyncWebParameter* p = request->getParam("log_level_uart", true);
+    int level = p->value().toInt();
+    if (p->value() == "-1") level = LOG_OFF;
     
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_uart) {
@@ -325,9 +326,10 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("log_level_network")) {
-    int level = server->arg("log_level_network").toInt();
-    if (server->arg("log_level_network") == "-1") level = LOG_OFF;
+  if (request->hasParam("log_level_network", true)) {
+    const AsyncWebParameter* p = request->getParam("log_level_network", true);
+    int level = p->value().toInt();
+    if (p->value() == "-1") level = LOG_OFF;
     
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_network) {
@@ -339,8 +341,9 @@ void handleSave() {
   }
 
   // WiFi settings
-  if (server->hasArg("ssid")) {
-    String newSSID = server->arg("ssid");
+  if (request->hasParam("ssid", true)) {
+    const AsyncWebParameter* p = request->getParam("ssid", true);
+    String newSSID = p->value();
     if (newSSID.length() > 0 && newSSID != config.ssid) {
       config.ssid = newSSID;
       configChanged = true;
@@ -348,8 +351,9 @@ void handleSave() {
     }
   }
 
-  if (server->hasArg("password")) {
-    String newPassword = server->arg("password");
+  if (request->hasParam("password", true)) {
+    const AsyncWebParameter* p = request->getParam("password", true);
+    String newPassword = p->value();
     if (newPassword.length() >= 8 && newPassword != config.password) {
       config.password = newPassword;
       configChanged = true;
@@ -358,8 +362,9 @@ void handleSave() {
   }
 
   // Permanent WiFi mode
-  if (server->hasArg("permanent_wifi")) {
-    bool newPermanent = server->arg("permanent_wifi") == "1";
+  if (request->hasParam("permanent_wifi", true)) {
+    const AsyncWebParameter* p = request->getParam("permanent_wifi", true);
+    bool newPermanent = p->value() == "1";
     if (newPermanent != config.permanent_network_mode) {
       config.permanent_network_mode = newPermanent;
       configChanged = true;
@@ -372,42 +377,32 @@ void handleSave() {
     cancelWiFiTimeout();
     
     config_save(&config);
-    server->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
-    server->client().clear();  // Ensure response is sent
+    request->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
     vTaskDelay(pdMS_TO_TICKS(3000));  // Match the 3 seconds shown in HTML
     ESP.restart();
   } else {
-    server->send(200, "text/html", "<h1>No Changes</h1><p>Configuration was not modified.</p><a href='/'>Back</a>");
+    request->send(200, "text/html", "<h1>No Changes</h1><p>Configuration was not modified.</p><a href='/'>Back</a>");
   }
 }
 
 // Handle reset statistics
-void handleResetStats() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleResetStats(AsyncWebServerRequest *request) {
   log_msg("Resetting statistics and logs...", LOG_INFO);
   resetStatistics(&uartStats);
   logging_clear();
 
   // Return JSON response for AJAX request
-  server->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Statistics and logs cleared\"}");
+  request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Statistics and logs cleared\"}");
 }
 
 // Handle crash log JSON request
-void handleCrashLogJson() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleCrashLogJson(AsyncWebServerRequest *request) {
   String json = crashlog_get_json();
-  server->send(200, "application/json", json);
+  request->send(200, "application/json", json);
 }
 
 // Handle clear crash log request
-void handleClearCrashLog() {
-  WebServer* server = getWebServer();
-  if (!server) return;
-
+void handleClearCrashLog(AsyncWebServerRequest *request) {
   crashlog_clear();
-  server->send(200, "application/json", "{\"status\":\"ok\"}");
+  request->send(200, "application/json", "{\"status\":\"ok\"}");
 }
