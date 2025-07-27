@@ -29,9 +29,9 @@ static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 4, TASK_FOREVER,
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 
 // External function declarations
-extern void updateMainStats();        // Will be implemented in uartbridge.cpp
-extern void updateDevice3Stats();     // Will be implemented in uartbridge.cpp
-extern void updateDevice4Stats();     // Will be implemented in uartbridge.cpp
+extern void updateMainStats();        // Implemented in uartbridge.cpp
+extern void updateDevice3Stats();     // Implemented in device3_task.cpp
+extern void updateDevice4Stats();     // Implemented in device4_task.cpp
 
 void initializeScheduler() {
     // Set all callbacks

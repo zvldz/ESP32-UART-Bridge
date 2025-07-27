@@ -16,8 +16,12 @@ extern FlowControlStatus flowControlStatus;
 
 // External objects from uartbridge.cpp
 extern UartInterface* device2Serial;
-extern UartInterface* device3Serial;
+
+// External objects from device3_task.cpp
 extern SemaphoreHandle_t device3Mutex;
+
+// Device 3 UART interface (defined here, used via extern in device3_task.h)
+UartInterface* device3Serial = nullptr;
 
 // Global variable for USB interface (used in uartbridge.cpp)
 UsbInterface* g_usbInterface = nullptr;

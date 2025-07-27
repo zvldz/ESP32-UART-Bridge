@@ -1,109 +1,6 @@
 # TODO / Roadmap
 
-## Current Device Architecture
-
-### Device Roles
-
-Each device can operate in one of several roles, or be disabled (`None`). Roles and pin assignments are configured through the web interface using dropdown selectors.
-
-#### Device 1 — Main UART Interface (Required)
-- **Always enabled**, uses fixed UART TX/RX on GPIO 4/5.
-- Protocol is generic UART (e.g. MAVLink, NMEA), not limited to MAVLink.
-- This device **does not participate in logging**.
-- Uses ESP-IDF DMA implementation exclusively.
-
-#### Device 2 — Secondary Communication Channel
-- Can be:
-  - Disabled
-  - UART over GPIO 8/9 (uses UartDMA with polling)
-  - USB Device mode (uses Arduino Serial)
-  - USB Host mode (uses ESP-IDF USB Host API)
-- Can be a participant in a bidirectional UART bridge with Device 1.
-- Not used for logging.
-
-#### Device 3 — Logging or Mirror UART
-- Can be:
-  - Disabled
-  - Mirror of Device 1 (unidirectional 1 → 3)
-  - Full UART bridge with Device 1 (bidirectional)
-  - Dedicated UART log channel (TX only) at 115200 baud
-- Uses fixed UART pins 11/12.
-- Uses UartDMA with polling (including logger mode).
-
-#### Device 4 — Wi-Fi / Network Channel ✅
-- Can be:
-  - Disabled
-  - Network bridge (e.g. MAVLink-over-UDP) ✅
-  - Logging over Wi-Fi (UDP logs) ✅
-- Wi-Fi must be active for this device to be used.
-- **Uses AsyncUDP (built into ESP32 Arduino Core) for implementation** ✅
-
-**Note**: Only one role can be active per device. Conflicting configurations (e.g. enabling both mirror and log on Device 3) must be blocked in the UI.
-
-### Logging System
-
-Three distinct logging channels, each with its own configurable verbosity level:
-
-- **Web (GUI) Logs** — displayed in the browser, optionally with filters.
-- **UART Logs** — output through UART (Device 3, TX pin 12).
-- **Network Logs** — transmitted over UDP when Wi-Fi is active (Device 4).
-
-Each channel can be enabled or disabled independently and can have its own log level (e.g. ERROR, WARNING, DEBUG).
-
-#### Logging Policies (Default Suggestions)
-- **UART logs (Device 3)** — log only errors by default
-- **Network logs (Device 4)** — log only errors or be disabled
-- **Web logs (GUI)** — full DEBUG by default (only shown in UI)
-- **Do not mirror full DEBUG logs to Wi-Fi** — it may affect performance
-
-## Current Status
-
-The project now uses a full ESP-IDF approach for all UART operations and modern AsyncWebServer:
-- **Device 1 (Main UART)**: Full ESP-IDF with DMA and event task ✅
-- **Device 2 (Secondary)**: ESP-IDF with DMA polling mode ✅
-- **Device 3 (Mirror/Bridge/Log)**: ESP-IDF with DMA polling mode ✅
-- **Device 4 (Network)**: AsyncUDP for Logger and Bridge modes ✅
-- **USB Device**: Arduino Serial (proven stable) ✅
-- **USB Host**: ESP-IDF implementation ✅
-- **UART Logger**: ESP-IDF with DMA polling mode ✅
-- **Permanent Network Mode**: Fully implemented and configurable ✅
-- **Web Server**: ESPAsyncWebServer for non-blocking operations ✅
-
-## Priority 2 - Device 4 Network Implementation ✅
-
-- [x] **Device 4 Network Implementation** (implement as single unit) ✅
-  - UDP Bridge Mode for MAVLink-over-WiFi (client + server) ✅
-  - Network logging capabilities via UDP ✅
-  - Will use built-in AsyncUDP (no external library needed) ✅
-  - Configure via web interface (target IP, port, role selection) ✅
-  - Integration with existing device role system ✅
-  - **Implementation approach**: ✅
-    - Create network_bridge.cpp/h ✅
-    - Add to hybrid refactoring structure ✅
-    - Support both client and server modes ✅
-    - Add Device4Task for network packet handling ✅
-  - **Future preparation**: ✅
-    - Create base `NetworkChannel` class for future TCP support ✅
-    - Design config structure with room for TCP parameters ✅
-    - Abstract `LogTransport` interface for different transports ✅
-  - **Note**: See detailed implementation plan in `Device 4 Network Implementation - Detailed Plan.md` ✅
-
-### Alternative Captive Portal Implementation
-- **Current**: DNSServer + tDnsProcess task (150ms polling)  
-- **Alternative**: AsyncWebServer CaptiveRequestHandler class
-- **Benefits**: No separate DNS task, better async integration
-- **Implementation**:
-  ```cpp
-  class BridgeCaptiveHandler : public AsyncWebHandler {
-      bool canHandle(AsyncWebServerRequest *request) const override { return true; }
-      void handleRequest(AsyncWebServerRequest *request) { request->redirect("/"); }
-  };
-  server.addHandler(new BridgeCaptiveHandler()).setFilter(ON_AP_FILTER);
-  ```
-- **Device-specific endpoints**: /generate_204 (Android), /hotspot-detect.html (iOS)
-- **Priority**: After main ESPAsyncWebServer migration is stable
-
-## Priority 3 - Configuration Import/Export
+## Priority 1 - Configuration Import/Export
 
 - [ ] **Export Configuration**
   - Download current config as JSON file
@@ -131,9 +28,24 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Share configurations between devices
   - No need to reconfigure after firmware updates
 
-## Priority 4 - WiFi Client Mode
+### Alternative Captive Portal Implementation
+- **Current**: DNSServer + tDnsProcess task (150ms polling)  
+- **Alternative**: AsyncWebServer CaptiveRequestHandler class
+- **Benefits**: No separate DNS task, better async integration
+- **Implementation**:
+  ```cpp
+  class BridgeCaptiveHandler : public AsyncWebHandler {
+      bool canHandle(AsyncWebServerRequest *request) const override { return true; }
+      void handleRequest(AsyncWebServerRequest *request) { request->redirect("/"); }
+  };
+  server.addHandler(new BridgeCaptiveHandler()).setFilter(ON_AP_FILTER);
+  ```
+- **Device-specific endpoints**: /generate_204 (Android), /hotspot-detect.html (iOS)
+- **Priority**: After main ESPAsyncWebServer migration is stable
 
-### 4.1 - Basic WiFi Client
+## Priority 2 - WiFi Client Mode
+
+### 2.1 - Basic WiFi Client
 - [ ] **Basic WiFi Client Implementation**
   - Connect ESP32 to existing WiFi network instead of creating AP
   - Store WiFi credentials in LittleFS config file
@@ -141,7 +53,7 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Basic connection status indication
   - **Future preparation**: WiFi mode enum (AP, Client, AP+Client)
 
-### 4.2 - Auto-connect and Fallback
+### 2.2 - Auto-connect and Fallback
 - [ ] **Auto-connect and Fallback Logic**
   - Auto-connect on boot with saved credentials
   - Automatic fallback to AP mode on connection failure
@@ -149,7 +61,7 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Advanced status indication (connected/disconnected/searching)
   - **Future preparation**: State machine for network mode transitions
 
-## Priority 5 - Multi-Board Support
+## Priority 3 - Multi-Board Support
 
 - [ ] **ESP32-S3 Super Mini Support**
   - Add board detection system with compile-time configuration
@@ -171,9 +83,9 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
     - Conditional web interface options based on board capabilities
     - Unified documentation with board-specific notes
 
-## Priority 6 - Protocol Optimizations
+## Priority 4 - Protocol Optimizations
 
-### 6.1 - Protocol Detection Framework
+### 4.1 - Protocol Detection Framework
 - [ ] **Protocol Detection Framework**
   - Create base `ProtocolDetector` class
   - Define interface for packet boundary detection
@@ -181,7 +93,7 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Integration points in main data flow
   - **Future preparation**: Architecture ready for SBUS and other protocols
 
-### 6.2 - MAVLink Parser with Hardware Optimization
+### 4.2 - MAVLink Parser with Hardware Optimization
 - [ ] **MAVLink Packet Detection**
   - Implement `MavlinkDetector` using Protocol Framework
   - Simple header check to detect packet length (~30 lines)
@@ -194,7 +106,7 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Reduces latency by eliminating timeout waiting
   - **Note**: Works together with adaptive buffering, not replaces it
 
-### 6.3 - Hardware Packet Detection Improvements
+### 4.3 - Hardware Packet Detection Improvements
 - [ ] **Hardware-level Protocol Optimization**
   - Dynamic timeout based on detected protocol (not just MAVLink)
   - Pattern detection for text protocols using `uart_enable_pattern_det_baud_intr()`
@@ -202,7 +114,7 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
   - Benefits ALL protocols, not protocol-specific
   - Implementation in `uart_dma.cpp` configuration
 
-### 6.4 - Device 3 Adaptive Buffering
+### 4.4 - Device 3 Adaptive Buffering
 - [ ] **Device 3 Adaptive Buffering**
   - Currently uses simple batch transfer (64-byte blocks)
   - Implement adaptive buffering using Protocol Framework
@@ -215,12 +127,12 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
     - **IoT**: Protocol-aware routing
     - **RS-485**: Intelligent gateway operation
 
-## Priority 7 - SBUS Protocol Support
+## Priority 5 - SBUS Protocol Support
 
 - [ ] **SBUS Mode** - UART to/from SBUS converter
   - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
   - Convert SBUS to standard UART (configurable baud rate)
-  - **Uses Protocol Framework from Priority 6.1**
+  - **Uses Protocol Framework from Priority 4.1**
   - **Device Roles**:
     - `D1_UART_TO_SBUS`: Device 1 receives UART, Device 2 outputs SBUS
     - `D1_SBUS_TO_UART`: Device 1 receives SBUS, Device 2 outputs UART
