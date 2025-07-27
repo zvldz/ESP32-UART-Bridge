@@ -10,6 +10,14 @@
 // External objects
 extern SemaphoreHandle_t logMutex;
 extern Config config;
+extern SystemState systemState;
+
+// Device 4 logging support
+extern SemaphoreHandle_t device4LogMutex;
+extern uint8_t device4LogBuffer[];
+extern int device4LogHead;
+extern int device4LogTail;
+#define DEVICE4_LOG_BUFFER_SIZE 2048
 
 // Logging system internal data
 static String logBuffer[LOG_BUFFER_SIZE];
@@ -139,6 +147,46 @@ void log_msg(String message, LogLevel level) {
       logSerial->write((const uint8_t*)logLine.c_str(), logLine.length());
     }
     // If buffer full - skip this log to avoid blocking
+  }
+
+  // Output to network if Device 4 is configured as logger
+  if (systemState.networkActive &&
+      config.device4.role == D4_LOG_NETWORK &&
+      config.log_level_network != LOG_OFF && 
+      level <= config.log_level_network &&
+      device4LogMutex) {
+    
+    // Format log for network (same as web interface)
+    unsigned long uptimeMs = millis();
+    unsigned long seconds = uptimeMs / 1000;
+    unsigned long ms = uptimeMs % 1000;
+    
+    String logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
+                     String(getLogLevelName(level)) + "] " + message + "\n";
+    
+    // Add to buffer (non-blocking)
+    if (xSemaphoreTake(device4LogMutex, 0) == pdTRUE) {
+        const char* data = logLine.c_str();
+        size_t len = logLine.length();
+        
+        // Add to ring buffer
+        int added = 0;
+        for (size_t i = 0; i < len; i++) {
+            int nextHead = (device4LogHead + 1) % DEVICE4_LOG_BUFFER_SIZE;
+            if (nextHead != device4LogTail) {
+                device4LogBuffer[device4LogHead] = data[i];
+                device4LogHead = nextHead;
+                added++;
+            } else {
+                // Buffer full - stop
+                break;
+            }
+        }
+        
+        xSemaphoreGive(device4LogMutex);
+        
+        // Do not log overflow to avoid recursion
+    }
   }
 }
 

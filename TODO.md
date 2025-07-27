@@ -30,13 +30,13 @@ Each device can operate in one of several roles, or be disabled (`None`). Roles 
 - Uses fixed UART pins 11/12.
 - Uses UartDMA with polling (including logger mode).
 
-#### Device 4 — Wi-Fi / Network Channel (Future)
+#### Device 4 — Wi-Fi / Network Channel ✅
 - Can be:
   - Disabled
-  - Network bridge (e.g. MAVLink-over-UDP)
-  - Logging over Wi-Fi (UDP logs)
+  - Network bridge (e.g. MAVLink-over-UDP) ✅
+  - Logging over Wi-Fi (UDP logs) ✅
 - Wi-Fi must be active for this device to be used.
-- **Will use AsyncUDP (built into ESP32 Arduino Core) for implementation**
+- **Uses AsyncUDP (built into ESP32 Arduino Core) for implementation** ✅
 
 **Note**: Only one role can be active per device. Conflicting configurations (e.g. enabling both mirror and log on Device 3) must be blocked in the UI.
 
@@ -62,30 +62,31 @@ The project now uses a full ESP-IDF approach for all UART operations and modern 
 - **Device 1 (Main UART)**: Full ESP-IDF with DMA and event task ✅
 - **Device 2 (Secondary)**: ESP-IDF with DMA polling mode ✅
 - **Device 3 (Mirror/Bridge/Log)**: ESP-IDF with DMA polling mode ✅
+- **Device 4 (Network)**: AsyncUDP for Logger and Bridge modes ✅
 - **USB Device**: Arduino Serial (proven stable) ✅
 - **USB Host**: ESP-IDF implementation ✅
 - **UART Logger**: ESP-IDF with DMA polling mode ✅
 - **Permanent Network Mode**: Fully implemented and configurable ✅
 - **Web Server**: ESPAsyncWebServer for non-blocking operations ✅
 
-## Priority 2 - Device 4 Network Implementation
+## Priority 2 - Device 4 Network Implementation ✅
 
-- [ ] **Device 4 Network Implementation** (implement as single unit)
-  - UDP Bridge Mode for MAVLink-over-WiFi (client + server)
-  - Network logging capabilities via UDP
-  - Will use built-in AsyncUDP (no external library needed)
-  - Configure via web interface (target IP, port, role selection)
-  - Integration with existing device role system
-  - **Implementation approach**:
-    - Create network_bridge.cpp/h
-    - Add to hybrid refactoring structure
-    - Support both client and server modes
-    - Add Device4Task for network packet handling
-  - **Future preparation**:
-    - Create base `NetworkChannel` class for future TCP support
-    - Design config structure with room for TCP parameters
-    - Abstract `LogTransport` interface for different transports
-  - **Note**: See detailed implementation plan in `Device 4 Network Implementation - Detailed Plan.md`
+- [x] **Device 4 Network Implementation** (implement as single unit) ✅
+  - UDP Bridge Mode for MAVLink-over-WiFi (client + server) ✅
+  - Network logging capabilities via UDP ✅
+  - Will use built-in AsyncUDP (no external library needed) ✅
+  - Configure via web interface (target IP, port, role selection) ✅
+  - Integration with existing device role system ✅
+  - **Implementation approach**: ✅
+    - Create network_bridge.cpp/h ✅
+    - Add to hybrid refactoring structure ✅
+    - Support both client and server modes ✅
+    - Add Device4Task for network packet handling ✅
+  - **Future preparation**: ✅
+    - Create base `NetworkChannel` class for future TCP support ✅
+    - Design config structure with room for TCP parameters ✅
+    - Abstract `LogTransport` interface for different transports ✅
+  - **Note**: See detailed implementation plan in `Device 4 Network Implementation - Detailed Plan.md` ✅
 
 ### Alternative Captive Portal Implementation
 - **Current**: DNSServer + tDnsProcess task (150ms polling)  

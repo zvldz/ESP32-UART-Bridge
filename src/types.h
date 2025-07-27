@@ -60,8 +60,15 @@ enum Device3Role {
 // Device 4 role
 enum Device4Role {
     D4_NONE = 0,
-    D4_NETWORK_BRIDGE = 1,  // Future: Network Bridge
-    D4_LOG_NETWORK = 2      // Future: Network Logger
+    D4_NETWORK_BRIDGE = 1,  // Network Bridge
+    D4_LOG_NETWORK = 2      // Network Logger
+};
+
+// Device 4 Configuration
+struct Device4Config {
+    char target_ip[16];      // Target IP address for UDP packets
+    uint16_t port;           // Target port for UDP packets
+    uint8_t role;            // Copy of role from device4
 };
 
 // Device configuration
@@ -99,6 +106,9 @@ typedef struct {
   DeviceConfig device3;
   DeviceConfig device4;
   
+  // Device 4 network configuration
+  Device4Config device4_config;
+  
   // Log levels
   LogLevel log_level_web;
   LogLevel log_level_uart;
@@ -114,6 +124,12 @@ typedef struct {
   unsigned long device2TxBytes;  // Device 2 TX
   unsigned long device3RxBytes;  // Device 3 RX (Bridge mode only)
   unsigned long device3TxBytes;  // Device 3 TX (Mirror/Bridge/Log)
+  
+  // Device 4 statistics
+  unsigned long device4TxBytes;    // Device 4 TX (Network Logger/Bridge)
+  unsigned long device4TxPackets;  // Device 4 TX packet count
+  unsigned long device4RxBytes;    // Device 4 RX (Bridge mode only)
+  unsigned long device4RxPackets;  // Device 4 RX packet count
   
   // General statistics
   unsigned long lastActivityTime;

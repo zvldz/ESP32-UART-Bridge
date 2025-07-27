@@ -76,6 +76,16 @@ const char* getDevice3RoleName(uint8_t role) {
   }
 }
 
+// Helper function for device4 role names
+const char* getDevice4RoleName(uint8_t role) {
+  switch(role) {
+    case D4_NONE: return "Disabled";
+    case D4_NETWORK_BRIDGE: return "Network Bridge";
+    case D4_LOG_NETWORK: return "Network Logger";
+    default: return "Unknown";
+  }
+}
+
 // Thread-safe function to update shared statistics using critical sections
 void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
                       unsigned long device2Rx, unsigned long device2Tx,

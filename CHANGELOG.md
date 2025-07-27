@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v2.7.0 (Device 4 Network Implementation) - July 2025 ✅
+- **Device 4 Network Functionality** - Completed
+  - **Network Logger Mode**: Send system logs via UDP (broadcast or unicast)
+  - **Network Bridge Mode**: Bidirectional UART<->UDP communication
+  - **Configuration**: Full web interface integration with IP/Port settings
+  - **Statistics**: Real-time TX/RX bytes and packet counters
+  - **Architecture**:
+    - AsyncUDP library for network operations
+    - Ring buffers for non-blocking data transfer
+    - Task runs on Core 1 with web server
+    - DMA-style approach for efficient data handling
+  - **Integration**:
+    - Device 4 configuration saved/loaded with config version 5
+    - Network Log Level enabled when Device 4 is active
+    - Full statistics in web interface status display
+    - Works in both standalone and network modes
+  - **Technical Details**:
+    - 2KB buffers for logs and bridge data
+    - 50ms task delay for low latency
+    - Mutex protection for thread-safe buffer access
+    - Forward declarations to resolve compilation order
+  - **Fixed Issues**:
+    - Web interface now correctly displays selected Device 4 role
+    - Removed duplicate role name transmission in config JSON
+
 ## v2.6.0 (ESPAsyncWebServer Migration) - July 2025 ✅
 - **Migrated to ESPAsyncWebServer** - Completed
   - **Libraries**: Updated to ESPAsyncWebServer v3.7.10 + AsyncTCP v3.4.5

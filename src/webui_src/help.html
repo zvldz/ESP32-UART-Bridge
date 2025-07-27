@@ -32,6 +32,7 @@
             </ul>
             <p><strong>Compatible with all protocols including:</strong> MAVLink (drone telemetry), NMEA (GPS), Modbus RTU (industrial), AT Commands (modems), and any other UART-based protocol.</p>
             <p style="margin-top: 10px;"><small><strong>Note:</strong> While the bridge works with all protocols, the buffer sizing at 115200 baud (288 bytes) was specifically tuned to reduce packet loss during MAVLink parameter transfers.</small></p>
+            <p style="margin-top: 10px;"><strong>🌐 Network Features:</strong> The bridge can also stream data over network using Device 4 - send logs via UDP or create wireless UART bridges for remote device access.</p>
         </div>
         
         <div class="section">
@@ -93,13 +94,24 @@
                 <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 3 - Mirror/Bridge/Logger</td></tr>
                 <tr><td>GPIO11</td><td>UART RX</td><td>Bridge mode only</td><td>📌 If bridge</td></tr>
                 <tr><td>GPIO12</td><td>UART TX</td><td>All Device 3 modes</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 4 - Network Channel</td></tr>
+                <tr><td>Wi-Fi</td><td>Network</td><td>Logger/Bridge via UDP</td><td>📌 If enabled</td></tr>
                 <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">System</td></tr>
                 <tr><td>GND</td><td>Ground</td><td>Device GND</td><td>✅ Yes</td></tr>
                 <tr><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
                 <tr><td>GPIO21</td><td>RGB LED</td><td>Built-in (WS2812)</td><td>✅ Yes</td></tr>
             </table>
             <div class="warning" style="margin-top: 10px;">
-                <strong>📌 Note:</strong> Device 2 and Device 3 pins are only used when their respective roles are enabled in the configuration.
+                <strong>📌 Note:</strong> Device 2, 3, and 4 are only active when their respective roles are enabled in the configuration.
+            </div>
+            
+            <div class="success" style="margin-top: 15px;">
+                <strong>🌐 Device 4 - Network Channel:</strong><br>
+                - <strong>Network Logger:</strong> Stream system logs via UDP (port 14560)<br>
+                - <strong>Network Bridge:</strong> Bidirectional UART↔UDP conversion (port 14550)<br>
+                - Configure target IP and port in main settings<br>
+                - Requires active Wi-Fi connection<br>
+                <small>For detailed configuration, see README documentation.</small>
             </div>
         </div>
         

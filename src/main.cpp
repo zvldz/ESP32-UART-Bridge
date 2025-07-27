@@ -38,6 +38,7 @@ UsbMode usbMode = USB_MODE_DEVICE;
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t device3TaskHandle = NULL;
+TaskHandle_t device4TaskHandle = NULL;
 
 // USB interface
 UsbInterface* usbInterface = NULL;
@@ -462,6 +463,10 @@ void createMutexes() {
     // Cannot use log_msg here as logging system not initialized
     return;
   }
+
+  // Always create Device 4 mutex (needed for logging)
+  extern SemaphoreHandle_t device4LogMutex;
+  device4LogMutex = xSemaphoreCreateMutex();
 }
 
 void createTasks() {
@@ -493,5 +498,20 @@ void createTasks() {
     
     log_msg("Device 3 task created on core " + String(DEVICE3_TASK_CORE) + 
             " for " + String(config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge") + " mode", LOG_INFO);
+  }
+
+  // Create Device 4 task only if configured
+  if (config.device4.role != D4_NONE) {
+    xTaskCreatePinnedToCore(
+      device4Task,           
+      "Device4_Task",        
+      8192,                  
+      NULL,                  
+      UART_TASK_PRIORITY-2,  
+      &device4TaskHandle,    
+      DEVICE4_TASK_CORE      // Core 1 for network operations
+    );
+    log_msg("Device 4 task created on core " + String(DEVICE4_TASK_CORE) + 
+            " for " + String(getDevice4RoleName(config.device4.role)), LOG_INFO);
   }
 }

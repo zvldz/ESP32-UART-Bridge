@@ -18,6 +18,19 @@ extern int device3TxTail;
 extern int device3RxHead;
 extern int device3RxTail;
 
+// Device 4 Bridge buffers
+extern uint8_t device4BridgeTxBuffer[];
+extern uint8_t device4BridgeRxBuffer[];
+extern int device4BridgeTxHead;
+extern int device4BridgeTxTail;
+extern int device4BridgeRxHead;
+extern int device4BridgeRxTail;
+extern SemaphoreHandle_t device4BridgeMutex;
+
+// Forward declarations for Device 4 functions
+static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len);
+static inline void processDevice4BridgeToUart(BridgeContext* ctx);
+
 // Check if we should yield to WiFi task
 static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
     if (mode == BRIDGE_NET && millis() - *ctx->timing.lastWifiYield > 50) {
@@ -56,6 +69,11 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                 xSemaphoreGive(*ctx->sync.device3Mutex);
             }
         }
+        
+        // Copy to Device 4 if in Bridge mode (UART->UDP)
+        if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
+            addToDevice4BridgeTx(&data, 1);
+        }
 
         // Route to Device 2 based on its role
         if (ctx->devices.device2IsUSB) {
@@ -85,6 +103,12 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                             xSemaphoreGive(*ctx->sync.device3Mutex);
                         }
                     }
+                    
+                    // Copy to Device 4 if in Bridge mode
+                    if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
+                        uint8_t byteCopy = (uint8_t)nextByte;
+                        addToDevice4BridgeTx(&byteCopy, 1);
+                    }
                 }
             }
             
@@ -92,6 +116,11 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             if (batchSize > 0 && ctx->interfaces.device2Serial->availableForWrite() >= batchSize) {
                 ctx->interfaces.device2Serial->write(batchBuffer, batchSize);
                 *ctx->stats.device2TxBytes += batchSize;
+            }
+            
+            // Send batch to Device 4 if in Bridge mode
+            if (batchSize > 0 && ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
+                addToDevice4BridgeTx(batchBuffer, batchSize);
             }
         }
 
@@ -184,6 +213,52 @@ static inline void processDevice3BridgeInput(BridgeContext* ctx) {
         if (bytesToWrite > 0 && ctx->interfaces.uartBridgeSerial->availableForWrite() >= bytesToWrite) {
             ctx->interfaces.uartBridgeSerial->write(writeBuffer, bytesToWrite);
             *ctx->stats.device1TxBytes += bytesToWrite;
+        }
+    }
+}
+
+// Add UART data to Device 4 Bridge TX buffer (UART->UDP)
+static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len) {
+    if (!device4BridgeMutex) return;
+    
+    if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        for (size_t i = 0; i < len; i++) {
+            int nextHead = (device4BridgeTxHead + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
+            if (nextHead != device4BridgeTxTail) {  // Buffer not full
+                device4BridgeTxBuffer[device4BridgeTxHead] = data[i];
+                device4BridgeTxHead = nextHead;
+            } else {
+                // Buffer full, stop adding
+                break;
+            }
+        }
+        xSemaphoreGive(device4BridgeMutex);
+    }
+}
+
+// Process Device 4 Bridge RX data (UDP->UART)
+static inline void processDevice4BridgeToUart(BridgeContext* ctx) {
+    const int UART_BLOCK_SIZE = 64;
+    
+    if (!device4BridgeMutex) return;
+    
+    if (xSemaphoreTake(device4BridgeMutex, 0) == pdTRUE) {
+        // Process in blocks for efficiency
+        int bytesToWrite = 0;
+        uint8_t writeBuffer[UART_BLOCK_SIZE];
+        
+        while (device4BridgeRxHead != device4BridgeRxTail && bytesToWrite < UART_BLOCK_SIZE) {
+            writeBuffer[bytesToWrite++] = device4BridgeRxBuffer[device4BridgeRxTail];
+            device4BridgeRxTail = (device4BridgeRxTail + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
+        }
+        
+        xSemaphoreGive(device4BridgeMutex);
+        
+        // Write collected data to Device 1 UART
+        if (bytesToWrite > 0 && ctx->interfaces.uartBridgeSerial->availableForWrite() >= bytesToWrite) {
+            ctx->interfaces.uartBridgeSerial->write(writeBuffer, bytesToWrite);
+            *ctx->stats.device1TxBytes += bytesToWrite;
+            *ctx->stats.lastActivity = millis();
         }
     }
 }

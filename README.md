@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.6.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.7.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -40,6 +40,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Protocol Detection**: No automatic protocol detection (uses timing-based optimization)
 - **USB Buffer**: Can overflow at very high sustained data rates
 - **Device 2/3**: Use polling mode instead of event-driven architecture
+- **Device 4**: UDP only (TCP support planned for future versions)
 
 ## Hardware
 
@@ -67,6 +68,10 @@ Universal UART to USB bridge with web configuration interface for any serial com
   - **Device 3 (Mirror/Bridge/Logger UART)**:
     - GPIO11: UART RX (used only in Bridge mode)
     - GPIO12: UART TX (used in all Device 3 modes)
+  - **Device 4 (Network Channel)**:
+    - No physical pins - uses Wi-Fi network
+    - Network Logger: UDP port for log streaming (default: 14560)
+    - Network Bridge: Bidirectional UDP for UART data (default: 14550)
   - **System**:
     - GPIO0: BOOT button (built-in) - triple-click for network mode
     - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
@@ -143,6 +148,8 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Legacy Equipment**: Modernize RS232/RS485 equipment
 - **Development**: Debug embedded systems with USB convenience
 - **Remote Monitoring**: Permanent Wi-Fi access for remote diagnostics
+- **Network Bridging**: UART-to-UDP conversion for wireless serial communication
+- **Remote Logging**: Stream device logs over network for centralized monitoring
 
 ## USB Modes
 
@@ -197,6 +204,50 @@ The web interface allows configuration of:
 - **WiFi Settings**: SSID and password for your network
 - **USB Mode**: Device (default) or Host mode
 - **Network Mode**: Temporary setup or permanent Wi-Fi operation
+- **Device Roles**: Configure Device 2, 3, and 4 functionality
+
+## Device Roles
+
+The bridge supports multiple configurable devices:
+
+### Device 1 - Main UART (Always Active)
+- Primary UART interface on GPIO 4/5
+- Cannot be disabled - this is the main data channel
+- Supports full range of baud rates and configurations
+
+### Device 2 - Secondary Channel
+Can be configured as:
+- **Disabled**: No secondary channel
+- **UART2**: Additional UART on GPIO 8/9
+- **USB**: USB device or host mode
+
+### Device 3 - Auxiliary UART
+Can be configured as:
+- **Disabled**: Not used
+- **Mirror**: One-way copy of Device 1 data (TX only)
+- **Bridge**: Full bidirectional UART bridge with Device 1
+- **Logger**: Dedicated UART log output at 115200 baud
+
+### Device 4 - Network Channel
+Requires active Wi-Fi connection. Can be configured as:
+- **Disabled**: Not used
+- **Network Logger**: Stream system logs via UDP
+  - Default port: 14560
+  - Supports broadcast (x.x.x.255) or unicast
+  - Configurable log levels (ERROR, WARNING, INFO, DEBUG)
+- **Network Bridge**: Bidirectional UART-to-UDP conversion
+  - Default port: 14550
+  - Full duplex communication
+  - Ideal for wireless serial connections
+  - Use with ground control stations, telemetry systems, etc.
+
+### Network Configuration for Device 4
+When Device 4 is enabled, additional settings appear:
+- **Target IP**: Destination for UDP packets
+  - Use x.x.x.255 for broadcast (reaches all devices on network)
+  - Use specific IP for unicast (single destination)
+- **Port**: UDP port number (1-65535)
+- **Network Log Level**: Only visible when Device 4 is active
 
 ## LED Indicators
 
@@ -260,6 +311,25 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 - **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud
 - **AT command modems**: May require specific line endings (CR, LF, or CR+LF)
 - **Modbus RTU**: Uses strict timing requirements - the bridge's timeout-based buffering may work at some baud rates but is not specifically optimized for Modbus
+
+### Device 4 Network Usage Examples
+
+**Network Logger Mode:**
+```bash
+# Listen for logs on Linux/Mac
+nc -u -l 14560
+
+# Listen for logs on Windows
+# Use a UDP listener tool or netcat for Windows
+```
+
+**Network Bridge Mode:**
+```bash
+# Connect to UART device over network
+# Configure your application to use UDP instead of serial port
+# Example: MAVLink ground station configured for UDP connection
+# IP: ESP32's IP address, Port: 14550
+```
 
 ## Troubleshooting
 
@@ -330,8 +400,8 @@ The bridge includes a flexible logging system with multiple levels:
 
 Logs are viewable through the web interface. The system supports multiple output channels:
 - **Web Interface**: View logs in real-time through the browser
-- **UART Output**: Optional logging to Device 3 UART TX pin
-- **Network Logging**: Future support for UDP log streaming
+- **UART Output**: Optional logging to Device 3 UART TX pin (115200 baud)
+- **Network Logging**: UDP log streaming via Device 4 (when configured as Network Logger)
 
 ### Adaptive Buffering Technology
 

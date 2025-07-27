@@ -77,6 +77,11 @@ void config_init(Config* config) {
   config->device3.role = D3_NONE;     // Disabled
   config->device4.role = D4_NONE;     // Disabled
   
+  // Device 4 defaults
+  strcpy(config->device4_config.target_ip, "192.168.4.255");
+  config->device4_config.port = 14560;
+  config->device4_config.role = D4_NONE;
+  
   // Log levels defaults
   config->log_level_web = LOG_WARNING;
   config->log_level_uart = LOG_WARNING;
@@ -121,6 +126,18 @@ void config_migrate(Config* config) {
     log_msg("Migrating config from version " + String(config->config_version) + " to 4", LOG_INFO);
     config->permanent_network_mode = false;
     config->config_version = 4;
+  }
+  
+  if (config->config_version < 5) {
+    log_msg("Migrating config from version " + String(config->config_version) + " to 5", LOG_INFO);
+    
+    // Set Device 4 defaults
+    config->device4.role = D4_NONE;
+    strcpy(config->device4_config.target_ip, "192.168.4.255");
+    config->device4_config.port = 14560;
+    config->device4_config.role = D4_NONE;
+    
+    config->config_version = 5;
   }
 }
 
@@ -208,6 +225,15 @@ void config_load(Config* config) {
     config->device4.role = doc["devices"]["device4"] | D4_NONE;
   }
 
+  // Load Device 4 configuration (new in v5)
+  if (doc["device4"].is<JsonObject>()) {
+    const char* ip = doc["device4"]["target_ip"] | "192.168.4.255";
+    strncpy(config->device4_config.target_ip, ip, 15);
+    config->device4_config.target_ip[15] = '\0';
+    config->device4_config.port = doc["device4"]["port"] | 14560;
+    config->device4_config.role = doc["device4"]["role"] | D4_NONE;
+  }
+
   // Load log levels (new in v2)
   if (doc["logging"].is<JsonObject>()) {
     config->log_level_web = (LogLevel)(doc["logging"]["web"] | LOG_WARNING);
@@ -280,6 +306,11 @@ void config_save(Config* config) {
   doc["devices"]["device2"] = config->device2.role;
   doc["devices"]["device3"] = config->device3.role;
   doc["devices"]["device4"] = config->device4.role;
+
+  // Save Device 4 configuration
+  doc["device4"]["target_ip"] = config->device4_config.target_ip;
+  doc["device4"]["port"] = config->device4_config.port;
+  doc["device4"]["role"] = config->device4_config.role;
 
   // Log levels
   doc["logging"]["web"] = config->log_level_web;
