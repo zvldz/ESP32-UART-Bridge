@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v2.7.2 (Device 3/4 Code Refactoring) - July 2025 ✅
+- **Device 3/4 Module Separation** - Completed
+  - **File Structure**: Created independent device3_task.cpp/h and device4_task.cpp/h modules
+  - **Code Reduction**: Reduced uartbridge.cpp from 600+ to 240 lines (360+ lines moved)
+  - **Architecture Improvement**: Clear separation of device responsibilities for better maintainability
+  - **Dependencies**: Updated all cross-file includes and extern declarations
+  - **Linker Fixes**: Resolved device3Serial definition conflicts between modules
+  - **Benefits**:
+    - Easier maintenance and development
+    - Reduced file complexity and improved readability
+    - Clear module boundaries for future expansion
+    - Preserved all existing functionality without changes
+
+## v2.7.1 (Device 3/4 Statistics Unification) - July 2025 ✅
+- **Statistics Thread Safety** - Completed
+  - **Device 4 Protection**: Added critical sections for all TX/RX statistics updates
+  - **Device 3 Migration**: Moved from local variables to global variables approach
+  - **Race Condition Fixes**: Eliminated multi-threaded statistics conflicts
+  - **Unified Architecture**: Consistent statistics handling across Device 3 and Device 4
+  - **TaskScheduler Integration**: Implemented updateDevice3Stats() for periodic updates
+  - **Benefits**:
+    - Thread-safe statistics under high data load
+    - Reliable counters without "jumping" values
+    - Maintainable unified codebase
+    - Stable operation in concurrent scenarios
+
 ## v2.7.0 (Device 4 Network Implementation) - July 2025 ✅
 - **Device 4 Network Functionality** - Completed
   - **Network Logger Mode**: Send system logs via UDP (broadcast or unicast)

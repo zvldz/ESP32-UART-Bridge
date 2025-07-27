@@ -8,24 +8,9 @@
 #include "uart_interface.h"
 #include "usb_interface.h"
 #include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
+#include "device3_task.h"
+#include "device4_task.h"
 #include <Arduino.h>
-
-// External buffer variables from uartbridge.cpp
-extern uint8_t device3TxBuffer[];
-extern uint8_t device3RxBuffer[];
-extern int device3TxHead;
-extern int device3TxTail;
-extern int device3RxHead;
-extern int device3RxTail;
-
-// Device 4 Bridge buffers
-extern uint8_t device4BridgeTxBuffer[];
-extern uint8_t device4BridgeRxBuffer[];
-extern int device4BridgeTxHead;
-extern int device4BridgeTxTail;
-extern int device4BridgeRxHead;
-extern int device4BridgeRxTail;
-extern SemaphoreHandle_t device4BridgeMutex;
 
 // Forward declarations for Device 4 functions
 static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len);
