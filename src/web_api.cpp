@@ -65,6 +65,11 @@ String getConfigJson() {
     // Device role names
     doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
+    doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
+    
+    // Device 4 configuration
+    doc["device4TargetIp"] = config.device4_config.target_ip;
+    doc["device4Port"] = config.device4_config.port;
     
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
@@ -88,6 +93,14 @@ String getConfigJson() {
     doc["device2Tx"] = getProtectedULongValue(&uartStats.device2TxBytes);
     doc["device3Rx"] = getProtectedULongValue(&uartStats.device3RxBytes);
     doc["device3Tx"] = getProtectedULongValue(&uartStats.device3TxBytes);
+    
+    // Add Device 4 statistics if active
+    if (config.device4.role != D4_NONE && systemState.networkActive) {
+        doc["device4TxBytes"] = getProtectedULongValue(&uartStats.device4TxBytes);
+        doc["device4TxPackets"] = getProtectedULongValue(&uartStats.device4TxPackets);
+        doc["device4RxBytes"] = getProtectedULongValue(&uartStats.device4RxBytes);
+        doc["device4RxPackets"] = getProtectedULongValue(&uartStats.device4RxPackets);
+    }
     
     // Total traffic
     unsigned long totalTraffic = 0;
@@ -144,6 +157,15 @@ void handleStatus(AsyncWebServerRequest *request) {
     doc["device3Rx"] = localStats.device3RxBytes;
     doc["device3Tx"] = localStats.device3TxBytes;
     doc["device3Role"] = getDevice3RoleName(config.device3.role);
+  }
+
+  // Device 4 stats (only if enabled and network active)
+  if (config.device4.role != D4_NONE && systemState.networkActive) {
+    doc["device4TxBytes"] = localStats.device4TxBytes;
+    doc["device4TxPackets"] = localStats.device4TxPackets;
+    doc["device4RxBytes"] = localStats.device4RxBytes;
+    doc["device4RxPackets"] = localStats.device4RxPackets;
+    doc["device4Role"] = getDevice4RoleName(config.device4.role);
   }
 
   // Total traffic
@@ -296,6 +318,23 @@ void handleSave(AsyncWebServerRequest *request) {
       }
     }
   }
+
+  // Device 4 configuration
+  if (request->hasParam("device4_target_ip", true)) {
+    String ip = request->getParam("device4_target_ip", true)->value();
+    strncpy(config.device4_config.target_ip, ip.c_str(), 15);
+    config.device4_config.target_ip[15] = '\0';
+    configChanged = true;
+    log_msg("Device 4 target IP changed to " + ip, LOG_INFO);
+  }
+  if (request->hasParam("device4_port", true)) {
+    String portStr = request->getParam("device4_port", true)->value();
+    config.device4_config.port = portStr.toInt();
+    configChanged = true;
+    log_msg("Device 4 port changed to " + portStr, LOG_INFO);
+  }
+  // Copy role to configuration
+  config.device4_config.role = config.device4.role;
 
   // Log levels
   if (request->hasParam("log_level_web", true)) {

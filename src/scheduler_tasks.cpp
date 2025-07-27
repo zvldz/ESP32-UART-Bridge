@@ -25,11 +25,13 @@ static Task tDroppedDataStats(5000, TASK_FOREVER, nullptr);
 static Task tWiFiTimeout(WIFI_TIMEOUT, TASK_ONCE, nullptr);
 static Task tUpdateStats(UART_STATS_UPDATE_INTERVAL_MS, TASK_FOREVER, nullptr);
 static Task tUpdateStatsDevice3(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, nullptr);
+static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 4, TASK_FOREVER, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 
 // External function declarations
 extern void updateMainStats();        // Will be implemented in uartbridge.cpp
 extern void updateDevice3Stats();     // Will be implemented in uartbridge.cpp
+extern void updateDevice4Stats();     // Will be implemented in uartbridge.cpp
 
 void initializeScheduler() {
     // Set all callbacks
@@ -66,6 +68,10 @@ void initializeScheduler() {
         updateDevice3Stats(); 
     });
     
+    tUpdateStatsDevice4.set(UART_STATS_UPDATE_INTERVAL_MS * 4, TASK_FOREVER, []{ 
+        updateDevice4Stats(); 
+    });
+    
     tDnsProcess.set(150, TASK_FOREVER, []{ 
         if (dnsServer) {
             dnsServer->processNextRequest();
@@ -84,6 +90,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tWiFiTimeout);
     taskScheduler.addTask(tUpdateStats);
     taskScheduler.addTask(tUpdateStatsDevice3);
+    taskScheduler.addTask(tUpdateStatsDevice4);
     taskScheduler.addTask(tDnsProcess);
     
     // Enable basic tasks that run in all modes
@@ -96,6 +103,7 @@ void initializeScheduler() {
     tAllStacksDiagnostics.delay(1000); // Start after 1 second
     tDroppedDataStats.delay(2500);     // Start after 2.5 seconds
     tUpdateStatsDevice3.delay(250);    // Start after 0.25 seconds
+    tUpdateStatsDevice4.delay(400);    // Start after 0.4 seconds
 }
 
 void enableStandaloneTasks() {
@@ -108,6 +116,11 @@ void enableStandaloneTasks() {
     // Enable Device3 stats only if device is active
     if (config.device3.role != D3_NONE) {
         tUpdateStatsDevice3.enable();
+    }
+    
+    // Enable Device4 stats only if device is active and network is available
+    if (config.device4.role != D4_NONE) {
+        tUpdateStatsDevice4.enable();
     }
     
     // Disable network mode tasks
@@ -133,6 +146,10 @@ void enableNetworkTasks(bool temporaryNetwork) {
     if (config.device3.role != D3_NONE) {
         tUpdateStatsDevice3.enable();
     }
+    
+    if (config.device4.role != D4_NONE) {
+        tUpdateStatsDevice4.enable();
+    }
 }
 
 void disableAllTasks() {
@@ -142,6 +159,7 @@ void disableAllTasks() {
     tDroppedDataStats.disable();
     tUpdateStats.disable();
     tUpdateStatsDevice3.disable();
+    tUpdateStatsDevice4.disable();
     tDnsProcess.disable();
     tWiFiTimeout.disable();
 }

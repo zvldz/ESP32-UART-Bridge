@@ -63,14 +63,33 @@ const DeviceConfig = {
                     <td><strong>Device 4</strong></td>
                     <td>Network</td>
                     <td>
-                        <select name="device4_role" id="device4_role" disabled style="width: 100%;">
+                        <select name="device4_role" id="device4_role" style="width: 100%;">
                             <option value="0">Disabled</option>
-                            <option value="1">Network Bridge (Coming Soon)</option>
-                            <option value="2">Network Logger (Coming Soon)</option>
+                            <option value="1">Network Bridge</option>
+                            <option value="2">Network Logger</option>
                         </select>
                     </td>
                 </tr>
             </table>
+            
+            <div id="device4Config" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <h4 style="margin-top: 0;">Device 4 Network Configuration</h4>
+                <div style="display: flex; gap: 20px; align-items: flex-end;">
+                    <div>
+                        <label for="device4_target_ip">Target IP:</label>
+                        <input type="text" name="device4_target_ip" id="device4_target_ip" 
+                               style="width: 150px;" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$">
+                    </div>
+                    <div>
+                        <label for="device4_port">Port:</label>
+                        <input type="number" name="device4_port" id="device4_port" 
+                               style="width: 80px;" min="1" max="65535">
+                    </div>
+                </div>
+                <small style="display: block; margin-top: 10px; color: #666;">
+                    ℹ️ Bridge: use x.x.x.255 for broadcast | Logger: use specific IP
+                </small>
+            </div>
             
             <h4 style="margin-top: 20px;">Logging Configuration</h4>
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -116,7 +135,10 @@ const DeviceConfig = {
         
         if (device2Role) device2Role.value = this.config.device2Role;
         if (device3Role) device3Role.value = this.config.device3Role;
-        if (device4Role) device4Role.value = this.config.device4Role;
+        if (device4Role) {
+            console.log('Setting Device 4 role to:', this.config.device4Role);
+            device4Role.value = this.config.device4Role;
+        }
         
         // Set log levels
         const logLevelWeb = document.getElementById('log_level_web');
@@ -127,14 +149,27 @@ const DeviceConfig = {
         if (logLevelUart) logLevelUart.value = this.config.logLevelUart;
         if (logLevelNetwork) logLevelNetwork.value = this.config.logLevelNetwork;
         
-        // Update device 2 pins display
+        // Set Device 4 configuration
+        const device4TargetIp = document.getElementById('device4_target_ip');
+        const device4Port = document.getElementById('device4_port');
+        if (device4TargetIp) device4TargetIp.value = this.config.device4TargetIp || '';
+        if (device4Port) device4Port.value = this.config.device4Port || '';
+        
+        // Update device displays
         this.updateDevice2Pins();
+        this.updateDevice4Config();
+        this.updateNetworkLogLevel();
     },
     
     attachListeners() {
         const device2Role = document.getElementById('device2_role');
         if (device2Role) {
             device2Role.addEventListener('change', () => this.updateDevice2Pins());
+        }
+
+        const device4Role = document.getElementById('device4_role');
+        if (device4Role) {
+            device4Role.addEventListener('change', () => this.updateDevice4Config());
         }
     },
     
@@ -186,5 +221,59 @@ const DeviceConfig = {
         };
         
         return roleNames[device]?.[role] || 'Unknown';
+    },
+
+    updateDevice4Config() {
+        const device4Role = document.getElementById('device4_role');
+        const device4Config = document.getElementById('device4Config');
+        const targetIpInput = document.getElementById('device4_target_ip');
+        const portInput = document.getElementById('device4_port');
+        const networkLogLevel = document.getElementById('log_level_network');
+        
+        if (!device4Role || !device4Config) return;
+        
+        const role = device4Role.value;
+        
+        if (role !== '0') {
+            device4Config.style.display = 'block';
+            
+            // Enable Network Log Level when Device 4 is active
+            if (networkLogLevel) {
+                networkLogLevel.disabled = false;
+            }
+            
+            // Set defaults if fields are empty
+            if (!targetIpInput.value || targetIpInput.value === '') {
+                if (role === '1') {  // Bridge
+                    targetIpInput.value = '192.168.4.255';
+                    portInput.value = '14550';
+                } else if (role === '2') {  // Logger
+                    targetIpInput.value = '192.168.4.255';
+                    portInput.value = '14560';
+                }
+            }
+        } else {
+            device4Config.style.display = 'none';
+            
+            // Disable Network Log Level when Device 4 is disabled
+            if (networkLogLevel) {
+                networkLogLevel.disabled = true;
+                networkLogLevel.value = '-1'; // Set to OFF
+            }
+        }
+    },
+
+    updateNetworkLogLevel() {
+        const device4Role = document.getElementById('device4_role');
+        const networkLogLevel = document.getElementById('log_level_network');
+        
+        if (!device4Role || !networkLogLevel) return;
+        
+        // Enable/disable Network Log Level based on Device 4 role
+        if (device4Role.value !== '0') {
+            networkLogLevel.disabled = false;
+        } else {
+            networkLogLevel.disabled = true;
+        }
     }
 };

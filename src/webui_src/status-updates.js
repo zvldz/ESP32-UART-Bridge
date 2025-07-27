@@ -35,6 +35,12 @@ const StatusUpdates = {
             device3Rx: document.getElementById('device3Rx'),
             device3Tx: document.getElementById('device3Tx'),
             
+            // Device 4 stats
+            device4Stats: document.getElementById('device4Stats'),
+            device4Role: document.getElementById('device4Role'),
+            device4Tx: document.getElementById('device4Tx'),
+            device4Packets: document.getElementById('device4Packets'),
+            
             // Totals
             totalTraffic: document.getElementById('totalTraffic'),
             lastActivity: document.getElementById('lastActivity'),
@@ -83,6 +89,10 @@ const StatusUpdates = {
                 <tr id="device3Stats" style="display: none;">
                     <td><strong>Device 3 (<span id="device3Role">${this.config.device3RoleName}</span>):</strong></td>
                     <td>RX: <span id="device3Rx">${this.config.device3Rx}</span> bytes, TX: <span id="device3Tx">${this.config.device3Tx}</span> bytes</td>
+                </tr>
+                <tr id="device4Stats" style="display: none;">
+                    <td><strong>Device 4 (<span id="device4Role">-</span>):</strong></td>
+                    <td>TX: <span id="device4Tx">0</span> bytes (<span id="device4Packets">0</span> packets)</td>
                 </tr>
                 <tr><td colspan="2" style="border-top: 1px solid #ddd; padding-top: 5px;"></td></tr>
                 <tr><td><strong>Total Traffic:</strong></td><td id="totalTraffic">${this.config.totalTraffic} bytes</td></tr>
@@ -150,6 +160,32 @@ const StatusUpdates = {
                 }
             } else if (this.elements.device3Stats) {
                 this.elements.device3Stats.style.display = 'none';
+            }
+            
+            // Update Device 4 stats if present
+            if (data.device4Role && this.elements.device4Stats) {
+                this.elements.device4Stats.style.display = 'table-row';
+                if (this.elements.device4Role) {
+                    this.elements.device4Role.textContent = data.device4Role;
+                }
+                if (this.elements.device4Tx) {
+                    this.elements.device4Tx.textContent = data.device4TxBytes || 0;
+                }
+                if (this.elements.device4Packets) {
+                    this.elements.device4Packets.textContent = data.device4TxPackets || 0;
+                }
+                
+                // Update text for Bridge mode
+                if (data.device4Role.includes('Bridge')) {
+                    const device4StatsRow = this.elements.device4Stats.querySelector('td:last-child');
+                    if (device4StatsRow) {
+                        device4StatsRow.innerHTML = 
+                            `TX: <span id="device4Tx">${data.device4TxBytes || 0}</span> bytes (${data.device4TxPackets || 0} pkts), ` +
+                            `RX: <span id="device4Rx">${data.device4RxBytes || 0}</span> bytes (${data.device4RxPackets || 0} pkts)`;
+                    }
+                }
+            } else if (this.elements.device4Stats) {
+                this.elements.device4Stats.style.display = 'none';
             }
             
             // Update totals

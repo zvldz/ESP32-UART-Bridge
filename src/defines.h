@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.6.0"
+#define DEVICE_VERSION "2.7.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -69,6 +69,10 @@ these features but is not justified for current requirements.
 #define DEVICE3_UART_BUFFER_SIZE 2048
 #define DEVICE3_LOG_BUFFER_SIZE 256  // For UART logger TX only
 
+// Device 4 buffering
+#define DEVICE4_LOG_BUFFER_SIZE 2048
+#define DEVICE4_BRIDGE_BUFFER_SIZE 2048
+
 // UART task statistics update interval
 #define UART_STATS_UPDATE_INTERVAL_MS 500  // How often UART task updates shared statistics
 
@@ -95,5 +99,6 @@ these features but is not justified for current requirements.
 #define UART_TASK_CORE 0      // Main UART bridge task
 #define WEB_TASK_CORE 1       // Web server task
 #define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
+#define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
 
 #endif // DEFINES_H
