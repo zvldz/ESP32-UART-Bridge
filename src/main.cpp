@@ -503,12 +503,12 @@ void createTasks() {
   // Create Device 4 task only if configured
   if (config.device4.role != D4_NONE) {
     xTaskCreatePinnedToCore(
-      device4Task,           
-      "Device4_Task",        
-      8192,                  
-      NULL,                  
-      UART_TASK_PRIORITY-2,  
-      &device4TaskHandle,    
+      device4Task,
+      "Device4_Task",
+      8192,
+      NULL,
+      UART_TASK_PRIORITY-2,
+      &device4TaskHandle,
       DEVICE4_TASK_CORE      // Core 1 for network operations
     );
     log_msg("Device 4 task created on core " + String(DEVICE4_TASK_CORE) + 

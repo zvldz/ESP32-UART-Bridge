@@ -27,6 +27,7 @@ static Task tUpdateStats(UART_STATS_UPDATE_INTERVAL_MS, TASK_FOREVER, nullptr);
 static Task tUpdateStatsDevice3(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, nullptr);
 static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 4, TASK_FOREVER, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
+static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 
 // External function declarations
 extern void updateMainStats();        // Implemented in uartbridge.cpp
@@ -78,6 +79,11 @@ void initializeScheduler() {
         }
     });
     
+    tRebootDevice.set(TASK_IMMEDIATE, TASK_ONCE, []{ 
+        log_msg("Executing scheduled reboot", LOG_INFO);
+        ESP.restart();
+    });
+    
     // Initialize scheduler
     taskScheduler.init();
     
@@ -92,6 +98,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tUpdateStatsDevice3);
     taskScheduler.addTask(tUpdateStatsDevice4);
     taskScheduler.addTask(tDnsProcess);
+    taskScheduler.addTask(tRebootDevice);
     
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
@@ -170,4 +177,14 @@ void startWiFiTimeout() {
 
 void cancelWiFiTimeout() {
     tWiFiTimeout.disable();
+}
+
+void scheduleReboot(unsigned long delayMs) {
+    log_msg("Device reboot scheduled in " + String(delayMs) + "ms", LOG_INFO);
+    
+    // Cancel WiFi timeout if it was active
+    cancelWiFiTimeout();
+    
+    // Start reboot task with delay
+    tRebootDevice.restartDelayed(delayMs);
 }

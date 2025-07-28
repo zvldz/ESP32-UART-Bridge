@@ -194,6 +194,30 @@
         </div>
         
         <div class="section">
+            <h3>💾 Configuration Backup & Restore</h3>
+            <div class="success">
+                <strong>Save and restore your device configuration:</strong><br>
+                <br>
+                <strong>📤 Export Configuration:</strong><br>
+                - Click "Export Config" button on main page<br>
+                - Downloads JSON file with all current settings<br>
+                - Filename: esp32-bridge-config-[unique-ID].json<br>
+                - Includes UART, WiFi, device roles, and logging settings<br>
+                <br>
+                <strong>📥 Import Configuration:</strong><br>
+                - Click "Import Config" button and select saved JSON file<br>
+                - Validates configuration structure and version<br>
+                - Applies all settings and automatically reboots device<br>
+                <br>
+                <strong>✅ Use Cases:</strong><br>
+                - Quick setup of multiple identical devices<br>
+                - Backup configuration before firmware updates<br>
+                - Share working configurations between team members<br>
+                - Restore after device reset or configuration errors
+            </div>
+        </div>
+        
+        <div class="section">
             <h3>🔘 Button Functions</h3>
             <div class="success">
                 <strong>BOOT Button (GPIO0) Functions:</strong><br>

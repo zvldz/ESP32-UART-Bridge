@@ -106,18 +106,79 @@ const FormUtils = {
         
         // Firmware update toggle
         window.toggleFirmwareUpdate = () => this.toggleFirmwareUpdate();
+        
+        // Config backup toggle
+        window.toggleConfigBackup = () => this.toggleConfigBackup();
+        
+        // Config import handler
+        window.handleConfigImport = (input) => this.handleConfigImport(input);
+        
+        // Firmware update handler
+        window.handleFirmwareUpdate = () => this.handleFirmwareUpdate();
     },
     
     handleSubmit(e) {
+        e.preventDefault(); // Prevent normal form submission
+        
+        const form = e.target;
+        const submitButton = document.getElementById('saveButton');
+        
         // Show loading state on submit button
-        const submitButton = e.target.querySelector('button[type="submit"]');
         if (submitButton) {
             submitButton.disabled = true;
             submitButton.textContent = 'Saving...';
         }
         
-        // Form will submit normally
-        return true;
+        // Submit via fetch to handle JSON response
+        const formData = new FormData(form);
+        
+        fetch('/save', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = data.message;
+                    submitButton.style.backgroundColor = '#4CAF50';
+                }
+                
+                // Add instruction after 2 seconds
+                setTimeout(() => {
+                    if (submitButton) {
+                        submitButton.textContent += ' Please refresh the page manually.';
+                    }
+                }, 2000);
+            } else if (data.status === 'unchanged') {
+                if (submitButton) {
+                    submitButton.textContent = 'No Changes';
+                    submitButton.disabled = false;
+                }
+                // Reset button after a moment
+                setTimeout(() => {
+                    if (submitButton) {
+                        submitButton.textContent = 'Save & Reboot';
+                    }
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            console.error('Save error:', error);
+            if (submitButton) {
+                submitButton.textContent = 'Save Failed';
+                submitButton.disabled = false;
+            }
+            // Reset button after a moment
+            setTimeout(() => {
+                if (submitButton) {
+                    submitButton.textContent = 'Save & Reboot';
+                }
+            }, 2000);
+        });
+        
+        return false;
     },
     
     togglePassword() {
@@ -170,5 +231,188 @@ const FormUtils = {
         }
         
         return true;
+    },
+    
+    toggleConfigBackup() {
+        Utils.toggleElement('configBackupContent', 'configArrow');
+    },
+    
+    handleConfigImport(input) {
+        const file = input.files[0];
+        if (!file) {
+            return;
+        }
+        
+        // Validate file type
+        if (!file.name.toLowerCase().endsWith('.json')) {
+            alert('Please select a JSON configuration file');
+            input.value = '';
+            return;
+        }
+        
+        // Show progress
+        const progressDiv = document.getElementById('importProgress');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('importStatus');
+        
+        if (progressDiv && progressBar && statusText) {
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Uploading configuration...';
+        }
+        
+        // Create FormData and submit
+        const formData = new FormData();
+        formData.append('config', file);
+        
+        // Submit with progress indication
+        fetch('/config/import', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (progressBar) progressBar.style.width = '100%';
+            
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Import failed');
+            }
+        })
+        .then(data => {
+            if (data.status === 'ok') {
+                if (statusText) {
+                    statusText.textContent = data.message;
+                    statusText.style.color = 'green';
+                }
+                
+                // Add instruction after 2 seconds
+                setTimeout(() => {
+                    if (statusText) {
+                        statusText.textContent += ' Please refresh the page manually.';
+                    }
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            if (statusText) {
+                statusText.textContent = 'Import failed: ' + error.message;
+                statusText.style.color = 'red';
+            }
+            if (progressBar) progressBar.style.width = '0%';
+            console.error('Config import error:', error);
+        });
+        
+        // Reset file input
+        input.value = '';
+    },
+    
+    handleFirmwareUpdate() {
+        const fileInput = document.getElementById('firmwareFile');
+        const updateButton = document.getElementById('updateButton');
+        const progressDiv = document.getElementById('updateProgress');
+        const progressBar = document.getElementById('updateProgressBar');
+        const statusText = document.getElementById('updateStatus');
+        
+        if (!fileInput.files[0]) {
+            alert('Please select a firmware file (.bin)');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        
+        // Validate file type
+        if (!file.name.toLowerCase().endsWith('.bin')) {
+            alert('Please select a .bin firmware file');
+            return;
+        }
+        
+        // Confirm update
+        if (!confirm('Are you sure you want to update firmware? This will restart the device.')) {
+            return;
+        }
+        
+        // Show progress and disable button
+        if (progressDiv && progressBar && statusText && updateButton) {
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Uploading firmware...';
+            statusText.style.color = 'black';
+            updateButton.disabled = true;
+            updateButton.textContent = 'Updating...';
+        }
+        
+        // Create FormData and submit
+        const formData = new FormData();
+        formData.append('update', file);
+        
+        // Submit with progress tracking
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable && progressBar) {
+                const percentComplete = (event.loaded / event.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                
+                if (statusText) {
+                    statusText.textContent = `Uploading firmware... ${Math.round(percentComplete)}%`;
+                }
+            }
+        });
+        
+        // Handle response
+        xhr.addEventListener('load', () => {
+            if (progressBar) progressBar.style.width = '100%';
+            
+            try {
+                const response = JSON.parse(xhr.responseText);
+                
+                if (xhr.status === 200 && response.status === 'ok') {
+                    if (statusText) {
+                        statusText.textContent = response.message;
+                        statusText.style.color = 'green';
+                    }
+                    if (updateButton) {
+                        updateButton.disabled = false;
+                    }
+                    
+                    // Add instruction after 2 seconds
+                    setTimeout(() => {
+                        if (statusText) {
+                            statusText.textContent += ' Please refresh the page manually.';
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(response.message || 'Update failed');
+                }
+            } catch (error) {
+                if (statusText) {
+                    statusText.textContent = 'Update failed: ' + error.message;
+                    statusText.style.color = 'red';
+                }
+                if (progressBar) progressBar.style.width = '0%';
+                if (updateButton) {
+                    updateButton.disabled = false;
+                    updateButton.textContent = 'Update Firmware';
+                }
+            }
+        });
+        
+        // Handle network errors
+        xhr.addEventListener('error', () => {
+            if (statusText) {
+                statusText.textContent = 'Update failed: Network error';
+                statusText.style.color = 'red';
+            }
+            if (progressBar) progressBar.style.width = '0%';
+            if (updateButton) {
+                updateButton.disabled = false;
+                updateButton.textContent = 'Update Firmware';
+            }
+        });
+        
+        xhr.open('POST', '/update');
+        xhr.send(formData);
     }
 };

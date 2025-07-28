@@ -21,4 +21,7 @@ void disableAllTasks();
 void startWiFiTimeout();
 void cancelWiFiTimeout();
 
+// Scheduled reboot
+void scheduleReboot(unsigned long delayMs = 3000);
+
 #endif // SCHEDULER_TASKS_H

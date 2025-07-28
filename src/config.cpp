@@ -78,7 +78,7 @@ void config_init(Config* config) {
   config->device4.role = D4_NONE;     // Disabled
   
   // Device 4 defaults
-  strcpy(config->device4_config.target_ip, "192.168.4.255");
+  strcpy(config->device4_config.target_ip, "");
   config->device4_config.port = 14560;
   config->device4_config.role = D4_NONE;
   
@@ -133,7 +133,7 @@ void config_migrate(Config* config) {
     
     // Set Device 4 defaults
     config->device4.role = D4_NONE;
-    strcpy(config->device4_config.target_ip, "192.168.4.255");
+    strcpy(config->device4_config.target_ip, "");
     config->device4_config.port = 14560;
     config->device4_config.role = D4_NONE;
     
@@ -153,13 +153,26 @@ void config_load(Config* config) {
     return;
   }
 
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, file);
+  String jsonString = file.readString();
   file.close();
 
+  config_load_from_json(config, jsonString);
+}
+
+// Load configuration from JSON string
+bool config_load_from_json(Config* config, const String& jsonString) {
+  log_msg("Parsing JSON config, length: " + String(jsonString.length()), LOG_DEBUG);
+  
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, jsonString);
+
   if (error) {
-    return;
+    log_msg("Failed to parse configuration JSON: " + String(error.c_str()), LOG_ERROR);
+    log_msg("JSON content: " + jsonString.substring(0, 200), LOG_ERROR);  // First 200 chars
+    return false;
   }
+  
+  log_msg("JSON parsed successfully", LOG_DEBUG);
 
   // Check if this is old format (no config_version field)
   if (!doc["config_version"].is<int>()) {
@@ -172,28 +185,15 @@ void config_load(Config* config) {
   if (doc["uart"].is<JsonObject>()) {
     config->baudrate = doc["uart"]["baudrate"] | 115200;
     
-    // Handle different config versions
-    if (config->config_version < 3) {
-      // Old format: numeric/string values
-      uint8_t databits = doc["uart"]["databits"] | 8;
-      config->databits = string_to_word_length(databits);
-      
-      String parity = doc["uart"]["parity"] | "none";
-      config->parity = string_to_parity(parity.c_str());
-      
-      uint8_t stopbits = doc["uart"]["stopbits"] | 1;
-      config->stopbits = string_to_stop_bits(stopbits);
-    } else {
-      // New format: stored as strings for readability
-      String databits_str = doc["uart"]["databits_str"] | "8";
-      config->databits = string_to_word_length(databits_str.toInt());
-      
-      String parity_str = doc["uart"]["parity_str"] | "none";
-      config->parity = string_to_parity(parity_str.c_str());
-      
-      String stopbits_str = doc["uart"]["stopbits_str"] | "1";
-      config->stopbits = string_to_stop_bits(stopbits_str.toInt());
-    }
+    // Load string values (current format)
+    String databits = doc["uart"]["databits"] | "8";
+    config->databits = string_to_word_length(databits.toInt());
+    
+    String parity = doc["uart"]["parity"] | "none";
+    config->parity = string_to_parity(parity.c_str());
+    
+    String stopbits = doc["uart"]["stopbits"] | "1";
+    config->stopbits = string_to_stop_bits(stopbits.toInt());
     
     config->flowcontrol = doc["uart"]["flowcontrol"] | false;
   }
@@ -227,7 +227,7 @@ void config_load(Config* config) {
 
   // Load Device 4 configuration (new in v5)
   if (doc["device4"].is<JsonObject>()) {
-    const char* ip = doc["device4"]["target_ip"] | "192.168.4.255";
+    const char* ip = doc["device4"]["target_ip"] | "";
     strncpy(config->device4_config.target_ip, ip, 15);
     config->device4_config.target_ip[15] = '\0';
     config->device4_config.port = doc["device4"]["port"] | 14560;
@@ -248,38 +248,22 @@ void config_load(Config* config) {
 
   // Migrate if needed
   config_migrate(config);
+  
+  return true;
 }
 
-// Save configuration to LittleFS
-void config_save(Config* config) {
-  log_msg("Saving configuration to LittleFS...", LOG_INFO);
-
-  // Create backup of current config
-  if (LittleFS.exists("/config.json")) {
-    if (LittleFS.exists("/backup.json")) {
-      LittleFS.remove("/backup.json");
-    }
-    LittleFS.rename("/config.json", "/backup.json");
-  }
-
+// Convert configuration to JSON string
+String config_to_json(Config* config) {
   JsonDocument doc;
 
   // Configuration version
   doc["config_version"] = CURRENT_CONFIG_VERSION;
 
-  // UART settings - save both numeric and string values for compatibility
+  // UART settings
   doc["uart"]["baudrate"] = config->baudrate;
-  
-  // Save as strings for v3+ format
-  doc["uart"]["databits_str"] = word_length_to_string(config->databits);
-  doc["uart"]["parity_str"] = parity_to_string(config->parity);
-  doc["uart"]["stopbits_str"] = stop_bits_to_string(config->stopbits);
-  
-  // Also save numeric values for backward compatibility
-  doc["uart"]["databits"] = atoi(word_length_to_string(config->databits));
+  doc["uart"]["databits"] = word_length_to_string(config->databits);
   doc["uart"]["parity"] = parity_to_string(config->parity);
-  doc["uart"]["stopbits"] = atoi(stop_bits_to_string(config->stopbits));
-  
+  doc["uart"]["stopbits"] = stop_bits_to_string(config->stopbits);
   doc["uart"]["flowcontrol"] = config->flowcontrol;
 
   // WiFi settings
@@ -319,13 +303,33 @@ void config_save(Config* config) {
 
   // Note: device_version and device_name are NOT saved - always use compiled values
 
+  String result;
+  serializeJson(doc, result);
+  return result;
+}
+
+// Save configuration to LittleFS
+void config_save(Config* config) {
+  log_msg("Saving configuration to LittleFS...", LOG_INFO);
+
+  // Create backup of current config
+  if (LittleFS.exists("/config.json")) {
+    if (LittleFS.exists("/backup.json")) {
+      LittleFS.remove("/backup.json");
+    }
+    LittleFS.rename("/config.json", "/backup.json");
+  }
+
+  // Get configuration JSON
+  String jsonString = config_to_json(config);
+
   File file = LittleFS.open("/config.json", "w");
   if (!file) {
     log_msg("Failed to create config file", LOG_ERROR);
     return;
   }
 
-  if (serializeJson(doc, file) == 0) {
+  if (file.print(jsonString) == 0) {
     log_msg("Failed to write config file", LOG_ERROR);
   } else {
     log_msg("Configuration saved successfully", LOG_INFO);

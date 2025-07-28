@@ -127,62 +127,10 @@ String getConfigJson() {
     return json;
 }
 
-// Handle status request with critical sections
+// Handle status request - return full config and stats (used by AJAX)
 void handleStatus(AsyncWebServerRequest *request) {
-  JsonDocument doc;
-
-  // Copy all statistics in one critical section
-  UartStats localStats;
-  enterStatsCritical();
-  localStats = uartStats;
-  exitStatsCritical();
-
-  // System info
-  doc["freeRam"] = ESP.getFreeHeap();
-  doc["uptime"] = (millis() - localStats.deviceStartTime) / 1000;
-
-  // Device 1 stats
-  doc["device1Rx"] = localStats.device1RxBytes;
-  doc["device1Tx"] = localStats.device1TxBytes;
-
-  // Device 2 stats (only if enabled)
-  if (config.device2.role != D2_NONE) {
-    doc["device2Rx"] = localStats.device2RxBytes;
-    doc["device2Tx"] = localStats.device2TxBytes;
-    doc["device2Role"] = getDevice2RoleName(config.device2.role);
-  }
-
-  // Device 3 stats (only if enabled)
-  if (config.device3.role != D3_NONE) {
-    doc["device3Rx"] = localStats.device3RxBytes;
-    doc["device3Tx"] = localStats.device3TxBytes;
-    doc["device3Role"] = getDevice3RoleName(config.device3.role);
-  }
-
-  // Device 4 stats (only if enabled and network active)
-  if (config.device4.role != D4_NONE && systemState.networkActive) {
-    doc["device4TxBytes"] = localStats.device4TxBytes;
-    doc["device4TxPackets"] = localStats.device4TxPackets;
-    doc["device4RxBytes"] = localStats.device4RxBytes;
-    doc["device4RxPackets"] = localStats.device4RxPackets;
-    doc["device4Role"] = getDevice4RoleName(config.device4.role);
-  }
-
-  // Total traffic
-  unsigned long totalTraffic = localStats.device1RxBytes + localStats.device1TxBytes +
-                               localStats.device2RxBytes + localStats.device2TxBytes +
-                               localStats.device3RxBytes + localStats.device3TxBytes;
-  doc["totalTraffic"] = totalTraffic;
-
-  // Last activity
-  if (localStats.lastActivityTime == 0) {
-    doc["lastActivity"] = "Never";
-  } else {
-    doc["lastActivity"] = (millis() - localStats.lastActivityTime) / 1000;
-  }
-
-  String json;
-  serializeJson(doc, json);
+  // Use existing getConfigJson() function which includes everything needed
+  String json = getConfigJson();
   request->send(200, "application/json", json);
 }
 
@@ -416,11 +364,13 @@ void handleSave(AsyncWebServerRequest *request) {
     cancelWiFiTimeout();
     
     config_save(&config);
-    request->send(200, "text/html", "<html><head><title>Configuration Saved</title></head><body><h1>Configuration Saved</h1><p>Settings updated successfully!</p><p>Device will restart in 3 seconds...</p><script>setTimeout(function(){window.location='/';}, 3000);</script></body></html>");
-    vTaskDelay(pdMS_TO_TICKS(3000));  // Match the 3 seconds shown in HTML
-    ESP.restart();
+    
+    request->send(200, "application/json", 
+        "{\"status\":\"ok\",\"message\":\"Configuration saved successfully! Device restarting...\"}");
+    
+    scheduleReboot(3000);
   } else {
-    request->send(200, "text/html", "<h1>No Changes</h1><p>Configuration was not modified.</p><a href='/'>Back</a>");
+    request->send(200, "application/json", "{\"status\":\"unchanged\",\"message\":\"Configuration was not modified\"}");
   }
 }
 
@@ -444,4 +394,70 @@ void handleCrashLogJson(AsyncWebServerRequest *request) {
 void handleClearCrashLog(AsyncWebServerRequest *request) {
   crashlog_clear();
   request->send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+// Export configuration as downloadable JSON file
+void handleExportConfig(AsyncWebServerRequest *request) {
+  log_msg("Configuration export requested", LOG_INFO);
+  
+  // Generate random ID for filename uniqueness
+  String randomId = String(millis() & 0xFFFFFF, HEX);
+  randomId.toUpperCase();
+  String filename = "esp32-bridge-config-" + randomId + ".json";
+  
+  // Get configuration JSON (without runtime statistics)
+  String configJson = config_to_json(&config);
+  
+  // Send as downloadable file
+  AsyncWebServerResponse *response = request->beginResponse(200, "application/json", configJson);
+  response->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+  request->send(response);
+}
+
+// Import configuration from uploaded JSON file
+void handleImportConfig(AsyncWebServerRequest *request) {
+  // Check if file data was uploaded
+  if (!request->_tempObject) {
+    log_msg("Import failed: No file uploaded", LOG_ERROR);
+    request->send(400, "text/plain", "No file uploaded");
+    return;
+  }
+
+  String* fileContent = (String*)request->_tempObject;
+  log_msg("Configuration import requested, content length: " + String(fileContent->length()), LOG_INFO);
+  
+  // Log first 100 characters for debugging (safe for display)
+  String preview = fileContent->substring(0, 100);
+  log_msg("JSON preview: " + preview, LOG_DEBUG);
+
+  // Parse configuration from uploaded JSON
+  Config tempConfig;
+  config_init(&tempConfig);
+  
+  if (!config_load_from_json(&tempConfig, *fileContent)) {
+    log_msg("Import failed: JSON parsing error", LOG_ERROR);
+    delete fileContent;  // Clean up
+    request->send(400, "text/plain", "Invalid configuration file");
+    return;
+  }
+  
+  delete fileContent;  // Clean up
+
+  // Apply imported configuration
+  config = tempConfig;
+  config_save(&config);
+  
+  log_msg("Configuration imported successfully, restarting...", LOG_INFO);
+  
+  request->send(200, "application/json", 
+    "{\"status\":\"ok\",\"message\":\"Configuration imported successfully! Device restarting...\"}");
+  
+  scheduleReboot(3000);
+}
+
+// Get client IP address
+void handleClientIP(AsyncWebServerRequest *request) {
+  String clientIP = request->client()->remoteIP().toString();
+  log_msg("Client IP requested: " + clientIP, LOG_DEBUG);
+  request->send(200, "text/plain", clientIP);
 }
