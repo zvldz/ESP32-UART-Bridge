@@ -11,6 +11,8 @@ void config_init(Config* config);
 void config_load(Config* config);
 void config_save(Config* config);
 void config_migrate(Config* config);
+bool config_load_from_json(Config* config, const String& jsonString);
+String config_to_json(Config* config);
 
 // Helper functions for string conversion
 const char* parity_to_string(uart_parity_t parity);

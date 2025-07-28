@@ -6,7 +6,7 @@
     <title>ESP32 UART Bridge</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
     <link rel="stylesheet" href="/style.css">
-    <script type="application/json" id="config">%CONFIG_JSON%</script>
+    <!-- Config will be loaded dynamically via AJAX -->
 </head>
 <body>
     <div class="container">
@@ -149,10 +149,39 @@
                 </div>
                 
                 <div style="text-align: center; margin-top: 20px;">
-                    <button type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
+                    <button id="saveButton" type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
                 </div>
             </div>
         </form>
+        
+        <!-- Configuration Backup -->
+        <div class="section" style="margin-top: 20px;">
+            <h3 style="cursor: pointer;" onclick="toggleConfigBackup()">
+                Configuration Backup
+                <span id="configArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
+            </h3>
+            <div id="configBackupContent" style="display: none;">
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <a href="/config/export" style="background-color: #2196F3; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block;">💾 Export Config</a>
+                        <br><small style="color: #666; font-size: 12px;">Download current configuration</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="document.getElementById('configFile').click()" style="background-color: #FF9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📁 Import Config</button>
+                        <br><small style="color: #666; font-size: 12px;">Upload configuration file</small>
+                    </div>
+                </div>
+                <form id="importForm" action="/config/import" method="POST" enctype="multipart/form-data" style="display: none;">
+                    <input type="file" id="configFile" name="config" accept=".json" onchange="handleConfigImport(this)">
+                </form>
+                <div id="importProgress" style="display: none; margin-top: 10px;">
+                    <div style="background: #f0f0f0; border-radius: 4px; overflow: hidden;">
+                        <div id="progressBar" style="background: #4CAF50; height: 4px; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <p id="importStatus">Uploading configuration...</p>
+                </div>
+            </div>
+        </div>
         
         <!-- Firmware Update -->
         <div class="section">
@@ -161,10 +190,25 @@
                 <span id="firmwareArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
             </h3>
             <div id="firmwareUpdateContent" style="display: none;">
-                <form method='POST' action='/update' enctype='multipart/form-data'>
-                    <input type='file' name='update' accept='.bin'><br><br>
-                    <input type='submit' value='Update Firmware' onclick='return confirm("Are you sure you want to update firmware?");'>
-                </form>
+                <div style="margin-bottom: 15px;">
+                    <label for="firmwareFile">Select Firmware File (.bin):</label><br>
+                    <input type="file" id="firmwareFile" accept=".bin" style="margin: 5px 0;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <button type="button" id="updateButton" onclick="handleFirmwareUpdate()" 
+                            style="padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Update Firmware
+                    </button>
+                </div>
+                
+                <!-- Progress indication -->
+                <div id="updateProgress" style="display: none; margin-top: 15px;">
+                    <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
+                        <div id="updateProgressBar" style="height: 20px; background-color: #007bff; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <p id="updateStatus" style="margin: 5px 0; font-weight: bold;">Uploading firmware...</p>
+                </div>
+                
                 <p><small>Select .bin firmware file. Device will restart automatically after update.</small></p>
             </div>
         </div>

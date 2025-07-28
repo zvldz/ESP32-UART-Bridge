@@ -1,21 +1,28 @@
 // ESP32 UART Bridge - Main Module
 
-// Global configuration from embedded JSON
-const config = JSON.parse(document.getElementById('config').textContent);
+// Global configuration - will be loaded via AJAX
+let config = null;
 
 // Main initialization function
-function initializeUI() {
-    // Initialize all modules with config
-    DeviceConfig.init(config);
-    FormUtils.init(config);
-    StatusUpdates.init(config);
-    CrashLog.init();
-    
-    // Start periodic updates
-    startPeriodicUpdates();
-    
-    // Log initialization complete
-    console.log('ESP32 UART Bridge UI initialized');
+async function initializeUI() {
+    try {
+        // Load initial configuration from server
+        const response = await fetch('/status');
+        config = await response.json();
+        
+        // Initialize all modules with config
+        DeviceConfig.init(config);
+        FormUtils.init(config);
+        StatusUpdates.init(config);
+        CrashLog.init();
+        
+        // Start periodic updates
+        startPeriodicUpdates();
+    } catch (error) {
+        console.error('Failed to load configuration:', error);
+        // Show error message to user
+        document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: red;"><h2>Failed to load configuration</h2><p>Please refresh the page</p></div>';
+    }
 }
 
 // Start periodic updates for dynamic content

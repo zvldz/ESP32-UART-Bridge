@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v2.7.3 (Configuration Import/Export + UI Improvements) - July 2025 ✅
+- **Configuration Import/Export** - Completed
+  - **Export Configuration**: Download current config as JSON file with unique filename
+  - **Import Configuration**: Upload JSON config file with validation and auto-reboot  
+  - **Web Interface**: Added "Configuration Backup" section with Export/Import buttons
+  - **Async Reboot Fix**: Resolved reboot timing issues using TaskScheduler for delayed restart
+  - **UI/UX Improvements**: Proper status messages, progress bars, and error handling
+  - **Benefits**:
+    - Quick device provisioning and configuration backup/restore
+    - Share configurations between devices  
+    - No need to reconfigure after firmware updates
+    - Reliable status display without "Failed to fetch" errors
+
 ## v2.7.2 (Device 3/4 Code Refactoring) - July 2025 ✅
 - **Device 3/4 Module Separation** - Completed
   - **File Structure**: Created independent device3_task.cpp/h and device4_task.cpp/h modules

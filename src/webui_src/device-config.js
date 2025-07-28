@@ -136,7 +136,6 @@ const DeviceConfig = {
         if (device2Role) device2Role.value = this.config.device2Role;
         if (device3Role) device3Role.value = this.config.device3Role;
         if (device4Role) {
-            console.log('Setting Device 4 role to:', this.config.device4Role);
             device4Role.value = this.config.device4Role;
         }
         
@@ -245,11 +244,29 @@ const DeviceConfig = {
             // Set defaults if fields are empty
             if (!targetIpInput.value || targetIpInput.value === '') {
                 if (role === '1') {  // Bridge
-                    targetIpInput.value = '192.168.4.255';
-                    portInput.value = '14550';
+                    // Try to get client IP first, fallback to broadcast
+                    fetch('/client-ip')
+                        .then(response => response.text())
+                        .then(clientIP => {
+                            targetIpInput.value = clientIP;
+                            portInput.value = '14550';
+                        })
+                        .catch(() => {
+                            targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
+                            portInput.value = '14550';
+                        });
                 } else if (role === '2') {  // Logger
-                    targetIpInput.value = '192.168.4.255';
-                    portInput.value = '14560';
+                    // Try to get client IP first, fallback to broadcast
+                    fetch('/client-ip')
+                        .then(response => response.text())
+                        .then(clientIP => {
+                            targetIpInput.value = clientIP;
+                            portInput.value = '14560';
+                        })
+                        .catch(() => {
+                            targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
+                            portInput.value = '14560';
+                        });
                 }
             }
         } else {

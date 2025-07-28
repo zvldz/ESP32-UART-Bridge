@@ -1,47 +1,33 @@
 # TODO / Roadmap
 
-## Priority 1 - Configuration Import/Export
+## Priority 1 - Configuration Import/Export ✅ COMPLETED
 
-- [ ] **Export Configuration**
+- [x] **Export Configuration** ✅ COMPLETED
   - Download current config as JSON file
   - Endpoint: `/config/export`
-  - Default filename: "esp32-bridge-config.json"
+  - Default filename: "esp32-bridge-config-[ID].json" with unique ID
   - Includes ALL settings including passwords
   - Reuses existing JSON serialization from config.cpp
   
-- [ ] **Import Configuration**  
+- [x] **Import Configuration** ✅ COMPLETED
   - Upload JSON config file via web interface
   - Endpoint: `/config/import`
   - Form-based upload (similar to OTA update)
   - Validation of JSON structure and config version
   - Apply settings and automatic reboot
   
-- [ ] **Web Interface Updates**
+- [x] **Web Interface Updates** ✅ COMPLETED
   - New section "Configuration Backup" 
   - Button "Export Config" → downloads current configuration
   - Form "Import Config" with file selector
   - Progress indication during import
   
-- [ ] **Implementation benefits**:
+- [x] **Implementation benefits** ✅ ACHIEVED:
   - Quick device provisioning
   - Configuration backup/restore
   - Share configurations between devices
   - No need to reconfigure after firmware updates
 
-### Alternative Captive Portal Implementation
-- **Current**: DNSServer + tDnsProcess task (150ms polling)  
-- **Alternative**: AsyncWebServer CaptiveRequestHandler class
-- **Benefits**: No separate DNS task, better async integration
-- **Implementation**:
-  ```cpp
-  class BridgeCaptiveHandler : public AsyncWebHandler {
-      bool canHandle(AsyncWebServerRequest *request) const override { return true; }
-      void handleRequest(AsyncWebServerRequest *request) { request->redirect("/"); }
-  };
-  server.addHandler(new BridgeCaptiveHandler()).setFilter(ON_AP_FILTER);
-  ```
-- **Device-specific endpoints**: /generate_204 (Android), /hotspot-detect.html (iOS)
-- **Priority**: After main ESPAsyncWebServer migration is stable
 
 ## Priority 2 - WiFi Client Mode
 

@@ -14,5 +14,8 @@ void handleSave(AsyncWebServerRequest *request);
 void handleResetStats(AsyncWebServerRequest *request);
 void handleCrashLogJson(AsyncWebServerRequest *request);
 void handleClearCrashLog(AsyncWebServerRequest *request);
+void handleExportConfig(AsyncWebServerRequest *request);
+void handleImportConfig(AsyncWebServerRequest *request);
+void handleClientIP(AsyncWebServerRequest *request);
 
 #endif // WEB_API_H

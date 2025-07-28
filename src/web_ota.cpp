@@ -2,6 +2,7 @@
 #include "web_interface.h"
 #include "logging.h"
 #include "uart_interface.h"
+#include "scheduler_tasks.h"
 #include <Update.h>
 #include <ESPAsyncWebServer.h>
 
@@ -111,11 +112,10 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
 
 // Handle update end for async web server
 void handleUpdateEnd(AsyncWebServerRequest *request) {
-  request->send(200, "text/plain", Update.hasError() ? 
-    ("Update failed: " + String(Update.errorString())) : 
-    "Update successful! Rebooting...");
-  
   if (Update.hasError()) {
+    String errorMsg = "{\"status\":\"error\",\"message\":\"Update failed: " + String(Update.errorString()) + "\"}";
+    request->send(400, "application/json", errorMsg);
+    
     // Resume tasks after failed update
     if (uartBridgeTaskHandle) {
       vTaskResume(uartBridgeTaskHandle);
@@ -124,7 +124,9 @@ void handleUpdateEnd(AsyncWebServerRequest *request) {
       vTaskResume(device3TaskHandle);
     }
   } else {
-    vTaskDelay(pdMS_TO_TICKS(500)); // Give time for response to be sent
-    ESP.restart();
+    request->send(200, "application/json", 
+      "{\"status\":\"ok\",\"message\":\"Firmware updated successfully! Device rebooting...\"}");
+    
+    scheduleReboot(3000);
   }
 }

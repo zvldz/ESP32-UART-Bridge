@@ -139,6 +139,23 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **To Permanent**: Enable via web interface in WiFi Configuration
 - **To Standalone**: Disable permanent mode via web interface
 
+## Configuration Management
+
+### Configuration Backup & Restore
+- **Export Configuration**: Download your current device settings as a JSON file
+  - Access via web interface → "Configuration Backup" section → "Export Config"
+  - Creates unique filename: `esp32-bridge-config-[ID].json`
+  - Includes all UART, WiFi, device roles, and logging settings
+- **Import Configuration**: Upload and apply saved configuration
+  - Select JSON file via "Import Config" button
+  - Validates configuration structure and version compatibility
+  - Automatically reboots device with new settings
+- **Use Cases**: 
+  - Quick provisioning of multiple devices
+  - Backup before firmware updates
+  - Share working configurations between team members
+  - Restore after device reset or configuration errors
+
 ## Common Use Cases
 
 - **Industrial Automation**: Connect Modbus RTU devices to modern systems

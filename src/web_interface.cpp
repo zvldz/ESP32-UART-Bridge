@@ -40,13 +40,7 @@ DNSServer* dnsServer = nullptr;
 // Indicates whether the web server was successfully started
 static bool webServerInitialized = false;
 
-// Built-in template processor for ESPAsyncWebServer
-String processor(const String& var) {
-    if (var == "CONFIG_JSON") {
-        return getConfigJson();
-    }
-    return String();
-}
+// Template processor no longer needed - config loaded via AJAX
 
 // Initialize web server in NETWORK mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
@@ -96,9 +90,11 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   // Create async web server
   server = new AsyncWebServer(80);
 
-  // Setup main page with template processing
+  // Setup main page with gzip compression
   server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", HTML_INDEX, processor);
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_INDEX_GZ, HTML_INDEX_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
   });
 
   // Setup API routes
@@ -111,15 +107,73 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   server->on("/success", HTTP_GET, handleSuccess);
   server->on("/crashlog_json", HTTP_GET, handleCrashLogJson);
   server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
+  server->on("/config/export", HTTP_GET, handleExportConfig);
+  server->on("/config/import", HTTP_POST, 
+    [](AsyncWebServerRequest *request) {
+      // Handle upload completion
+      handleImportConfig(request);
+    },
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+      // Handle file upload data
+      static String uploadedData = "";
+      
+      if (index == 0) {
+        uploadedData = "";  // Reset for new upload
+        uploadedData.reserve(4096);  // Reserve space to avoid frequent reallocations
+      }
+      
+      // Only append printable characters and whitespace, skip null bytes
+      for (size_t i = 0; i < len; i++) {
+        char c = (char)data[i];
+        if (c >= 32 || c == '\n' || c == '\r' || c == '\t') {
+          uploadedData += c;
+        }
+      }
+      
+      if (final) {
+        // Store complete data for processing
+        request->_tempObject = new String(uploadedData);
+      }
+    }
+  );
+  server->on("/client-ip", HTTP_GET, handleClientIP);
   
-  // Serve static files
-  server->on("/style.css", HTTP_GET, handleCSS);
-  server->on("/main.js", HTTP_GET, handleMainJS);
-  server->on("/crash-log.js", HTTP_GET, handleCrashJS);
-  server->on("/utils.js", HTTP_GET, handleUtilsJS);
-  server->on("/device-config.js", HTTP_GET, handleDeviceConfigJS);
-  server->on("/form-utils.js", HTTP_GET, handleFormUtilsJS);
-  server->on("/status-updates.js", HTTP_GET, handleStatusUpdatesJS);
+  // Serve static files with gzip compression
+  server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/device-config.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+  server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
   
   // Setup OTA update with async handlers
   server->on("/update", HTTP_POST, 
@@ -164,49 +218,11 @@ bool checkWiFiTimeout() {
   return false;
 }
 
-// Handle root page
-void handleRoot(AsyncWebServerRequest *request) {
-  request->send_P(200, "text/html", HTML_INDEX, processor);
-}
-
-// Handle help page
+// Handle help page with gzip compression  
 void handleHelp(AsyncWebServerRequest *request) {
-  request->send_P(200, "text/html", HTML_HELP);
-}
-
-// Handle CSS request
-void handleCSS(AsyncWebServerRequest *request) {
-  request->send_P(200, "text/css", CSS_STYLE);
-}
-
-// Handle main.js request
-void handleMainJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_MAIN);
-}
-
-// Handle crash-log.js request
-void handleCrashJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_CRASH_LOG);
-}
-
-// Handle utils.js request
-void handleUtilsJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_UTILS);
-}
-
-// Handle device-config.js request
-void handleDeviceConfigJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_DEVICE_CONFIG);
-}
-
-// Handle form-utils.js request
-void handleFormUtilsJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_FORM_UTILS);
-}
-
-// Handle status-updates.js request
-void handleStatusUpdatesJS(AsyncWebServerRequest *request) {
-  request->send_P(200, "application/javascript", JS_STATUS_UPDATES);
+  AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_HELP_GZ, HTML_HELP_GZ_LEN);
+  response->addHeader("Content-Encoding", "gzip");
+  request->send(response);
 }
 
 // Handle success page for captive portal
