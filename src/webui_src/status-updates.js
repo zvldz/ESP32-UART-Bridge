@@ -57,7 +57,7 @@ const StatusUpdates = {
         
         container.innerHTML = `
             <table>
-                <tr><td><strong>Device:</strong></td><td>${this.config.deviceName} v${this.config.version}</td></tr>
+                <tr><td><strong>Device:</strong></td><td>${this.config.deviceName}&nbsp; v${this.config.version}</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${this.config.freeRam} bytes</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
                 <tr><td><strong>WiFi SSID:</strong></td><td>${this.config.ssid}</td></tr>
