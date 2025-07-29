@@ -67,6 +67,11 @@ void config_init(Config* config) {
   config->ssid = DEFAULT_AP_SSID;
   config->password = DEFAULT_AP_PASSWORD;
   config->permanent_network_mode = false;
+  
+  // WiFi Client mode defaults
+  config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
+  config->wifi_client_ssid = "";
+  config->wifi_client_password = "";
   config->device_version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
   config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
@@ -139,6 +144,17 @@ void config_migrate(Config* config) {
     
     config->config_version = 5;
   }
+  
+  if (config->config_version < 6) {
+    log_msg("Migrating config from version 5 to 6", LOG_INFO);
+    
+    // Add WiFi Client mode fields
+    config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
+    config->wifi_client_ssid = "";      // Empty by default
+    config->wifi_client_password = "";  // Empty by default
+    
+    config->config_version = 6;
+  }
 }
 
 // Load configuration from LittleFS
@@ -203,6 +219,11 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     config->ssid = doc["wifi"]["ssid"] | DEFAULT_AP_SSID;
     config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
     config->permanent_network_mode = doc["wifi"]["permanent"] | false;
+    
+    // Load WiFi mode and client settings
+    config->wifi_mode = (BridgeWiFiMode)(doc["wifi"]["mode"] | BRIDGE_WIFI_MODE_AP);
+    config->wifi_client_ssid = doc["wifi"]["client_ssid"] | "";
+    config->wifi_client_password = doc["wifi"]["client_password"] | "";
   }
 
   // Load USB settings
@@ -270,6 +291,11 @@ String config_to_json(Config* config) {
   doc["wifi"]["ssid"] = config->ssid;
   doc["wifi"]["password"] = config->password;
   doc["wifi"]["permanent"] = config->permanent_network_mode;
+  
+  // WiFi mode and client settings
+  doc["wifi"]["mode"] = config->wifi_mode;
+  doc["wifi"]["client_ssid"] = config->wifi_client_ssid;
+  doc["wifi"]["client_password"] = config->wifi_client_password;
 
   // USB settings
   switch(config->usb_mode) {

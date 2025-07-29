@@ -12,11 +12,31 @@ typedef enum {
   BRIDGE_NET         // Network setup mode
 } BridgeMode;
 
+// WiFi operation modes for our bridge
+enum BridgeWiFiMode {
+    BRIDGE_WIFI_MODE_AP = 0,      // Access Point mode (current)
+    BRIDGE_WIFI_MODE_CLIENT = 1,  // Client mode (STA)
+    BRIDGE_WIFI_MODE_AP_STA = 2   // Future: simultaneous AP+STA
+};
+
+// WiFi Client connection states
+enum WiFiClientState {
+    CLIENT_IDLE = 0,
+    CLIENT_SCANNING,
+    CLIENT_CONNECTING,
+    CLIENT_CONNECTED,
+    CLIENT_WRONG_PASSWORD,
+    CLIENT_NO_SSID
+};
+
 // LED modes
 typedef enum {
   LED_MODE_OFF,
-  LED_MODE_WIFI_ON,      // Constantly ON in network setup mode
-  LED_MODE_DATA_FLASH    // Flash on data activity in standalone mode
+  LED_MODE_WIFI_ON,                // AP mode - purple constant
+  LED_MODE_DATA_FLASH,             // Data activity flash
+  LED_MODE_WIFI_CLIENT_CONNECTED,  // Client connected - orange constant
+  LED_MODE_WIFI_CLIENT_SEARCHING,  // Client searching - orange slow blink
+  LED_MODE_WIFI_CLIENT_ERROR       // Wrong password - orange fast blink
 } LedMode;
 
 // USB operation modes
@@ -92,6 +112,11 @@ typedef struct {
   String ssid;
   String password;
   bool permanent_network_mode;  // Wi-Fi remains active without timeout
+  
+  // WiFi mode selection
+  BridgeWiFiMode wifi_mode;
+  String wifi_client_ssid;
+  String wifi_client_password;
 
   // System info
   String device_version;
@@ -146,6 +171,15 @@ typedef struct {
   volatile unsigned long lastClickTime;
   volatile bool buttonPressed;
   volatile unsigned long buttonPressTime;
+  
+  // Client mode state
+  WiFiClientState wifiClientState;
+  int wifiRetryCount;
+  bool wifiClientConnected;
+  int wifiRSSI;  // Signal strength in dBm
+  
+  // Temporary mode override
+  bool tempForceApMode;            // Force AP mode for this session (triple click from client)
 } SystemState;
 
 // Flow control detection results

@@ -126,24 +126,58 @@
                         <span id="wifiArrow" style="float: right; user-select: none; font-size: 18px;">▶</span>
                     </h4>
                     <div id="wifiConfigContent" style="display: none;">
+                        <!-- Permanent mode checkbox (keep existing) -->
                         <div style="margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; width: auto;">
                                 <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1" style="width: auto; margin: 0;">
                                 <span>Permanent Network Mode</span>
                             </label>
-                            <small style="display: block; margin: 0; color: #666; font-size: 13px;">Wi-Fi stays active permanently when enabled</small>
+                            <small style="display: block; margin: 0; color: #666; font-size: 13px;">
+                                ⚠️ Applies to both AP and Client modes
+                            </small>
                         </div>
-                        <label for="ssid">WiFi SSID:</label>
-                        <input type="text" name="ssid" id="ssid" maxlength="32">
-                        <label for="password">WiFi Password:</label>
-                        <div style="position: relative;">
-                            <input type="password" name="password" id="password" maxlength="64" style="padding-right: 40px;">
-                            <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
-                                    <circle cx="10" cy="10" r="3"></circle>
-                                </svg>
-                            </span>
+                        
+                        <!-- WiFi Mode Selection -->
+                        <h5 style="margin-top: 15px;">WiFi Mode</h5>
+                        <div style="margin: 10px 0 15px 0;">
+                            <select name="wifi_mode" id="wifi_mode" style="width: 200px;">
+                                <option value="0">Access Point</option>
+                                <option value="1">Client (Connect to Network)</option>
+                            </select>
+                        </div>
+                        
+                        <!-- AP Mode settings -->
+                        <div id="apModeSettings" style="display: none;">
+                            <h5>Access Point Settings</h5>
+                            <label for="ssid">AP Name (SSID):</label>
+                            <input type="text" name="ssid" id="ssid" maxlength="32">
+                            <label for="password">AP Password:</label>
+                            <div style="position: relative;">
+                                <input type="password" name="password" id="password" maxlength="64" style="padding-right: 40px;">
+                                <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+                                        <circle cx="10" cy="10" r="3"></circle>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Client Mode settings -->
+                        <div id="clientModeSettings" style="display: none;">
+                            <h5>Connect to Network</h5>
+                            <label for="wifi_client_ssid">Network Name (SSID):</label>
+                            <input type="text" name="wifi_client_ssid" id="wifi_client_ssid" maxlength="32">
+                            <label for="wifi_client_password">Network Password:</label>
+                            <div style="position: relative;">
+                                <input type="password" name="wifi_client_password" id="wifi_client_password" maxlength="64" style="padding-right: 40px;">
+                                <span id="toggleClientPasswordIcon" onclick="toggleClientPassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+                                        <circle cx="10" cy="10" r="3"></circle>
+                                    </svg>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -75,11 +75,24 @@ const FormUtils = {
         // USB mode
         this.setSelectValue('usbmode', this.config.usbMode);
         
+        // Set WiFi mode
+        const wifiMode = document.getElementById('wifi_mode');
+        if (wifiMode) wifiMode.value = this.config.wifiMode || 0;
+        
         // WiFi settings
         const ssid = document.getElementById('ssid');
         const password = document.getElementById('password');
         if (ssid) ssid.value = this.config.ssid;
         if (password) password.value = this.config.password;
+        
+        // Set client WiFi settings
+        const clientSsid = document.getElementById('wifi_client_ssid');
+        const clientPassword = document.getElementById('wifi_client_password');
+        if (clientSsid) clientSsid.value = this.config.wifiClientSsid || '';
+        if (clientPassword) clientPassword.value = this.config.wifiClientPassword || '';
+        
+        // Show correct settings based on mode
+        this.updateWiFiModeDisplay();
         
         // Update log count display
         const logCount = document.getElementById('logCount');
@@ -98,8 +111,15 @@ const FormUtils = {
             form.addEventListener('submit', (e) => this.handleSubmit(e));
         }
         
+        // WiFi mode change listener
+        const wifiMode = document.getElementById('wifi_mode');
+        if (wifiMode) {
+            wifiMode.addEventListener('change', () => this.updateWiFiModeDisplay());
+        }
+        
         // Password toggle - attach to global function
         window.togglePassword = () => this.togglePassword();
+        window.toggleClientPassword = () => this.toggleClientPassword();
         
         // WiFi config toggle
         window.toggleWifiConfig = () => this.toggleWifiConfig();
@@ -120,6 +140,11 @@ const FormUtils = {
     handleSubmit(e) {
         e.preventDefault(); // Prevent normal form submission
         
+        // Validate form before submission
+        if (!this.validateForm()) {
+            return false;
+        }
+        
         const form = e.target;
         const submitButton = document.getElementById('saveButton');
         
@@ -136,7 +161,15 @@ const FormUtils = {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                // Handle HTTP errors (like 400)
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Server error');
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.status === 'ok') {
                 if (submitButton) {
@@ -162,20 +195,39 @@ const FormUtils = {
                         submitButton.textContent = 'Save & Reboot';
                     }
                 }, 2000);
+            } else if (data.status === 'error') {
+                // Handle server-side validation errors
+                alert(data.message || 'Configuration error');
+                if (submitButton) {
+                    submitButton.textContent = 'Save Failed';
+                    submitButton.disabled = false;
+                    submitButton.style.backgroundColor = '#dc3545'; // Red color
+                }
+                setTimeout(() => {
+                    if (submitButton) {
+                        submitButton.textContent = 'Save & Reboot';
+                        submitButton.style.backgroundColor = '#4CAF50'; // Reset to green
+                    }
+                }, 3000);
             }
         })
         .catch(error => {
             console.error('Save error:', error);
+            // Show error message
+            alert(error.message || 'Failed to save configuration');
+            
             if (submitButton) {
                 submitButton.textContent = 'Save Failed';
                 submitButton.disabled = false;
+                submitButton.style.backgroundColor = '#dc3545'; // Red color
             }
             // Reset button after a moment
             setTimeout(() => {
                 if (submitButton) {
                     submitButton.textContent = 'Save & Reboot';
+                    submitButton.style.backgroundColor = '#4CAF50'; // Reset to green
                 }
-            }, 2000);
+            }, 3000);
         });
         
         return false;
@@ -207,6 +259,46 @@ const FormUtils = {
         }
     },
     
+    toggleClientPassword() {
+        const passwordInput = document.getElementById('wifi_client_password');
+        const icon = document.getElementById('toggleClientPasswordIcon');
+        
+        if (!passwordInput || !icon) return;
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path>
+                </svg>
+            `;
+        } else {
+            passwordInput.type = 'password';
+            icon.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+                    <circle cx="10" cy="10" r="3"></circle>
+                </svg>
+            `;
+        }
+    },
+    
+    updateWiFiModeDisplay() {
+        const wifiMode = document.getElementById('wifi_mode');
+        const apSettings = document.getElementById('apModeSettings');
+        const clientSettings = document.getElementById('clientModeSettings');
+        
+        if (!wifiMode || !apSettings || !clientSettings) return;
+        
+        if (wifiMode.value === '0') {  // AP Mode
+            apSettings.style.display = 'block';
+            clientSettings.style.display = 'none';
+        } else {  // Client Mode
+            apSettings.style.display = 'none';
+            clientSettings.style.display = 'block';
+        }
+    },
+    
     toggleWifiConfig() {
         Utils.toggleElement('wifiConfigContent', 'wifiArrow');
     },
@@ -217,17 +309,36 @@ const FormUtils = {
     
     // Validate form before submission
     validateForm() {
-        const ssid = document.getElementById('ssid');
-        const password = document.getElementById('password');
+        const wifiMode = document.getElementById('wifi_mode');
         
-        if (ssid && ssid.value.trim() === '') {
-            alert('WiFi SSID cannot be empty');
-            return false;
-        }
-        
-        if (password && password.value.length > 0 && password.value.length < 8) {
-            alert('WiFi password must be at least 8 characters or empty for open network');
-            return false;
+        if (wifiMode && wifiMode.value === '0') {
+            // AP mode validation
+            const ssid = document.getElementById('ssid');
+            const password = document.getElementById('password');
+            
+            if (ssid && ssid.value.trim() === '') {
+                alert('WiFi AP SSID cannot be empty');
+                return false;
+            }
+            
+            if (password && password.value.length > 0 && password.value.length < 8) {
+                alert('WiFi AP password must be at least 8 characters or empty for open network');
+                return false;
+            }
+        } else if (wifiMode && wifiMode.value === '1') {
+            // Client mode validation
+            const clientSsid = document.getElementById('wifi_client_ssid');
+            const clientPassword = document.getElementById('wifi_client_password');
+            
+            if (clientSsid && clientSsid.value.trim() === '') {
+                alert('WiFi network name (SSID) cannot be empty in Client mode');
+                return false;
+            }
+            
+            if (clientPassword && clientPassword.value.length > 0 && clientPassword.value.length < 8) {
+                alert('WiFi network password must be at least 8 characters or empty for open network');
+                return false;
+            }
         }
         
         return true;

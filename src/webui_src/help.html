@@ -36,27 +36,27 @@
         </div>
         
         <div class="section">
-            <h3>🌐 Network Operation Modes</h3>
+            <h3>🌐 WiFi Operation Modes</h3>
             <div class="success">
-                <strong>The bridge supports two network operation modes:</strong><br><br>
-                <strong>🔄 Temporary Setup Mode (Traditional):</strong><br>
-                - Activated by triple-clicking BOOT button<br>
-                - Wi-Fi AP active for limited time with automatic timeout<br>
-                - Returns to standalone mode automatically<br>
-                - Use for quick configuration changes<br><br>
-                <strong>🔗 Permanent Network Mode:</strong><br>
-                - Configured via web interface checkbox<br>
-                - Wi-Fi stays active permanently until manually disabled<br>
-                - No timeout - ideal for remote monitoring<br>
-                - Connects to your existing Wi-Fi network<br>
-                - Always accessible for configuration and diagnostics
+                <strong>The bridge supports dual WiFi modes with flexible operation:</strong><br><br>
+                <strong>📡 WiFi Access Point (AP) Mode:</strong><br>
+                - Creates WiFi hotspot "ESP-Bridge" (password: 12345678)<br>
+                - Direct device configuration without existing WiFi<br>
+                - Access web interface at 192.168.4.1<br><br>
+                <strong>🔗 WiFi Client Mode:</strong><br>
+                - Connects to existing WiFi networks<br>
+                - Remote access using assigned IP address<br>
+                - Configure SSID/password via web interface<br><br>
+                <strong>Operation Duration:</strong><br>
+                - <strong>Temporary:</strong> Triple-click activation, auto timeout<br>
+                - <strong>Permanent:</strong> Always-on via web checkbox
             </div>
             <div class="warning">
-                <strong>💡 Network Mode Tips:</strong><br>
-                - <strong>LED Indicator:</strong> Solid purple in both network modes<br>
-                - <strong>Access:</strong> Connect to "ESP-Bridge" (temp) or your configured network (permanent)<br>
-                - <strong>Switching:</strong> Triple-click BOOT for temporary mode anytime<br>
-                - <strong>Security:</strong> Use strong WiFi passwords for permanent mode
+                <strong>💡 WiFi Mode Tips:</strong><br>
+                - <strong>LED Indicators:</strong> Purple (AP), Orange blink (Client searching), Orange solid (Client connected)<br>
+                - <strong>Triple-click logic:</strong> Standalone→saved mode, Client→temporary AP<br>
+                - <strong>Recovery:</strong> Hold BOOT 5s to reset WiFi to defaults<br>
+                - <strong>Remote access:</strong> Use permanent mode for always-on connectivity
             </div>
         </div>
         
@@ -118,22 +118,29 @@
         <div class="section">
             <h3>💡 LED Status Indicators</h3>
             <div class="success">
-                <strong>The RGB LED (GPIO21) provides visual feedback:</strong><br>
+                <strong>The RGB LED (GPIO21) provides comprehensive visual feedback:</strong><br><br>
+                <strong>📊 Data Activity (Standalone Mode):</strong><br>
                 - <strong>Blue flashes</strong> - Data from device (UART RX)<br>
                 - <strong>Green flashes</strong> - Data from computer (USB RX)<br>
-                - <strong>Cyan flashes</strong> - Bidirectional data transfer<br>
-                - <strong>Solid purple</strong> - Network mode (temporary or permanent)<br>
-                - <strong>White blinks</strong> - Button click feedback (1-2 clicks)<br>
-                - <strong>Purple rapid blinking</strong> - WiFi reset confirmation (5s hold)<br>
+                - <strong>Cyan flashes</strong> - Bidirectional data transfer<br><br>
+                <strong>🌐 WiFi Network Status:</strong><br>
+                - <strong>Purple solid</strong> - WiFi AP mode active<br>
+                - <strong>Orange slow blink (2s)</strong> - WiFi Client searching<br>
+                - <strong>Orange solid</strong> - WiFi Client connected<br>
+                - <strong>Red fast blink (500ms)</strong> - WiFi Client error<br><br>
+                <strong>🔘 System Status:</strong><br>
+                - <strong>White blinks</strong> - Button click feedback<br>
+                - <strong>Purple rapid blink</strong> - WiFi reset confirmation<br>
                 - <strong>Rainbow effect</strong> - Boot sequence (1 second)<br>
                 - <strong>Off</strong> - Idle, no data transfer
             </div>
             <table>
-                <tr><th>Mode</th><th>LED State</th><th>Description</th></tr>
-                <tr><td>Standalone Mode</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
-                <tr><td>Network Mode</td><td>Solid purple</td><td>Constantly ON while in network mode</td></tr>
-                <tr><td>Boot Sequence</td><td>Rainbow effect</td><td>Colorful startup animation for 1 second</td></tr>
-                <tr><td>Button clicks</td><td>White blinks</td><td>Shows click count (100ms per blink)</td></tr>
+                <tr><th>Context</th><th>LED State</th><th>Description</th></tr>
+                <tr><td>Data Activity</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
+                <tr><td>WiFi AP Mode</td><td>Purple solid</td><td>Hotspot active</td></tr>
+                <tr><td>WiFi Client</td><td>Orange blink → Orange solid</td><td>Searching → Connected</td></tr>
+                <tr><td>WiFi Error</td><td>Red fast blink</td><td>Connection failed</td></tr>
+                <tr><td>Button Feedback</td><td>White blinks</td><td>Shows click count</td></tr>
             </table>
         </div>
         
@@ -184,9 +191,12 @@
                 <tr><td>Application can't connect</td><td>Check USB connection, try different baud rate</td></tr>
                 <tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
                 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
-                <tr><td>No network mode</td><td>Triple-click BOOT button, wait for solid purple LED</td></tr>
-                <tr><td>LED solid purple</td><td>Device is in network mode - normal behavior</td></tr>
-                <tr><td>Can't access permanent network</td><td>Triple-click BOOT for temporary mode, then reconfigure</td></tr>
+                <tr><td>No WiFi mode</td><td>Triple-click BOOT button, check LED indicators</td></tr>
+                <tr><td>LED purple solid</td><td>WiFi AP mode active - connect to "ESP-Bridge"</td></tr>
+                <tr><td>LED orange blinking</td><td>WiFi Client searching - check network availability</td></tr>
+                <tr><td>LED orange solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
+                <tr><td>LED red blinking</td><td>WiFi Client error - wrong password or network issue</td></tr>
+                <tr><td>Can't access WiFi Client</td><td>Triple-click BOOT for temporary AP, then reconfigure</td></tr>
                 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
                 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
                 <tr><td>Mission Planner reset loops</td><td>Enable "Disable RTS resets on ESP32 SerialUSB" in Mission Planner connection settings. ESP32-S3's native USB outputs bootloader messages that can confuse some applications.</td></tr>
@@ -220,21 +230,23 @@
         <div class="section">
             <h3>🔘 Button Functions</h3>
             <div class="success">
-                <strong>BOOT Button (GPIO0) Functions:</strong><br>
-                - <strong>Triple-click (3 clicks within 3 seconds):</strong> Enter temporary network mode<br>
-                - <strong>Hold 5+ seconds:</strong> Reset WiFi settings to defaults (SSID: ESP-Bridge, Password: 12345678)<br>
-                - <strong>Hold during power-on:</strong> Enter bootloader mode for firmware update<br>
-                <br>
-                <strong>WiFi Reset Procedure:</strong><br>
-                1. Press and hold BOOT button for at least 5 seconds<br>
-                2. LED will flash purple rapidly 10 times to confirm<br>
-                3. Device will restart with default WiFi settings<br>
-                4. Connect to "ESP-Bridge" network with password "12345678"<br>
-                <br>
-                <strong>Network Mode Selection:</strong><br>
-                - <strong>Temporary Mode:</strong> Triple-click BOOT button anytime<br>
-                - <strong>Permanent Mode:</strong> Enable "Permanent Network Mode" checkbox in web interface<br>
-                - <strong>Back to Standalone:</strong> Disable permanent mode via web interface
+                <strong>BOOT Button (GPIO0) Functions:</strong><br><br>
+                <strong>🔘 Triple-Click (Mode Switching):</strong><br>
+                - <strong>From Standalone:</strong> Activates saved WiFi mode (Client or AP)<br>
+                - <strong>From WiFi Client:</strong> Forces temporary AP for reconfiguration<br>
+                - LED shows white blinks indicating click count<br>
+                - Useful when WiFi password changed or moved location<br><br>
+                <strong>🔄 Long Press (5+ seconds):</strong><br>
+                - Resets WiFi credentials to factory defaults<br>
+                - SSID: "ESP-Bridge", Password: "12345678"<br>
+                - LED flashes purple rapidly to confirm reset<br>
+                - Device automatically restarts<br><br>
+                <strong>⚡ Power-On Hold:</strong><br>
+                - Hold during power-on for firmware update mode<br><br>
+                <strong>Mode Selection Summary:</strong><br>
+                - <strong>Temporary WiFi:</strong> Triple-click from any mode<br>
+                - <strong>Permanent WiFi:</strong> Enable checkbox in web interface<br>
+                - <strong>WiFi Recovery:</strong> Hold 5s to reset, then triple-click
             </div>
         </div>
         

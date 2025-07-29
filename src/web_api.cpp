@@ -8,9 +8,11 @@
 #include "crashlog.h"
 #include "diagnostics.h"
 #include "scheduler_tasks.h"
+#include "wifi_manager.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <WiFi.h>
 
 // External objects from main.cpp
 extern Config config;
@@ -18,6 +20,7 @@ extern UartStats uartStats;
 extern SystemState systemState;
 extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
+
 
 // Helper function to safely read protected unsigned long value using critical sections
 unsigned long getProtectedULongValue(unsigned long* valuePtr) {
@@ -53,6 +56,20 @@ String getConfigJson() {
     doc["ssid"] = config.ssid;
     doc["password"] = config.password;
     doc["permanentWifi"] = config.permanent_network_mode;
+    
+    // WiFi mode and client settings
+    doc["wifiMode"] = config.wifi_mode;
+    doc["wifiClientSsid"] = config.wifi_client_ssid;
+    doc["wifiClientPassword"] = config.wifi_client_password;
+    
+    // Client mode status
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+        doc["wifiClientConnected"] = systemState.wifiClientConnected;
+        if (systemState.wifiClientConnected) {
+            doc["ipAddress"] = WiFi.localIP().toString();
+            doc["rssiPercent"] = rssi_to_percent(WiFi.RSSI());
+        }
+    }
     
     // USB mode
     doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
@@ -356,6 +373,60 @@ void handleSave(AsyncWebServerRequest *request) {
       config.permanent_network_mode = newPermanent;
       configChanged = true;
       log_msg("Permanent WiFi mode " + String(newPermanent ? "enabled" : "disabled"), LOG_INFO);
+    }
+  }
+  
+  // WiFi mode
+  if (request->hasParam("wifi_mode", true)) {
+    const AsyncWebParameter* p = request->getParam("wifi_mode", true);
+    int mode = p->value().toInt();
+    if (mode >= BRIDGE_WIFI_MODE_AP && mode <= BRIDGE_WIFI_MODE_CLIENT) {
+      if (mode != config.wifi_mode) {
+        config.wifi_mode = (BridgeWiFiMode)mode;
+        configChanged = true;
+        log_msg("WiFi mode changed to " + String(mode == BRIDGE_WIFI_MODE_AP ? "AP" : "Client"), LOG_INFO);
+      }
+    }
+  }
+
+  // Client SSID
+  if (request->hasParam("wifi_client_ssid", true)) {
+    const AsyncWebParameter* p = request->getParam("wifi_client_ssid", true);
+    String newSSID = p->value();
+    
+    // Validate SSID
+    newSSID.trim();  // Remove whitespace
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && newSSID.isEmpty()) {
+      log_msg("Client SSID cannot be empty", LOG_ERROR);
+      request->send(400, "application/json", 
+        "{\"status\":\"error\",\"message\":\"Client SSID cannot be empty\"}");
+      return;
+    }
+    
+    if (newSSID != config.wifi_client_ssid) {
+      config.wifi_client_ssid = newSSID;
+      configChanged = true;
+      log_msg("WiFi Client SSID changed to " + newSSID, LOG_INFO);
+    }
+  }
+
+  // Client Password
+  if (request->hasParam("wifi_client_password", true)) {
+    const AsyncWebParameter* p = request->getParam("wifi_client_password", true);
+    String newPassword = p->value();
+    
+    // Validate password (empty allowed for open networks, otherwise min 8 chars)
+    if (newPassword.length() > 0 && newPassword.length() < 8) {
+      log_msg("Client password must be at least 8 characters or empty", LOG_ERROR);
+      request->send(400, "application/json", 
+        "{\"status\":\"error\",\"message\":\"WiFi password must be at least 8 characters or empty for open network\"}");
+      return;
+    }
+    
+    if (newPassword != config.wifi_client_password) {
+      config.wifi_client_password = newPassword;
+      configChanged = true;
+      log_msg("WiFi Client password updated", LOG_INFO);
     }
   }
 

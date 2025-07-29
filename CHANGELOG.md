@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v2.8.0 (WiFi Client Mode Implementation) - July 2025 ✅
+- **WiFi Client Mode** - Full implementation completed
+  - **Dual WiFi Modes**: Support for both Access Point (AP) and Client (STA) modes
+  - **WiFi Manager**: Complete state machine with scanning, connecting, and error handling
+  - **Triple Click Logic**: Enhanced button logic for mode switching between Standalone/Client/AP
+  - **LED Indication System**: 
+    - Orange slow blink during network scanning (2s interval)
+    - Solid orange when connected as WiFi client
+    - Fast red blink for connection errors (500ms interval)
+    - White blink for button click feedback in Client mode
+  - **Device 4 Network Awareness**: Proper WiFi connection waiting using EventGroup synchronization
+  - **Temporary/Permanent Modes**: Session-based temporary modes and persistent configuration
+  - **Configuration**: Full web interface integration for WiFi Client credentials
+  - **NVS Optimization**: Fixed preferences key length limitations (temp_net_mode)
+  - **Benefits**:
+    - Connect to existing WiFi networks while maintaining AP functionality
+    - Seamless mode switching without configuration loss
+    - Visual feedback for all WiFi states and user interactions
+    - Reliable network operations with proper synchronization
+
 ## v2.7.3 (Configuration Import/Export + UI Improvements) - July 2025 ✅
 - **Configuration Import/Export** - Completed
   - **Export Configuration**: Download current config as JSON file with unique filename

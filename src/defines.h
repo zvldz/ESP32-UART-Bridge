@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.7.2"
+#define DEVICE_VERSION "2.8.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -60,6 +60,17 @@ these features but is not justified for current requirements.
 #define DEFAULT_AP_SSID "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
+// WiFi Client Mode constants
+#define WIFI_CLIENT_RETRY_INTERVAL_MS  10000  // Retry every 10 seconds
+#define WIFI_CLIENT_SCAN_INTERVAL_MS   10000  // Scan for networks every 10 seconds
+#define WIFI_CLIENT_BLINK_INTERVAL_MS  2000   // Orange slow blink for searching
+#define WIFI_CLIENT_ERROR_BLINK_MS     500    // Fast blink for errors
+#define WIFI_CLIENT_MAX_RETRIES        5      // Max password attempts before error state
+
+// RSSI thresholds for percentage calculation
+#define WIFI_RSSI_EXCELLENT -30  // 100% signal
+#define WIFI_RSSI_POOR      -90  // 0% signal
+
 // Logging system
 #define LOG_BUFFER_SIZE 100
 #define LOG_DISPLAY_COUNT 50
@@ -84,6 +95,9 @@ these features but is not justified for current requirements.
 // LED colors for Device 3
 #define COLOR_MAGENTA   0xFF00FF  // Device 3 TX
 #define COLOR_YELLOW    0xFFFF00  // Device 3 RX (Bridge mode)
+
+// LED colors - WiFi Client mode
+#define COLOR_ORANGE    0xFF8000  // Client mode connected
 
 // Crash logging
 #define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep

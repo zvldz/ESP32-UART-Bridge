@@ -16,6 +16,7 @@ static SemaphoreHandle_t ledMutex = NULL;
 
 // External objects from main.cpp
 extern BridgeMode bridgeMode;
+extern Config config;
 
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
@@ -46,6 +47,12 @@ static volatile bool buttonBlinkActive = false;
 static volatile int buttonBlinkCount = 0;
 static volatile unsigned long buttonBlinkNextTime = 0;
 static volatile bool buttonBlinkState = false;
+
+// Client mode blink state
+static volatile bool clientBlinkActive = false;
+static volatile unsigned long clientBlinkNextTime = 0;
+static volatile bool clientBlinkState = false;
+static volatile LedMode clientBlinkMode = LED_MODE_OFF;
 
 // Helper function to set LED state (thread-safe)
 static void setLED(bool on) {
@@ -126,6 +133,28 @@ void led_set_mode(LedMode mode) {
 
    case LED_MODE_DATA_FLASH:
      // Will be handled by activity notifications
+     break;
+
+   case LED_MODE_WIFI_CLIENT_CONNECTED:
+     // Orange solid for connected client
+     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+       pendingColorValue = COLOR_ORANGE;
+       ledUpdateNeeded = true;
+       xSemaphoreGive(ledMutex);
+     }
+     log_msg("LED orange solid for client connected", LOG_DEBUG);
+     break;
+
+   case LED_MODE_WIFI_CLIENT_SEARCHING:
+   case LED_MODE_WIFI_CLIENT_ERROR:
+     // Initialize client blink state for immediate start
+     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+       clientBlinkActive = true;
+       clientBlinkState = false;
+       clientBlinkNextTime = millis();
+       clientBlinkMode = mode;
+       xSemaphoreGive(ledMutex);
+     }
      break;
  }
 }
@@ -221,14 +250,19 @@ void led_rapid_blink(int count, int delay_ms) {
  }
 }
 
-// Visual indication of click count
+// Visual indication of click count (works in standalone and WiFi client modes)
 void led_blink_click_feedback(int clickCount) {
- if (bridgeMode == BRIDGE_STANDALONE && clickCount > 0) {
+ // Show feedback only in modes where button clicks do something useful
+ bool showFeedback = (bridgeMode == BRIDGE_STANDALONE) || 
+                     (bridgeMode == BRIDGE_NET && config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT);
+                     
+ if (showFeedback && clickCount > 0) {
    if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
      buttonBlinkCount = clickCount;
      buttonBlinkActive = true;
      buttonBlinkState = false;
      buttonBlinkNextTime = millis();
+     
      xSemaphoreGive(ledMutex);
    }
  }
@@ -239,7 +273,31 @@ void led_process_updates() {
  // Skip all if not initialized
  if (ledMutex == NULL) return;
 
- // Process pending LED changes first (before mode checks)
+ // Button feedback has highest priority - check first
+ if (buttonBlinkActive && millis() >= buttonBlinkNextTime) {
+   if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+     if (buttonBlinkState) {
+       leds[0] = CRGB::Black;
+       buttonBlinkState = false;
+       buttonBlinkCount = buttonBlinkCount - 1;
+       if (buttonBlinkCount <= 0) {
+         buttonBlinkActive = false;
+         // Restore main LED mode after button feedback ends  
+         ledUpdateNeeded = true;  // Force restore of pendingColorValue
+       }
+       buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS * 2;  // Longer pause between blinks
+     } else {
+       leds[0] = CRGB::White;  // White for button feedback
+       buttonBlinkState = true;
+       buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS;
+     }
+     FastLED.show();
+     xSemaphoreGive(ledMutex);
+   }
+   return;  // Skip other updates during button feedback
+ }
+
+ // Process pending LED changes (after button feedback check)
  if (ledUpdateNeeded) {
    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
      leds[0] = CRGB(pendingColorValue);
@@ -247,6 +305,30 @@ void led_process_updates() {
      ledUpdateNeeded = false;
      xSemaphoreGive(ledMutex);
    }
+ }
+
+ // Handle client mode blinking FIRST (before network mode check)
+ if ((currentLedMode == LED_MODE_WIFI_CLIENT_SEARCHING || 
+      currentLedMode == LED_MODE_WIFI_CLIENT_ERROR) && 
+     millis() >= clientBlinkNextTime) {
+   
+   int blinkInterval = (currentLedMode == LED_MODE_WIFI_CLIENT_SEARCHING) ? 
+                       WIFI_CLIENT_BLINK_INTERVAL_MS : 
+                       WIFI_CLIENT_ERROR_BLINK_MS;
+   
+   if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+     if (clientBlinkState) {
+       leds[0] = CRGB::Black;
+       clientBlinkState = false;
+     } else {
+       leds[0] = CRGB(COLOR_ORANGE);
+       clientBlinkState = true;
+     }
+     FastLED.show();
+     clientBlinkNextTime = millis() + blinkInterval;
+     xSemaphoreGive(ledMutex);
+   }
+   return;  // Skip other updates during client blink
  }
 
  // Network mode - purple constant, only rapid blink can interrupt
@@ -297,27 +379,6 @@ void led_process_updates() {
    return;  // Skip other updates during rapid blink
  }
 
- // Handle button feedback blink
- if (buttonBlinkActive && millis() >= buttonBlinkNextTime) {
-   if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
-     if (buttonBlinkState) {
-       leds[0] = CRGB::Black;
-       buttonBlinkState = false;
-       buttonBlinkCount = buttonBlinkCount - 1;
-       if (buttonBlinkCount <= 0) {
-         buttonBlinkActive = false;
-       }
-       buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS * 2;  // Longer pause between blinks
-     } else {
-       leds[0] = CRGB::White;  // White for button feedback
-       buttonBlinkState = true;
-       buttonBlinkNextTime = millis() + LED_BUTTON_FLASH_MS;
-     }
-     FastLED.show();
-     xSemaphoreGive(ledMutex);
-   }
-   return;  // Skip data activity during button feedback
- }
 
  // Standalone mode - check data activity
  static uint32_t lastUartCount = 0;
