@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.7.2-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.8.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -23,7 +23,9 @@ Universal UART to USB bridge with web configuration interface for any serial com
   - Host mode: Connect USB modems or serial adapters to ESP32
   - Configurable via web interface
 - **High Performance**: Hardware packet detection (UART idle timeout) and event-driven architecture (Device 1)
-- **Web Configuration**: Easy setup via WiFi access point
+- **Dual WiFi Modes**: Flexible network connectivity options
+  - **WiFi Access Point (AP) Mode**: Create hotspot for direct configuration 
+  - **WiFi Client Mode**: Connect to existing WiFi networks for remote access
   - **Permanent Network Mode**: Wi-Fi remains active permanently for always-on access
   - **Temporary Setup Mode**: Wi-Fi timeout for quick configuration (triple-click activation)
 - **Visual Feedback**: RGB LED shows data flow direction and system status
@@ -118,26 +120,43 @@ Universal UART to USB bridge with web configuration interface for any serial com
      - Green: Computer → Device
      - Cyan: Bidirectional
 
-## Network Operation Modes
+## WiFi Operation Modes
 
-### Temporary Setup Mode (Triple-Click)
-- Activated by triple-clicking BOOT button
-- Wi-Fi AP active for limited time (default timeout)
-- Designed for quick configuration changes
-- Returns to standalone mode automatically
-- LED: Solid purple during network mode
+The device supports two WiFi connection modes that can operate in temporary or permanent configurations:
 
-### Permanent Network Mode
-- Configured via web interface checkbox
-- Wi-Fi remains active indefinitely
-- No timeout - stays connected until manually disabled
-- Connects to your existing Wi-Fi network
-- LED: Solid purple when network active
+### WiFi Access Point (AP) Mode
+- **Default Mode**: Creates WiFi hotspot "ESP-Bridge" (password: 12345678)
+- **Direct Configuration**: Connect devices directly to ESP32 for setup
+- **No Internet Required**: Works independently without existing WiFi infrastructure
+- **Access**: Web interface at 192.168.4.1
 
-### Switching Between Modes
-- **To Temporary**: Triple-click BOOT button anytime
-- **To Permanent**: Enable via web interface in WiFi Configuration
-- **To Standalone**: Disable permanent mode via web interface
+### WiFi Client Mode  
+- **Network Integration**: Connects ESP32 to existing WiFi network
+- **Remote Access**: Access web interface using assigned IP address
+- **Internet Connectivity**: Enables cloud features and remote monitoring
+- **Configuration**: Set SSID and password via web interface
+
+### Network Mode Duration
+
+**Temporary Mode (Triple-Click Activation)**
+- Activated by triple-clicking BOOT button from any mode
+- Wi-Fi active for limited time with automatic timeout
+- Returns to standalone mode automatically after timeout
+- **Mode Selection**: 
+  - From Standalone: Activates saved WiFi mode (AP or Client)
+  - From WiFi Client: Forces temporary AP mode for reconfiguration
+
+**Permanent Network Mode**
+- Configured via web interface "Permanent Network Mode" checkbox
+- Wi-Fi remains active indefinitely until manually disabled  
+- No automatic timeout - maintains connection across reboots
+- **Benefits**: Always-on remote access, continuous network logging
+
+### Mode Switching
+- **Standalone → Network**: Triple-click BOOT button (uses saved WiFi mode)
+- **WiFi Client → AP**: Triple-click BOOT button (temporary AP for reconfiguration)
+- **Enable Permanent**: Check box in web interface WiFi configuration
+- **Disable Network**: Uncheck permanent mode via web interface
 
 ## Configuration Management
 
@@ -218,7 +237,7 @@ The web interface allows configuration of:
 - **Stop Bits**: 1 or 2
 - **Parity**: None, Even, Odd
 - **Flow Control**: None or RTS/CTS
-- **WiFi Settings**: SSID and password for your network
+- **WiFi Settings**: Choose AP or Client mode, configure credentials
 - **USB Mode**: Device (default) or Host mode
 - **Network Mode**: Temporary setup or permanent Wi-Fi operation
 - **Device Roles**: Configure Device 2, 3, and 4 functionality
@@ -268,22 +287,50 @@ When Device 4 is enabled, additional settings appear:
 
 ## LED Indicators
 
+### Data Activity (Standalone Mode)
 | Color | Pattern | Meaning |
 |-------|---------|---------|
 | Blue | Flash | Data from device (UART RX) |
 | Green | Flash | Data from computer (USB RX) |
 | Cyan | Flash | Bidirectional data transfer |
-| Purple | Solid | Network mode (temporary or permanent) |
-| Purple | Rapid blink | WiFi reset confirmation |
-| White | Blinks | Button click feedback |
-| Rainbow | 1 second | Boot sequence |
 | Off | - | Idle, no data |
+
+### WiFi Network Status  
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| Purple | Solid | WiFi AP mode active |
+| Orange | Slow blink (2s) | WiFi Client searching for network |
+| Orange | Solid | WiFi Client connected successfully |
+| Red | Fast blink (500ms) | WiFi Client connection error |
+
+### System Status
+| Color | Pattern | Meaning |
+|-------|---------|---------|
+| White | Quick blinks | Button click feedback |
+| Purple | Rapid blink | WiFi reset confirmation |
+| Rainbow | 1 second | Boot sequence |
 
 ## Button Functions
 
-- **Triple-click**: Enter temporary network mode
-- **Hold 5+ seconds**: Reset WiFi to defaults (SSID: ESP-Bridge, Password: 12345678)
-- **Hold during power-on**: Enter bootloader mode for firmware flashing
+### Triple-Click (Mode Switching)
+- **From Standalone Mode**: Activates saved WiFi mode
+  - If WiFi Client configured: Connects to saved network  
+  - If no Client configured: Creates AP hotspot
+  - LED feedback: White blinks indicate click count
+- **From WiFi Client Mode**: Forces temporary AP mode
+  - Allows reconfiguration when can't access current network
+  - Useful when WiFi password changed or moved to different location
+
+### Long Press (5+ seconds)
+- **WiFi Reset**: Resets WiFi credentials to factory defaults
+  - SSID: "ESP-Bridge" 
+  - Password: "12345678"
+  - LED feedback: Purple rapid blink confirms reset
+  - Device automatically restarts
+
+### Power-On Hold
+- **Bootloader Mode**: Hold during power-on for firmware flashing
+  - Used for manual firmware updates via USB
 
 ## Building from Source
 
@@ -353,7 +400,9 @@ nc -u -l 14560
 | Problem | Solution |
 |---------|----------|
 | No data activity | Check TX/RX connections, verify baud rate matches device |
-| LED solid purple | Device is in network mode - connect to "ESP-Bridge" network or your configured WiFi |
+| LED solid purple | WiFi AP mode active - connect to "ESP-Bridge" network |
+| LED orange blinking | WiFi Client mode searching for network |
+| LED solid orange | WiFi Client mode connected successfully |
 | Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
 | Connection drops | Enable flow control if supported by device |
 | USB device not recognized | In Host mode, only CDC devices are supported |

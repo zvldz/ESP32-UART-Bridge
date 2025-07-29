@@ -15,6 +15,7 @@
 #include "system_utils.h"
 #include "scheduler_tasks.h"
 #include "device_init.h"
+#include "wifi_manager.h"
 
 // DMA support - always enabled
 #include "uart_interface.h"
@@ -23,7 +24,7 @@
 // Global objects
 Config config;
 UartStats uartStats = {0};
-SystemState systemState = {0};
+SystemState systemState = {0};  // All fields initialized to 0/false
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
 FlowControlStatus flowControlStatus = {false, false};
@@ -62,6 +63,10 @@ void handleButtonInput();
 // Helper functions for device role names
 const char* getDevice2RoleName(uint8_t role);
 const char* getDevice3RoleName(uint8_t role);
+
+// WiFi Manager callbacks
+void on_wifi_connected();
+void on_wifi_disconnected();
 
 // FIRST thing - disable brownout using constructor attribute
 void disableBrownout() __attribute__((constructor));
@@ -175,6 +180,11 @@ void loop() {
   // Process LED updates from main thread - MUST be first
   led_process_updates();
 
+  // Process WiFi Manager in network mode
+  if (bridgeMode == BRIDGE_NET) {
+    wifi_manager_process();
+  }
+
   // Handle all button interactions
   handleButtonInput();
 
@@ -199,19 +209,32 @@ void initPins() {
 }
 
 void detectMode() {
-  // Check for WiFi mode flag in preferences
+  // Check for temporary network mode flag in preferences
   preferences.begin("uartbridge", false);
-  bool wifiModeRequested = preferences.getBool("wifi_mode", false);
+  bool tempNetworkRequested = preferences.getBool("temp_net", false);
+  String tempNetworkMode = preferences.getString("temp_net_mode", "AP");  // Max 15 chars!
   preferences.end();
 
-  if (wifiModeRequested) {
-    log_msg("WiFi mode requested via preferences - entering network mode", LOG_INFO);
-    // Clear the flag
+  if (tempNetworkRequested) {
+    log_msg("Temporary network mode requested via preferences: " + tempNetworkMode, LOG_INFO);
+    // Clear the flags
     preferences.begin("uartbridge", false);
-    preferences.putBool("wifi_mode", false);
+    preferences.remove("temp_net");
+    preferences.remove("temp_net_mode");  // Max 15 chars!
     preferences.end();
+    
     bridgeMode = BRIDGE_NET;
-    systemState.isTemporaryNetwork = true;  // Setup AP is temporary
+    systemState.isTemporaryNetwork = true;
+    
+    // Temporarily override WiFi mode for this session only
+    if (tempNetworkMode == "CLIENT") {
+      log_msg("Temporary override: using Client mode", LOG_INFO);
+      // Will use config.wifi_mode (CLIENT) as saved
+    } else {
+      log_msg("Temporary override: forcing AP mode", LOG_INFO);
+      // Need to temporarily force AP mode - will handle in initNetworkMode()
+      systemState.tempForceApMode = true;
+    }
     return;
   }
 
@@ -248,6 +271,9 @@ void detectMode() {
 void initStandaloneMode() {
   // Set LED mode for data flash explicitly
   led_set_mode(LED_MODE_DATA_FLASH);
+  
+  // Ensure network is not active in standalone mode
+  systemState.networkActive = false;
 
   // Set global USB mode based on configuration
   usbMode = config.usb_mode;
@@ -294,8 +320,30 @@ void initStandaloneMode() {
 }
 
 void initNetworkMode() {
-  // Set LED mode for network setup
-  led_set_mode(LED_MODE_WIFI_ON);
+  // Initialize WiFi Manager first
+  wifi_manager_init();
+  
+  // Start WiFi in appropriate mode (check for temporary override)
+  if (systemState.tempForceApMode) {
+    log_msg("Starting temporary WiFi AP mode (forced by triple click)", LOG_INFO);
+    wifi_manager_start_ap(config.ssid, config.password);
+    // Set LED mode for AP setup
+    led_set_mode(LED_MODE_WIFI_ON);
+    // Reset the temporary flag
+    systemState.tempForceApMode = false;
+  } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+    log_msg("Starting WiFi Client mode", LOG_INFO);
+    wifi_manager_start_client(config.wifi_client_ssid, config.wifi_client_password);
+    // LED searching state is set by WiFi Manager
+  } else {
+    log_msg("Starting WiFi AP mode", LOG_INFO);
+    wifi_manager_start_ap(config.ssid, config.password);
+    // Set LED mode for AP setup
+    led_set_mode(LED_MODE_WIFI_ON);
+  }
+  
+  // Set network as active
+  systemState.networkActive = true;
 
   // Use configured USB mode (from config file) - only if Device 2 is USB
   usbMode = config.usb_mode;
@@ -365,8 +413,10 @@ void handleButtonInput() {
     systemState.clickCount = 0;
   }
 
-  // Update LED feedback only when click count changes
-  if (bridgeMode == BRIDGE_STANDALONE && systemState.clickCount != lastLedClickCount) {
+  // Update LED feedback when click count changes (only for modes where clicks do something)
+  if ((bridgeMode == BRIDGE_STANDALONE || 
+       (bridgeMode == BRIDGE_NET && config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT)) &&
+      systemState.clickCount != lastLedClickCount) {
     if (systemState.clickCount > 0) {
       led_blink_click_feedback(systemState.clickCount);
     }
@@ -420,15 +470,39 @@ void handleButtonInput() {
       systemState.clickCount = systemState.clickCount + 1;
       log_msg("Click registered, count: " + String(systemState.clickCount), LOG_DEBUG);
 
-      // Check for triple click
-      if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS && bridgeMode == BRIDGE_STANDALONE) {
-        log_msg("*** TRIPLE CLICK DETECTED! Activating Network Mode ***", LOG_INFO);
-        log_msg("*** Setting WiFi mode flag and restarting ***", LOG_INFO);
-
+      // Check for triple click - enhanced logic
+      if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS && 
+          (bridgeMode == BRIDGE_STANDALONE || 
+           (bridgeMode == BRIDGE_NET && config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT))) {
+        
         preferences.begin("uartbridge", false);
-        preferences.putBool("wifi_mode", true);
+        
+        if (bridgeMode == BRIDGE_STANDALONE) {
+          // From standalone → activate saved WiFi mode
+          log_msg("*** TRIPLE CLICK: Standalone → Saved WiFi Mode ***", LOG_INFO);
+          
+          
+          preferences.putBool("temp_net", true);
+          if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+            preferences.putString("temp_net_mode", "CLIENT");  // Max 15 chars!
+            log_msg("*** Will start in WiFi Client mode ***", LOG_INFO);
+          } else {
+            preferences.putString("temp_net_mode", "AP");  // Max 15 chars!
+            log_msg("*** Will start in WiFi AP mode ***", LOG_INFO);
+          }
+          
+          // TEMPORARY DEBUG HACK - Move after preferences.end() for proper verification
+        } else {
+          // From active Client mode → force temporary AP mode
+          log_msg("*** TRIPLE CLICK: Client Mode → Force AP Mode ***", LOG_INFO);
+          preferences.putBool("temp_net", true);
+          preferences.putString("temp_net_mode", "AP");  // Max 15 chars!
+          log_msg("*** Will force temporary AP mode ***", LOG_INFO);
+        }
+        
         preferences.end();
-
+        
+        log_msg("*** Restarting in 1 second ***", LOG_INFO);
         vTaskDelay(pdMS_TO_TICKS(1000));
         ESP.restart();
       }
@@ -513,5 +587,30 @@ void createTasks() {
     );
     log_msg("Device 4 task created on core " + String(DEVICE4_TASK_CORE) + 
             " for " + String(getDevice4RoleName(config.device4.role)), LOG_INFO);
+  }
+}
+
+//================================================================
+// WiFi Manager Callbacks
+//================================================================
+
+void on_wifi_connected() {
+  log_msg("WiFi Manager: Client connected successfully", LOG_INFO);
+  
+  // Set LED mode for connected client
+  led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+  
+  // Set network event group bit for Device 4 synchronization
+  if (networkEventGroup) {
+    xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
+  }
+}
+
+void on_wifi_disconnected() {
+  log_msg("WiFi Manager: Client disconnected", LOG_WARNING);
+  
+  // Clear network event group bit
+  if (networkEventGroup) {
+    xEventGroupClearBits(networkEventGroup, NETWORK_CONNECTED_BIT);
   }
 }

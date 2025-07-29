@@ -4,7 +4,7 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 5  // Increased from 4 to 5 for Device 4 network support
+#define CURRENT_CONFIG_VERSION 6  // Increased from 5 to 6 for WiFi Client Mode
 
 // Configuration management interface
 void config_init(Config* config);

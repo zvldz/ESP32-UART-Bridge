@@ -3,6 +3,7 @@
 #include "logging.h"
 #include "types.h"
 #include "diagnostics.h"
+#include "wifi_manager.h"
 
 // External objects
 extern Config config;
@@ -36,19 +37,43 @@ SemaphoreHandle_t device4BridgeMutex = nullptr;
 void device4Task(void* parameter) {
     log_msg("Device 4 task started on core " + String(xPortGetCoreID()), LOG_INFO);
     
-    // Wait for network ready with timeout
-    const uint32_t maxWaitTime = 3000;  // 3 seconds
-    uint32_t waited = 0;
+    // Wait for network mode to be active first
+    const uint32_t maxNetworkWaitTime = 3000;  // 3 seconds
+    uint32_t networkWaited = 0;
     
-    while (!systemState.networkActive && waited < maxWaitTime) {
+    while (!systemState.networkActive && networkWaited < maxNetworkWaitTime) {
         vTaskDelay(pdMS_TO_TICKS(100));
-        waited += 100;
+        networkWaited += 100;
     }
     
     if (!systemState.networkActive) {
-        log_msg("Device 4: Network not ready after 3s, exiting", LOG_ERROR);
+        log_msg("Device 4: Network mode not active after 3s, exiting", LOG_ERROR);
         vTaskDelete(NULL);
         return;
+    }
+    
+    log_msg("Device 4: Network mode active, waiting for WiFi connection...", LOG_INFO);
+    
+    // Wait for actual WiFi connection (AP mode or Client connected)
+    EventBits_t bits;
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+        // In client mode, wait for connection
+        log_msg("Device 4: Waiting for WiFi client connection...", LOG_INFO);
+        bits = xEventGroupWaitBits(networkEventGroup, 
+                                  NETWORK_CONNECTED_BIT, 
+                                  pdFALSE, pdTRUE, 
+                                  pdMS_TO_TICKS(30000));  // 30 second timeout
+        
+        if (!(bits & NETWORK_CONNECTED_BIT)) {
+            log_msg("Device 4: WiFi client connection timeout after 30s, exiting", LOG_ERROR);
+            vTaskDelete(NULL);
+            return;
+        }
+        
+        log_msg("Device 4: WiFi client connected successfully", LOG_INFO);
+    } else {
+        // In AP mode, WiFi is immediately ready
+        log_msg("Device 4: WiFi AP mode active", LOG_INFO);
     }
     
     // Additional delay for WiFi stack stabilization
@@ -122,6 +147,26 @@ void device4Task(void* parameter) {
     
     // Main loop for log transmission and Bridge mode
     while (1) {
+        // Check if WiFi client mode is still connected
+        if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+            if (!wifi_manager_is_connected()) {
+                log_msg("Device 4: WiFi client disconnected, waiting for reconnection...", LOG_WARNING);
+                
+                // Wait for reconnection
+                bits = xEventGroupWaitBits(networkEventGroup, 
+                                          NETWORK_CONNECTED_BIT, 
+                                          pdFALSE, pdTRUE, 
+                                          pdMS_TO_TICKS(10000));  // 10 second timeout
+                
+                if (!(bits & NETWORK_CONNECTED_BIT)) {
+                    log_msg("Device 4: WiFi reconnection timeout, continuing...", LOG_WARNING);
+                    // Continue anyway - might reconnect later
+                } else {
+                    log_msg("Device 4: WiFi client reconnected", LOG_INFO);
+                }
+            }
+        }
+        
         // Logger mode: Check log buffer
         if (config.device4.role == D4_LOG_NETWORK && device4LogMutex) {
             if (xSemaphoreTake(device4LogMutex, pdMS_TO_TICKS(10)) == pdTRUE) {

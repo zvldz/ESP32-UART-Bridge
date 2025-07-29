@@ -55,12 +55,26 @@ const StatusUpdates = {
         const container = document.getElementById('systemInfo');
         if (!container) return;
         
+        // Build WiFi info based on mode
+        let wifiInfo = '';
+        if (this.config.wifiMode === 0) {  // AP Mode
+            wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Access Point (${this.config.ssid})</td></tr>`;
+        } else {  // Client Mode
+            if (this.config.wifiClientConnected) {
+                const rssiPercent = this.config.rssiPercent || 0;
+                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (${this.config.wifiClientSsid} ${rssiPercent}%)</td></tr>`;
+                wifiInfo += `<tr><td><strong>IP Address:</strong></td><td>${this.config.ipAddress || 'N/A'}</td></tr>`;
+            } else {
+                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (Searching: ${this.config.wifiClientSsid})</td></tr>`;
+            }
+        }
+        
         container.innerHTML = `
             <table>
                 <tr><td><strong>Device:</strong></td><td>${this.config.deviceName}&nbsp; v${this.config.version}</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${this.config.freeRam} bytes</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
-                <tr><td><strong>WiFi SSID:</strong></td><td>${this.config.ssid}</td></tr>
+                ${wifiInfo}
                 <tr><td><strong>Current UART:</strong></td><td>${this.config.uartConfig}</td></tr>
                 <tr><td><strong>Flow Control:</strong></td><td>${this.config.flowControl}</td></tr>
             </table>
