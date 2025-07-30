@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v2.8.2 (WiFi Manager ESP-IDF Migration) - July 2025 ✅
+- **Complete WiFi Manager Migration** - Completed
+  - **Full ESP-IDF Implementation**: Migrated from Arduino WiFi API to native ESP-IDF
+    - Replaced WiFi.h with esp_wifi.h, esp_event.h, esp_netif.h
+    - Event-driven architecture using ESP-IDF event handlers
+    - Native WiFi configuration and state management
+    - Eliminated temporary AP appearance in Client mode (main issue resolved)
+  - **mDNS Service Implementation**: Device discovery by hostname in Client mode
+    - Added mdns.h support with CONFIG_MDNS_ENABLED=y
+    - Generated unique hostnames using device name + MAC suffix (2 bytes)
+    - Safe mDNS initialization outside event handler context
+    - HTTP service advertisement for web interface discovery
+  - **DHCP Hostname Configuration**: Proper device identification in router
+    - Implemented esp_netif_set_hostname() before WiFi start
+    - Router now displays custom device name instead of "espresiff"
+    - Hostname generation with MAC uniqueness for multiple devices
+  - **Enhanced Error Handling**: Robust connection management and recovery
+    - Bootloop protection with safe mode after 3 WiFi init failures
+    - Proper memory checks before WiFi initialization
+    - Connection timeout handling and automatic retry logic
+    - Scan failure recovery with WiFi subsystem reset
+
 ## v2.8.1 (WiFi Client Mode Stability Fixes) - July 2025 ✅
 - **WiFi Client Connection Logic** - Major stability improvements
   - **AP Mode Conflict Resolution**: Fixed dual AP+Client mode issue causing network conflicts

@@ -54,6 +54,11 @@ static volatile unsigned long clientBlinkNextTime = 0;
 static volatile bool clientBlinkState = false;
 static volatile LedMode clientBlinkMode = LED_MODE_OFF;
 
+// Safe mode blink state (separate from client blink to avoid conflicts)
+static volatile bool safeModeBlinkActive = false;
+static volatile unsigned long safeModeBlinkNextTime = 0;
+static volatile bool safeModeBlinkState = false;
+
 // Helper function to set LED state (thread-safe)
 static void setLED(bool on) {
  if (ledMutex == NULL) return;
@@ -108,64 +113,7 @@ void leds_init() {
          " (rainbow effect took " + String(effectDuration) + "ms)", LOG_INFO);
 }
 
-// Set LED mode
-void led_set_mode(LedMode mode) {
- currentLedMode = mode;
-
- switch (mode) {
-   case LED_MODE_OFF:
-     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-       pendingColorValue = (uint32_t)CRGB::Black;
-       ledUpdateNeeded = true;
-       xSemaphoreGive(ledMutex);
-     }
-     break;
-
-   case LED_MODE_WIFI_ON:
-     // Force LED ON for network mode - purple
-     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-       pendingColorValue = (uint32_t)CRGB::Purple;
-       ledUpdateNeeded = true;
-       xSemaphoreGive(ledMutex);
-     }
-     log_msg("LED forced ON (purple) for network mode", LOG_DEBUG);
-     break;
-
-   case LED_MODE_DATA_FLASH:
-     // Will be handled by activity notifications
-     break;
-
-   case LED_MODE_WIFI_CLIENT_CONNECTED:
-     // Orange solid for connected client
-     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-       pendingColorValue = COLOR_ORANGE;
-       ledUpdateNeeded = true;
-       xSemaphoreGive(ledMutex);
-     }
-     log_msg("LED orange solid for client connected", LOG_DEBUG);
-     break;
-
-   case LED_MODE_WIFI_CLIENT_SEARCHING:
-   case LED_MODE_WIFI_CLIENT_ERROR:
-     // Initialize client blink state for immediate start
-     if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-       clientBlinkActive = true;
-       clientBlinkState = false;
-       clientBlinkNextTime = millis();
-       clientBlinkMode = mode;
-       
-       // Debug LED mode setting for WiFi client
-       if (mode == LED_MODE_WIFI_CLIENT_SEARCHING) {
-         log_msg("LED set to WiFi Client Searching mode", LOG_DEBUG);
-       } else if (mode == LED_MODE_WIFI_CLIENT_ERROR) {
-         log_msg("LED set to WiFi Client Error mode", LOG_DEBUG);
-       }
-       
-       xSemaphoreGive(ledMutex);
-     }
-     break;
- }
-}
+// Removed first duplicate led_set_mode function - using implementation at end of file
 
 // Notify functions for UART task
 void led_notify_uart_rx() {
@@ -281,7 +229,25 @@ void led_process_updates() {
  // Skip all if not initialized
  if (ledMutex == NULL) return;
 
- // Button feedback has highest priority - check first
+ // Safe Mode blink processing (highest priority)
+ if (safeModeBlinkActive && millis() >= safeModeBlinkNextTime) {
+   if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+     if (safeModeBlinkState) {
+       leds[0] = CRGB::Black;
+       safeModeBlinkState = false;
+       safeModeBlinkNextTime = millis() + 4500;  // Long pause (4.5 sec)
+     } else {
+       leds[0] = CRGB::Red;
+       safeModeBlinkState = true;
+       safeModeBlinkNextTime = millis() + 500;   // Short flash (0.5 sec)
+     }
+     FastLED.show();
+     xSemaphoreGive(ledMutex);
+   }
+   return;  // Skip other updates during safe mode blink
+ }
+
+ // Button feedback has second priority - check next
  if (buttonBlinkActive && millis() >= buttonBlinkNextTime) {
    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
      if (buttonBlinkState) {
@@ -448,4 +414,86 @@ void led_process_updates() {
      xSemaphoreGive(ledMutex);
    }
  }
+}
+
+// Set LED mode (implementation)
+void led_set_mode(LedMode mode) {
+  currentLedMode = mode;
+  
+  switch(mode) {
+    case LED_MODE_OFF:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        leds[0] = CRGB::Black;
+        FastLED.show();
+        clientBlinkActive = false;
+        safeModeBlinkActive = false;
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_WIFI_ON:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        leds[0] = CRGB::Purple;
+        FastLED.show();
+        clientBlinkActive = false;
+        safeModeBlinkActive = false;
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_WIFI_CLIENT_CONNECTED:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        leds[0] = CRGB::Orange;
+        FastLED.show();
+        clientBlinkActive = false;
+        safeModeBlinkActive = false;
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_WIFI_CLIENT_SEARCHING:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        clientBlinkActive = true;
+        clientBlinkState = false;
+        clientBlinkNextTime = millis();
+        clientBlinkMode = mode;
+        safeModeBlinkActive = false;
+        log_msg("LED set to WiFi Client Searching - orange slow blink", LOG_DEBUG);
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_WIFI_CLIENT_ERROR:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        clientBlinkActive = true;
+        clientBlinkState = false;
+        clientBlinkNextTime = millis();
+        clientBlinkMode = mode;
+        safeModeBlinkActive = false;
+        log_msg("LED set to WiFi Client Error - red fast blink", LOG_DEBUG);
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_SAFE_MODE:
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        safeModeBlinkActive = true;
+        safeModeBlinkState = false;
+        safeModeBlinkNextTime = millis();
+        clientBlinkActive = false;
+        log_msg("LED set to Safe Mode - red blink every 5s", LOG_DEBUG);
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+      
+    case LED_MODE_DATA_FLASH:
+    default:
+      // Data flash mode is handled by activity notifications
+      if (ledMutex != NULL && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        clientBlinkActive = false;
+        safeModeBlinkActive = false;
+        xSemaphoreGive(ledMutex);
+      }
+      break;
+  }
 }

@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.8.1"
+#define DEVICE_VERSION "2.8.2"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -117,6 +117,6 @@ these features but is not justified for current requirements.
 #define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
 
 // Debug flags
-// #define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
+//#define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
 
 #endif // DEFINES_H

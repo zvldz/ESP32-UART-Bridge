@@ -6,12 +6,11 @@
 #include "defines.h"
 #include "types.h"
 #include "web_interface.h"
-#include <DNSServer.h>
+#include "wifi_manager.h"
 
 // External objects
 extern Config config;
 extern BridgeMode bridgeMode;
-extern DNSServer* dnsServer;
 
 // Global scheduler instance
 Scheduler taskScheduler;
