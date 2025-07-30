@@ -91,6 +91,9 @@ void config_init(Config* config) {
   config->log_level_web = LOG_WARNING;
   config->log_level_uart = LOG_WARNING;
   config->log_level_network = LOG_OFF;
+  
+  // Protocol optimization default
+  config->protocolOptimization = PROTOCOL_NONE;
 }
 
 // Migrate configuration from old versions

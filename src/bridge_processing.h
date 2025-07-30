@@ -10,6 +10,7 @@
 #include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
 #include "device3_task.h"
 #include "device4_task.h"
+#include "protocols/protocol_pipeline.h"  // Protocol detection hooks
 #include <Arduino.h>
 
 // Forward declarations for Device 4 functions
@@ -41,6 +42,12 @@ static inline void processDevice1Input(BridgeContext* ctx) {
         }
 
         uint8_t data = ctx->interfaces.uartBridgeSerial->read();
+        
+        // HOOK: Pre-process byte
+        if (!preprocessProtocolByte(ctx, &data)) {
+            continue;
+        }
+        
         (*ctx->stats.device1RxBytes)++;
         
         // Copy to Device 3 if in Mirror or Bridge mode
@@ -62,6 +69,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
 
         // Route to Device 2 based on its role
         if (ctx->devices.device2IsUSB) {
+            // HOOK: Notify protocol detector
+            onProtocolByteReceived(ctx, data);
+            
             // Device 2 is USB - use adaptive buffering from adaptive_buffer.h
             (*ctx->stats.totalUartPackets)++;
             processAdaptiveBufferByte(ctx, data, currentTime);

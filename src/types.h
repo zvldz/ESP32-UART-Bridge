@@ -85,6 +85,17 @@ enum Device4Role {
     D4_LOG_NETWORK = 2      // Network Logger
 };
 
+// Protocol optimization types
+enum ProtocolType {
+    PROTOCOL_NONE = 0,       // Default - adaptive buffering only
+    PROTOCOL_MAVLINK = 1,    // MAVLink v1/v2
+    PROTOCOL_MODBUS_RTU = 2, // Modbus RTU
+    PROTOCOL_NMEA = 3,       // NMEA 0183
+    PROTOCOL_TEXT_LINE = 4,  // Line-based protocols
+    PROTOCOL_SBUS = 5,       // SBUS (future)
+    // Add more as needed
+};
+
 // Device 4 Configuration
 struct Device4Config {
     char target_ip[16];      // Target IP address for UDP packets
@@ -139,6 +150,9 @@ typedef struct {
   LogLevel log_level_web;
   LogLevel log_level_uart;
   LogLevel log_level_network;
+  
+  // Protocol optimization
+  uint8_t protocolOptimization;  // Protocol detection mode (ProtocolType enum)
 } Config;
 
 // Traffic statistics
@@ -207,6 +221,10 @@ inline void exitStatsCritical() {
 // Forward declarations for interface types
 class UartInterface;
 class UsbInterface;
+class ProtocolDetector;
+
+// Forward declaration for protocol statistics (will be defined in future phases)
+struct ProtocolStats;
 
 // Bridge operation context - contains pointers to local variables
 struct BridgeContext {
@@ -276,6 +294,21 @@ struct BridgeContext {
         Config* config;
         UartStats* globalStats;
     } system;
+    
+    // Protocol detection state
+    struct {
+        bool enabled;                    // Is protocol detection active
+        ProtocolDetector* detector;      // Current protocol detector
+        size_t detectedPacketSize;       // Size of detected packet
+        bool packetInProgress;           // Currently receiving packet
+        uint32_t packetStartTime;        // When packet reception started
+        ProtocolStats* stats;            // Protocol statistics (nullptr in Phase 4.1)
+        
+        // Error tracking for future adaptive behavior
+        uint32_t consecutiveErrors;     // Count of failed detection attempts
+        uint32_t lastValidPacketTime;   // Timestamp of last valid packet
+        bool temporarilyDisabled;       // Reserved for future auto-disable feature
+    } protocol;
 };
 
 // Initialize BridgeContext with all necessary pointers
