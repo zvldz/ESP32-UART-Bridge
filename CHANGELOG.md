@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## v2.8.1 (WiFi Client Mode Stability Fixes) - July 2025 ✅
+- **WiFi Client Connection Logic** - Major stability improvements
+  - **AP Mode Conflict Resolution**: Fixed dual AP+Client mode issue causing network conflicts
+    - Added ESP-IDF level WiFi initialization with forced STA-only mode 
+    - Implemented double AP disable: at client start and after successful connection
+    - Eliminated unwanted AP broadcast during client connection process
+  - **Intelligent Connection Management**: Enhanced retry logic with proper error distinction
+    - **Initial Connection**: Scans every 15 seconds when network not found
+    - **Connection Attempts**: Up to 5 attempts when target network is available  
+    - **Authentication Failure**: Stops after 5 failed attempts to prevent router lockout
+    - **Network Loss Recovery**: Unlimited reconnection attempts after successful initial connection
+    - **Error State Handling**: Clear distinction between "wrong password" and "network not found"
+  - **LED Indication Accuracy**: Corrected LED behavior for all connection states
+    - Orange slow blink (2s): Searching for configured network
+    - Orange solid: Successfully connected to WiFi network
+    - Red fast blink (500ms): Authentication failed (wrong password) - restart required
+    - Purple solid: AP mode active for direct configuration
+  - **Performance Optimization**: Eliminated unnecessary scanning after successful connection
+    - Fixed continuous scanning loop when already connected
+    - Improved WiFi manager process state handling
+- **Code Quality Improvements**
+  - **ESP-IDF Integration**: Hybrid approach using ESP-IDF for initialization, Arduino for operations
+- **Documentation Updates**
+  - **README.md**: Comprehensive WiFi Client section with detailed connection logic
+  - **Help Page**: Updated HTML help with key WiFi Client information and troubleshooting
+  - **Troubleshooting**: Enhanced problem resolution guide with specific LED state meanings
+
 ## v2.8.0 (WiFi Client Mode Implementation) - July 2025 ✅
 - **WiFi Client Mode** - Full implementation completed
   - **Dual WiFi Modes**: Support for both Access Point (AP) and Client (STA) modes

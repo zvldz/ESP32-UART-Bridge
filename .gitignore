@@ -44,3 +44,4 @@ src/CMakeLists.txt
 src/webui_gen/
 
 CL*.md
+notes.txt

@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.8.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.8.1-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -135,6 +135,12 @@ The device supports two WiFi connection modes that can operate in temporary or p
 - **Remote Access**: Access web interface using assigned IP address
 - **Internet Connectivity**: Enables cloud features and remote monitoring
 - **Configuration**: Set SSID and password via web interface
+- **Intelligent Connection Logic**: 
+  - Scans for configured network every 15 seconds when not found
+  - Attempts connection up to 5 times when network is available
+  - Distinguishes between authentication failures and network unavailability
+  - Unlimited reconnection attempts after successful initial connection
+  - Automatic recovery from temporary network outages
 
 ### Network Mode Duration
 
@@ -157,6 +163,40 @@ The device supports two WiFi connection modes that can operate in temporary or p
 - **WiFi Client → AP**: Triple-click BOOT button (temporary AP for reconfiguration)
 - **Enable Permanent**: Check box in web interface WiFi configuration
 - **Disable Network**: Uncheck permanent mode via web interface
+
+### WiFi Client Connection Logic
+
+The device implements intelligent connection management with different behaviors for initial connection vs. reconnection:
+
+#### Initial Connection Process
+1. **Network Scanning**: Scans for configured SSID every 15 seconds
+   - **LED**: Orange slow blink (2 second intervals)
+   - Continues until network is found or mode is changed
+2. **Connection Attempts**: When network found, attempts connection up to 5 times
+   - **LED**: Orange solid during connection attempts
+   - Brief pause between attempts for WiFi stack recovery
+3. **Success**: Connection established and IP address obtained
+   - **LED**: Orange solid (connected)
+   - Device ready for remote access
+4. **Authentication Failure**: Wrong password detected after 5 attempts
+   - **LED**: Red fast blink (500ms intervals) 
+   - **Recovery**: Requires device restart or mode change
+   - Device stops attempting connections to prevent router lockout
+
+#### Network Loss Recovery
+1. **Connection Monitoring**: Detects when established connection is lost
+2. **Immediate Reconnection**: Starts scanning and connecting immediately
+   - **LED**: Orange slow blink (searching for network)
+   - No retry limit - assumes temporary network outage
+3. **Unlimited Attempts**: Continues reconnection indefinitely
+   - Device has previously proven credentials work
+   - Handles router restarts, temporary outages, WiFi roaming
+
+#### Error States and Recovery
+- **Network Not Found**: Orange slow blink, continues scanning indefinitely
+- **Wrong Password**: Red fast blink, requires restart to retry
+- **Connection Lost**: Returns to search mode, unlimited reconnection attempts
+- **AP Conflict**: Device operates only in Client mode when connected (no dual AP+Client mode)
 
 ## Configuration Management
 
@@ -296,12 +336,12 @@ When Device 4 is enabled, additional settings appear:
 | Off | - | Idle, no data |
 
 ### WiFi Network Status  
-| Color | Pattern | Meaning |
-|-------|---------|---------|
-| Purple | Solid | WiFi AP mode active |
-| Orange | Slow blink (2s) | WiFi Client searching for network |
-| Orange | Solid | WiFi Client connected successfully |
-| Red | Fast blink (500ms) | WiFi Client connection error |
+| Color | Pattern | Meaning | Details |
+|-------|---------|---------|---------|
+| Purple | Solid | WiFi AP mode active | Hotspot "ESP-Bridge" ready for connections |
+| Orange | Slow blink (2s) | WiFi Client searching | Scanning for configured network every 15s |
+| Orange | Solid | WiFi Client connected | Successfully connected to WiFi network |
+| Red | Fast blink (500ms) | WiFi Client error | Wrong password after 5 attempts - restart required |
 
 ### System Status
 | Color | Pattern | Meaning |
@@ -320,6 +360,7 @@ When Device 4 is enabled, additional settings appear:
 - **From WiFi Client Mode**: Forces temporary AP mode
   - Allows reconfiguration when can't access current network
   - Useful when WiFi password changed or moved to different location
+  - Bypasses wrong password error state
 
 ### Long Press (5+ seconds)
 - **WiFi Reset**: Resets WiFi credentials to factory defaults
@@ -401,15 +442,19 @@ nc -u -l 14560
 |---------|----------|
 | No data activity | Check TX/RX connections, verify baud rate matches device |
 | LED solid purple | WiFi AP mode active - connect to "ESP-Bridge" network |
-| LED orange blinking | WiFi Client mode searching for network |
-| LED solid orange | WiFi Client mode connected successfully |
+| LED orange slow blink | WiFi Client searching - check SSID spelling and network availability |
+| LED solid orange | WiFi Client connected successfully |
+| LED red fast blink | Wrong WiFi password - restart device or triple-click to change mode |
 | Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
+| Can't connect to WiFi | Check network name, password, and 2.4GHz band (5GHz not supported) |
+| WiFi connects then disconnects | Check router settings, signal strength, or power saving features |
 | Connection drops | Enable flow control if supported by device |
 | USB device not recognized | In Host mode, only CDC devices are supported |
 | Application can't connect | Check USB cable, try different COM port settings |
 | Connection resets repeatedly | Application toggling DTR/RTS - disable hardware flow control |
 | Partial or corrupted data | Check baud rate settings, verify wire quality and grounding |
 | Can't access permanent network | Triple-click BOOT to enter temporary mode, then reconfigure |
+| Network takes long to connect | Normal - device scans every 15s and attempts 5 connections when found |
 
 ## Performance Notes
 
