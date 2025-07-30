@@ -5,6 +5,7 @@
 #include "logging.h"
 #include "uart_interface.h"
 #include "usb_interface.h"
+#include "protocols/protocol_pipeline.h"  // Protocol detection hooks
 #include <Arduino.h>
 
 // Adaptive buffering timeout constants (in microseconds)
@@ -33,6 +34,11 @@ static inline bool shouldTransmitBuffer(BridgeContext* ctx,
     // No data to transmit
     if (*ctx->adaptive.bufferIndex == 0) {
         return false;
+    }
+    
+    // NEW: Check protocol-specific conditions first
+    if (shouldTransmitProtocolBuffer(ctx, currentTime, timeSinceLastByte)) {
+        return true;
     }
     
     // Calculate time buffer has been accumulating
@@ -77,13 +83,27 @@ static inline bool shouldTransmitBuffer(BridgeContext* ctx,
 
 // Transmit adaptive buffer to USB interface
 static inline void transmitAdaptiveBuffer(BridgeContext* ctx) {
+    size_t bytesToSend = *ctx->adaptive.bufferIndex;
+    
+    // HOOK: Get protocol-specific transmit size
+    bytesToSend = getProtocolTransmitSize(ctx, bytesToSend);
+    
+    // HOOK: Pre-transmission processing
+    if (!preprocessProtocolTransmit(ctx, ctx->adaptive.buffer, &bytesToSend)) {
+        return;
+    }
+    
     // Check USB buffer availability to prevent blocking
     int availableSpace = ctx->interfaces.usbInterface->availableForWrite();
     
-    if (availableSpace >= *ctx->adaptive.bufferIndex) {
+    if (availableSpace >= bytesToSend) {
         // Can write entire buffer
-        ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, *ctx->adaptive.bufferIndex);
-        *ctx->stats.device2TxBytes += *ctx->adaptive.bufferIndex;
+        ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, bytesToSend);
+        *ctx->stats.device2TxBytes += bytesToSend;
+        
+        // HOOK: Post-transmission cleanup
+        onProtocolPacketTransmitted(ctx, bytesToSend);
+        
         *ctx->adaptive.bufferIndex = 0;  // Reset buffer
     } else if (availableSpace > 0) {
         // USB buffer has some space - write what we can

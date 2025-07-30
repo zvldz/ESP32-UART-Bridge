@@ -153,6 +153,12 @@ void uartBridgeTask(void* parameter) {
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
 
+  // Initialize protocol detection
+  initProtocolDetection(&ctx, &config);
+
+  // Configure hardware for selected protocol
+  configureHardwareForProtocol(&ctx, config.protocolOptimization);
+
   log_msg("UART Bridge Task started", LOG_INFO);
   log_msg("Device optimization: D2 USB=" + String(device2IsUSB) + ", D2 UART2=" + String(device2IsUART2) + 
           ", D3 Active=" + String(device3Active) + ", D3 Bridge=" + String(device3IsBridge), LOG_DEBUG);
@@ -167,6 +173,9 @@ void uartBridgeTask(void* parameter) {
   // ===== END TEMPORARY DIAGNOSTIC CODE =====
 
   while (1) {
+    // HOOK: Update protocol state
+    updateProtocolState(&ctx);
+    
     // Poll Device 2 UART if configured
     if (device2IsUART2 && device2Serial) {
       static_cast<UartDMA*>(device2Serial)->pollEvents();
@@ -228,6 +237,9 @@ void uartBridgeTask(void* parameter) {
     if (device2IsUSB && bufferIndex > 0) {
       handleBufferTimeout(&ctx);
     }
+
+    // HOOK: Check protocol timeouts
+    checkProtocolTimeouts(&ctx);
 
     // Fixed delay for multi-core systems (always 1ms)
     vTaskDelay(pdMS_TO_TICKS(1));

@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## v2.8.3 (Protocol Detection Framework) - July 2025 ✅
+- **Protocol Detection Infrastructure** - Phase 4.1 Complete
+  - **Framework Architecture**: Extensible protocol detection system
+    - Created `src/protocols/` directory with base classes and interfaces
+    - Implemented `ProtocolDetector` interface for protocol-specific implementations
+    - Added comprehensive protocol pipeline with processing hooks
+  - **Data Structure Extensions**: Enhanced core structures for protocol support
+    - Added `ProtocolType` enum with support for MAVLink, Modbus RTU, NMEA, Text Line, SBUS
+    - Extended `BridgeContext` with protocol detection state and error tracking
+    - Added `protocolOptimization` configuration field with PROTOCOL_NONE default
+  - **Integration Points**: Protocol-aware data processing
+    - Integrated protocol hooks in `bridge_processing.h` for byte-level processing
+    - Enhanced `adaptive_buffer.h` with protocol-specific transmission logic
+    - Added protocol lifecycle management in `uartbridge.cpp`
+  - **Stub Implementation**: Complete framework with zero functional impact
+    - All protocol functions implemented as safe stubs returning default values
+    - Zero performance overhead when disabled (PROTOCOL_NONE default)
+    - Full backward compatibility with existing adaptive buffering
+  - **Benefits**: Ready infrastructure for Phase 4.2+ protocol implementations
+    - Easy addition of new protocols without architectural changes
+    - Clear separation of concerns between framework and protocol logic
+    - Prepared for future protocol-specific optimizations
+
 ## v2.8.2 (WiFi Manager ESP-IDF Migration) - July 2025 ✅
 - **Complete WiFi Manager Migration** - Completed
   - **Full ESP-IDF Implementation**: Migrated from Arduino WiFi API to native ESP-IDF
