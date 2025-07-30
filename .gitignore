@@ -43,5 +43,6 @@ managed_components
 src/CMakeLists.txt
 src/webui_gen/
 
-CL*.md
+CLAUDE.md
+.claude
 notes.txt
