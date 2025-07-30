@@ -36,7 +36,8 @@ typedef enum {
   LED_MODE_DATA_FLASH,             // Data activity flash
   LED_MODE_WIFI_CLIENT_CONNECTED,  // Client connected - orange constant
   LED_MODE_WIFI_CLIENT_SEARCHING,  // Client searching - orange slow blink
-  LED_MODE_WIFI_CLIENT_ERROR       // Wrong password - orange fast blink
+  LED_MODE_WIFI_CLIENT_ERROR,      // Wrong password - orange fast blink
+  LED_MODE_SAFE_MODE               // Safe mode - red blink every 5s
 } LedMode;
 
 // USB operation modes
@@ -180,6 +181,9 @@ typedef struct {
   
   // Temporary mode override
   bool tempForceApMode;            // Force AP mode for this session (triple click from client)
+  
+  // Safe mode flag
+  bool wifiSafeMode;               // WiFi safe mode after initialization failures
 } SystemState;
 
 // Flow control detection results

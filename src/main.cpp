@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 #include <Preferences.h>
 #include <LittleFS.h>
 #include "defines.h"
@@ -320,25 +319,32 @@ void initStandaloneMode() {
 }
 
 void initNetworkMode() {
-  // Initialize WiFi Manager first
-  wifi_manager_init();
+  // Инициализация WiFi Manager
+  esp_err_t ret = wifi_manager_init();
   
-  // Start WiFi in appropriate mode (check for temporary override)
+  if (ret != ESP_OK && config.device4.role != D4_NONE) {
+    // Критическая ошибка только если Device 4 включен
+    log_msg("Failed to init WiFi, entering safe mode", LOG_ERROR);
+    systemState.wifiSafeMode = true;
+    led_set_mode(LED_MODE_SAFE_MODE);
+    return;
+  } else if (ret != ESP_OK) {
+    // Device 4 выключен - продолжаем без WiFi
+    log_msg("WiFi init failed, but Device 4 disabled - continuing", LOG_WARNING);
+  }
+
+  // Запуск WiFi в нужном режиме
   if (systemState.tempForceApMode) {
     log_msg("Starting temporary WiFi AP mode (forced by triple click)", LOG_INFO);
     wifi_manager_start_ap(config.ssid, config.password);
-    // Set LED mode for AP setup
     led_set_mode(LED_MODE_WIFI_ON);
-    // Reset the temporary flag
     systemState.tempForceApMode = false;
   } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
     log_msg("Starting WiFi Client mode", LOG_INFO);
     wifi_manager_start_client(config.wifi_client_ssid, config.wifi_client_password);
-    // LED searching state is set by WiFi Manager
   } else {
     log_msg("Starting WiFi AP mode", LOG_INFO);
     wifi_manager_start_ap(config.ssid, config.password);
-    // Set LED mode for AP setup
     led_set_mode(LED_MODE_WIFI_ON);
   }
   
