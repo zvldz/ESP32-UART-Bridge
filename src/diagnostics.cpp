@@ -258,3 +258,19 @@ void logDmaStatistics(UartInterface* uartSerial) {
             ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
   }
 }
+
+#ifdef SERIAL_LOG_ENABLE
+// Force output to serial for critical debugging
+// Useful when normal logging system is not available
+void forceSerialLog(const String& message) {
+    static bool serialInited = false;
+    if (!serialInited) {
+        Serial.begin(115200);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        serialInited = true;
+    }
+    Serial.printf("FORCE_LOG: %s\n", message.c_str());
+    Serial.flush();
+}
+#endif
+

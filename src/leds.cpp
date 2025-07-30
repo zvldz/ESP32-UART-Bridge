@@ -153,6 +153,14 @@ void led_set_mode(LedMode mode) {
        clientBlinkState = false;
        clientBlinkNextTime = millis();
        clientBlinkMode = mode;
+       
+       // Debug LED mode setting for WiFi client
+       if (mode == LED_MODE_WIFI_CLIENT_SEARCHING) {
+         log_msg("LED set to WiFi Client Searching mode", LOG_DEBUG);
+       } else if (mode == LED_MODE_WIFI_CLIENT_ERROR) {
+         log_msg("LED set to WiFi Client Error mode", LOG_DEBUG);
+       }
+       
        xSemaphoreGive(ledMutex);
      }
      break;
@@ -321,8 +329,16 @@ void led_process_updates() {
        leds[0] = CRGB::Black;
        clientBlinkState = false;
      } else {
-       leds[0] = CRGB(COLOR_ORANGE);
+       // Use orange for searching, red for error
+       uint32_t blinkColor = (currentLedMode == LED_MODE_WIFI_CLIENT_SEARCHING) ? 
+                             COLOR_ORANGE : COLOR_RED;
+       leds[0] = CRGB(blinkColor);
        clientBlinkState = true;
+       
+       // Log LED activity for error mode
+       if (currentLedMode == LED_MODE_WIFI_CLIENT_ERROR) {
+         log_msg("LED blinking RED (error mode)", LOG_DEBUG);
+       }
      }
      FastLED.show();
      clientBlinkNextTime = millis() + blinkInterval;

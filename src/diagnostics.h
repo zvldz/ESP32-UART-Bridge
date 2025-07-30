@@ -30,4 +30,8 @@ void runAllStacksDiagnostics();
 // Set bridge context for diagnostic functions
 void setBridgeContext(BridgeContext* ctx);
 
+#ifdef SERIAL_LOG_ENABLE
+void forceSerialLog(const String& message);
+#endif
+
 #endif // DIAGNOSTICS_H

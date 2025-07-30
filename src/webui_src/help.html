@@ -46,14 +46,16 @@
                 <strong>🔗 WiFi Client Mode:</strong><br>
                 - Connects to existing WiFi networks<br>
                 - Remote access using assigned IP address<br>
-                - Configure SSID/password via web interface<br><br>
+                - Configure SSID/password via web interface<br>
+                - <strong>Smart Connection:</strong> Scans every 15s, tries 5x when found<br>
+                - Unlimited reconnection after successful initial connection<br><br>
                 <strong>Operation Duration:</strong><br>
                 - <strong>Temporary:</strong> Triple-click activation, auto timeout<br>
                 - <strong>Permanent:</strong> Always-on via web checkbox
             </div>
             <div class="warning">
                 <strong>💡 WiFi Mode Tips:</strong><br>
-                - <strong>LED Indicators:</strong> Purple (AP), Orange blink (Client searching), Orange solid (Client connected)<br>
+                - <strong>LED Indicators:</strong> Purple (AP), Orange blink (Client searching), Orange solid (connected), Red blink (wrong password)<br>
                 - <strong>Triple-click logic:</strong> Standalone→saved mode, Client→temporary AP<br>
                 - <strong>Recovery:</strong> Hold BOOT 5s to reset WiFi to defaults<br>
                 - <strong>Remote access:</strong> Use permanent mode for always-on connectivity
@@ -139,7 +141,7 @@
                 <tr><td>Data Activity</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
                 <tr><td>WiFi AP Mode</td><td>Purple solid</td><td>Hotspot active</td></tr>
                 <tr><td>WiFi Client</td><td>Orange blink → Orange solid</td><td>Searching → Connected</td></tr>
-                <tr><td>WiFi Error</td><td>Red fast blink</td><td>Connection failed</td></tr>
+                <tr><td>WiFi Error</td><td>Red fast blink</td><td>Wrong password (5 attempts failed)</td></tr>
                 <tr><td>Button Feedback</td><td>White blinks</td><td>Shows click count</td></tr>
             </table>
         </div>
@@ -195,8 +197,9 @@
                 <tr><td>LED purple solid</td><td>WiFi AP mode active - connect to "ESP-Bridge"</td></tr>
                 <tr><td>LED orange blinking</td><td>WiFi Client searching - check network availability</td></tr>
                 <tr><td>LED orange solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
-                <tr><td>LED red blinking</td><td>WiFi Client error - wrong password or network issue</td></tr>
+                <tr><td>LED red blinking</td><td>WiFi Client error - wrong password (restart required)</td></tr>
                 <tr><td>Can't access WiFi Client</td><td>Triple-click BOOT for temporary AP, then reconfigure</td></tr>
+                <tr><td>WiFi takes long to connect</td><td>Normal - scans every 15s, tries 5x when network found</td></tr>
                 <tr><td>Forgot WiFi password</td><td>Hold BOOT button for 5+ seconds to reset WiFi to defaults</td></tr>
                 <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
                 <tr><td>Mission Planner reset loops</td><td>Enable "Disable RTS resets on ESP32 SerialUSB" in Mission Planner connection settings. ESP32-S3's native USB outputs bootloader messages that can confuse some applications.</td></tr>
@@ -235,7 +238,7 @@
                 - <strong>From Standalone:</strong> Activates saved WiFi mode (Client or AP)<br>
                 - <strong>From WiFi Client:</strong> Forces temporary AP for reconfiguration<br>
                 - LED shows white blinks indicating click count<br>
-                - Useful when WiFi password changed or moved location<br><br>
+                - Useful when WiFi password changed or red LED error state<br><br>
                 <strong>🔄 Long Press (5+ seconds):</strong><br>
                 - Resets WiFi credentials to factory defaults<br>
                 - SSID: "ESP-Bridge", Password: "12345678"<br>

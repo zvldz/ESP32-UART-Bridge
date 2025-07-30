@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.8.0"
+#define DEVICE_VERSION "2.8.1"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -62,7 +62,7 @@ these features but is not justified for current requirements.
 
 // WiFi Client Mode constants
 #define WIFI_CLIENT_RETRY_INTERVAL_MS  10000  // Retry every 10 seconds
-#define WIFI_CLIENT_SCAN_INTERVAL_MS   10000  // Scan for networks every 10 seconds
+#define WIFI_CLIENT_SCAN_INTERVAL_MS   15000  // Scan for networks every 15 seconds
 #define WIFI_CLIENT_BLINK_INTERVAL_MS  2000   // Orange slow blink for searching
 #define WIFI_CLIENT_ERROR_BLINK_MS     500    // Fast blink for errors
 #define WIFI_CLIENT_MAX_RETRIES        5      // Max password attempts before error state
@@ -98,6 +98,7 @@ these features but is not justified for current requirements.
 
 // LED colors - WiFi Client mode
 #define COLOR_ORANGE    0xFF8000  // Client mode connected
+#define COLOR_RED       0xFF0000  // Client mode error
 
 // Crash logging
 #define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep
@@ -114,5 +115,8 @@ these features but is not justified for current requirements.
 #define WEB_TASK_CORE 1       // Web server task
 #define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
 #define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
+
+// Debug flags
+// #define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
 
 #endif // DEFINES_H
