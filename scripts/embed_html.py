@@ -39,12 +39,9 @@ def minify_and_compress(content, content_type, filename):
     if MINIFY_AVAILABLE:
         try:
             if content_type == 'html':
-                # minify-html with optimized settings
-                content = html_minify(content, 
-                    minify_js=True,
-                    minify_css=True,
-                    remove_processing_instructions=True,
-                    keep_redundant_attributes=True)  # Keep type="submit" and other redundant attributes
+                # Skip HTML minification to preserve text readability
+                # gzip compression will handle size reduction
+                pass
             elif content_type == 'js':
                 content = jsmin(content)
             elif content_type == 'css':

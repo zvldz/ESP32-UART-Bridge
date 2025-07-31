@@ -215,6 +215,9 @@ const StatusUpdates = {
                     this.elements.lastActivity.textContent = `${data.lastActivity} seconds ago`;
                 }
             }
+            
+            // Update protocol statistics
+            this.updateProtocolStats(data);
         });
     },
     
@@ -356,6 +359,52 @@ const StatusUpdates = {
         }
         
         document.body.removeChild(textArea);
+    },
+    
+    updateProtocolStats(data) {
+        const protocolStatsContent = document.getElementById('protocolStatsContent');
+        if (!protocolStatsContent) return;
+        
+        // Check if protocol stats are available
+        if (!data.protocolStats) {
+            protocolStatsContent.innerHTML = '<p style="color: #666; text-align: center; margin: 20px 0;">No protocol statistics available</p>';
+            return;
+        }
+        
+        const stats = data.protocolStats;
+        const protocolName = data.protocolOptimization === 1 ? 'MAVLink' : 'Unknown';
+        
+        protocolStatsContent.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Detection Summary</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Protocol: <strong>${protocolName}</strong></div>
+                        <div>Rate: <strong>${stats.packetsPerSecond}/sec</strong></div>
+                        <div>Detected: <strong>${stats.packetsDetected}</strong></div>
+                        <div>Transmitted: <strong>${stats.packetsTransmitted}</strong></div>
+                        <div>Errors: <strong>${stats.detectionErrors}</strong></div>
+                        <div>Resyncs: <strong>${stats.resyncEvents}</strong></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Packet Analysis</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Total Bytes: <strong>${stats.totalBytes}</strong></div>
+                        <div>Average Size: <strong>${stats.avgPacketSize}B</strong></div>
+                        <div>Min Size: <strong>${stats.minPacketSize}B</strong></div>
+                        <div>Max Size: <strong>${stats.maxPacketSize}B</strong></div>
+                        <div>Last Packet: <strong>${stats.lastPacketTime}</strong></div>
+                        <div>Max Errors: <strong>${stats.maxConsecutiveErrors}</strong></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666;">
+                ℹ️ Protocol detection applies to Device 1↔2 data flow only. Statistics reset on device restart or manual reset.
+            </div>
+        `;
     }
 };
 

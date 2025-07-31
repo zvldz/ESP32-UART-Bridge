@@ -75,6 +75,9 @@ const FormUtils = {
         // USB mode
         this.setSelectValue('usbmode', this.config.usbMode);
         
+        // Protocol optimization
+        this.setSelectValue('protocol_optimization', this.config.protocolOptimization || 0);
+        
         // Set WiFi mode
         const wifiMode = document.getElementById('wifi_mode');
         if (wifiMode) wifiMode.value = this.config.wifiMode || 0;

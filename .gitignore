@@ -43,6 +43,9 @@ managed_components
 src/CMakeLists.txt
 src/webui_gen/
 
+chat.txt
+compile_commands.json
+*.code-workspace
 CLAUDE.md
 .claude
 notes.txt

@@ -23,6 +23,9 @@ public:
     virtual uint32_t getOptimalRxTimeout() const { return 10; }  // DMA timeout in bit periods
     virtual uint32_t getMaxPacketSize() const { return 1024; }
     virtual bool requiresTimingCheck() const { return false; }
+    
+    // Protocol priority for future multi-protocol support
+    virtual uint8_t getPriority() const { return 50; }  // 0-100, higher = priority
 };
 
 #endif // PROTOCOL_DETECTOR_H

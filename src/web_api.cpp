@@ -9,6 +9,7 @@
 #include "diagnostics.h"
 #include "scheduler_tasks.h"
 #include "wifi_manager.h"
+#include "protocols/protocol_pipeline.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -133,6 +134,33 @@ String getConfigJson() {
         doc["lastActivity"] = "Never";
     } else {
         doc["lastActivity"] = String((millis() - lastActivity) / 1000) + " seconds ago";
+    }
+    
+    // Protocol optimization configuration
+    doc["protocolOptimization"] = config.protocolOptimization;
+    
+    // Protocol statistics via bridge context accessor
+    BridgeContext* ctx = getBridgeContext();
+    if (ctx && ctx->protocol.stats) {
+        auto stats = ctx->protocol.stats;
+        doc["protocolStats"]["packetsDetected"] = stats->packetsDetected;
+        doc["protocolStats"]["packetsTransmitted"] = stats->packetsTransmitted;
+        doc["protocolStats"]["detectionErrors"] = stats->detectionErrors;
+        doc["protocolStats"]["resyncEvents"] = stats->resyncEvents;
+        doc["protocolStats"]["totalBytes"] = stats->totalBytes;
+        doc["protocolStats"]["minPacketSize"] = (stats->minPacketSize == UINT32_MAX) ? 0 : stats->minPacketSize;
+        doc["protocolStats"]["maxPacketSize"] = stats->maxPacketSize;
+        doc["protocolStats"]["avgPacketSize"] = stats->avgPacketSize;
+        doc["protocolStats"]["packetsPerSecond"] = stats->packetsPerSecond;
+        doc["protocolStats"]["consecutiveErrors"] = stats->consecutiveErrors;
+        doc["protocolStats"]["maxConsecutiveErrors"] = stats->maxConsecutiveErrors;
+        
+        // Format last packet time
+        if (stats->lastPacketTime == 0) {
+            doc["protocolStats"]["lastPacketTime"] = "Never";
+        } else {
+            doc["protocolStats"]["lastPacketTime"] = String((millis() - stats->lastPacketTime) / 1000) + " seconds ago";
+        }
     }
     
     // Log display count
@@ -343,6 +371,19 @@ void handleSave(AsyncWebServerRequest *request) {
     }
   }
 
+  // Protocol optimization
+  if (request->hasParam("protocol_optimization", true)) {
+    const AsyncWebParameter* p = request->getParam("protocol_optimization", true);
+    uint8_t newProtocol = p->value().toInt();
+    if (newProtocol != config.protocolOptimization) {
+      config.protocolOptimization = newProtocol;
+      configChanged = true;
+      String protocolName = (newProtocol == 0) ? "None" : 
+                           (newProtocol == 1) ? "MAVLink" : "Unknown";
+      log_msg("Protocol optimization changed to " + protocolName, LOG_INFO);
+    }
+  }
+
   // WiFi settings
   if (request->hasParam("ssid", true)) {
     const AsyncWebParameter* p = request->getParam("ssid", true);
@@ -448,6 +489,14 @@ void handleSave(AsyncWebServerRequest *request) {
 void handleResetStats(AsyncWebServerRequest *request) {
   log_msg("Resetting statistics and logs...", LOG_INFO);
   resetStatistics(&uartStats);
+  
+  // Reset protocol statistics via bridge context accessor
+  BridgeContext* ctx = getBridgeContext();
+  if (ctx && ctx->protocol.stats) {
+    ctx->protocol.stats->reset();
+    log_msg("Protocol statistics reset", LOG_INFO);
+  }
+  
   logging_clear();
 
   // Return JSON response for AJAX request

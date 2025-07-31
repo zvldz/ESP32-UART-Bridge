@@ -3,6 +3,9 @@
 
 #include "types.h"
 #include "protocol_detector.h"
+#include "protocol_factory.h"
+#include "../logging.h"
+#include <Arduino.h>
 
 // ========== Byte-level Processing Hooks ==========
 
@@ -23,15 +26,16 @@ static inline void onProtocolByteReceived(BridgeContext* ctx, uint8_t data) {
 static inline bool isValidPacketStart(BridgeContext* ctx, 
                                      const uint8_t* data, 
                                      size_t len) {
-    // TODO: Delegate to protocol detector
     if (!ctx->protocol.enabled || !ctx->protocol.detector) return false;
     
-    bool isValid = false;
-    // Future: isValid = ctx->protocol.detector->canDetect(data, len);
+    bool isValid = ctx->protocol.detector->canDetect(data, len);
     
     // Track consecutive errors for future use
     if (!isValid) {
         ctx->protocol.consecutiveErrors++;
+        if (ctx->protocol.stats) {
+            ctx->protocol.stats->onDetectionError();
+        }
     } else {
         ctx->protocol.consecutiveErrors = 0;
         ctx->protocol.lastValidPacketTime = millis();
@@ -44,11 +48,20 @@ static inline bool isValidPacketStart(BridgeContext* ctx,
 static inline int findPacketBoundary(BridgeContext* ctx,
                                     const uint8_t* data,
                                     size_t len) {
-    // TODO: Delegate to protocol detector
     if (!ctx->protocol.enabled || !ctx->protocol.detector) return 0;
     
-    // Future: return ctx->protocol.detector->findPacketBoundary(data, len);
-    return 0;
+    int result = ctx->protocol.detector->findPacketBoundary(data, len);
+    
+    // Handle resynchronization (negative return values)
+    if (result < 0) {
+        if (ctx->protocol.stats) {
+            ctx->protocol.stats->onResyncEvent();
+        }
+        log_msg("Protocol resync: skipping " + String(-result) + " bytes", LOG_DEBUG);
+        // Return negative value to indicate bytes to skip
+    }
+    
+    return result;
 }
 
 // ========== Timing Checks ==========
@@ -97,30 +110,32 @@ static inline void resetProtocolState(BridgeContext* ctx) {
 
 // Post-transmission cleanup
 static inline void onProtocolPacketTransmitted(BridgeContext* ctx, size_t bytesSent) {
-    // TODO: Update statistics, handle remaining bytes
+    // Update statistics
+    if (ctx->protocol.stats) {
+        ctx->protocol.stats->onPacketTransmitted(bytesSent);
+        log_msg("Protocol packet: " + String(bytesSent) + " bytes transmitted", LOG_DEBUG);
+    }
     resetProtocolState(ctx);
 }
 
 // Update protocol statistics
 static inline void updateProtocolStats(BridgeContext* ctx, bool success) {
-    // TODO: Update protocol statistics when ProtocolStats is implemented
     if (!ctx->protocol.stats) return;
     
-    // Future implementation:
-    // if (success) {
-    //     ctx->protocol.stats->packetsDetected++;
-    //     updateProtocolFrameRate(ctx->protocol.stats, millis());
-    // } else {
-    //     ctx->protocol.stats->errors++;
-    // }
+    if (success && ctx->protocol.detectedPacketSize > 0) {
+        ctx->protocol.stats->onPacketDetected(ctx->protocol.detectedPacketSize, millis());
+        log_msg("Protocol packet detected: " + String(ctx->protocol.detectedPacketSize) + " bytes", LOG_DEBUG);
+    } else if (!success) {
+        ctx->protocol.stats->onDetectionError();
+    }
 }
 
 // Reset protocol statistics
 static inline void resetProtocolStats(BridgeContext* ctx) {
-    // TODO: Reset protocol statistics when ProtocolStats is implemented
     if (!ctx->protocol.stats) return;
     
-    // Future: Clear all counters
+    ctx->protocol.stats->reset();
+    log_msg("Protocol statistics reset", LOG_INFO);
 }
 
 // Update protocol state machine
@@ -133,16 +148,25 @@ static inline void updateProtocolState(BridgeContext* ctx) {
 // Initialize protocol detection subsystem
 static inline void initProtocolDetection(BridgeContext* ctx, Config* config) {
     ctx->protocol.enabled = (config->protocolOptimization != PROTOCOL_NONE);
-    ctx->protocol.detector = nullptr;  // TODO: Create detector based on config
+    
+    // Initialize protocol detection based on config
+    if (ctx->protocol.enabled) {
+        initProtocolDetectionFactory(ctx, static_cast<ProtocolType>(config->protocolOptimization));
+        log_msg("Protocol detection enabled: " + String(getProtocolName(static_cast<ProtocolType>(config->protocolOptimization))), LOG_INFO);
+    } else {
+        ctx->protocol.detector = nullptr;
+        ctx->protocol.stats = nullptr;
+        log_msg("Protocol detection disabled", LOG_INFO);
+    }
+    
     ctx->protocol.detectedPacketSize = 0;
     ctx->protocol.packetInProgress = false;
     ctx->protocol.packetStartTime = 0;
-    ctx->protocol.stats = nullptr;  // TODO: Allocate when protocol is selected
     
     // Initialize error tracking
     ctx->protocol.consecutiveErrors = 0;
     ctx->protocol.lastValidPacketTime = 0;
-    ctx->protocol.temporarilyDisabled = false;  // Reserved for future use
+    ctx->protocol.temporarilyDisabled = false;
 }
 
 // Configure hardware for specific protocol
