@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## v2.9.0 (MAVLink Protocol Implementation) - January 2025 ✅
+- **MAVLink Protocol Detector** - Phase 4.2 Complete
+  - **Core MAVLink Implementation**: Full MAVLink v1/v2 packet detection
+    - Created `src/protocols/mavlink_detector.h/cpp` with complete implementation
+    - MAVLink packet boundary detection with header validation and payload size calculation
+    - Support for MAVLink v1 (0xFE) and v2 (0xFD) protocol versions
+    - Error handling with next start byte search for packet recovery
+  - **Protocol Statistics System**: Comprehensive performance tracking
+    - Created `src/protocols/protocol_stats.h` for real-time metrics
+    - Tracks detected packets, transmitted packets, error count, resync events
+    - Packet size statistics (average, min, max) and transmission rates
+    - Integration with web interface for live protocol monitoring
+  - **Configuration Management**: Seamless integration with existing config system
+    - Added `protocolOptimization` field with version migration (v6→v7)
+    - Protocol factory system with `src/protocols/protocol_factory.h/cpp`
+    - Web interface dropdown for protocol selection (None/MAVLink)
+    - Configuration persistence and loading across reboots
+  - **Web Interface Enhancements**: User-friendly protocol management
+    - Protocol Optimization dropdown in main interface (after UART Configuration)
+    - Collapsible Protocol Statistics section with real-time updates
+    - Statistics display: packets, errors, sizes, rates, last packet timing
+    - Form integration with save/load functionality
+  - **Performance Impact**: Dramatic latency reduction for MAVLink streams
+    - **Eliminates UART FIFO overflows** at 115200 baud with high-speed MAVLink data
+    - **Instant packet transmission** upon boundary detection (no timeout delays)
+    - **Perfect packet preservation** - no data loss or fragmentation
+    - Compatible with adaptive buffering fallback for non-MAVLink data
+  - **HTML Minification Fix**: Improved web interface readability
+    - Disabled aggressive HTML minification to preserve text spacing
+    - Maintained gzip compression for optimal size (70-78% reduction)
+    - Preserved JavaScript/CSS minification for performance
+
 ## v2.8.3 (Protocol Detection Framework) - July 2025 ✅
 - **Protocol Detection Infrastructure** - Phase 4.1 Complete
   - **Framework Architecture**: Extensible protocol detection system

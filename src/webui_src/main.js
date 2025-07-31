@@ -39,3 +39,19 @@ document.addEventListener('DOMContentLoaded', initializeUI);
 
 // Export config for debugging if needed
 window.bridgeConfig = config;
+
+// Toggle protocol statistics visibility
+function toggleProtocolStats() {
+    const statsDiv = document.getElementById('protocolStats');
+    const toggleIcon = document.getElementById('protocolStatsToggle');
+    
+    if (statsDiv && toggleIcon) {
+        if (statsDiv.style.display === 'none') {
+            statsDiv.style.display = 'block';
+            toggleIcon.textContent = '▼';
+        } else {
+            statsDiv.style.display = 'none';
+            toggleIcon.textContent = '▶';
+        }
+    }
+}

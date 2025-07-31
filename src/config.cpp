@@ -158,6 +158,15 @@ void config_migrate(Config* config) {
     
     config->config_version = 6;
   }
+  
+  if (config->config_version < 7) {
+    log_msg("Migrating config from version 6 to 7", LOG_INFO);
+    
+    // Add Protocol Optimization field
+    config->protocolOptimization = 0;  // PROTOCOL_NONE by default
+    
+    config->config_version = 7;
+  }
 }
 
 // Load configuration from LittleFS
@@ -265,6 +274,11 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     config->log_level_network = (LogLevel)(doc["logging"]["network"] | LOG_OFF);
   }
 
+  // Load protocol optimization (new in v7)
+  if (doc["protocol"].is<JsonObject>()) {
+    config->protocolOptimization = doc["protocol"]["optimization"] | 0;  // PROTOCOL_NONE by default
+  }
+
   // System settings like device_version and device_name are NOT loaded from file
   // They always use compiled-in values from defines.h
   config->device_version = DEVICE_VERSION;
@@ -329,6 +343,9 @@ String config_to_json(Config* config) {
   doc["logging"]["web"] = config->log_level_web;
   doc["logging"]["uart"] = config->log_level_uart;
   doc["logging"]["network"] = config->log_level_network;
+
+  // Protocol optimization
+  doc["protocol"]["optimization"] = config->protocolOptimization;
 
   // Note: device_version and device_name are NOT saved - always use compiled values
 

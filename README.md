@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.8.2-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.9.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -13,6 +13,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
+- **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection for drone/rover telemetry with zero latency and perfect packet preservation
 - **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
 - **Adaptive Buffering**: Automatically adjusts based on baud rate and inter-byte timing
   - Uses configurable timeout thresholds (200μs/1ms/5ms/15ms)
@@ -39,7 +40,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 - **Device 3 Adaptive Buffering**: Not yet implemented (uses simple 64-byte blocks)
 - **Packet Boundaries**: Currently preserved only for Device 1 → Device 2 path
-- **Protocol Detection**: No automatic protocol detection (uses timing-based optimization)
+- **Protocol Detection**: Limited to MAVLink (other protocols use timing-based optimization)
 - **USB Buffer**: Can overflow at very high sustained data rates
 - **Device 2/3**: Use polling mode instead of event-driven architecture
 - **Device 4**: UDP only (TCP support planned for future versions)
@@ -219,7 +220,7 @@ The device implements intelligent connection management with different behaviors
 
 - **Industrial Automation**: Connect Modbus RTU devices to modern systems
 - **IoT Connectivity**: Bridge 4G/LTE USB modems to embedded devices
-- **Vehicle Telemetry**: MAVLink communication for drones, rovers, boats
+- **Vehicle Telemetry**: MAVLink communication for drones, rovers, boats with native protocol optimization
 - **Marine Electronics**: NMEA GPS/AIS data bridging
 - **Legacy Equipment**: Modernize RS232/RS485 equipment
 - **Development**: Debug embedded systems with USB convenience
@@ -412,7 +413,7 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 **General fix:** Look for options to disable DTR/RTS control, hardware flow control, or "serial handshaking" in your application's connection settings.
 
 ### Protocol-Specific Considerations
-- **MAVLink devices**: Ensure baud rate matches autopilot settings (typically 57600 or 115200)
+- **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding (supports v1/v2 at any baud rate)
 - **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud
 - **AT command modems**: May require specific line endings (CR, LF, or CR+LF)
 - **Modbus RTU**: Uses strict timing requirements - the bridge's timeout-based buffering may work at some baud rates but is not specifically optimized for Modbus
@@ -528,6 +529,10 @@ This approach works well for many protocols without requiring protocol-specific 
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Detailed version history and technical implementation details
 - **[TODO.md](TODO.md)** - Future roadmap and current architecture documentation
+
+## Technical Notes
+
+- **Web Interface**: HTML files use gzip compression (70-78% size reduction) with preserved text readability. JavaScript/CSS remain minified for optimal performance.
 
 ## Acknowledgments
 

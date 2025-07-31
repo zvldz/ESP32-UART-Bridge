@@ -17,6 +17,10 @@ void setBridgeContext(BridgeContext* ctx) {
     g_bridgeContext = ctx;
 }
 
+BridgeContext* getBridgeContext() {
+    return g_bridgeContext;
+}
+
 // Print boot information to Serial (only for critical reset reasons)
 void printBootInfo() {
     // Get reset reason

@@ -4,7 +4,7 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 6  // Increased from 5 to 6 for WiFi Client Mode
+#define CURRENT_CONFIG_VERSION 7  // Increased from 6 to 7 for Protocol Optimization
 
 // Configuration management interface
 void config_init(Config* config);
