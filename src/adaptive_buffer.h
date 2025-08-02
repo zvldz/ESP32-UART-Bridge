@@ -354,11 +354,15 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, u
     
     // Connection state changed from disconnected to connected
     if (!wasConnected && isConnected) {
-        // Port just opened - reset protocol detector
+        // Port just opened - reset protocol detection state
         if (ctx->protocol.detector) {
-            ctx->protocol.detector->reset();
-            log_msg(LOG_DEBUG, "USB: Port reopened - protocol detector reset");
+            // Reset protocol state through context
+            ctx->protocol.packetInProgress = false;
+            ctx->protocol.consecutiveErrors = 0;
+            // Detector will resync on next packet
         }
+        log_msg(LOG_DEBUG, "USB: Port reopened");
+        
         // Clear any partial data in adaptive buffer
         *ctx->adaptive.bufferIndex = 0;
         ctx->protocol.lastAnalyzedOffset = 0;
