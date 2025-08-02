@@ -47,12 +47,12 @@ void initMainUART(UartInterface* serial, Config* config, UartStats* stats, UsbIn
   serial->begin(uartCfg, UART_RX_PIN, UART_TX_PIN);
 
   // Log configuration
-  log_msg("UART configured: " + String(config->baudrate) + " baud, " +
-          word_length_to_string(config->databits) + 
-          parity_to_string(config->parity)[0] +  // First char only
-          stop_bits_to_string(config->stopbits), LOG_INFO);
+  log_msg(LOG_INFO, "UART configured: %u baud, %s%c%s", config->baudrate,
+          word_length_to_string(config->databits),
+          parity_to_string(config->parity)[0],  // First char only
+          stop_bits_to_string(config->stopbits));
 
-  log_msg("Using DMA-accelerated UART", LOG_INFO);
+  log_msg(LOG_INFO, "Using DMA-accelerated UART");
 
   // Detect flow control if enabled
   if (config->flowcontrol) {
@@ -104,11 +104,10 @@ void initDevice2UART() {
     // Initialize with full UART configuration
     device2Serial->begin(uartCfg, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
     
-    log_msg("Device 2 UART initialized on GPIO" + String(DEVICE2_UART_RX_PIN) + "/" + 
-            String(DEVICE2_UART_TX_PIN) + " at " + String(config.baudrate) + 
-            " baud (DMA polling mode)", LOG_INFO);
+    log_msg(LOG_INFO, "Device 2 UART initialized on GPIO%d/%d at %u baud (DMA polling mode)", 
+            DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN, config.baudrate);
   } else {
-    log_msg("Failed to create Device 2 UART", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to create Device 2 UART");
   }
 }
 
@@ -137,38 +136,37 @@ void initDevice3(uint8_t role) {
     if (role == D3_UART3_MIRROR) {
       // Mirror mode - TX only
       device3Serial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
-      log_msg("Device 3 Mirror mode initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + 
-              " (TX only) at " + String(config.baudrate) + " baud (UART0, DMA polling)", LOG_INFO);
+      log_msg(LOG_INFO, "Device 3 Mirror mode initialized on GPIO%d (TX only) at %u baud (UART0, DMA polling)", 
+              DEVICE3_UART_TX_PIN, config.baudrate);
     } else if (role == D3_UART3_BRIDGE) {
       // Bridge mode - full duplex
       device3Serial->begin(uartCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
-      log_msg("Device 3 Bridge mode initialized on GPIO" + String(DEVICE3_UART_RX_PIN) + "/" + 
-              String(DEVICE3_UART_TX_PIN) + " at " + String(config.baudrate) + 
-              " baud (UART0, DMA polling)", LOG_INFO);
+      log_msg(LOG_INFO, "Device 3 Bridge mode initialized on GPIO%d/%d at %u baud (UART0, DMA polling)", 
+              DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, config.baudrate);
     }
   } else {
-    log_msg("Failed to create Device 3 UART", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to create Device 3 UART");
   }
 }
 
 // Initialize and log device configuration
 void initDevices() {
   // Log device configuration using helper functions
-  log_msg("Device configuration:", LOG_INFO);
-  log_msg("- Device 1: Main UART Bridge (always enabled)", LOG_INFO);
+  log_msg(LOG_INFO, "Device configuration:");
+  log_msg(LOG_INFO, "- Device 1: Main UART Bridge (always enabled)");
   
   // Device 2 with role name
   String d2Info = "- Device 2: " + String(getDevice2RoleName(config.device2.role));
   if (config.device2.role == D2_USB) {
     d2Info += " (" + String(config.usb_mode == USB_MODE_HOST ? "Host" : "Device") + " mode)";
   }
-  log_msg(d2Info, LOG_INFO);
+  log_msg(LOG_INFO, "%s", d2Info.c_str());
   
   // Device 3 with role name
-  log_msg("- Device 3: " + String(getDevice3RoleName(config.device3.role)), LOG_INFO);
+  log_msg(LOG_INFO, "- Device 3: %s", getDevice3RoleName(config.device3.role));
   
   // Device 4
-  log_msg("- Device 4: " + String(config.device4.role == D4_NONE ? "Disabled" : "Future feature"), LOG_INFO);
+  log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Future feature");
   
   // Initialize UART logger if Device 3 is configured for logging
   if (config.device3.role == D3_UART3_LOG) {
@@ -176,9 +174,9 @@ void initDevices() {
   }
   
   // Log logging configuration
-  log_msg("Logging configuration:", LOG_INFO);
-  log_msg("- Web logs: " + String(getLogLevelName(config.log_level_web)), LOG_INFO);
-  log_msg("- UART logs: " + String(getLogLevelName(config.log_level_uart)) + 
-          (config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)"), LOG_INFO);
-  log_msg("- Network logs: " + String(getLogLevelName(config.log_level_network)) + " (future)", LOG_INFO);
+  log_msg(LOG_INFO, "Logging configuration:");
+  log_msg(LOG_INFO, "- Web logs: %s", getLogLevelName(config.log_level_web));
+  log_msg(LOG_INFO, "- UART logs: %s%s", getLogLevelName(config.log_level_uart),
+          config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)");
+  log_msg(LOG_INFO, "- Network logs: %s (future)", getLogLevelName(config.log_level_network));
 }

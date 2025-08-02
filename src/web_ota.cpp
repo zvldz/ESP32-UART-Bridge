@@ -20,18 +20,18 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
   
   if (!index) {
     // File start - this is the first chunk
-    log_msg("Firmware update started: " + filename, LOG_INFO);
+    log_msg(LOG_INFO, "Firmware update started: %s", filename.c_str());
     updateStarted = false;
 
     // Suspend UART tasks during update to prevent interference
     if (uartBridgeTaskHandle) {
-      log_msg("Suspending UART bridge task for OTA update", LOG_DEBUG);
+      log_msg(LOG_DEBUG, "Suspending UART bridge task for OTA update");
       vTaskSuspend(uartBridgeTaskHandle);
     }
     
     // Also suspend Device 3 task if it exists
     if (device3TaskHandle) {
-      log_msg("Suspending Device 3 task for OTA update", LOG_DEBUG);
+      log_msg(LOG_DEBUG, "Suspending Device 3 task for OTA update");
       vTaskSuspend(device3TaskHandle);
     }
 
@@ -43,13 +43,13 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
     
     // IMPORTANT: Deinitialize Device 3 UART0 to prevent conflicts
     if (device3Serial) {
-      log_msg("Deinitializing Device 3 UART0 for clean OTA update", LOG_DEBUG);
+      log_msg(LOG_DEBUG, "Deinitializing Device 3 UART0 for clean OTA update");
       device3Serial->end();
       vTaskDelay(pdMS_TO_TICKS(50)); // Give time for UART to fully release
     }
 
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start with max available size
-      log_msg("Failed to begin firmware update: " + String(Update.errorString()), LOG_ERROR);
+      log_msg(LOG_ERROR, "Failed to begin firmware update: %s", Update.errorString());
       
       // Resume tasks if update failed to start
       if (uartBridgeTaskHandle) {
@@ -67,7 +67,7 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
   if (len && updateStarted) {
     // Write firmware chunk
     if (Update.write(data, len) != len) {
-      log_msg("Firmware write failed: " + String(Update.errorString()), LOG_ERROR);
+      log_msg(LOG_ERROR, "Firmware write failed: %s", Update.errorString());
       updateStarted = false;
       
       // Resume tasks on write failure
@@ -84,7 +84,7 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
     static unsigned long lastProgress = 0;
     unsigned long progress = Update.progress();
     if (progress - lastProgress > 50000) { // Log every 50KB
-      log_msg("Firmware update progress: " + String(progress) + " bytes", LOG_DEBUG);
+      log_msg(LOG_DEBUG, "Firmware update progress: %lu bytes", progress);
       lastProgress = progress;
     }
   }
@@ -92,11 +92,11 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
   if (final && updateStarted) {
     // File end - finalize update
     if (Update.end(true)) { // True to set the size to the current progress
-      log_msg("Firmware update successful: " + String(index + len) + " bytes", LOG_INFO);
-      log_msg("Rebooting device...", LOG_INFO);
+      log_msg(LOG_INFO, "Firmware update successful: %zu bytes", index + len);
+      log_msg(LOG_INFO, "Rebooting device...");
       updateStarted = false;
     } else {
-      log_msg("Firmware update failed at end: " + String(Update.errorString()), LOG_ERROR);
+      log_msg(LOG_ERROR, "Firmware update failed at end: %s", Update.errorString());
       updateStarted = false;
       
       // Resume tasks if update failed

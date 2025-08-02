@@ -17,7 +17,7 @@ void crashlog_check_and_save() {
     if (reason == ESP_RST_PANIC || reason == ESP_RST_TASK_WDT ||
         reason == ESP_RST_INT_WDT || reason == ESP_RST_WDT) {
 
-        log_msg("System recovered from crash: " + crashlog_get_reset_reason_string(reason), LOG_ERROR);
+        log_msg(LOG_ERROR, "System recovered from crash: %s", crashlog_get_reset_reason_string(reason).c_str());
 
         // Check if file exists, create if not
         if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
@@ -40,7 +40,7 @@ void crashlog_check_and_save() {
         if (file) {
             // Check file size protection
             if (file.size() > 4096) {
-                log_msg("Crashlog too large, truncating", LOG_WARNING);
+                log_msg(LOG_WARNING, "Crashlog too large, truncating");
                 file.close();
                 LittleFS.remove(CRASHLOG_FILE_PATH);
 
@@ -52,7 +52,7 @@ void crashlog_check_and_save() {
                 file.close();
 
                 if (error) {
-                    log_msg("Crashlog corrupted, reinitializing: " + String(error.c_str()), LOG_WARNING);
+                    log_msg(LOG_WARNING, "Crashlog corrupted, reinitializing: %s", error.c_str());
                     LittleFS.remove(CRASHLOG_FILE_PATH);
 
                     // Create new structure
@@ -95,9 +95,9 @@ void crashlog_check_and_save() {
         if (file) {
             serializeJson(doc, file);
             file.close();
-            log_msg("Crash #" + String(totalCrashes) + " logged successfully", LOG_INFO);
+            log_msg(LOG_INFO, "Crash #%d logged successfully", totalCrashes);
         } else {
-            log_msg("Cannot write crashlog file", LOG_ERROR);
+            log_msg(LOG_ERROR, "Cannot write crashlog file");
         }
 
         // Reset min heap tracking for new session
@@ -136,7 +136,7 @@ String crashlog_get_json() {
 void crashlog_clear() {
     if (LittleFS.exists(CRASHLOG_FILE_PATH)) {
         LittleFS.remove(CRASHLOG_FILE_PATH);
-        log_msg("Crash history cleared", LOG_INFO);
+        log_msg(LOG_INFO, "Crash history cleared");
     }
 
     // Create empty file

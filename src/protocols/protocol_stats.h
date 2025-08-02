@@ -2,6 +2,7 @@
 #define PROTOCOL_STATS_H
 
 #include <stdint.h>
+#include "../logging.h"
 
 // Protocol detection and processing statistics
 struct ProtocolStats {
@@ -25,6 +26,10 @@ struct ProtocolStats {
     uint32_t consecutiveErrors;     // Current streak of errors (for future auto-disable)
     uint32_t maxConsecutiveErrors;  // Highest error streak seen
     
+    // Private: Rate calculation state
+    uint32_t lastRateUpdate;        // Last time rate was calculated
+    uint32_t packetsInLastSecond;   // Packets counted in current second
+    
     // Constructor
     ProtocolStats() { reset(); }
     
@@ -42,6 +47,8 @@ struct ProtocolStats {
         packetsPerSecond = 0;
         consecutiveErrors = 0;
         maxConsecutiveErrors = 0;
+        lastRateUpdate = 0;
+        packetsInLastSecond = 0;
     }
     
     // Update packet size statistics
@@ -59,26 +66,39 @@ struct ProtocolStats {
     
     // Update packet rate (called periodically)
     void updatePacketRate(uint32_t currentTime) {
-        static uint32_t lastRateUpdate = 0;
-        static uint32_t packetsInLastSecond = 0;
+        // Don't count here - let onPacketDetected do it
         
-        if (currentTime - lastRateUpdate >= 1000) {  // Every second
+        // Handle initialization
+        if (lastRateUpdate == 0) {
+            lastRateUpdate = currentTime;
+            return;
+        }
+        
+        // Handle real millis() overflow (happens every ~49 days)
+        // Only consider it overflow if difference is huge (> 40 days)
+        if (currentTime < lastRateUpdate && 
+            (lastRateUpdate - currentTime) > 3456000000UL) {  // ~40 days in ms
+            lastRateUpdate = currentTime;
+            packetsInLastSecond = 1;
+            return;
+        }
+        
+        // Normal rate update
+        if (currentTime - lastRateUpdate >= 1000) {
             packetsPerSecond = packetsInLastSecond;
             packetsInLastSecond = 0;
             lastRateUpdate = currentTime;
-        } else {
-            packetsInLastSecond++;
         }
     }
     
     // Record successful packet detection
     void onPacketDetected(uint32_t size, uint32_t currentTime) {
         packetsDetected++;
-        totalBytes += size;
+        packetsInLastSecond++;  // Count here instead
         updatePacketSize(size);
         lastPacketTime = currentTime;
-        updatePacketRate(currentTime);
-        consecutiveErrors = 0;  // Reset error streak
+        consecutiveErrors = 0;
+        updatePacketRate(currentTime);  // Just update rate calculation
     }
     
     // Record packet transmission through optimized path

@@ -35,7 +35,7 @@ int device4BridgeRxTail = 0;
 SemaphoreHandle_t device4BridgeMutex = nullptr;
 
 void device4Task(void* parameter) {
-    log_msg("Device 4 task started on core " + String(xPortGetCoreID()), LOG_INFO);
+    log_msg(LOG_INFO, "Device 4 task started on core %d", xPortGetCoreID());
     
     // Wait for network mode to be active first
     const uint32_t maxNetworkWaitTime = 3000;  // 3 seconds
@@ -47,44 +47,44 @@ void device4Task(void* parameter) {
     }
     
     if (!systemState.networkActive) {
-        log_msg("Device 4: Network mode not active after 3s, exiting", LOG_ERROR);
+        log_msg(LOG_ERROR, "Device 4: Network mode not active after 3s, exiting");
         vTaskDelete(NULL);
         return;
     }
     
-    log_msg("Device 4: Network mode active, waiting for WiFi connection...", LOG_INFO);
+    log_msg(LOG_INFO, "Device 4: Network mode active, waiting for WiFi connection...");
     
     // Wait for actual WiFi connection (AP mode or Client connected)
     EventBits_t bits;
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         // In client mode, wait for connection
-        log_msg("Device 4: Waiting for WiFi client connection...", LOG_INFO);
+        log_msg(LOG_INFO, "Device 4: Waiting for WiFi client connection...");
         bits = xEventGroupWaitBits(networkEventGroup, 
                                   NETWORK_CONNECTED_BIT, 
                                   pdFALSE, pdTRUE, 
                                   pdMS_TO_TICKS(30000));  // 30 second timeout
         
         if (!(bits & NETWORK_CONNECTED_BIT)) {
-            log_msg("Device 4: WiFi client connection timeout after 30s, exiting", LOG_ERROR);
+            log_msg(LOG_ERROR, "Device 4: WiFi client connection timeout after 30s, exiting");
             vTaskDelete(NULL);
             return;
         }
         
-        log_msg("Device 4: WiFi client connected successfully", LOG_INFO);
+        log_msg(LOG_INFO, "Device 4: WiFi client connected successfully");
     } else {
         // In AP mode, WiFi is immediately ready
-        log_msg("Device 4: WiFi AP mode active", LOG_INFO);
+        log_msg(LOG_INFO, "Device 4: WiFi AP mode active");
     }
     
     // Additional delay for WiFi stack stabilization
     vTaskDelay(pdMS_TO_TICKS(1000));
     
-    log_msg("Device 4: Network ready, initializing AsyncUDP", LOG_INFO);
+    log_msg(LOG_INFO, "Device 4: Network ready, initializing AsyncUDP");
     
     // Create AsyncUDP instance
     device4UDP = new AsyncUDP();
     if (!device4UDP) {
-        log_msg("Device 4: Failed to create AsyncUDP", LOG_ERROR);
+        log_msg(LOG_ERROR, "Device 4: Failed to create AsyncUDP");
         vTaskDelete(NULL);
         return;
     }
@@ -93,7 +93,7 @@ void device4Task(void* parameter) {
     if (config.device4.role == D4_NETWORK_BRIDGE) {
         device4BridgeMutex = xSemaphoreCreateMutex();
         if (!device4BridgeMutex) {
-            log_msg("Device 4: Failed to create bridge mutex", LOG_ERROR);
+            log_msg(LOG_ERROR, "Device 4: Failed to create bridge mutex");
             delete device4UDP;
             vTaskDelete(NULL);
             return;
@@ -107,11 +107,9 @@ void device4Task(void* parameter) {
     // Setup listener for Bridge mode
     if (config.device4.role == D4_NETWORK_BRIDGE) {
         if (!device4UDP->listen(config.device4_config.port)) {
-            log_msg("Device 4: Failed to listen on port " + 
-                    String(config.device4_config.port), LOG_ERROR);
+            log_msg(LOG_ERROR, "Device 4: Failed to listen on port %d", config.device4_config.port);
         } else {
-            log_msg("Device 4: Listening on port " + 
-                    String(config.device4_config.port), LOG_INFO);
+            log_msg(LOG_INFO, "Device 4: Listening on port %d", config.device4_config.port);
             
             device4UDP->onPacket([](AsyncUDPPacket packet) {
                 if (config.device4.role == D4_NETWORK_BRIDGE && device4BridgeMutex) {
@@ -127,7 +125,7 @@ void device4Task(void* parameter) {
                                 device4BridgeRxHead = nextHead;
                             } else {
                                 // Buffer full, drop packet
-                                log_msg("Device 4: Bridge RX buffer full, dropping packet", LOG_WARNING);
+                                log_msg(LOG_WARNING, "Device 4: Bridge RX buffer full, dropping packet");
                                 break;
                             }
                         }
@@ -150,7 +148,7 @@ void device4Task(void* parameter) {
         // Check if WiFi client mode is still connected
         if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
             if (!wifi_manager_is_connected()) {
-                log_msg("Device 4: WiFi client disconnected, waiting for reconnection...", LOG_WARNING);
+                log_msg(LOG_WARNING, "Device 4: WiFi client disconnected, waiting for reconnection...");
                 
                 // Wait for reconnection
                 bits = xEventGroupWaitBits(networkEventGroup, 
@@ -159,10 +157,10 @@ void device4Task(void* parameter) {
                                           pdMS_TO_TICKS(10000));  // 10 second timeout
                 
                 if (!(bits & NETWORK_CONNECTED_BIT)) {
-                    log_msg("Device 4: WiFi reconnection timeout, continuing...", LOG_WARNING);
+                    log_msg(LOG_WARNING, "Device 4: WiFi reconnection timeout, continuing...");
                     // Continue anyway - might reconnect later
                 } else {
-                    log_msg("Device 4: WiFi client reconnected", LOG_INFO);
+                    log_msg(LOG_INFO, "Device 4: WiFi client reconnected");
                 }
             }
         }

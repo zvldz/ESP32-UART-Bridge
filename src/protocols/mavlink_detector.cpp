@@ -3,7 +3,7 @@
 #include <Arduino.h>  // For millis()
 
 MavlinkDetector::MavlinkDetector() : currentVersion(0), headerValidated(false) {
-    log_msg("MAVLink detector initialized", LOG_DEBUG);
+    log_msg(LOG_INFO, "MAVLink detector initialized");
 }
 
 bool MavlinkDetector::canDetect(const uint8_t* data, size_t len) {
@@ -14,6 +14,13 @@ bool MavlinkDetector::canDetect(const uint8_t* data, size_t len) {
 }
 
 int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
+    // Debug first call
+    static bool firstCall = true;
+    if (firstCall && len > 0) {
+        log_msg(LOG_INFO, "MAVLink detector active, first byte: 0x%02X", data[0]);
+        firstCall = false;
+    }
+    
     if (len == 0) return 0;  // Need more data
     
     // Check start byte and determine version
@@ -23,11 +30,10 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
     } else if (data[0] == MAVLINK_STX_V2) {
         version = 2;
     } else {
-        // Invalid start byte - search for next valid start
+        // Invalid start byte - search for next valid start  
         int nextStart = findNextStartByte(data, len, 1);
         if (nextStart > 0) {
-            log_msg("MAVLink: Invalid start byte 0x" + String(data[0], HEX) + ", found next at pos " + String(nextStart), LOG_DEBUG);
-            return -nextStart;  // Skip to next start position
+            log_msg(LOG_INFO, "MAV: Resync invalid 0x%02X → next %d", data[0], nextStart);
         }
         return -1;  // Skip 1 byte and try again
     }
@@ -44,7 +50,8 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
             // Header validation failed - search for next start byte
             int nextStart = findNextStartByte(data, len, 1);
             if (nextStart > 0) {
-                log_msg("MAVLink: Header validation failed, found next at pos " + String(nextStart), LOG_DEBUG);
+                log_msg(LOG_INFO, "MAV: Resync v%d header fail → next %d", version, nextStart);
+                // This is a resync event - log it
                 return -nextStart;  // Skip to next start position
             }
             return -1;  // Skip 1 byte and try again
@@ -56,7 +63,7 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
     // Extract payload length
     uint8_t payloadLen = data[1];
     if (payloadLen > MAVLINK_MAX_PAYLOAD_LEN) {
-        log_msg("MAVLink: Invalid payload length " + String(payloadLen), LOG_DEBUG);
+        log_msg(LOG_INFO, "MAV: Invalid payload len %d (max %d)", payloadLen, MAVLINK_MAX_PAYLOAD_LEN);
         headerValidated = false;  // Reset validation state
         int nextStart = findNextStartByte(data, len, 1);
         if (nextStart > 0) {
@@ -78,7 +85,7 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
         
         // Check for unsupported incompat_flags (bits 1-7 reserved)
         if (incompatFlags & 0xFE) {
-            log_msg("MAVLink v2: Unsupported incompat_flags 0x" + String(incompatFlags, HEX), LOG_DEBUG);
+            log_msg(LOG_DEBUG, "MAVLink v2: Unsupported incompat_flags 0x%02X", incompatFlags);
             headerValidated = false;
             int nextStart = findNextStartByte(data, len, 1);
             if (nextStart > 0) {
@@ -92,8 +99,6 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
     if (len < totalSize) {
         return 0;  // Need more data
     }
-    
-    log_msg("MAVLink v" + String(version) + " packet detected: " + String(totalSize) + " bytes (payload: " + String(payloadLen) + ")", LOG_DEBUG);
     
     // Reset state for next packet
     headerValidated = false;
@@ -132,5 +137,17 @@ int MavlinkDetector::findNextStartByte(const uint8_t* data, size_t len, size_t s
         }
     }
     
-    return -1;  // No start byte found within search window
+    // If not found and we hit the search window limit
+    if (searchEnd < len && searchEnd == startPos + MAVLINK_MAX_SEARCH_WINDOW) {
+        // Skip to end of search window to make faster progress
+        // This helps when there's garbage data before valid packets
+        return static_cast<int>(MAVLINK_MAX_SEARCH_WINDOW);
+    }
+    
+    // If searched less than window size, skip what we searched
+    if (searchEnd > startPos + 1) {
+        return static_cast<int>(searchEnd - startPos);
+    }
+    
+    return 1;  // Default: skip 1 byte
 }

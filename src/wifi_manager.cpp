@@ -75,13 +75,13 @@ static void initMdnsService() {
         esp_err_t instance_ret = mdns_instance_name_set(config.device_name.c_str());
         esp_err_t service_ret = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
         
-        log_msg("mDNS initialized: " + hostname + ".local (" + config.device_name + ")", LOG_INFO);
+        log_msg(LOG_INFO, "mDNS initialized: %s.local (%s)", hostname.c_str(), config.device_name.c_str());
         
-        if (hostname_ret != ESP_OK) log_msg("mDNS hostname set failed: " + String(esp_err_to_name(hostname_ret)), LOG_WARNING);
-        if (instance_ret != ESP_OK) log_msg("mDNS instance set failed: " + String(esp_err_to_name(instance_ret)), LOG_WARNING);
-        if (service_ret != ESP_OK) log_msg("mDNS service add failed: " + String(esp_err_to_name(service_ret)), LOG_WARNING);
+        if (hostname_ret != ESP_OK) log_msg(LOG_WARNING, "mDNS hostname set failed: %s", esp_err_to_name(hostname_ret));
+        if (instance_ret != ESP_OK) log_msg(LOG_WARNING, "mDNS instance set failed: %s", esp_err_to_name(instance_ret));
+        if (service_ret != ESP_OK) log_msg(LOG_WARNING, "mDNS service add failed: %s", esp_err_to_name(service_ret));
     } else {
-        log_msg("Failed to initialize mDNS: " + String(esp_err_to_name(mdns_ret)), LOG_WARNING);
+        log_msg(LOG_WARNING, "Failed to initialize mDNS: %s", esp_err_to_name(mdns_ret));
     }
     
     mdnsInitNeeded = false;  // Reset flag
@@ -100,14 +100,14 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
-                log_msg("WiFi STA started", LOG_DEBUG);
+                log_msg(LOG_DEBUG, "WiFi STA started");
                 esp_wifi_connect();
                 break;
                 
             case WIFI_EVENT_STA_CONNECTED:
                 {
                     wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*)event_data;
-                    log_msg("WiFi connected to " + String((char*)event->ssid), LOG_INFO);
+                    log_msg(LOG_INFO, "WiFi connected to %s", (char*)event->ssid);
                 }
                 break;
                 
@@ -115,7 +115,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 {
                     wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
                     String reasonStr = "Disconnect reason: " + String(event->reason);
-                    log_msg("WiFi disconnected: " + reasonStr, LOG_WARNING);
+                    log_msg(LOG_WARNING, "WiFi disconnected: Disconnect reason: %d", event->reason);
                     
                     // Check if this is an authentication failure
                     bool isAuthError = (event->reason == WIFI_REASON_AUTH_FAIL || 
@@ -125,7 +125,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     // Handle based on current state and history
                     if (systemState.wifiClientState == CLIENT_CONNECTED) {
                         // We were connected - try to reconnect
-                        log_msg("Was connected, will attempt reconnection", LOG_INFO);
+                        log_msg(LOG_INFO, "Was connected, will attempt reconnection");
                         systemState.wifiClientState = CLIENT_SCANNING;
                         systemState.wifiRetryCount = 0;
                         lastScanTime = 0;
@@ -137,21 +137,20 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         connectInProgress = false;
                         systemState.wifiRetryCount++;
                         
-                        log_msg("Connection attempt #" + String(systemState.wifiRetryCount) + 
-                                " failed", LOG_DEBUG);
+                        log_msg(LOG_DEBUG, "Connection attempt #%d failed", systemState.wifiRetryCount);
                         
                         // Check if we should stop trying - ONLY for authentication failures
                         if (!wasConnectedBefore && isAuthError && 
                             systemState.wifiRetryCount >= WIFI_CLIENT_MAX_RETRIES) {
                             // Authentication error on initial connection - wrong password
-                            log_msg("Max authentication failures reached - wrong password", LOG_WARNING);
+                            log_msg(LOG_WARNING, "Max authentication failures reached - wrong password");
                             systemState.wifiClientState = CLIENT_WRONG_PASSWORD;
                             led_set_mode(LED_MODE_WIFI_CLIENT_ERROR);
                             targetNetworkFound = false;
                         }
                         else if (targetNetworkFound && systemState.wifiRetryCount < WIFI_CLIENT_MAX_RETRIES) {
                             // Network is still available, try again after a short delay
-                            log_msg("Retrying connection in 500ms...", LOG_DEBUG);
+                            log_msg(LOG_DEBUG, "Retrying connection in 500ms...");
                             
                             vTaskDelay(pdMS_TO_TICKS(500));
                             
@@ -160,8 +159,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                             lastConnectAttempt = millis();
                             
                             esp_wifi_connect();
-                            log_msg("Retry attempt #" + String(systemState.wifiRetryCount + 1) + 
-                                    " to " + targetSSID, LOG_INFO);
+                            log_msg(LOG_INFO, "Retry attempt #%d to %s", systemState.wifiRetryCount + 1, targetSSID.c_str());
                         }
                         else {
                             // Network not found or too many retries - need to scan
@@ -176,7 +174,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     
                     // Clean up mDNS when disconnected
                     mdns_free();
-                    log_msg("mDNS freed on disconnect", LOG_DEBUG);
+                    log_msg(LOG_DEBUG, "mDNS freed on disconnect");
                 }
                 break;
                 
@@ -185,7 +183,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     scanInProgress = false;
                     uint16_t networksFound = 0;
                     esp_wifi_scan_get_ap_num(&networksFound);
-                    log_msg("WiFi scan complete, found " + String(networksFound) + " networks", LOG_DEBUG);
+                    log_msg(LOG_DEBUG, "WiFi scan complete, found %d networks", networksFound);
                     
                     // Check if target SSID was found
                     bool foundNow = false;
@@ -213,8 +211,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         connectInProgress = true;
                         lastConnectAttempt = millis();
                         
-                        log_msg("Target network found, attempting connection #" + 
-                                String(systemState.wifiRetryCount + 1), LOG_INFO);
+                        log_msg(LOG_INFO, "Target network found, attempting connection #%d", systemState.wifiRetryCount + 1);
                         
                         esp_wifi_connect();
                     } 
@@ -223,7 +220,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         targetNetworkFound = false;
                         systemState.wifiClientState = CLIENT_NO_SSID;
                         led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
-                        log_msg("Target network '" + targetSSID + "' not found", LOG_DEBUG);
+                        log_msg(LOG_DEBUG, "Target network '%s' not found", targetSSID.c_str());
                     }
                 }
                 break;
@@ -235,7 +232,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
                     char ip_str[16];
                     sprintf(ip_str, IPSTR, IP2STR(&event->ip_info.ip));
-                    log_msg("WiFi got IP: " + String(ip_str), LOG_INFO);
+                    log_msg(LOG_INFO, "WiFi got IP: %s", ip_str);
                     
                     systemState.wifiClientState = CLIENT_CONNECTED;
                     systemState.wifiClientConnected = true;
@@ -262,7 +259,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 esp_err_t wifi_manager_init() {
     // Check safe mode (Device 4)
     if (config.device4.role != D4_NONE && wifiInitFailCount >= 3) {
-        log_msg("WiFi in safe mode after 3 failures", LOG_WARNING);
+        log_msg(LOG_WARNING, "WiFi in safe mode after 3 failures");
         systemState.wifiSafeMode = true;
         return ESP_FAIL;
     }
@@ -280,7 +277,7 @@ esp_err_t wifi_manager_init() {
     
     // Check memory
     if (ESP.getFreeHeap() < 30000) {
-        log_msg("Not enough heap for WiFi: " + String(ESP.getFreeHeap()), LOG_ERROR);
+        log_msg(LOG_ERROR, "Not enough heap for WiFi: %d", ESP.getFreeHeap());
         wifiInitFailCount++;
         return ESP_ERR_NO_MEM;
     }
@@ -288,7 +285,7 @@ esp_err_t wifi_manager_init() {
     // Initialize TCP/IP
     ret = esp_netif_init();
     if (ret != ESP_OK) {
-        log_msg("Failed to init netif: " + String(esp_err_to_name(ret)), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to init netif: %s", esp_err_to_name(ret));
         wifiInitFailCount++;
         return ret;
     }
@@ -296,7 +293,7 @@ esp_err_t wifi_manager_init() {
     // Event loop
     ret = esp_event_loop_create_default();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        log_msg("Failed to create event loop: " + String(esp_err_to_name(ret)), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to create event loop: %s", esp_err_to_name(ret));
         wifiInitFailCount++;
         return ret;
     }
@@ -306,7 +303,7 @@ esp_err_t wifi_manager_init() {
     ap_netif = esp_netif_create_default_wifi_ap();
     
     if (!sta_netif || !ap_netif) {
-        log_msg("Failed to create netif interfaces", LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to create netif interfaces");
         wifiInitFailCount++;
         return ESP_ERR_NO_MEM;
     }
@@ -316,7 +313,7 @@ esp_err_t wifi_manager_init() {
     ret = esp_wifi_init(&cfg);
     
     if (ret != ESP_OK) {
-        log_msg("Failed to init WiFi: " + String(esp_err_to_name(ret)), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to init WiFi: %s", esp_err_to_name(ret));
         wifiInitFailCount++;
         return ret;
     }
@@ -324,14 +321,14 @@ esp_err_t wifi_manager_init() {
     // Register event handlers
     ret = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
     if (ret != ESP_OK) {
-        log_msg("Failed to register WiFi event handler: " + String(esp_err_to_name(ret)), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to register WiFi event handler: %s", esp_err_to_name(ret));
         wifiInitFailCount++;
         return ret;
     }
     
     ret = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
     if (ret != ESP_OK) {
-        log_msg("Failed to register IP event handler: " + String(esp_err_to_name(ret)), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to register IP event handler: %s", esp_err_to_name(ret));
         wifiInitFailCount++;
         return ret;
     }
@@ -339,7 +336,7 @@ esp_err_t wifi_manager_init() {
     // Create event group for network synchronization
     networkEventGroup = xEventGroupCreate();
     if (!networkEventGroup) {
-        log_msg("Failed to create network event group", LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to create network event group");
         wifiInitFailCount++;
         return ESP_ERR_NO_MEM;
     }
@@ -352,17 +349,17 @@ esp_err_t wifi_manager_init() {
     wifi_initialized = true;
     wifiInitFailCount = 0;  // Success - reset counter
     
-    log_msg("WiFi Manager initialized successfully", LOG_INFO);
+    log_msg(LOG_INFO, "WiFi Manager initialized successfully");
     return ESP_OK;
 }
 
 esp_err_t wifi_manager_start_client(const String& ssid, const String& password) {
     if (!wifi_initialized) {
-        log_msg("WiFi not initialized", LOG_ERROR);
+        log_msg(LOG_ERROR, "WiFi not initialized");
         return ESP_ERR_INVALID_STATE;
     }
     
-    log_msg("Starting WiFi Client mode for SSID: " + ssid, LOG_INFO);
+    log_msg(LOG_INFO, "Starting WiFi Client mode for SSID: %s", ssid.c_str());
     
     targetSSID = ssid;
     targetPassword = password;
@@ -382,7 +379,7 @@ esp_err_t wifi_manager_start_client(const String& ssid, const String& password) 
     // CRITICAL: Set DHCP hostname BEFORE starting WiFi
     String hostname = generateMdnsHostname();
     esp_err_t hostname_ret = esp_netif_set_hostname(sta_netif, hostname.c_str());
-    log_msg("DHCP hostname set to: " + hostname + " (" + String(esp_err_to_name(hostname_ret)) + ")", LOG_INFO);
+    log_msg(LOG_INFO, "DHCP hostname set to: %s (%s)", hostname.c_str(), esp_err_to_name(hostname_ret));
     
     ESP_ERROR_CHECK(esp_wifi_start());
     
@@ -397,9 +394,9 @@ esp_err_t wifi_manager_start_client(const String& ssid, const String& password) 
     if (scan_ret == ESP_OK) {
         scanInProgress = true;
         lastScanTime = millis();
-        log_msg("Initial WiFi scan started", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "Initial WiFi scan started");
     } else {
-        log_msg("Failed to start initial scan: " + String(esp_err_to_name(scan_ret)), LOG_WARNING);
+        log_msg(LOG_WARNING, "Failed to start initial scan: %s", esp_err_to_name(scan_ret));
     }
     
     return ESP_OK;
@@ -407,11 +404,11 @@ esp_err_t wifi_manager_start_client(const String& ssid, const String& password) 
 
 esp_err_t wifi_manager_start_ap(const String& ssid, const String& password) {
     if (!wifi_initialized) {
-        log_msg("WiFi not initialized", LOG_ERROR);
+        log_msg(LOG_ERROR, "WiFi not initialized");
         return ESP_ERR_INVALID_STATE;
     }
     
-    log_msg("Starting WiFi AP mode: " + ssid, LOG_INFO);
+    log_msg(LOG_INFO, "Starting WiFi AP mode: %s", ssid.c_str());
     
     wifi_config_t wifi_config = {};
     strncpy((char*)wifi_config.ap.ssid, ssid.c_str(), 32);
@@ -433,7 +430,7 @@ esp_err_t wifi_manager_start_ap(const String& ssid, const String& password) {
     if (!dnsServer) {
         dnsServer = new DNSServer();
         dnsServer->start(53, "*", IPAddress(192, 168, 4, 1));
-        log_msg("DNS Server started for captive portal (Arduino DNSServer)", LOG_INFO);
+        log_msg(LOG_INFO, "DNS Server started for captive portal (Arduino DNSServer)");
     }
     
     led_set_mode(LED_MODE_WIFI_ON);
@@ -444,14 +441,14 @@ esp_err_t wifi_manager_start_ap(const String& ssid, const String& password) {
 void wifi_manager_stop() {
     if (!wifi_initialized) return;
     
-    log_msg("Stopping WiFi Manager", LOG_INFO);
+    log_msg(LOG_INFO, "Stopping WiFi Manager");
     
     // Stop DNS server
     if (dnsServer) {
         dnsServer->stop();
         delete dnsServer;
         dnsServer = nullptr;
-        log_msg("DNS Server stopped", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "DNS Server stopped");
     }
     
     // Stop WiFi
@@ -480,7 +477,7 @@ void wifi_manager_process() {
     
     // Handle connection timeout
     if (connectInProgress && (now - lastConnectAttempt > 10000)) {
-        log_msg("Connection attempt timed out", LOG_WARNING);
+        log_msg(LOG_WARNING, "Connection attempt timed out");
         esp_wifi_disconnect();
         // Let the disconnect event handler manage the retry logic
     }
@@ -489,7 +486,7 @@ void wifi_manager_process() {
     if (!scanInProgress && !connectInProgress && 
         systemState.wifiClientState != CLIENT_CONNECTED &&
         (now - lastScanTime > WIFI_CLIENT_SCAN_INTERVAL_MS)) {
-        log_msg("Starting periodic WiFi scan", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "Starting periodic WiFi scan");
         
         esp_err_t scan_ret = esp_wifi_scan_start(NULL, false);
         if (scan_ret == ESP_OK) {
@@ -499,12 +496,11 @@ void wifi_manager_process() {
         } else {
             // Scan failed to start
             scanFailureCount++;
-            log_msg("WiFi scan failed to start (attempt " + String(scanFailureCount) + 
-                    "), error: " + String(esp_err_to_name(scan_ret)), LOG_WARNING);
+            log_msg(LOG_WARNING, "WiFi scan failed to start (attempt %d), error: %s", scanFailureCount, esp_err_to_name(scan_ret));
             
             if (scanFailureCount >= 10) {
                 // Too many failures - try to recover
-                log_msg("Too many scan failures, attempting WiFi reset", LOG_WARNING);
+                log_msg(LOG_WARNING, "Too many scan failures, attempting WiFi reset");
                 esp_wifi_stop();
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 esp_wifi_start();
@@ -512,7 +508,7 @@ void wifi_manager_process() {
                 
                 // If still failing after reset, reboot might be needed
                 if (scanFailureCount >= 20) {
-                    log_msg("WiFi subsystem unrecoverable, rebooting...", LOG_ERROR);
+                    log_msg(LOG_ERROR, "WiFi subsystem unrecoverable, rebooting...");
                     ESP.restart();
                 }
             }

@@ -241,33 +241,24 @@ const DeviceConfig = {
                 networkLogLevel.disabled = false;
             }
             
-            // Set defaults if fields are empty
+            // Always update port based on role
+            if (role === '1') {  // Network Bridge
+                portInput.value = '14550';
+            } else if (role === '2') {  // Network Logger
+                portInput.value = '14560';
+            }
+            
+            // Set IP defaults only if field is empty
             if (!targetIpInput.value || targetIpInput.value === '') {
-                if (role === '1') {  // Bridge
-                    // Try to get client IP first, fallback to broadcast
-                    fetch('/client-ip')
-                        .then(response => response.text())
-                        .then(clientIP => {
-                            targetIpInput.value = clientIP;
-                            portInput.value = '14550';
-                        })
-                        .catch(() => {
-                            targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
-                            portInput.value = '14550';
-                        });
-                } else if (role === '2') {  // Logger
-                    // Try to get client IP first, fallback to broadcast
-                    fetch('/client-ip')
-                        .then(response => response.text())
-                        .then(clientIP => {
-                            targetIpInput.value = clientIP;
-                            portInput.value = '14560';
-                        })
-                        .catch(() => {
-                            targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
-                            portInput.value = '14560';
-                        });
-                }
+                // Try to get client IP first, fallback to broadcast
+                fetch('/client-ip')
+                    .then(response => response.text())
+                    .then(clientIP => {
+                        targetIpInput.value = clientIP;
+                    })
+                    .catch(() => {
+                        targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
+                    });
             }
         } else {
             device4Config.style.display = 'none';

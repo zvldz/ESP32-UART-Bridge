@@ -62,20 +62,23 @@ void uartBridgeTask(void* parameter) {
   // Wait for system initialization
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  log_msg("UART task started on core " + String(xPortGetCoreID()), LOG_INFO);
+  log_msg(LOG_INFO, "UART task started on core %d", xPortGetCoreID());
 
-  // Dynamic buffer allocation based on baudrate
-  const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(config.baudrate);
+  // Dynamic buffer allocation based on baudrate and protocol setting
+  const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(
+    config.baudrate, 
+    config.protocolOptimization != PROTOCOL_NONE
+  );
+
   uint8_t* adaptiveBuffer = (uint8_t*)pvPortMalloc(adaptiveBufferSize);
   if (!adaptiveBuffer) {
-    log_msg("Failed to allocate adaptive buffer!", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to allocate adaptive buffer!");
     vTaskDelete(NULL);
     return;
   }
 
-  log_msg("Adaptive buffering: " + String(adaptiveBufferSize) + 
-          " bytes (for " + String(config.baudrate) + " baud). " +
-          "Thresholds: 200μs/1ms/5ms/15ms", LOG_INFO);
+  log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
+          adaptiveBufferSize, config.baudrate);
 
   // Local counters for all devices
   unsigned long localDevice1RxBytes = 0;
@@ -159,18 +162,9 @@ void uartBridgeTask(void* parameter) {
   // Configure hardware for selected protocol
   configureHardwareForProtocol(&ctx, config.protocolOptimization);
 
-  log_msg("UART Bridge Task started", LOG_INFO);
-  log_msg("Device optimization: D2 USB=" + String(device2IsUSB) + ", D2 UART2=" + String(device2IsUART2) + 
-          ", D3 Active=" + String(device3Active) + ", D3 Bridge=" + String(device3IsBridge), LOG_DEBUG);
-
-  // ===== TEMPORARY DIAGNOSTIC CODE =====
-  // Added to diagnose FIFO overflow issue 
-  /*
-  static unsigned long maxProcessTime = 0;
-  static unsigned long totalProcessTime = 0;
-  static unsigned long processCount = 0;
-  */
-  // ===== END TEMPORARY DIAGNOSTIC CODE =====
+  log_msg(LOG_INFO, "UART Bridge Task started");
+  log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
+          device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
 
   while (1) {
     // HOOK: Update protocol state
@@ -186,35 +180,7 @@ void uartBridgeTask(void* parameter) {
       vTaskDelay(pdMS_TO_TICKS(5));
     }
 
-    // ===== TEMPORARY DIAGNOSTIC CODE =====
-    /*
-    unsigned long processStart = micros();
-    */
-    // ===== END TEMPORARY DIAGNOSTIC CODE =====
-
     processDevice1Input(&ctx);
-
-    // ===== TEMPORARY DIAGNOSTIC CODE =====
-    /*    
-    unsigned long processTime = micros() - processStart;
-
-    totalProcessTime += processTime;
-    processCount++;
-    if (processTime > maxProcessTime) {
-        maxProcessTime = processTime;
-    }
-
-    static unsigned long lastProcessLog = 0;
-    if (millis() - lastProcessLog > 5000 && processCount > 0) {
-        log_msg("[TEMP DIAG] processDevice1Input: avg=" + String(totalProcessTime / processCount) + 
-                "us, max=" + String(maxProcessTime) + "us, count=" + String(processCount), LOG_WARNING);
-        maxProcessTime = 0;
-        totalProcessTime = 0;
-        processCount = 0;
-        lastProcessLog = millis();
-    }
-    */
-    // ===== END TEMPORARY DIAGNOSTIC CODE =====
     
     // Process Device 2 based on type
     if (device2IsUSB) {

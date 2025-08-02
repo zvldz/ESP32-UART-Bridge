@@ -41,7 +41,7 @@ void device3Task(void* parameter) {
   // Wait for system initialization
   vTaskDelay(pdMS_TO_TICKS(1000));
   
-  log_msg("Device 3 task started on core " + String(xPortGetCoreID()), LOG_INFO);
+  log_msg(LOG_INFO, "Device 3 task started on core %d", xPortGetCoreID());
   
   
   // Rate limiting for LED notifications
@@ -117,7 +117,7 @@ void device3Task(void* parameter) {
               exitStatsCritical();
             } else {
               // Buffer full
-              log_msg("Device 3 RX buffer full, dropping data", LOG_WARNING);
+              log_msg(LOG_WARNING, "Device 3 RX buffer full, dropping data");
               break;
             }
           }

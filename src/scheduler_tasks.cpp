@@ -56,7 +56,7 @@ void initializeScheduler() {
     });
     
     tWiFiTimeout.set(WIFI_TIMEOUT, TASK_ONCE, []{ 
-        log_msg("WiFi timeout - switching to standalone mode", LOG_INFO);
+        log_msg(LOG_INFO, "WiFi timeout - switching to standalone mode");
         ESP.restart();
     });
     
@@ -79,7 +79,7 @@ void initializeScheduler() {
     });
     
     tRebootDevice.set(TASK_IMMEDIATE, TASK_ONCE, []{ 
-        log_msg("Executing scheduled reboot", LOG_INFO);
+        log_msg(LOG_INFO, "Executing scheduled reboot");
         ESP.restart();
     });
     
@@ -179,7 +179,7 @@ void cancelWiFiTimeout() {
 }
 
 void scheduleReboot(unsigned long delayMs) {
-    log_msg("Device reboot scheduled in " + String(delayMs) + "ms", LOG_INFO);
+    log_msg(LOG_INFO, "Device reboot scheduled in %lums", delayMs);
     
     // Cancel WiFi timeout if it was active
     cancelWiFiTimeout();

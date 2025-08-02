@@ -4,6 +4,15 @@ const StatusUpdates = {
     config: null,
     elements: null,
     
+    // Track previous values for activity indicators
+    previousValues: {
+        device1Rx: 0, device1Tx: 0,
+        device2Rx: 0, device2Tx: 0, 
+        device3Rx: 0, device3Tx: 0,
+        device4RxBytes: 0, device4TxBytes: 0, 
+        device4RxPackets: 0, device4TxPackets: 0
+    },
+    
     init(config) {
         this.config = config;
         this.elements = this.cacheElements();
@@ -19,27 +28,21 @@ const StatusUpdates = {
             freeRam: document.getElementById('freeRam'),
             uptime: document.getElementById('uptime'),
             
-            // Device 1 stats
-            device1Rx: document.getElementById('device1Rx'),
-            device1Tx: document.getElementById('device1Tx'),
+            // Device traffic elements (new format)
+            device1Traffic: document.getElementById('device1Traffic'),
+            device2Traffic: document.getElementById('device2Traffic'),
+            device3Traffic: document.getElementById('device3Traffic'),
+            device4Traffic: document.getElementById('device4Traffic'),
             
-            // Device 2 stats
+            // Device stats containers
             device2Stats: document.getElementById('device2Stats'),
-            device2Role: document.getElementById('device2Role'),
-            device2Rx: document.getElementById('device2Rx'),
-            device2Tx: document.getElementById('device2Tx'),
-            
-            // Device 3 stats
             device3Stats: document.getElementById('device3Stats'),
-            device3Role: document.getElementById('device3Role'),
-            device3Rx: document.getElementById('device3Rx'),
-            device3Tx: document.getElementById('device3Tx'),
-            
-            // Device 4 stats
             device4Stats: document.getElementById('device4Stats'),
+            
+            // Device roles
+            device2Role: document.getElementById('device2Role'),
+            device3Role: document.getElementById('device3Role'),
             device4Role: document.getElementById('device4Role'),
-            device4Tx: document.getElementById('device4Tx'),
-            device4Packets: document.getElementById('device4Packets'),
             
             // Totals
             totalTraffic: document.getElementById('totalTraffic'),
@@ -62,7 +65,8 @@ const StatusUpdates = {
         } else {  // Client Mode
             if (this.config.wifiClientConnected) {
                 const rssiPercent = this.config.rssiPercent || 0;
-                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (${this.config.wifiClientSsid} ${rssiPercent}%)</td></tr>`;
+                const wifiSignal = Utils.getWifiSignalBars(rssiPercent);
+                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (${this.config.wifiClientSsid} ${wifiSignal} ${rssiPercent}%)</td></tr>`;
                 wifiInfo += `<tr><td><strong>IP Address:</strong></td><td>${this.config.ipAddress || 'N/A'}</td></tr>`;
             } else {
                 wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (Searching: ${this.config.wifiClientSsid})</td></tr>`;
@@ -71,8 +75,8 @@ const StatusUpdates = {
         
         container.innerHTML = `
             <table>
-                <tr><td><strong>Device:</strong></td><td>${this.config.deviceName}&nbsp; v${this.config.version}</td></tr>
-                <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${this.config.freeRam} bytes</td></tr>
+                <tr><td><strong>Device:</strong></td><td>${this.config.deviceName} v${this.config.version}</td></tr>
+                <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
                 ${wifiInfo}
                 <tr><td><strong>Current UART:</strong></td><td>${this.config.uartConfig}</td></tr>
@@ -94,22 +98,22 @@ const StatusUpdates = {
                 <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Statistics</td></tr>
                 <tr id="device1Stats">
                     <td><strong>Device 1 (UART1):</strong></td>
-                    <td>RX: <span id="device1Rx">${this.config.device1Rx}</span> bytes, TX: <span id="device1Tx">${this.config.device1Tx}</span> bytes</td>
+                    <td id="device1Traffic">${Utils.formatTraffic(this.config.device1Rx || 0, this.config.device1Tx || 0)}</td>
                 </tr>
                 <tr id="device2Stats" style="display: none;">
                     <td><strong>Device 2 (<span id="device2Role">${this.config.device2RoleName}</span>):</strong></td>
-                    <td>RX: <span id="device2Rx">${this.config.device2Rx}</span> bytes, TX: <span id="device2Tx">${this.config.device2Tx}</span> bytes</td>
+                    <td id="device2Traffic">${Utils.formatTraffic(this.config.device2Rx || 0, this.config.device2Tx || 0)}</td>
                 </tr>
                 <tr id="device3Stats" style="display: none;">
                     <td><strong>Device 3 (<span id="device3Role">${this.config.device3RoleName}</span>):</strong></td>
-                    <td>RX: <span id="device3Rx">${this.config.device3Rx}</span> bytes, TX: <span id="device3Tx">${this.config.device3Tx}</span> bytes</td>
+                    <td id="device3Traffic">${Utils.formatTraffic(this.config.device3Rx || 0, this.config.device3Tx || 0)}</td>
                 </tr>
                 <tr id="device4Stats" style="display: none;">
                     <td><strong>Device 4 (<span id="device4Role">-</span>):</strong></td>
-                    <td>TX: <span id="device4Tx">0</span> bytes (<span id="device4Packets">0</span> packets)</td>
+                    <td id="device4Traffic">-</td>
                 </tr>
                 <tr><td colspan="2" style="border-top: 1px solid #ddd; padding-top: 5px;"></td></tr>
-                <tr><td><strong>Total Traffic:</strong></td><td id="totalTraffic">${this.config.totalTraffic} bytes</td></tr>
+                <tr><td><strong>Total Traffic:</strong></td><td id="totalTraffic">${Utils.formatBytes(this.config.totalTraffic || 0)}</td></tr>
                 <tr><td><strong>Last Activity:</strong></td><td id="lastActivity">${this.config.lastActivity}</td></tr>
             </table>
             <div style="text-align: center; margin: 15px 0;">
@@ -130,31 +134,41 @@ const StatusUpdates = {
         Utils.safeFetch('/status', (data) => {
             // Update system info
             if (this.elements.freeRam) {
-                this.elements.freeRam.textContent = `${data.freeRam} bytes`;
+                this.elements.freeRam.textContent = Utils.formatBytes(data.freeRam);
             }
             if (this.elements.uptime) {
                 this.elements.uptime.textContent = `${data.uptime} seconds`;
             }
             
-            // Update Device 1 stats (always visible)
-            if (this.elements.device1Rx) {
-                this.elements.device1Rx.textContent = data.device1Rx;
-            }
-            if (this.elements.device1Tx) {
-                this.elements.device1Tx.textContent = data.device1Tx;
+            // Update Device 1 traffic (always visible)
+            if (this.elements.device1Traffic) {
+                const formattedTraffic = Utils.formatTraffic(
+                    data.device1Rx || 0, 
+                    data.device1Tx || 0,
+                    this.previousValues.device1Rx,
+                    this.previousValues.device1Tx
+                );
+                this.elements.device1Traffic.innerHTML = formattedTraffic;
+                this.previousValues.device1Rx = data.device1Rx || 0;
+                this.previousValues.device1Tx = data.device1Tx || 0;
             }
             
             // Update Device 2 stats if present
             if (data.device2Role && this.elements.device2Stats) {
                 this.elements.device2Stats.style.display = 'table-row';
                 if (this.elements.device2Role) {
-                    this.elements.device2Role.textContent = data.device2Role;
+                    this.elements.device2Role.textContent = data.device2RoleName;
                 }
-                if (this.elements.device2Rx) {
-                    this.elements.device2Rx.textContent = data.device2Rx;
-                }
-                if (this.elements.device2Tx) {
-                    this.elements.device2Tx.textContent = data.device2Tx;
+                if (this.elements.device2Traffic) {
+                    const formattedTraffic = Utils.formatTraffic(
+                        data.device2Rx || 0, 
+                        data.device2Tx || 0,
+                        this.previousValues.device2Rx,
+                        this.previousValues.device2Tx
+                    );
+                    this.elements.device2Traffic.innerHTML = formattedTraffic;
+                    this.previousValues.device2Rx = data.device2Rx || 0;
+                    this.previousValues.device2Tx = data.device2Tx || 0;
                 }
             } else if (this.elements.device2Stats) {
                 this.elements.device2Stats.style.display = 'none';
@@ -164,13 +178,18 @@ const StatusUpdates = {
             if (data.device3Role && this.elements.device3Stats) {
                 this.elements.device3Stats.style.display = 'table-row';
                 if (this.elements.device3Role) {
-                    this.elements.device3Role.textContent = data.device3Role;
+                    this.elements.device3Role.textContent = data.device3RoleName;
                 }
-                if (this.elements.device3Rx) {
-                    this.elements.device3Rx.textContent = data.device3Rx;
-                }
-                if (this.elements.device3Tx) {
-                    this.elements.device3Tx.textContent = data.device3Tx;
+                if (this.elements.device3Traffic) {
+                    const formattedTraffic = Utils.formatTraffic(
+                        data.device3Rx || 0, 
+                        data.device3Tx || 0,
+                        this.previousValues.device3Rx,
+                        this.previousValues.device3Tx
+                    );
+                    this.elements.device3Traffic.innerHTML = formattedTraffic;
+                    this.previousValues.device3Rx = data.device3Rx || 0;
+                    this.previousValues.device3Tx = data.device3Tx || 0;
                 }
             } else if (this.elements.device3Stats) {
                 this.elements.device3Stats.style.display = 'none';
@@ -180,40 +199,37 @@ const StatusUpdates = {
             if (data.device4Role && this.elements.device4Stats) {
                 this.elements.device4Stats.style.display = 'table-row';
                 if (this.elements.device4Role) {
-                    this.elements.device4Role.textContent = data.device4Role;
+                    this.elements.device4Role.textContent = data.device4RoleName;
                 }
-                if (this.elements.device4Tx) {
-                    this.elements.device4Tx.textContent = data.device4TxBytes || 0;
-                }
-                if (this.elements.device4Packets) {
-                    this.elements.device4Packets.textContent = data.device4TxPackets || 0;
-                }
-                
-                // Update text for Bridge mode
-                if (data.device4Role.includes('Bridge')) {
-                    const device4StatsRow = this.elements.device4Stats.querySelector('td:last-child');
-                    if (device4StatsRow) {
-                        device4StatsRow.innerHTML = 
-                            `TX: <span id="device4Tx">${data.device4TxBytes || 0}</span> bytes (${data.device4TxPackets || 0} pkts), ` +
-                            `RX: <span id="device4Rx">${data.device4RxBytes || 0}</span> bytes (${data.device4RxPackets || 0} pkts)`;
-                    }
+                if (this.elements.device4Traffic) {
+                    const formattedTraffic = Utils.formatNetworkTraffic(
+                        data.device4RxBytes || 0,
+                        data.device4TxBytes || 0,
+                        data.device4RxPackets || 0,
+                        data.device4TxPackets || 0,
+                        this.previousValues.device4RxBytes,
+                        this.previousValues.device4TxBytes,
+                        this.previousValues.device4RxPackets,
+                        this.previousValues.device4TxPackets
+                    );
+                    this.elements.device4Traffic.innerHTML = formattedTraffic;
+                    this.previousValues.device4RxBytes = data.device4RxBytes || 0;
+                    this.previousValues.device4TxBytes = data.device4TxBytes || 0;
+                    this.previousValues.device4RxPackets = data.device4RxPackets || 0;
+                    this.previousValues.device4TxPackets = data.device4TxPackets || 0;
                 }
             } else if (this.elements.device4Stats) {
                 this.elements.device4Stats.style.display = 'none';
             }
             
-            // Update totals
+            // Update totals with smart formatting
             if (this.elements.totalTraffic) {
-                this.elements.totalTraffic.textContent = `${data.totalTraffic} bytes`;
+                this.elements.totalTraffic.textContent = Utils.formatBytes(data.totalTraffic || 0);
             }
             
-            // Handle last activity
+            // Handle last activity (backend already adds "seconds ago")
             if (this.elements.lastActivity) {
-                if (data.lastActivity === "Never") {
-                    this.elements.lastActivity.textContent = "Never";
-                } else {
-                    this.elements.lastActivity.textContent = `${data.lastActivity} seconds ago`;
-                }
+                this.elements.lastActivity.textContent = data.lastActivity || "Never";
             }
             
             // Update protocol statistics
