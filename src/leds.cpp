@@ -75,7 +75,7 @@ void leds_init() {
  // Create mutex first
  ledMutex = xSemaphoreCreateMutex();
  if (ledMutex == NULL) {
-   log_msg("Failed to create LED mutex!", LOG_ERROR);
+   log_msg(LOG_ERROR, "Failed to create LED mutex!");
    return;
  }
 
@@ -85,7 +85,7 @@ void leds_init() {
  FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
 
  // Rainbow startup effect
- log_msg("Starting rainbow effect...", LOG_DEBUG);
+ log_msg(LOG_DEBUG, "Starting rainbow effect...");
  unsigned long startTime = millis();
 
  // Complete 3 full rainbow cycles in 1 second
@@ -109,8 +109,7 @@ void leds_init() {
  }
 
  unsigned long effectDuration = millis() - startTime;
- log_msg("WS2812 RGB LED initialized on GPIO" + String(LED_PIN1) +
-         " (rainbow effect took " + String(effectDuration) + "ms)", LOG_INFO);
+ log_msg(LOG_INFO, "WS2812 RGB LED initialized on GPIO%d (rainbow effect took %lums)", LED_PIN1, effectDuration);
 }
 
 // Removed first duplicate led_set_mode function - using implementation at end of file
@@ -303,7 +302,7 @@ void led_process_updates() {
        
        // Log LED activity for error mode
        if (currentLedMode == LED_MODE_WIFI_CLIENT_ERROR) {
-         log_msg("LED blinking RED (error mode)", LOG_DEBUG);
+         log_msg(LOG_DEBUG, "LED blinking RED (error mode)");
        }
      }
      FastLED.show();
@@ -458,7 +457,7 @@ void led_set_mode(LedMode mode) {
         clientBlinkNextTime = millis();
         clientBlinkMode = mode;
         safeModeBlinkActive = false;
-        log_msg("LED set to WiFi Client Searching - orange slow blink", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "LED set to WiFi Client Searching - orange slow blink");
         xSemaphoreGive(ledMutex);
       }
       break;
@@ -470,7 +469,7 @@ void led_set_mode(LedMode mode) {
         clientBlinkNextTime = millis();
         clientBlinkMode = mode;
         safeModeBlinkActive = false;
-        log_msg("LED set to WiFi Client Error - red fast blink", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "LED set to WiFi Client Error - red fast blink");
         xSemaphoreGive(ledMutex);
       }
       break;
@@ -481,7 +480,7 @@ void led_set_mode(LedMode mode) {
         safeModeBlinkState = false;
         safeModeBlinkNextTime = millis();
         clientBlinkActive = false;
-        log_msg("LED set to Safe Mode - red blink every 5s", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "LED set to Safe Mode - red blink every 5s");
         xSemaphoreGive(ledMutex);
       }
       break;

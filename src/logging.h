@@ -23,8 +23,8 @@ void logging_init();
 void logging_get_recent_logs(String* buffer, int maxCount, int* actualCount);
 void logging_clear();
 
-// Log function
-void log_msg(String message, LogLevel level);    // Main logging function
+// Log functions
+void log_msg(LogLevel level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
 // UART logging initialization
 void logging_init_uart();
@@ -34,5 +34,18 @@ const char* getLogLevelName(LogLevel level);
 
 // Configuration access (for future web interface)
 LogConfig* logging_get_config();
+
+// Safe logging macro for hot path - avoids String allocations
+// TEMPORARY: For debugging protocol implementation
+#define LOG_HOT_PATH(level, fmt, ...) do { \
+    if (config.log_level_uart >= level) { \
+        char _logBuf[128]; \
+        snprintf(_logBuf, sizeof(_logBuf), fmt, ##__VA_ARGS__); \
+        log_msg(_logBuf, level); \
+    } \
+} while(0)
+
+// Usage example:
+// LOG_HOT_PATH(LOG_DEBUG, "Packet detected: size=%d, offset=%zu", size, offset);
 
 #endif // LOGGING_H
