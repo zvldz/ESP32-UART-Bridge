@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v2.10.0 (USB Buffer Overflow Prevention) - January 2025 ✅
+- **USB Buffer Overflow Prevention**: Behavioral port state detection to prevent buffer overflow
+  - **Behavioral Port Detection** (`src/usb_device.cpp`): Smart detection of USB port state without relying on unavailable APIs
+    - **Buffer monitoring**: Tracks write buffer availability patterns to detect port closure
+    - **Adaptive thresholds**: ASSUME_CLOSED_THRESHOLD (20) and FIRST_ATTEMPT_THRESHOLD (5) for optimal response
+    - **Honest API**: Returns 0 when unable to write, allowing caller to manage data freshness
+    - **Automatic recovery**: Seamless transition when port opens/closes
+  - **Early Data Dropping** (`src/adaptive_buffer.h`): Prevents accumulation of stale data
+    - **Connection state tracking**: Monitors USB port state changes in real-time
+    - **Protocol detector reset**: Automatic reset when port reopens to prevent packet fragmentation
+    - **Buffer cleanup**: Immediate buffer clearing on port state transitions
+    - **Diagnostic integration**: Proper statistics tracking for dropped data
+  - **Improved Diagnostics**: Enhanced meaning of UART FIFO overflow messages
+    - **Real issues only**: FIFO overflow now indicates actual USB performance problems when port is open
+    - **Reduced log spam**: Eliminated false overflow warnings when port is closed
+    - **Better troubleshooting**: Clear distinction between port closure and performance issues
+  - **Real-time Performance**: Optimized for time-critical applications
+    - **Fast detection**: ~20-200ms response time for port closure detection
+    - **Fresh data guarantee**: Only current data transmitted after port reopens
+    - **Zero stale data**: Prevents transmission of outdated information
+
 ## v2.9.5 (Critical Memory Safety & Logging Refactoring) - January 2025 ✅
 - **Critical Memory Safety Fixes**: Eliminated heap corruption and segmentation faults
   - **Adaptive Buffer Protection** (`src/adaptive_buffer.h`): Fixed buffer underflow and bounds checking

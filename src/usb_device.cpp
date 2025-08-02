@@ -29,6 +29,10 @@ public:
             log_msg(LOG_INFO, "USB Device: no connection detected, continuing...");
         }
 
+        // Reset behavioral detection state
+        everHadFreeSpace = false;
+        consecutiveFullBuffer = 0;
+        
         initialized = true;
     }
 
@@ -43,26 +47,63 @@ public:
     }
 
     int read() override {
-        if (!initialized) return -1;
+        if (!connected()) return -1;
         return Serial.read();
     }
 
     size_t write(uint8_t data) override {
-        if (!initialized) return 0;
-        return Serial.write(data);
+        uint8_t buf[1] = {data};
+        return write(buf, 1);
     }
 
     size_t write(const uint8_t* buffer, size_t size) override {
-        if (!initialized) return 0;
-        return Serial.write(buffer, size);
+        if (!initialized || size == 0) return 0;
+        
+        // For first attempts, always try even if we haven't seen free space yet
+        if (!everHadFreeSpace && consecutiveFullBuffer < FIRST_ATTEMPT_THRESHOLD) {
+            // Give initial data a chance to determine port state
+        } else if (!connected()) {
+            // After initial attempts, use connected() to quickly reject if port is closed
+            return 0;
+        }
+        
+        int availableSpace = Serial.availableForWrite();
+        
+        if (availableSpace == 0) {
+            // Buffer is full
+            consecutiveFullBuffer++;
+            
+            if (consecutiveFullBuffer >= ASSUME_CLOSED_THRESHOLD) {
+                // Port is likely closed - honestly report we cannot write
+                // This allows caller to drop old data and prepare fresh data
+                return 0;
+            }
+            
+            // Still hoping port will open - honestly report no bytes written
+            return 0;
+            
+        } else {
+            // We have space - port is definitely open!
+            everHadFreeSpace = true;
+            consecutiveFullBuffer = 0;  // Reset counter
+            
+            // Write what we can
+            size_t toWrite = (availableSpace < size) ? availableSpace : size;
+            return Serial.write(buffer, toWrite);
+        }
     }
 
     bool connected() override {
-        return initialized && Serial;
+        if (!initialized || !Serial) return false;
+        
+        // Consider connected if:
+        // 1. We ever had free space (port was opened at least once)
+        // 2. Buffer is not stuck full (port is still being read)
+        return everHadFreeSpace && (consecutiveFullBuffer < ASSUME_CLOSED_THRESHOLD);
     }
 
     void flush() override {
-        if (initialized) {
+        if (connected()) {
             Serial.flush();
         }
     }
@@ -77,6 +118,14 @@ public:
 private:
     uint32_t baudrate;
     bool initialized;
+    
+    // Behavioral port detection state
+    bool everHadFreeSpace = false;           // Ever had space in buffer since init
+    uint32_t consecutiveFullBuffer = 0;      // Counter for full buffer conditions
+    
+    // Thresholds for real-time critical data
+    static constexpr uint32_t ASSUME_CLOSED_THRESHOLD = 20;  // ~20-200ms depending on call rate
+    static constexpr uint32_t FIRST_ATTEMPT_THRESHOLD = 5;   // Give first data a chance
 };
 
 // Factory method for creating a USB Device

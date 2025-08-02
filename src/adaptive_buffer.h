@@ -93,6 +93,27 @@ static inline bool shouldTransmitBuffer(BridgeContext* ctx,
 
 // Transmit adaptive buffer to USB interface
 static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long currentTime) {
+    // Early check for USB readiness
+    if (!ctx->interfaces.usbInterface->connected()) {
+        // Port closed - drop entire buffer
+        if (*ctx->adaptive.bufferIndex > 0) {
+            *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
+            *ctx->diagnostics.totalDroppedBytes += *ctx->adaptive.bufferIndex;
+            (*ctx->diagnostics.dropEvents)++;
+            
+            if (*ctx->adaptive.bufferIndex > *ctx->diagnostics.maxDropSize) {
+                *ctx->diagnostics.maxDropSize = *ctx->adaptive.bufferIndex;
+            }
+            
+            *ctx->adaptive.bufferIndex = 0;
+            ctx->protocol.lastAnalyzedOffset = 0;
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
+        }
+        return;
+    }
+    
+    // === EXISTING CODE CONTINUES HERE ===
     size_t bytesToSend = *ctx->adaptive.bufferIndex;
     size_t transmitOffset = 0;  // Where to start transmitting from
     
@@ -327,6 +348,43 @@ static inline void handleBufferTimeout(BridgeContext* ctx) {
 
 // Process adaptive buffering for a single byte
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, unsigned long currentTime) {
+    // Track connection state changes
+    static bool wasConnected = true;
+    bool isConnected = ctx->interfaces.usbInterface->connected();
+    
+    // Connection state changed from disconnected to connected
+    if (!wasConnected && isConnected) {
+        // Port just opened - reset protocol detector
+        if (ctx->protocol.detector) {
+            ctx->protocol.detector->reset();
+            log_msg(LOG_DEBUG, "USB: Port reopened - protocol detector reset");
+        }
+        // Clear any partial data in adaptive buffer
+        *ctx->adaptive.bufferIndex = 0;
+        ctx->protocol.lastAnalyzedOffset = 0;
+        ctx->protocol.packetFound = false;
+        ctx->protocol.currentPacketStart = 0;
+    }
+    
+    wasConnected = isConnected;
+    
+    // Check if USB is ready to receive data
+    if (!isConnected) {
+        // USB port is closed - drop data immediately
+        (*ctx->diagnostics.droppedBytes)++;
+        (*ctx->diagnostics.totalDroppedBytes)++;
+        
+        // Log periodically to avoid spam
+        static unsigned long lastNotConnectedLog = 0;
+        if (millis() - lastNotConnectedLog > 5000) {
+            log_msg(LOG_INFO, "USB: Dropping data - port not connected");
+            lastNotConnectedLog = millis();
+        }
+        
+        return;  // Don't buffer anything
+    }
+    
+    // === EXISTING CODE CONTINUES HERE ===
     // Start buffer timing on first byte
     if (*ctx->adaptive.bufferIndex == 0) {
         *ctx->adaptive.bufferStartTime = currentTime;
