@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.9.5-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.10.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -454,6 +454,8 @@ nc -u -l 14560
 | Application can't connect | Check USB cable, try different COM port settings |
 | Connection resets repeatedly | Application toggling DTR/RTS - disable hardware flow control |
 | Partial or corrupted data | Check baud rate settings, verify wire quality and grounding |
+| "UART FIFO overflow" messages | This indicates USB cannot keep up with UART data rate. Only appears when COM port is open. Check adaptive buffer size matches your baud rate, consider enabling flow control, or reduce baud rate. |
+| "USB: Dropping data - port not connected" | Normal behavior when COM port is not opened. Data is discarded to prevent buffer overflow. Open a serial terminal to receive data. |
 | Can't access permanent network | Triple-click BOOT to enter temporary mode, then reconfigure |
 | Network takes long to connect | Normal - device scans every 15s and attempts 5 connections when found |
 
