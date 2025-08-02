@@ -34,9 +34,9 @@ void detectFlowControl() {
   if (flowControlStatus.flowControlDetected) {
     // Flow control is configured in UartDMA::begin()
     flowControlStatus.flowControlActive = true;
-    log_msg("Flow control detected and activated", LOG_INFO);
+    log_msg(LOG_INFO, "Flow control detected and activated");
   } else {
-    log_msg("Flow control enabled but no RTS/CTS detected", LOG_WARNING);
+    log_msg(LOG_WARNING, "Flow control enabled but no RTS/CTS detected");
     flowControlStatus.flowControlActive = false;
   }
 }

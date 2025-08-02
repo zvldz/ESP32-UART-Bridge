@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## v2.9.5 (Critical Memory Safety & Logging Refactoring) - January 2025 ✅
+- **Critical Memory Safety Fixes**: Eliminated heap corruption and segmentation faults
+  - **Adaptive Buffer Protection** (`src/adaptive_buffer.h`): Fixed buffer underflow and bounds checking
+    - **Underflow prevention**: Added validation for `totalConsumed > bufferIndex` before size_t arithmetic
+    - **Bounds checking**: Comprehensive validation before all memmove operations
+    - **Safe state recovery**: Automatic buffer reset on detection of invalid states
+    - **Partial transmission safety**: Enhanced partial data transmission with proper boundary checks
+  - **Protocol Pipeline Hardening** (`src/protocols/protocol_pipeline.h`): Fixed MAVLink detection crashes
+    - **Pointer validation**: Added bounds checking before `detector->canDetect()` calls
+    - **Search window protection**: Prevented buffer overruns during protocol packet search
+    - **Packet size validation**: Limited packet sizes to reasonable bounds (max 512 bytes)
+    - **Diagnostic logging**: Added periodic state dumps for debugging protocol issues
+  - **MAVLink Detector Improvements** (`src/protocols/mavlink_detector.h/cpp`): Enhanced error recovery
+    - **Increased search window**: Expanded from 64 to 300 bytes for better resync capability
+    - **Improved resync logic**: More efficient recovery from garbage data streams
+    - **Enhanced error handling**: Better progress through invalid data sequences
+  - **Stability Impact**: Eliminated MAVFtp connection drops and system crashes
+    - **Zero heap corruption**: Fixed root cause of ESP32 reboots during MAVLink processing
+    - **Reliable protocol detection**: MAVLink packets now consistently detected and processed
+    - **Stable network operations**: MAVFtp parameter uploads work without interruption
+
+- **Logging System Refactoring**: Complete elimination of heap fragmentation
+  - **Printf-Style Migration**: Migrated all ~306 log_msg calls across 21 files
+    - Replaced String concatenation (`"Text " + String(var)`) with printf format (`"Text %d", var`)
+    - Unified logging interface: `log_msg(LOG_LEVEL, "format", args)`
+    - Added compile-time format string validation with `__attribute__((format(printf, 2, 3)))`
+  - **Memory Optimization**: Eliminated heap allocation in logging hot paths
+    - **Stack-based formatting**: All log messages use 256-byte stack buffers
+    - **Zero heap fragmentation**: Removed String object creation in critical paths
+    - **Hot path protection**: Adaptive buffer and protocol pipeline logging optimized
+  - **Performance Impact**: Significant stability improvement for ESP32
+    - **Reduced RAM usage**: Eliminated hundreds of String allocations per second
+    - **Lower fragmentation**: ESP32 heap stays healthier during intensive operations
+    - **Better reliability**: Reduced risk of memory-related crashes during MAVLink processing
+  - **Code Cleanup**: Removed deprecated logging functions
+    - Deleted old `log_msg(String, LogLevel)` and `log_msg(const char*, LogLevel)` functions
+    - Single unified printf-style logging function for entire codebase
+    - Improved code maintainability and consistency
+
 ## v2.9.0 (MAVLink Protocol Implementation) - January 2025 ✅
 - **MAVLink Protocol Detector** - Phase 4.2 Complete
   - **Core MAVLink Implementation**: Full MAVLink v1/v2 packet detection

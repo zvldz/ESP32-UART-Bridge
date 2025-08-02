@@ -39,6 +39,22 @@ const Utils = {
         return `${s}s`;
     },
 
+    // Generate WiFi signal icon based on RSSI percentage
+    getWifiIcon(rssiPercent) {
+        if (rssiPercent >= 75) return '📶'; // Full signal
+        if (rssiPercent >= 50) return '📶'; // Good signal
+        if (rssiPercent >= 25) return '📶'; // Fair signal
+        return '📶'; // Weak signal
+    },
+
+    // Generate WiFi signal bars based on RSSI percentage (mobile style)
+    getWifiSignalBars(rssiPercent) {
+        if (rssiPercent >= 75) return '<span style="font-family: monospace;">▂▄▆█</span>'; // 4 bars
+        if (rssiPercent >= 50) return '<span style="font-family: monospace;">▂▄▆</span>';  // 3 bars  
+        if (rssiPercent >= 25) return '<span style="font-family: monospace;">▂▄</span>';   // 2 bars
+        return '<span style="font-family: monospace;">▂</span>';                          // 1 bar
+    },
+
     // Update element text content safely
     updateElementText(id, text) {
         const el = document.getElementById(id);
@@ -113,5 +129,45 @@ const Utils = {
             console.error('JSON parse error:', e);
             return defaultValue;
         }
+    },
+
+    // Format traffic statistics with visual indicators and alignment
+    formatTraffic(rxBytes, txBytes, rxPrevious = 0, txPrevious = 0) {
+        const rxFormatted = this.formatBytes(rxBytes);
+        const txFormatted = this.formatBytes(txBytes);
+        
+        // Detect activity (bytes increased since last update)
+        const rxActive = rxBytes > rxPrevious;
+        const txActive = txBytes > txPrevious;
+        
+        // Create colored indicators
+        const rxIndicator = rxActive ? '<span style="color: #28a745;">●</span>' : '<span style="color: #6c757d;">○</span>';
+        const txIndicator = txActive ? '<span style="color: #28a745;">●</span>' : '<span style="color: #6c757d;">○</span>';
+        
+        // Create aligned layout using flexbox with proper right alignment
+        return `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <span>${rxIndicator} ↓ <strong>${rxFormatted}</strong></span>
+            <span><strong>${txFormatted}</strong> ↑ ${txIndicator}</span>
+        </div>`;
+    },
+
+    // Format traffic for Device 4 (Network Bridge/Logger) with RX/TX and packets
+    formatNetworkTraffic(rxBytes, txBytes, rxPackets, txPackets, rxBytesPrevious = 0, txBytesPrevious = 0, rxPacketsPrevious = 0, txPacketsPrevious = 0) {
+        const rxFormatted = this.formatBytes(rxBytes);
+        const txFormatted = this.formatBytes(txBytes);
+        
+        // Detect activity
+        const rxActive = rxBytes > rxBytesPrevious || rxPackets > rxPacketsPrevious;
+        const txActive = txBytes > txBytesPrevious || txPackets > txPacketsPrevious;
+        
+        // Create colored indicators
+        const rxIndicator = rxActive ? '<span style="color: #28a745;">●</span>' : '<span style="color: #6c757d;">○</span>';
+        const txIndicator = txActive ? '<span style="color: #28a745;">●</span>' : '<span style="color: #6c757d;">○</span>';
+        
+        // Create compact aligned layout with packet counts and proper right alignment
+        return `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.9em;">
+            <span>${rxIndicator} ↓ <strong>${rxFormatted}</strong> <span style="color: #6c757d; font-size: 0.85em;">${rxPackets}p</span></span>
+            <span><strong>${txFormatted}</strong> <span style="color: #6c757d; font-size: 0.85em;">${txPackets}p</span> ↑ ${txIndicator}</span>
+        </div>`;
     }
 };

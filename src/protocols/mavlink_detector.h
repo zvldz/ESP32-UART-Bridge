@@ -11,7 +11,7 @@
 #define MAVLINK_MAX_PAYLOAD_LEN 255
 #define MAVLINK_CHECKSUM_LEN 2
 #define MAVLINK_SIGNATURE_LEN 13
-#define MAVLINK_MAX_SEARCH_WINDOW 64  // Max bytes to search for next start
+#define MAVLINK_MAX_SEARCH_WINDOW 300  // Must be larger than max MAVLink packet (280 bytes)
 
 class MavlinkDetector : public ProtocolDetector {
 private:

@@ -304,10 +304,25 @@ struct BridgeContext {
         uint32_t packetStartTime;        // When packet reception started
         ProtocolStats* stats;            // Protocol statistics (nullptr in Phase 4.1)
         
+        // Track last detected packet to avoid double counting
+        size_t lastDetectedOffset;       // Position of last counted packet in buffer
+        size_t lastDetectedSize;         // Size of last counted packet
+        bool statsUpdated;               // Were stats already updated for current packet
+        
         // Error tracking for future adaptive behavior
         uint32_t consecutiveErrors;     // Count of failed detection attempts
         uint32_t lastValidPacketTime;   // Timestamp of last valid packet
         bool temporarilyDisabled;       // Reserved for future auto-disable feature
+        
+        // MAVFtp mode detection
+        bool mavftpActive;              // True when FILE_TRANSFER_PROTOCOL detected
+        uint32_t lastMavftpTime;        // Time of last MAVFtp packet
+        uint16_t mavftpCount;           // Counter of consecutive MAVFtp packets
+        
+        // Buffer analysis state
+        size_t lastAnalyzedOffset;      // Position in buffer we've analyzed up to
+        size_t currentPacketStart;      // Start position of current packet in buffer
+        bool packetFound;               // Valid packet found in buffer
     } protocol;
 };
 
@@ -388,6 +403,26 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->system.bridgeMode = bridgeMode;
     ctx->system.config = config;
     ctx->system.globalStats = globalStats;
+    
+    // CRITICAL FIX: Initialize protocol structure to prevent crashes
+    ctx->protocol.enabled = false;
+    ctx->protocol.detector = nullptr;
+    ctx->protocol.detectedPacketSize = 0;
+    ctx->protocol.packetInProgress = false;
+    ctx->protocol.packetStartTime = 0;
+    ctx->protocol.stats = nullptr;
+    ctx->protocol.lastDetectedOffset = 0;
+    ctx->protocol.lastDetectedSize = 0;
+    ctx->protocol.statsUpdated = false;
+    ctx->protocol.consecutiveErrors = 0;
+    ctx->protocol.lastValidPacketTime = 0;
+    ctx->protocol.temporarilyDisabled = false;
+    ctx->protocol.mavftpActive = false;
+    ctx->protocol.lastMavftpTime = 0;
+    ctx->protocol.mavftpCount = 0;
+    ctx->protocol.lastAnalyzedOffset = 0;
+    ctx->protocol.currentPacketStart = 0;
+    ctx->protocol.packetFound = false;
 }
 
 #endif // TYPES_H

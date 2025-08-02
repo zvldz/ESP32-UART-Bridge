@@ -51,11 +51,11 @@ void systemDiagnostics() {
     
     // Critical memory conditions
     if (freeHeap < 10000) {
-        log_msg("CRITICAL: Low memory! Free: " + String(freeHeap) + " bytes", LOG_ERROR);
+        log_msg(LOG_ERROR, "CRITICAL: Low memory! Free: %u bytes", freeHeap);
     } else if (freeHeap < 20000) {
-        log_msg("Warning: Memory getting low. Free: " + String(freeHeap) + " bytes", LOG_WARNING);
+        log_msg(LOG_WARNING, "Warning: Memory getting low. Free: %u bytes", freeHeap);
     } else {
-        log_msg("Memory: Free=" + String(freeHeap) + " bytes, Min=" + String(minFreeHeap) + " bytes", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "Memory: Free=%u bytes, Min=%u bytes", freeHeap, minFreeHeap);
     }
 }
 
@@ -129,29 +129,24 @@ void runBridgeActivityLog() {
     if (!g_bridgeContext) return;
     
     String mode = (*g_bridgeContext->system.bridgeMode == BRIDGE_NET) ? "Network" : "Standalone";
-    log_msg("UART bridge alive [" + mode + " mode]: D1 RX=" + 
-            String(*g_bridgeContext->stats.device1RxBytes) +
-            " TX=" + String(*g_bridgeContext->stats.device1TxBytes) + " bytes" +
+    log_msg(LOG_DEBUG, "UART bridge alive [%s mode]: D1 RX=%lu TX=%lu bytes%s", mode.c_str(),
+            *g_bridgeContext->stats.device1RxBytes, *g_bridgeContext->stats.device1TxBytes,
             (*g_bridgeContext->diagnostics.totalDroppedBytes > 0 ? 
-             ", dropped=" + String(*g_bridgeContext->diagnostics.totalDroppedBytes) : ""), 
-            LOG_DEBUG);
+             String(", dropped=" + String(*g_bridgeContext->diagnostics.totalDroppedBytes)).c_str() : ""));
 }
 
 void runStackDiagnostics() {
     if (!g_bridgeContext) return;
     
     UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-    log_msg("UART task: Stack free=" + String(stackFree * 4) +
-            " bytes, Heap free=" + String(ESP.getFreeHeap()) +
-            " bytes, Largest block=" + String(ESP.getMaxAllocHeap()) + " bytes", 
-            LOG_DEBUG);
+    log_msg(LOG_DEBUG, "UART task: Stack free=%u bytes, Heap free=%u bytes, Largest block=%u bytes", 
+            stackFree * 4, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     
     // Add DMA diagnostics if available
     UartDMA* dma = static_cast<UartDMA*>(g_bridgeContext->interfaces.uartBridgeSerial);
     if (dma && dma->isInitialized()) {
-        log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
-                " TX=" + String(dma->getTxBytesTotal()) +
-                ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+        log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu", 
+                dma->getRxBytesTotal(), dma->getTxBytesTotal(), dma->getOverrunCount());
     }
 }
 
@@ -162,9 +157,9 @@ void runDroppedDataStats() {
     if (*g_bridgeContext->diagnostics.droppedBytes > 0) {
         // For regular drops (buffer full)
         if (*g_bridgeContext->diagnostics.maxDropSize > 0) {
-            log_msg("USB buffer full: dropped " + String(*g_bridgeContext->diagnostics.droppedBytes) + " bytes in " +
-                    String(*g_bridgeContext->diagnostics.dropEvents) + " events (total: " + String(*g_bridgeContext->diagnostics.totalDroppedBytes) +
-                    " bytes), max packet: " + String(*g_bridgeContext->diagnostics.maxDropSize) + " bytes", LOG_INFO);
+            log_msg(LOG_INFO, "USB buffer full: dropped %lu bytes in %lu events (total: %lu bytes), max packet: %d bytes",
+                    *g_bridgeContext->diagnostics.droppedBytes, *g_bridgeContext->diagnostics.dropEvents,
+                    *g_bridgeContext->diagnostics.totalDroppedBytes, *g_bridgeContext->diagnostics.maxDropSize);
             *g_bridgeContext->diagnostics.maxDropSize = 0;  // Reset for next period
         }
         
@@ -190,9 +185,9 @@ void runDroppedDataStats() {
                 }
             }
             
-            log_msg("USB timeout: dropped " + String(*g_bridgeContext->diagnostics.droppedBytes) + " bytes in " +
-                    String(*g_bridgeContext->diagnostics.dropEvents) + " events (total: " + String(*g_bridgeContext->diagnostics.totalDroppedBytes) +
-                    " bytes). " + sizes, LOG_INFO);
+            log_msg(LOG_INFO, "USB timeout: dropped %lu bytes in %lu events (total: %lu bytes). %s",
+                    *g_bridgeContext->diagnostics.droppedBytes, *g_bridgeContext->diagnostics.dropEvents,
+                    *g_bridgeContext->diagnostics.totalDroppedBytes, sizes.c_str());
             
             // Clear timeout sizes for next period
             for (int i = 0; i < 10; i++) {
@@ -250,16 +245,15 @@ void runAllStacksDiagnostics() {
     msg += ", Heap=" + String(ESP.getFreeHeap()) + "B";
     msg += ", MaxBlock=" + String(ESP.getMaxAllocHeap()) + "B";
     
-    log_msg(msg, LOG_DEBUG);
+    log_msg(LOG_DEBUG, "%s", msg.c_str());
 }
 
 // Log DMA statistics for a UART interface
 void logDmaStatistics(UartInterface* uartSerial) {
   UartDMA* dma = static_cast<UartDMA*>(uartSerial);
   if (dma && dma->isInitialized()) {
-    log_msg("DMA stats: RX=" + String(dma->getRxBytesTotal()) + 
-            " TX=" + String(dma->getTxBytesTotal()) +
-            ", Overruns=" + String(dma->getOverrunCount()), LOG_DEBUG);
+    log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu", 
+            dma->getRxBytesTotal(), dma->getTxBytesTotal(), dma->getOverrunCount());
   }
 }
 

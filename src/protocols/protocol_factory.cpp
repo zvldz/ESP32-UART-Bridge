@@ -5,19 +5,19 @@
 ProtocolDetector* createProtocolDetector(ProtocolType type) {
     switch (type) {
         case PROTOCOL_MAVLINK:
-            log_msg("Creating MAVLink protocol detector", LOG_DEBUG);
+            log_msg(LOG_INFO, "Creating MAVLink protocol detector");
             return new MavlinkDetector();
         
         case PROTOCOL_NONE:
         default:
-            log_msg("No protocol detector requested", LOG_DEBUG);
+            log_msg(LOG_DEBUG, "No protocol detector requested");
             return nullptr;
     }
 }
 
 void initProtocolDetectionFactory(BridgeContext* ctx, ProtocolType protocolType) {
     if (!ctx) {
-        log_msg("BridgeContext is null in initProtocolDetection", LOG_ERROR);
+        log_msg(LOG_ERROR, "BridgeContext is null in initProtocolDetection");
         return;
     }
     
@@ -27,14 +27,18 @@ void initProtocolDetectionFactory(BridgeContext* ctx, ProtocolType protocolType)
     // Create new detector
     ctx->protocol.detector = createProtocolDetector(protocolType);
     
-    // Initialize statistics
+    // Initialize statistics - ensure it's properly created
     if (!ctx->protocol.stats) {
         ctx->protocol.stats = new ProtocolStats();
+        log_msg(LOG_DEBUG, "Protocol statistics initialized");
     } else {
         ctx->protocol.stats->reset();
+        log_msg(LOG_DEBUG, "Protocol statistics reset");
     }
     
-    log_msg("Protocol detection initialized: " + String(getProtocolName(protocolType)), LOG_INFO);
+    char logBuf[64];
+    snprintf(logBuf, sizeof(logBuf), "Protocol detection initialized: %s", getProtocolName(protocolType));
+    log_msg(LOG_INFO, "%s", logBuf);
 }
 
 void cleanupProtocolDetection(BridgeContext* ctx) {

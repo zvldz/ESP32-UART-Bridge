@@ -56,7 +56,7 @@ public:
         
         esp_err_t err = usb_host_install(&host_config);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to install driver: " + String(esp_err_to_name(err)), LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to install driver: %s", esp_err_to_name(err));
             return;
         }
         
@@ -86,7 +86,7 @@ public:
         
         err = usb_host_client_register(&client_config, &this->client_handle);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to register client: " + String(esp_err_to_name(err)), LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to register client: %s", esp_err_to_name(err));
             usb_host_uninstall();
             return;
         }
@@ -96,7 +96,7 @@ public:
                                              USB_HOST_PRIORITY, &task_handle);
         
         if (task_created != pdPASS || task_handle == NULL) {
-            log_msg("USB Host: Failed to create task", LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to create task");
             usb_host_client_deregister(this->client_handle);
             usb_host_uninstall();
             return;
@@ -118,11 +118,11 @@ public:
         }
         
         initialized = true;
-        log_msg("USB Host: Initialized", LOG_INFO);
+        log_msg(LOG_INFO, "USB Host: Initialized");
     }
     
     void end() override {
-        log_msg("USB Host: Shutting down...", LOG_INFO);
+        log_msg(LOG_INFO, "USB Host: Shutting down...");
         
         is_connected = false;
         
@@ -165,7 +165,7 @@ private:
             esp_err_t err = usb_host_client_handle_events(self->client_handle, pdMS_TO_TICKS(10));
             
             if (err != ESP_OK && err != ESP_ERR_TIMEOUT) {
-                log_msg("USB Host: Event error: " + String(esp_err_to_name(err)), LOG_ERROR);
+                log_msg(LOG_ERROR, "USB Host: Event error: %s", esp_err_to_name(err));
             }
             
             // Process USB Host library events
@@ -186,12 +186,12 @@ private:
         
         switch (event_msg->event) {
             case USB_HOST_CLIENT_EVENT_NEW_DEV:
-                log_msg("USB Host: Device connected", LOG_INFO);
+                log_msg(LOG_INFO, "USB Host: Device connected");
                 self->handleDeviceConnection(event_msg->new_dev.address);
                 break;
                 
             case USB_HOST_CLIENT_EVENT_DEV_GONE:
-                log_msg("USB Host: Device disconnected", LOG_INFO);
+                log_msg(LOG_INFO, "USB Host: Device disconnected");
                 self->handleDeviceDisconnection();
                 break;
                 
@@ -207,7 +207,7 @@ private:
         // Open device
         err = usb_host_device_open(this->client_handle, dev_addr, &device_handle);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to open device: " + String(esp_err_to_name(err)), LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to open device: %s", esp_err_to_name(err));
             return;
         }
         
@@ -215,7 +215,7 @@ private:
         usb_device_info_t dev_info;
         err = usb_host_device_info(device_handle, &dev_info);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to get device info", LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to get device info");
             usb_host_device_close(this->client_handle, device_handle);
             device_handle = NULL;
             return;
@@ -225,15 +225,15 @@ private:
         const usb_device_desc_t *device_desc;
         err = usb_host_get_device_descriptor(device_handle, &device_desc);
         if (err == ESP_OK) {
-            log_msg("USB Host: VID=0x" + String(device_desc->idVendor, HEX) + 
-                    " PID=0x" + String(device_desc->idProduct, HEX), LOG_INFO);
+            log_msg(LOG_INFO, "USB Host: VID=0x%04X PID=0x%04X", 
+                    device_desc->idVendor, device_desc->idProduct);
         }
         
         // Get configuration descriptor
         const usb_config_desc_t *config_desc;
         err = usb_host_get_active_config_descriptor(device_handle, &config_desc);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to get config descriptor", LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to get config descriptor");
             usb_host_device_close(this->client_handle, device_handle);
             device_handle = NULL;
             return;
@@ -241,7 +241,7 @@ private:
         
         // Find CDC interface and endpoints
         if (!findCDCInterface(config_desc)) {
-            log_msg("USB Host: No CDC interface found", LOG_WARNING);
+            log_msg(LOG_WARNING, "USB Host: No CDC interface found");
             usb_host_device_close(this->client_handle, device_handle);
             device_handle = NULL;
             return;
@@ -250,27 +250,27 @@ private:
         // Claim interface with the correct interface number
         err = usb_host_interface_claim(this->client_handle, device_handle, interface_num, 0);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to claim interface " + String(interface_num) + ": " + String(esp_err_to_name(err)), LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to claim interface %d: %s", interface_num, esp_err_to_name(err));
             usb_host_device_close(this->client_handle, device_handle);
             device_handle = NULL;
             return;
         }
         
-        log_msg("USB Host: Successfully claimed interface " + String(interface_num), LOG_INFO);
+        log_msg(LOG_INFO, "USB Host: Successfully claimed interface %d", interface_num);
         
         // Allocate transfers with appropriate buffer size
         const size_t transfer_size = 64;  // Standard CDC bulk endpoint size
         
         err = usb_host_transfer_alloc(transfer_size, 0, &in_transfer);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to allocate IN transfer", LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to allocate IN transfer");
             cleanup();
             return;
         }
         
         err = usb_host_transfer_alloc(transfer_size, 0, &out_transfer);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to allocate OUT transfer", LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to allocate OUT transfer");
             cleanup();
             return;
         }
@@ -286,13 +286,13 @@ private:
         // Submit first IN transfer
         err = usb_host_transfer_submit(in_transfer);
         if (err != ESP_OK) {
-            log_msg("USB Host: Failed to submit IN transfer: " + String(esp_err_to_name(err)), LOG_ERROR);
+            log_msg(LOG_ERROR, "USB Host: Failed to submit IN transfer: %s", esp_err_to_name(err));
             cleanup();
             return;
         }
         
         is_connected = true;
-        log_msg("USB Host: Connected", LOG_INFO);
+        log_msg(LOG_INFO, "USB Host: Connected");
     }
     
     // Handle device disconnection
@@ -319,8 +319,7 @@ private:
                 // Check for CDC Data interface (0x0A) or Communications interface (0x02)
                 if (bInterfaceClass == USB_CDC_DATA_INTERFACE_CLASS) {
                     
-                    log_msg("USB Host: Found interface " + String(bInterfaceNumber) + 
-                            " with class 0x" + String(bInterfaceClass, HEX), LOG_DEBUG);
+                    log_msg(LOG_DEBUG, "USB Host: Found interface %d with class 0x%02X", bInterfaceNumber, bInterfaceClass);
                     
                     interface_num = bInterfaceNumber;  // Save interface number
                     
@@ -373,7 +372,7 @@ private:
         if (transfer->status == USB_TRANSFER_STATUS_COMPLETED) {
             // Copy data to ring buffer using base class helper
             if (!self->addToRxBuffer(transfer->data_buffer, transfer->actual_num_bytes)) {
-                log_msg("USB Host RX buffer overflow", LOG_WARNING);
+                log_msg(LOG_WARNING, "USB Host RX buffer overflow");
             }
             
             // Resubmit transfer
@@ -466,7 +465,7 @@ public:
     void init() override {
         // TODO: Detect VBUS to determine mode
         // For now, default to Device mode
-        log_msg("USB Auto: defaulting to Device mode (VBUS detection not implemented)", LOG_INFO);
+        log_msg(LOG_INFO, "USB Auto: defaulting to Device mode (VBUS detection not implemented)");
         activeInterface = createUsbDevice(baudrate);
         if (activeInterface) {
             activeInterface->init();

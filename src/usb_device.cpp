@@ -24,9 +24,9 @@ public:
         // Add stabilization delay only if USB is connected
         if (Serial) {
             vTaskDelay(pdMS_TO_TICKS(500));  // Allow USB detection time
-            log_msg("USB Device: connected at " + String(baudrate) + " baud", LOG_INFO);
+            log_msg(LOG_INFO, "USB Device: connected at %lu baud", baudrate);
         } else {
-            log_msg("USB Device: no connection detected, continuing...", LOG_INFO);
+            log_msg(LOG_INFO, "USB Device: no connection detected, continuing...");
         }
 
         initialized = true;

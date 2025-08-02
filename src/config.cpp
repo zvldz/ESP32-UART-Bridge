@@ -99,7 +99,7 @@ void config_init(Config* config) {
 // Migrate configuration from old versions
 void config_migrate(Config* config) {
   if (config->config_version < 2) {
-    log_msg("Migrating config from version " + String(config->config_version) + " to 2", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version %d to 2", config->config_version);
     
     // Set defaults for new fields
     config->device1.role = D1_UART1;
@@ -122,7 +122,7 @@ void config_migrate(Config* config) {
   }
   
   if (config->config_version < 3) {
-    log_msg("Migrating config from version " + String(config->config_version) + " to 3", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version %d to 3", config->config_version);
     
     // Version 2 had string/uint8_t types, convert to ESP-IDF enums
     // These will be set from loaded values in config_load
@@ -131,13 +131,13 @@ void config_migrate(Config* config) {
   }
   
   if (config->config_version < 4) {
-    log_msg("Migrating config from version " + String(config->config_version) + " to 4", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version %d to 4", config->config_version);
     config->permanent_network_mode = false;
     config->config_version = 4;
   }
   
   if (config->config_version < 5) {
-    log_msg("Migrating config from version " + String(config->config_version) + " to 5", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version %d to 5", config->config_version);
     
     // Set Device 4 defaults
     config->device4.role = D4_NONE;
@@ -149,7 +149,7 @@ void config_migrate(Config* config) {
   }
   
   if (config->config_version < 6) {
-    log_msg("Migrating config from version 5 to 6", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version 5 to 6");
     
     // Add WiFi Client mode fields
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
@@ -160,7 +160,7 @@ void config_migrate(Config* config) {
   }
   
   if (config->config_version < 7) {
-    log_msg("Migrating config from version 6 to 7", LOG_INFO);
+    log_msg(LOG_INFO, "Migrating config from version 6 to 7");
     
     // Add Protocol Optimization field
     config->protocolOptimization = 0;  // PROTOCOL_NONE by default
@@ -189,18 +189,19 @@ void config_load(Config* config) {
 
 // Load configuration from JSON string
 bool config_load_from_json(Config* config, const String& jsonString) {
-  log_msg("Parsing JSON config, length: " + String(jsonString.length()), LOG_DEBUG);
+  log_msg(LOG_DEBUG, "Parsing JSON config, length: %zu", jsonString.length());
   
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, jsonString);
 
   if (error) {
-    log_msg("Failed to parse configuration JSON: " + String(error.c_str()), LOG_ERROR);
-    log_msg("JSON content: " + jsonString.substring(0, 200), LOG_ERROR);  // First 200 chars
+    log_msg(LOG_ERROR, "Failed to parse configuration JSON: %s", error.c_str());
+    String jsonPreview = jsonString.substring(0, 200);
+    log_msg(LOG_ERROR, "JSON content: %s", jsonPreview.c_str());  // First 200 chars
     return false;
   }
   
-  log_msg("JSON parsed successfully", LOG_DEBUG);
+  log_msg(LOG_DEBUG, "JSON parsed successfully");
 
   // Check if this is old format (no config_version field)
   if (!doc["config_version"].is<int>()) {
@@ -356,7 +357,7 @@ String config_to_json(Config* config) {
 
 // Save configuration to LittleFS
 void config_save(Config* config) {
-  log_msg("Saving configuration to LittleFS...", LOG_INFO);
+  log_msg(LOG_INFO, "Saving configuration to LittleFS...");
 
   // Create backup of current config
   if (LittleFS.exists("/config.json")) {
@@ -371,14 +372,14 @@ void config_save(Config* config) {
 
   File file = LittleFS.open("/config.json", "w");
   if (!file) {
-    log_msg("Failed to create config file", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to create config file");
     return;
   }
 
   if (file.print(jsonString) == 0) {
-    log_msg("Failed to write config file", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to write config file");
   } else {
-    log_msg("Configuration saved successfully", LOG_INFO);
+    log_msg(LOG_INFO, "Configuration saved successfully");
   }
 
   file.close();

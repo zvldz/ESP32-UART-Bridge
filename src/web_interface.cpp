@@ -39,7 +39,7 @@ static bool webServerInitialized = false;
 
 // Initialize web server in NETWORK mode
 void webserver_init(Config* config, UartStats* stats, SystemState* state) {
-  log_msg("Starting Network Mode", LOG_INFO);
+  log_msg(LOG_INFO, "Starting Network Mode");
 
   state->networkActive = true;
   state->networkStartTime = millis();
@@ -151,7 +151,7 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
 
   // Start the server
   server->begin();
-  log_msg("Async web server started on port 80", LOG_INFO);
+  log_msg(LOG_INFO, "Async web server started on port 80");
   webServerInitialized = true;
 }
 
@@ -201,7 +201,7 @@ void handleNotFound(AsyncWebServerRequest *request) {
 
 // Handle reboot request
 void handleReboot(AsyncWebServerRequest *request) {
-  log_msg("Device reboot requested via web interface", LOG_INFO);
+  log_msg(LOG_INFO, "Device reboot requested via web interface");
   request->send(200, "text/html", "<h1>Rebooting...</h1>");
   vTaskDelay(pdMS_TO_TICKS(1000));
   ESP.restart();

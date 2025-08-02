@@ -43,6 +43,8 @@ managed_components
 src/CMakeLists.txt
 src/webui_gen/
 
+mp_logs
+
 chat.txt
 compile_commands.json
 *.code-workspace

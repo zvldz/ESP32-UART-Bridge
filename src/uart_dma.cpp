@@ -32,7 +32,7 @@ UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg)
     // Allocate ring buffer with configured size
     rx_ring_buf = (uint8_t*)heap_caps_malloc(RING_BUF_SIZE, MALLOC_CAP_DMA);
     if (!rx_ring_buf) {
-        log_msg("Failed to allocate DMA ring buffer of size " + String(RING_BUF_SIZE), LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to allocate DMA ring buffer of size %d", RING_BUF_SIZE);
         return;  // Critical error - cannot continue without buffer
     }
     
@@ -41,7 +41,7 @@ UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg)
     tx_mutex = xSemaphoreCreateMutex();
     
     if (!rx_mutex || !tx_mutex) {
-        log_msg("Failed to create mutexes", LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to create mutexes");
         // Cleanup allocated resources
         if (rx_ring_buf) {
             heap_caps_free(rx_ring_buf);
@@ -76,7 +76,7 @@ UartDMA::~UartDMA() {
 void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
     // Check if constructor succeeded
     if (!rx_ring_buf || !rx_mutex || !tx_mutex) {
-        log_msg("UartDMA not properly initialized, cannot begin", LOG_ERROR);
+        log_msg(LOG_ERROR, "UartDMA not properly initialized, cannot begin");
         return;
     }
     
@@ -86,10 +86,11 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
     tx_pin = txPin;
     
     // Debug output using stored configuration
-    log_msg("DMA UART config: " + String(config.baudrate) + " baud, " + 
-            word_length_to_string(config.databits) + 
-            parity_to_string(config.parity)[0] +  // First char only
-            stop_bits_to_string(config.stopbits), LOG_DEBUG);
+    log_msg(LOG_DEBUG, "DMA UART config: %u baud, %s%c%s", 
+            config.baudrate,
+            word_length_to_string(config.databits),
+            parity_to_string(config.parity)[0],  // First char only
+            stop_bits_to_string(config.stopbits));
     
     // Configure UART parameters from passed configuration
     uart_config_t uart_config = {
@@ -113,14 +114,14 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
     esp_err_t err = uart_driver_install(uart_num, DMA_RX_BUF_SIZE, DMA_TX_BUF_SIZE, 
                                         dmaConfig.eventQueueSize, &uart_queue, ESP_INTR_FLAG_IRAM);
     if (err != ESP_OK) {
-        log_msg("UART driver install failed: " + String(err), LOG_ERROR);
+        log_msg(LOG_ERROR, "UART driver install failed: %d", err);
         return;
     }
     
     // Configure UART parameters
     err = uart_param_config(uart_num, &uart_config);
     if (err != ESP_OK) {
-        log_msg("UART param config failed: " + String(err), LOG_ERROR);
+        log_msg(LOG_ERROR, "UART param config failed: %d", err);
         uart_driver_delete(uart_num);
         return;
     }
@@ -134,7 +135,7 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
     }
     
     if (err != ESP_OK) {
-        log_msg("UART set pin failed: " + String(err), LOG_ERROR);
+        log_msg(LOG_ERROR, "UART set pin failed: %d", err);
         uart_driver_delete(uart_num);
         return;
     }
@@ -159,22 +160,22 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
             &event_task_handle,
             0            // Core 0
         ) != pdPASS) {
-            log_msg("Failed to create UART event task", LOG_ERROR);
+            log_msg(LOG_ERROR, "Failed to create UART event task");
             uart_driver_delete(uart_num);
             return;
         }
-        log_msg("UART DMA event task created with priority " + String(dmaConfig.eventTaskPriority), LOG_DEBUG);
+        log_msg(LOG_DEBUG, "UART DMA event task created with priority %d", dmaConfig.eventTaskPriority);
     } else {
-        log_msg("UART DMA initialized in polling mode (no event task)", LOG_DEBUG);
+        log_msg(LOG_DEBUG, "UART DMA initialized in polling mode (no event task)");
     }
     
     // Mark as successfully initialized
     initialized = true;
     
-    log_msg("UART DMA initialized: " + String(config.baudrate) + " baud, pins RX=" + 
-            String(rx_pin) + " TX=" + String(tx_pin) + 
-            (config.flowcontrol && uart_num == UART_NUM_1 ? " with flow control" : "") +
-            ", mode=" + String(dmaConfig.useEventTask ? "event" : "polling"), LOG_INFO);
+    log_msg(LOG_INFO, "UART DMA initialized: %u baud, pins RX=%d TX=%d%s, mode=%s",
+            config.baudrate, rx_pin, tx_pin,
+            (config.flowcontrol && uart_num == UART_NUM_1 ? " with flow control" : ""),
+            dmaConfig.useEventTask ? "event" : "polling");
 }
 
 // Simplified begin - uses default UART configuration
@@ -198,7 +199,7 @@ void UartDMA::uartEventTask(void* pvParameters) {
     uint8_t* dtmp = (uint8_t*)heap_caps_malloc(uart->DMA_RX_BUF_SIZE, MALLOC_CAP_DMA);
     
     if (!dtmp) {
-        log_msg("Failed to allocate DMA event buffer", LOG_ERROR);
+        log_msg(LOG_ERROR, "Failed to allocate DMA event buffer");
         vTaskDelete(nullptr);
         return;
     }
@@ -217,7 +218,7 @@ void UartDMA::uartEventTask(void* pvParameters) {
                 }
                 
                 case UART_FIFO_OVF:
-                    log_msg("UART FIFO overflow", LOG_WARNING);
+                    log_msg(LOG_WARNING, "UART FIFO overflow");
                     
                     // TEMPORARY DIAGNOSTIC CODE
                     // Added to diagnose FIFO overflow issue
@@ -240,7 +241,7 @@ void UartDMA::uartEventTask(void* pvParameters) {
                     break;
                     
                 case UART_BUFFER_FULL:
-                    log_msg("UART ring buffer full", LOG_WARNING);
+                    log_msg(LOG_WARNING, "UART ring buffer full");
                     uart->overrun_flag = true;
                     uart->overrun_count = uart->overrun_count + 1;
                     uart_flush_input(uart->uart_num);
@@ -248,15 +249,15 @@ void UartDMA::uartEventTask(void* pvParameters) {
                     break;
                     
                 case UART_BREAK:
-                    log_msg("UART break detected", LOG_DEBUG);
+                    log_msg(LOG_DEBUG, "UART break detected");
                     break;
                     
                 case UART_PARITY_ERR:
-                    log_msg("UART parity error", LOG_WARNING);
+                    log_msg(LOG_WARNING, "UART parity error");
                     break;
                     
                 case UART_FRAME_ERR:
-                    log_msg("UART frame error", LOG_WARNING);
+                    log_msg(LOG_WARNING, "UART frame error");
                     break;
                     
                 case UART_DATA_BREAK:
@@ -265,7 +266,7 @@ void UartDMA::uartEventTask(void* pvParameters) {
                     break;
                     
                 default:
-                    log_msg("UART event type: " + String(event.type), LOG_DEBUG);
+                    log_msg(LOG_DEBUG, "UART event type: %d", event.type);
                     break;
             }
         }
@@ -286,7 +287,7 @@ void UartDMA::pollEvents() {
     if (!poll_buffer) {
         poll_buffer = (uint8_t*)heap_caps_malloc(DMA_RX_BUF_SIZE, MALLOC_CAP_DMA);
         if (!poll_buffer) {
-            log_msg("Failed to allocate poll buffer", LOG_ERROR);
+            log_msg(LOG_ERROR, "Failed to allocate poll buffer");
             return;
         }
     }
@@ -350,7 +351,7 @@ void UartDMA::processRxData(uint8_t* data, size_t len) {
                 // Buffer overflow
                 overrun_flag = true;
                 overrun_count = overrun_count + 1;
-                log_msg("UART RX ring buffer overflow", LOG_WARNING);
+                log_msg(LOG_WARNING, "UART RX ring buffer overflow");
                 break;
             }
             
@@ -467,8 +468,7 @@ void UartDMA::end() {
 
 // Set RX buffer size (no-op for DMA as size is fixed at creation)
 void UartDMA::setRxBufferSize(size_t size) {
-    log_msg("UART DMA RX buffer size is fixed at " + String(RING_BUF_SIZE) + 
-            " (configured at creation)", LOG_DEBUG);
+    log_msg(LOG_DEBUG, "UART DMA RX buffer size is fixed at %d (configured at creation)", RING_BUF_SIZE);
 }
 
 // Check if packet timeout occurred

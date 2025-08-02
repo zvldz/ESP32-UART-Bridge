@@ -4,8 +4,6 @@
 #include "types.h"
 #include "protocol_detector.h"
 #include "protocol_factory.h"
-#include "../logging.h"
-#include <Arduino.h>
 
 // ========== Byte-level Processing Hooks ==========
 
@@ -28,14 +26,12 @@ static inline bool isValidPacketStart(BridgeContext* ctx,
                                      size_t len) {
     if (!ctx->protocol.enabled || !ctx->protocol.detector) return false;
     
+    // Use detector to check for valid packet start
     bool isValid = ctx->protocol.detector->canDetect(data, len);
     
     // Track consecutive errors for future use
     if (!isValid) {
         ctx->protocol.consecutiveErrors++;
-        if (ctx->protocol.stats) {
-            ctx->protocol.stats->onDetectionError();
-        }
     } else {
         ctx->protocol.consecutiveErrors = 0;
         ctx->protocol.lastValidPacketTime = millis();
@@ -50,18 +46,8 @@ static inline int findPacketBoundary(BridgeContext* ctx,
                                     size_t len) {
     if (!ctx->protocol.enabled || !ctx->protocol.detector) return 0;
     
-    int result = ctx->protocol.detector->findPacketBoundary(data, len);
-    
-    // Handle resynchronization (negative return values)
-    if (result < 0) {
-        if (ctx->protocol.stats) {
-            ctx->protocol.stats->onResyncEvent();
-        }
-        log_msg("Protocol resync: skipping " + String(-result) + " bytes", LOG_DEBUG);
-        // Return negative value to indicate bytes to skip
-    }
-    
-    return result;
+    // FIXED: Use real detector instead of TODO stub!
+    return ctx->protocol.detector->findPacketBoundary(data, len);
 }
 
 // ========== Timing Checks ==========
@@ -70,8 +56,12 @@ static inline int findPacketBoundary(BridgeContext* ctx,
 static inline bool checkProtocolTiming(BridgeContext* ctx,
                                       unsigned long timeSinceLastByte,
                                       unsigned long timeInBuffer) {
-    // TODO: Implement timing checks (SBUS gaps, Modbus silence, etc.)
-    return false;  // true = transmit due to timing
+    // Check if packet is taking too long to complete
+    if (ctx->protocol.packetInProgress && timeInBuffer > 30000) {  // 30ms timeout
+        // Force transmission to prevent excessive buffering
+        return true;
+    }
+    return false;
 }
 
 // Check for protocol timeouts
@@ -105,15 +95,29 @@ static inline void resetProtocolState(BridgeContext* ctx) {
     ctx->protocol.detectedPacketSize = 0;
     ctx->protocol.packetInProgress = false;
     ctx->protocol.packetStartTime = 0;
+    ctx->protocol.statsUpdated = false;
+    ctx->protocol.packetFound = false;
+    ctx->protocol.currentPacketStart = 0;
+    // Don't reset lastAnalyzedOffset here - it's managed by buffer operations
     // Note: Don't reset error counters here - they track longer-term behavior
 }
 
 // Post-transmission cleanup
 static inline void onProtocolPacketTransmitted(BridgeContext* ctx, size_t bytesSent) {
-    // Update statistics
-    if (ctx->protocol.stats) {
-        ctx->protocol.stats->onPacketTransmitted(bytesSent);
-        log_msg("Protocol packet: " + String(bytesSent) + " bytes transmitted", LOG_DEBUG);
+    if (ctx->protocol.stats && bytesSent > 0) {
+        // If we detected packets, count them as transmitted
+        if (ctx->protocol.detectedPacketSize > 0) {
+            // Calculate how many complete packets were sent
+            size_t packetsInBuffer = bytesSent / ctx->protocol.detectedPacketSize;
+            if (packetsInBuffer > 0) {
+                ctx->protocol.stats->packetsTransmitted += packetsInBuffer;
+            }
+            // Update total bytes only for actual transmitted data
+            ctx->protocol.stats->totalBytes += bytesSent;
+        }
+        
+        // Avoid String allocation in hot path - can cause heap fragmentation
+        // log_msg("Protocol packet transmitted: " + String(bytesSent) + " bytes", LOG_DEBUG);
     }
     resetProtocolState(ctx);
 }
@@ -122,10 +126,12 @@ static inline void onProtocolPacketTransmitted(BridgeContext* ctx, size_t bytesS
 static inline void updateProtocolStats(BridgeContext* ctx, bool success) {
     if (!ctx->protocol.stats) return;
     
-    if (success && ctx->protocol.detectedPacketSize > 0) {
-        ctx->protocol.stats->onPacketDetected(ctx->protocol.detectedPacketSize, millis());
-        log_msg("Protocol packet detected: " + String(ctx->protocol.detectedPacketSize) + " bytes", LOG_DEBUG);
-    } else if (!success) {
+    if (success) {
+        // Packet successfully detected - stats will be updated by detector
+        // The detector calls onPacketDetected() which handles size and timing
+        ctx->protocol.stats->updatePacketRate(millis());
+    } else {
+        // Detection error or timeout
         ctx->protocol.stats->onDetectionError();
     }
 }
@@ -135,7 +141,7 @@ static inline void resetProtocolStats(BridgeContext* ctx) {
     if (!ctx->protocol.stats) return;
     
     ctx->protocol.stats->reset();
-    log_msg("Protocol statistics reset", LOG_INFO);
+    log_msg(LOG_INFO, "Protocol statistics reset");
 }
 
 // Update protocol state machine
@@ -148,17 +154,6 @@ static inline void updateProtocolState(BridgeContext* ctx) {
 // Initialize protocol detection subsystem
 static inline void initProtocolDetection(BridgeContext* ctx, Config* config) {
     ctx->protocol.enabled = (config->protocolOptimization != PROTOCOL_NONE);
-    
-    // Initialize protocol detection based on config
-    if (ctx->protocol.enabled) {
-        initProtocolDetectionFactory(ctx, static_cast<ProtocolType>(config->protocolOptimization));
-        log_msg("Protocol detection enabled: " + String(getProtocolName(static_cast<ProtocolType>(config->protocolOptimization))), LOG_INFO);
-    } else {
-        ctx->protocol.detector = nullptr;
-        ctx->protocol.stats = nullptr;
-        log_msg("Protocol detection disabled", LOG_INFO);
-    }
-    
     ctx->protocol.detectedPacketSize = 0;
     ctx->protocol.packetInProgress = false;
     ctx->protocol.packetStartTime = 0;
@@ -166,7 +161,15 @@ static inline void initProtocolDetection(BridgeContext* ctx, Config* config) {
     // Initialize error tracking
     ctx->protocol.consecutiveErrors = 0;
     ctx->protocol.lastValidPacketTime = 0;
-    ctx->protocol.temporarilyDisabled = false;
+    ctx->protocol.temporarilyDisabled = false;  // Reserved for future use
+    
+    // Create detector and stats using factory (was TODO)
+    if (ctx->protocol.enabled) {
+        initProtocolDetectionFactory(ctx, (ProtocolType)config->protocolOptimization);
+    } else {
+        ctx->protocol.detector = nullptr;
+        ctx->protocol.stats = nullptr;
+    }
 }
 
 // Configure hardware for specific protocol
@@ -181,51 +184,263 @@ static inline bool isBufferCritical(BridgeContext* ctx) {
     return (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize - 64);
 }
 
-// Main protocol detection logic
+// Detect MAVFtp mode based on message ID
+static inline void detectMavftpMode(BridgeContext* ctx, uint32_t currentTime) {
+    if (!ctx->protocol.enabled || *ctx->adaptive.bufferIndex < 10) {
+        return;
+    }
+    
+    // Check message ID (byte 5 in MAVLink v1, byte 7 in v2)
+    uint8_t msgId = 0;
+    if (ctx->adaptive.buffer[0] == 0xFE && *ctx->adaptive.bufferIndex >= 6) {  // MAVLink v1
+        msgId = ctx->adaptive.buffer[5];
+    } else if (ctx->adaptive.buffer[0] == 0xFD && *ctx->adaptive.bufferIndex >= 10) {  // MAVLink v2
+        msgId = ctx->adaptive.buffer[7];
+    }
+    
+    if (msgId == 110) {  // FILE_TRANSFER_PROTOCOL
+        ctx->protocol.mavftpCount++;
+        ctx->protocol.lastMavftpTime = currentTime;
+        
+        // Activate special mode after 3 consecutive MAVFtp packets
+        if (ctx->protocol.mavftpCount >= 3 && !ctx->protocol.mavftpActive) {
+            ctx->protocol.mavftpActive = true;
+            log_msg(LOG_DEBUG, "MAVFtp mode activated");
+        }
+    } else if (msgId == 0 || msgId == 30 || msgId == 24) {
+        // HEARTBEAT, ATTITUDE, GPS_RAW_INT - critical packets
+        // Don't reset counter, but don't increment either
+    } else {
+        // Other packets - slowly decay the counter
+        if (ctx->protocol.mavftpCount > 0) {
+            ctx->protocol.mavftpCount--;
+        }
+    }
+    
+    // Deactivate after 500ms without MAVFtp
+    if (ctx->protocol.mavftpActive && 
+        (currentTime - ctx->protocol.lastMavftpTime) > 500000) {
+        ctx->protocol.mavftpActive = false;
+        ctx->protocol.mavftpCount = 0;
+        log_msg(LOG_DEBUG, "MAVFtp mode deactivated");
+    }
+}
+
+// Check if packet is critical and should be sent immediately
+static inline bool isCriticalPacket(const uint8_t* data, size_t len) {
+    if (len < 6) return false;
+    
+    uint8_t msgId = 0;
+    if (data[0] == 0xFE && len >= 6) {  // MAVLink v1
+        msgId = data[5];
+    } else if (data[0] == 0xFD && len >= 10) {  // MAVLink v2
+        msgId = data[7];
+    }
+    
+    // Critical messages that should be transmitted immediately
+    switch (msgId) {
+        case 0:   // HEARTBEAT
+        case 1:   // SYS_STATUS  
+        case 24:  // GPS_RAW_INT
+        case 30:  // ATTITUDE
+        case 33:  // GLOBAL_POSITION_INT
+        case 74:  // VFR_HUD
+        case 253: // STATUSTEXT
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Main protocol detection logic - analyzes buffer incrementally
 static inline bool checkProtocolPacket(BridgeContext* ctx,
                                       unsigned long currentTime,
                                       unsigned long timeSinceLastByte) {
-    if (!ctx->protocol.enabled) return false;
+    if (!ctx->protocol.enabled || !ctx->protocol.detector) return false;
     
-    // 1. Check timing constraints
-    if (checkProtocolTiming(ctx, timeSinceLastByte, 
-                           currentTime - *ctx->adaptive.bufferStartTime)) {
+    // If we already found a packet, return true to transmit it
+    if (ctx->protocol.packetFound) {
         return true;
     }
     
-    // 2. Check for valid packet start
-    if (!ctx->protocol.packetInProgress) {
-        if (!isValidPacketStart(ctx, ctx->adaptive.buffer, 
-                               *ctx->adaptive.bufferIndex)) {
-            return false;
+    // Check for timeout on incomplete packet detection
+    if (ctx->protocol.packetInProgress) {
+        uint32_t timeInProgress = currentTime - ctx->protocol.packetStartTime;
+        uint32_t timeout = 50000;  // 50ms default
+        if (ctx->system.config && ctx->system.config->baudrate <= 115200) {
+            timeout = 100000;  // 100ms for slow speeds
         }
-        ctx->protocol.packetInProgress = true;
-        ctx->protocol.packetStartTime = currentTime;
+        
+        if (timeInProgress > timeout) {
+            // Timeout - reset detection state
+            log_msg(LOG_DEBUG, "Protocol: Detection timeout after %lums", 
+                    timeInProgress/1000);
+            ctx->protocol.packetInProgress = false;
+            ctx->protocol.lastAnalyzedOffset = 0;  // Reset to reanalyze buffer
+            if (ctx->protocol.stats) {
+                ctx->protocol.stats->onDetectionError();
+            }
+            return true;  // Force transmission
+        }
     }
     
-    // 3. Try to find packet boundary
-    int packetSize = findPacketBoundary(ctx, ctx->adaptive.buffer,
-                                       *ctx->adaptive.bufferIndex);
+    // Analyze buffer starting from last analyzed position
+    size_t bufferSize = *ctx->adaptive.bufferIndex;
     
-    if (packetSize > 0) {
-        ctx->protocol.detectedPacketSize = packetSize;
-        updateProtocolStats(ctx, true);  // Update success stats
+    // If buffer was transmitted, reset our analysis position
+    if (ctx->protocol.lastAnalyzedOffset > bufferSize) {
+        ctx->protocol.lastAnalyzedOffset = 0;
+    }
+    
+    // Search for packets in the unanalyzed portion of buffer
+    while (ctx->protocol.lastAnalyzedOffset < bufferSize) {
+        size_t searchStart = ctx->protocol.lastAnalyzedOffset;
+        
+        // Validate search start is within buffer
+        if (searchStart >= bufferSize) {
+            ctx->protocol.lastAnalyzedOffset = bufferSize;
+            break;
+        }
+        
+        // Additional safety check
+        if (searchStart > ctx->adaptive.bufferSize) {
+            log_msg(LOG_ERROR, "Invalid search offset: %zu > buffer size %zu", 
+                    searchStart, ctx->adaptive.bufferSize);
+            ctx->protocol.lastAnalyzedOffset = 0;
+            break;
+        }
+        
+        size_t remainingBytes = bufferSize - searchStart;
+        
+        // Validate pointer before detector call
+        uint8_t* searchPtr = ctx->adaptive.buffer + searchStart;
+        if (searchPtr < ctx->adaptive.buffer || 
+            searchPtr >= ctx->adaptive.buffer + ctx->adaptive.bufferSize) {
+            log_msg(LOG_ERROR, "Invalid search pointer at offset %zu", searchStart);
+            ctx->protocol.lastAnalyzedOffset++;
+            continue;
+        }
+
+        // Check if this position could be a packet start
+        if (ctx->protocol.detector->canDetect(searchPtr, remainingBytes)) {
+            // Try to find complete packet
+            int packetSize = ctx->protocol.detector->findPacketBoundary(
+                searchPtr, remainingBytes);
+            
+            if (packetSize > 0) {
+                // Validate packet size
+                if (packetSize > remainingBytes || packetSize > 512) {  // Max reasonable MAVLink size
+                    log_msg(LOG_ERROR, "Invalid packet size %d at offset %zu", 
+                            packetSize, searchStart);
+                    ctx->protocol.lastAnalyzedOffset++;
+                    continue;
+                }
+                
+                // Complete packet found!
+                ctx->protocol.currentPacketStart = searchStart;
+                ctx->protocol.detectedPacketSize = packetSize;
+                ctx->protocol.packetFound = true;
+                ctx->protocol.packetInProgress = false;
+                
+                // Update statistics
+                if (ctx->protocol.stats) {
+                    ctx->protocol.stats->onPacketDetected(packetSize, currentTime);
+                }
+                
+                // Log detection
+                static uint32_t detectCount = 0;
+                detectCount++;
+                if (detectCount % 100 == 0) {  // Log every 100 packets
+                    log_msg(LOG_INFO, "Protocol: Detected %u packets, last at offset %zu, size %d",
+                            detectCount, searchStart, packetSize);
+                }
+                
+                // Detect MAVFtp mode
+                detectMavftpMode(ctx, currentTime);
+                
+                // Check if critical packet
+                bool isCritical = isCriticalPacket(searchPtr, packetSize);
+                
+                // Update analyzed position to after this packet
+                ctx->protocol.lastAnalyzedOffset = searchStart + packetSize;
+                
+                // Decide whether to transmit immediately
+                if (isCritical || ctx->protocol.mavftpActive) {
+                    return true;  // Transmit immediately
+                }
+                
+                // For non-critical packets, continue searching for more packets
+                // This allows batching multiple small packets
+                continue;
+                
+            } else if (packetSize == 0) {
+                // Need more data for complete packet
+                if (!ctx->protocol.packetInProgress) {
+                    ctx->protocol.packetInProgress = true;
+                    ctx->protocol.packetStartTime = currentTime;
+                }
+                break;  // Wait for more data
+                
+            } else {
+                // packetSize < 0 - invalid data, skip bytes
+                int skipBytes = -packetSize;
+                
+                // Log resync event
+                if (ctx->protocol.stats) {
+                    ctx->protocol.stats->onResyncEvent();
+                    ctx->protocol.stats->onDetectionError();
+                }
+                
+                // Skip forward
+                ctx->protocol.lastAnalyzedOffset = searchStart + skipBytes;
+                
+                // Log resync
+                static uint32_t resyncCount = 0;
+                resyncCount++;
+                if (resyncCount % 10 == 0) {  // Log every 10 resyncs
+                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu, skipping %d bytes",
+                            resyncCount, searchStart, skipBytes);
+                }
+                
+                continue;  // Keep searching
+            }
+        } else {
+            // Not a valid packet start, move forward by 1 byte
+            ctx->protocol.lastAnalyzedOffset++;
+        }
+    }
+    
+    // Check if we found any packets
+    if (ctx->protocol.packetFound) {
         return true;
     }
     
-    // 4. Check for timeout
-    if (currentTime - ctx->protocol.packetStartTime > 100000) {  // 100ms
-        updateProtocolStats(ctx, false);  // Update error stats
-        return true;  // Force transmission
+    // Check if buffer is getting full
+    if (bufferSize > ctx->adaptive.bufferSize * 0.8) {
+        log_msg(LOG_DEBUG, "Protocol: Buffer 80% full, forcing transmission");
+        return true;
     }
     
-    return false;  // Keep waiting
+    // Periodic state dump for debugging
+    static uint32_t lastStateDump = 0;
+    if (millis() - lastStateDump > 10000 && ctx->protocol.enabled) {
+        log_msg(LOG_DEBUG, "Protocol state: bufSize=%zu, bufIndex=%zu, analyzed=%zu, "
+                "pktFound=%d, pktStart=%zu, pktSize=%zu",
+                ctx->adaptive.bufferSize, *ctx->adaptive.bufferIndex,
+                ctx->protocol.lastAnalyzedOffset, ctx->protocol.packetFound,
+                ctx->protocol.currentPacketStart, ctx->protocol.detectedPacketSize);
+        lastStateDump = millis();
+    }
+    
+    return false;  // Continue accumulating data
 }
 
 // Main transmission decision with protocol awareness
 static inline bool shouldTransmitProtocolBuffer(BridgeContext* ctx,
                                                unsigned long currentTime,
                                                unsigned long timeSinceLastByte) {
+
+    
     // Priority order:
     // 1. Safety - prevent buffer overflow
     if (isBufferCritical(ctx)) return true;

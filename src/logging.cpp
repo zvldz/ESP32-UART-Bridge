@@ -92,102 +92,126 @@ void logging_init_uart() {
     
     // Initialize UART on Device 3 pins (TX only for logging)
     logSerial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
-    log_msg("UART logging initialized on GPIO" + String(DEVICE3_UART_TX_PIN) + 
-            " at 115200 baud (UART0, DMA)", LOG_INFO);
+    log_msg(LOG_INFO, "UART logging initialized on GPIO%d at 115200 baud (UART0, DMA)", DEVICE3_UART_TX_PIN);
   } else {
-    log_msg("Failed to create UART logger interface", LOG_ERROR);
+    log_msg(LOG_ERROR, "Failed to create UART logger interface");
   }
 }
 
-// Main logging function with log level
-void log_msg(String message, LogLevel level) {
-  if (!message || message.length() == 0) return;
-
-  // Check if this message should be logged to web interface
-  bool shouldLogToWeb = (config.log_level_web != LOG_OFF && level <= config.log_level_web);
-  
-  // Save to buffer for web interface only if level is appropriate
-  if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
-    if (message.length() > 120) {
-      message = message.substring(0, 120) + "...";
+// Printf-style logging - thread-safe and heap-safe
+void log_msg(LogLevel level, const char* fmt, ...) {
+    if (!fmt) return;
+    
+    // Stack buffer for formatted message
+    char msgBuf[256];
+    
+    // Format the message
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(msgBuf, sizeof(msgBuf), fmt, args);
+    va_end(args);
+    
+    // Ensure null termination
+    msgBuf[sizeof(msgBuf) - 1] = '\0';
+    
+    // Truncation warning for debug builds
+    #ifdef DEBUG
+    if (len >= sizeof(msgBuf)) {
+        // Message was truncated
+        const char* truncMsg = " [TRUNCATED]";
+        size_t truncLen = strlen(truncMsg);
+        if (sizeof(msgBuf) > truncLen) {
+            strcpy(msgBuf + sizeof(msgBuf) - truncLen - 1, truncMsg);
+        }
     }
-
-    unsigned long uptimeMs = millis();
-    unsigned long seconds = uptimeMs / 1000;
-    unsigned long ms = uptimeMs % 1000;
+    #endif
     
-    // Add level to timestamp
-    String timestamp = "[" + String(seconds) + "." +
-                      String(ms / 100) + "s][" + 
-                      String(getLogLevelName(level)) + "] ";
-
-    logBuffer[logIndex].clear();
-    logBuffer[logIndex] = timestamp + message;
-
-    logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
-    if (logCount < LOG_BUFFER_SIZE) {
-      logCount++;
-    }
-    xSemaphoreGive(logMutex);
-  }
-
-  // Output to UART if Device 3 is configured as logger
-  if (logSerial && config.device3.role == D3_UART3_LOG && 
-      config.log_level_uart != LOG_OFF && level <= config.log_level_uart) {
-    // Non-blocking write to avoid slowing down main thread
-    if (logSerial->availableForWrite() > message.length() + 20) {
-      unsigned long uptimeMs = millis();
-      unsigned long seconds = uptimeMs / 1000;
-      unsigned long ms = uptimeMs % 1000;
-      
-      String logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
-                       String(getLogLevelName(level)) + "] " + message + "\r\n";
-      
-      // Write the log line as bytes
-      logSerial->write((const uint8_t*)logLine.c_str(), logLine.length());
-    }
-    // If buffer full - skip this log to avoid blocking
-  }
-
-  // Output to network if Device 4 is configured as logger
-  if (systemState.networkActive &&
-      config.device4.role == D4_LOG_NETWORK &&
-      config.log_level_network != LOG_OFF && 
-      level <= config.log_level_network &&
-      device4LogMutex) {
+    // Check if this message should be logged to web interface
+    bool shouldLogToWeb = (config.log_level_web != LOG_OFF && level <= config.log_level_web);
     
-    // Format log for network (same as web interface)
-    unsigned long uptimeMs = millis();
-    unsigned long seconds = uptimeMs / 1000;
-    unsigned long ms = uptimeMs % 1000;
-    
-    String logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
-                     String(getLogLevelName(level)) + "] " + message + "\n";
-    
-    // Add to buffer (non-blocking)
-    if (xSemaphoreTake(device4LogMutex, 0) == pdTRUE) {
-        const char* data = logLine.c_str();
-        size_t len = logLine.length();
+    // Web interface logging (with mutex)
+    if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
+        unsigned long uptimeMs = millis();
+        unsigned long seconds = uptimeMs / 1000;
+        unsigned long ms = uptimeMs % 1000;
         
-        // Add to ring buffer
-        int added = 0;
-        for (size_t i = 0; i < len; i++) {
-            int nextHead = (device4LogHead + 1) % DEVICE4_LOG_BUFFER_SIZE;
-            if (nextHead != device4LogTail) {
-                device4LogBuffer[device4LogHead] = data[i];
-                device4LogHead = nextHead;
-                added++;
-            } else {
-                // Buffer full - stop
-                break;
-            }
+        // Format timestamp + level + message
+        String logLine;
+        logLine.reserve(300);  // Pre-allocate to avoid fragmentation
+        logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
+                  String(getLogLevelName(level)) + "] " + String(msgBuf);
+        
+        // Truncate if too long
+        if (logLine.length() > 250) {
+            logLine = logLine.substring(0, 247) + "...";
         }
         
-        xSemaphoreGive(device4LogMutex);
-        
-        // Do not log overflow to avoid recursion
+        // Store in circular buffer
+        logBuffer[logIndex] = logLine;
+        logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
+        if (logCount < LOG_BUFFER_SIZE) {
+            logCount++;
+        }
+        xSemaphoreGive(logMutex);
     }
-  }
+    
+    // UART logging (non-blocking)
+    if (logSerial && config.device3.role == D3_UART3_LOG && 
+        config.log_level_uart != LOG_OFF && level <= config.log_level_uart) {
+        
+        // Format for UART with timestamp
+        char uartBuf[320];
+        unsigned long uptimeMs = millis();
+        unsigned long seconds = uptimeMs / 1000;
+        unsigned long ms = uptimeMs % 1000;
+        
+        int uartLen = snprintf(uartBuf, sizeof(uartBuf), 
+                              "[%lu.%lus][%s] %s\r\n", 
+                              seconds, ms/100, getLogLevelName(level), msgBuf);
+        
+        if (uartLen > 0 && uartLen < sizeof(uartBuf)) {
+            // Non-blocking write
+            if (logSerial->availableForWrite() > uartLen) {
+                logSerial->write((const uint8_t*)uartBuf, uartLen);
+            }
+        }
+    }
+    
+    // Network logging
+    if (systemState.networkActive &&
+        config.device4.role == D4_LOG_NETWORK &&
+        config.log_level_network != LOG_OFF && 
+        level <= config.log_level_network &&
+        device4LogMutex) {
+        
+        // Format for network
+        char netBuf[320];
+        unsigned long uptimeMs = millis();
+        unsigned long seconds = uptimeMs / 1000;
+        unsigned long ms = uptimeMs % 1000;
+        
+        int netLen = snprintf(netBuf, sizeof(netBuf),
+                             "[%lu.%lus][%s] %s\n",
+                             seconds, ms/100, getLogLevelName(level), msgBuf);
+        
+        // Add to ring buffer (non-blocking)
+        if (netLen > 0 && netLen < sizeof(netBuf) && 
+            xSemaphoreTake(device4LogMutex, 0) == pdTRUE) {
+            
+            // Copy to ring buffer
+            for (int i = 0; i < netLen; i++) {
+                int nextHead = (device4LogHead + 1) % DEVICE4_LOG_BUFFER_SIZE;
+                if (nextHead != device4LogTail) {
+                    device4LogBuffer[device4LogHead] = netBuf[i];
+                    device4LogHead = nextHead;
+                } else {
+                    break;  // Buffer full
+                }
+            }
+            
+            xSemaphoreGive(device4LogMutex);
+        }
+    }
 }
 
 // Return logs for web interface

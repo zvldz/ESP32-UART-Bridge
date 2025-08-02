@@ -1,3 +1,4 @@
+#include "protocols/protocol_stats.h"
 #include "web_api.h"
 #include "web_interface.h"
 #include "logging.h"
@@ -155,11 +156,38 @@ String getConfigJson() {
         doc["protocolStats"]["consecutiveErrors"] = stats->consecutiveErrors;
         doc["protocolStats"]["maxConsecutiveErrors"] = stats->maxConsecutiveErrors;
         
-        // Format last packet time
+        // Format last packet time with overflow protection
         if (stats->lastPacketTime == 0) {
             doc["protocolStats"]["lastPacketTime"] = "Never";
         } else {
-            doc["protocolStats"]["lastPacketTime"] = String((millis() - stats->lastPacketTime) / 1000) + " seconds ago";
+            unsigned long currentMillis = millis();
+            unsigned long timeDiff;
+            
+            // Handle millis() overflow properly (every ~49 days)
+            if (currentMillis >= stats->lastPacketTime) {
+                timeDiff = currentMillis - stats->lastPacketTime;
+            } else {
+                // Only consider it overflow if difference is huge (> 40 days)
+                if ((stats->lastPacketTime - currentMillis) > 3456000000UL) {  // ~40 days in ms
+                    stats->lastPacketTime = currentMillis;
+                    timeDiff = 0;
+                } else {
+                    // Small negative difference - just old packet, use simple calculation
+                    timeDiff = currentMillis + (UINT32_MAX - stats->lastPacketTime);
+                }
+            }
+            
+            // Reset very old time values (likely old data from previous session)
+            if (timeDiff > 86400000) {  // More than 24 hours in milliseconds
+                stats->lastPacketTime = currentMillis;
+                timeDiff = 0;
+            }
+            
+            if (timeDiff == 0) {
+                doc["protocolStats"]["lastPacketTime"] = "Just now";
+            } else {
+                doc["protocolStats"]["lastPacketTime"] = String(timeDiff / 1000) + " seconds ago";
+            }
         }
     }
     
@@ -198,7 +226,7 @@ void handleLogs(AsyncWebServerRequest *request) {
 
 // Handle save configuration
 void handleSave(AsyncWebServerRequest *request) {
-  log_msg("Saving new configuration...", LOG_INFO);
+  log_msg(LOG_INFO, "Saving new configuration...");
 
   // Parse form data
   bool configChanged = false;
@@ -210,7 +238,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newBaudrate != config.baudrate) {
       config.baudrate = newBaudrate;
       configChanged = true;
-      log_msg("UART baudrate changed to " + String(newBaudrate), LOG_INFO);
+      log_msg(LOG_INFO, "UART baudrate changed to %u", newBaudrate);
     }
   }
 
@@ -221,7 +249,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newWordLength != config.databits) {
       config.databits = newWordLength;
       configChanged = true;
-      log_msg("UART data bits changed to " + String(newDatabits), LOG_INFO);
+      log_msg(LOG_INFO, "UART data bits changed to %u", newDatabits);
     }
   }
 
@@ -232,7 +260,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newParityEnum != config.parity) {
       config.parity = newParityEnum;
       configChanged = true;
-      log_msg("UART parity changed to " + newParity, LOG_INFO);
+      log_msg(LOG_INFO, "UART parity changed to %s", newParity.c_str());
     }
   }
 
@@ -243,7 +271,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newStopBitsEnum != config.stopbits) {
       config.stopbits = newStopBitsEnum;
       configChanged = true;
-      log_msg("UART stop bits changed to " + String(newStopbits), LOG_INFO);
+      log_msg(LOG_INFO, "UART stop bits changed to %u", newStopbits);
     }
   }
 
@@ -251,7 +279,7 @@ void handleSave(AsyncWebServerRequest *request) {
   if (newFlowcontrol != config.flowcontrol) {
     config.flowcontrol = newFlowcontrol;
     configChanged = true;
-    log_msg("Flow control " + String(newFlowcontrol ? "enabled" : "disabled"), LOG_INFO);
+    log_msg(LOG_INFO, "Flow control %s", newFlowcontrol ? "enabled" : "disabled");
   }
 
   // USB mode settings
@@ -268,7 +296,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newMode != config.usb_mode) {
       config.usb_mode = newMode;
       configChanged = true;
-      log_msg("USB mode changed to " + mode, LOG_INFO);
+      log_msg(LOG_INFO, "USB mode changed to %s", mode.c_str());
     }
   }
 
@@ -280,7 +308,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (role != config.device2.role) {
         config.device2.role = role;
         configChanged = true;
-        log_msg("Device 2 role changed to " + String(role), LOG_INFO);
+        log_msg(LOG_INFO, "Device 2 role changed to %d", role);
       }
     }
   }
@@ -293,7 +321,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (role != config.device3.role) {
         config.device3.role = role;
         configChanged = true;
-        log_msg("Device 3 role changed to " + String(role), LOG_INFO);
+        log_msg(LOG_INFO, "Device 3 role changed to %d", role);
       }
     }
   }
@@ -306,7 +334,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (role != config.device4.role) {
         config.device4.role = role;
         configChanged = true;
-        log_msg("Device 4 role changed to " + String(role), LOG_INFO);
+        log_msg(LOG_INFO, "Device 4 role changed to %d", role);
       }
     }
   }
@@ -317,13 +345,13 @@ void handleSave(AsyncWebServerRequest *request) {
     strncpy(config.device4_config.target_ip, ip.c_str(), 15);
     config.device4_config.target_ip[15] = '\0';
     configChanged = true;
-    log_msg("Device 4 target IP changed to " + ip, LOG_INFO);
+    log_msg(LOG_INFO, "Device 4 target IP changed to %s", ip.c_str());
   }
   if (request->hasParam("device4_port", true)) {
     String portStr = request->getParam("device4_port", true)->value();
     config.device4_config.port = portStr.toInt();
     configChanged = true;
-    log_msg("Device 4 port changed to " + portStr, LOG_INFO);
+    log_msg(LOG_INFO, "Device 4 port changed to %s", portStr.c_str());
   }
   // Copy role to configuration
   config.device4_config.role = config.device4.role;
@@ -338,7 +366,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (level != config.log_level_web) {
         config.log_level_web = (LogLevel)level;
         configChanged = true;
-        log_msg("Web log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+        log_msg(LOG_INFO, "Web log level changed to %s", getLogLevelName((LogLevel)level));
       }
     }
   }
@@ -352,7 +380,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (level != config.log_level_uart) {
         config.log_level_uart = (LogLevel)level;
         configChanged = true;
-        log_msg("UART log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+        log_msg(LOG_INFO, "UART log level changed to %s", getLogLevelName((LogLevel)level));
       }
     }
   }
@@ -366,7 +394,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (level != config.log_level_network) {
         config.log_level_network = (LogLevel)level;
         configChanged = true;
-        log_msg("Network log level changed to " + String(getLogLevelName((LogLevel)level)), LOG_INFO);
+        log_msg(LOG_INFO, "Network log level changed to %s", getLogLevelName((LogLevel)level));
       }
     }
   }
@@ -378,9 +406,18 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newProtocol != config.protocolOptimization) {
       config.protocolOptimization = newProtocol;
       configChanged = true;
-      String protocolName = (newProtocol == 0) ? "None" : 
-                           (newProtocol == 1) ? "MAVLink" : "Unknown";
-      log_msg("Protocol optimization changed to " + protocolName, LOG_INFO);
+      const char* protocolName = (newProtocol == 0) ? "None" : 
+                                 (newProtocol == 1) ? "MAVLink" : "Unknown";
+      log_msg(LOG_INFO, "Protocol optimization changed to %s", protocolName);
+      
+      // Reinitialize protocol detection with new settings
+      BridgeContext* ctx = getBridgeContext();
+      if (ctx) {
+        initProtocolDetection(ctx, &config);
+        log_msg(LOG_DEBUG, "Protocol detection reinitialized");
+      } else {
+        log_msg(LOG_WARNING, "Warning: BridgeContext not available for protocol reinit");
+      }
     }
   }
 
@@ -391,7 +428,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newSSID.length() > 0 && newSSID != config.ssid) {
       config.ssid = newSSID;
       configChanged = true;
-      log_msg("WiFi SSID changed to " + newSSID, LOG_INFO);
+      log_msg(LOG_INFO, "WiFi SSID changed to %s", newSSID.c_str());
     }
   }
 
@@ -401,7 +438,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newPassword.length() >= 8 && newPassword != config.password) {
       config.password = newPassword;
       configChanged = true;
-      log_msg("WiFi password updated", LOG_INFO);
+      log_msg(LOG_INFO, "WiFi password updated");
     }
   }
 
@@ -412,7 +449,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newPermanent != config.permanent_network_mode) {
       config.permanent_network_mode = newPermanent;
       configChanged = true;
-      log_msg("Permanent WiFi mode " + String(newPermanent ? "enabled" : "disabled"), LOG_INFO);
+      log_msg(LOG_INFO, "Permanent WiFi mode %s", newPermanent ? "enabled" : "disabled");
     }
   }
   
@@ -424,7 +461,7 @@ void handleSave(AsyncWebServerRequest *request) {
       if (mode != config.wifi_mode) {
         config.wifi_mode = (BridgeWiFiMode)mode;
         configChanged = true;
-        log_msg("WiFi mode changed to " + String(mode == BRIDGE_WIFI_MODE_AP ? "AP" : "Client"), LOG_INFO);
+        log_msg(LOG_INFO, "WiFi mode changed to %s", mode == BRIDGE_WIFI_MODE_AP ? "AP" : "Client");
       }
     }
   }
@@ -437,7 +474,7 @@ void handleSave(AsyncWebServerRequest *request) {
     // Validate SSID
     newSSID.trim();  // Remove whitespace
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && newSSID.isEmpty()) {
-      log_msg("Client SSID cannot be empty", LOG_ERROR);
+      log_msg(LOG_ERROR, "Client SSID cannot be empty");
       request->send(400, "application/json", 
         "{\"status\":\"error\",\"message\":\"Client SSID cannot be empty\"}");
       return;
@@ -446,7 +483,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newSSID != config.wifi_client_ssid) {
       config.wifi_client_ssid = newSSID;
       configChanged = true;
-      log_msg("WiFi Client SSID changed to " + newSSID, LOG_INFO);
+      log_msg(LOG_INFO, "WiFi Client SSID changed to %s", newSSID.c_str());
     }
   }
 
@@ -457,7 +494,7 @@ void handleSave(AsyncWebServerRequest *request) {
     
     // Validate password (empty allowed for open networks, otherwise min 8 chars)
     if (newPassword.length() > 0 && newPassword.length() < 8) {
-      log_msg("Client password must be at least 8 characters or empty", LOG_ERROR);
+      log_msg(LOG_ERROR, "Client password must be at least 8 characters or empty");
       request->send(400, "application/json", 
         "{\"status\":\"error\",\"message\":\"WiFi password must be at least 8 characters or empty for open network\"}");
       return;
@@ -466,7 +503,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newPassword != config.wifi_client_password) {
       config.wifi_client_password = newPassword;
       configChanged = true;
-      log_msg("WiFi Client password updated", LOG_INFO);
+      log_msg(LOG_INFO, "WiFi Client password updated");
     }
   }
 
@@ -487,14 +524,14 @@ void handleSave(AsyncWebServerRequest *request) {
 
 // Handle reset statistics
 void handleResetStats(AsyncWebServerRequest *request) {
-  log_msg("Resetting statistics and logs...", LOG_INFO);
+  log_msg(LOG_INFO, "Resetting statistics and logs...");
   resetStatistics(&uartStats);
   
   // Reset protocol statistics via bridge context accessor
   BridgeContext* ctx = getBridgeContext();
   if (ctx && ctx->protocol.stats) {
     ctx->protocol.stats->reset();
-    log_msg("Protocol statistics reset", LOG_INFO);
+    log_msg(LOG_INFO, "Protocol statistics reset");
   }
   
   logging_clear();
@@ -517,7 +554,7 @@ void handleClearCrashLog(AsyncWebServerRequest *request) {
 
 // Export configuration as downloadable JSON file
 void handleExportConfig(AsyncWebServerRequest *request) {
-  log_msg("Configuration export requested", LOG_INFO);
+  log_msg(LOG_INFO, "Configuration export requested");
   
   // Generate random ID for filename uniqueness
   String randomId = String(millis() & 0xFFFFFF, HEX);
@@ -537,24 +574,24 @@ void handleExportConfig(AsyncWebServerRequest *request) {
 void handleImportConfig(AsyncWebServerRequest *request) {
   // Check if file data was uploaded
   if (!request->_tempObject) {
-    log_msg("Import failed: No file uploaded", LOG_ERROR);
+    log_msg(LOG_ERROR, "Import failed: No file uploaded");
     request->send(400, "text/plain", "No file uploaded");
     return;
   }
 
   String* fileContent = (String*)request->_tempObject;
-  log_msg("Configuration import requested, content length: " + String(fileContent->length()), LOG_INFO);
+  log_msg(LOG_INFO, "Configuration import requested, content length: %zu", fileContent->length());
   
   // Log first 100 characters for debugging (safe for display)
   String preview = fileContent->substring(0, 100);
-  log_msg("JSON preview: " + preview, LOG_DEBUG);
+  log_msg(LOG_DEBUG, "JSON preview: %s", preview.c_str());
 
   // Parse configuration from uploaded JSON
   Config tempConfig;
   config_init(&tempConfig);
   
   if (!config_load_from_json(&tempConfig, *fileContent)) {
-    log_msg("Import failed: JSON parsing error", LOG_ERROR);
+    log_msg(LOG_ERROR, "Import failed: JSON parsing error");
     delete fileContent;  // Clean up
     request->send(400, "text/plain", "Invalid configuration file");
     return;
@@ -566,7 +603,7 @@ void handleImportConfig(AsyncWebServerRequest *request) {
   config = tempConfig;
   config_save(&config);
   
-  log_msg("Configuration imported successfully, restarting...", LOG_INFO);
+  log_msg(LOG_INFO, "Configuration imported successfully, restarting...");
   
   request->send(200, "application/json", 
     "{\"status\":\"ok\",\"message\":\"Configuration imported successfully! Device restarting...\"}");
@@ -577,6 +614,6 @@ void handleImportConfig(AsyncWebServerRequest *request) {
 // Get client IP address
 void handleClientIP(AsyncWebServerRequest *request) {
   String clientIP = request->client()->remoteIP().toString();
-  log_msg("Client IP requested: " + clientIP, LOG_DEBUG);
+  log_msg(LOG_DEBUG, "Client IP requested: %s", clientIP.c_str());
   request->send(200, "text/plain", clientIP);
 }
