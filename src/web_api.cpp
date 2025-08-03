@@ -289,8 +289,6 @@ void handleSave(AsyncWebServerRequest *request) {
     UsbMode newMode = USB_MODE_DEVICE;
     if (mode == "host") {
       newMode = USB_MODE_HOST;
-    } else if (mode == "auto") {
-      newMode = USB_MODE_AUTO;
     }
     
     if (newMode != config.usb_mode) {

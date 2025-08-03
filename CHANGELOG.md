@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v2.10.1 (Configuration Cleanup) - January 2025 ✅
+- **USB Configuration Cleanup**: Removed unsupported USB Auto mode
+  - **Code Cleanup**: Removed USB_MODE_AUTO enum value and all related handling code
+  - **Web Interface**: Removed "Auto (not supported)" option from USB mode selection
+  - **Configuration**: Simplified USB mode to only Device and Host options
+  - **Implementation**: Deleted UsbAuto class and createUsbAuto factory function
+  - **Benefits**: Cleaner codebase, no misleading configuration options
+
 ## v2.10.0 (USB Buffer Overflow Prevention) - January 2025 ✅
 - **USB Buffer Overflow Prevention**: Behavioral port state detection to prevent buffer overflow
   - **Behavioral Port Detection** (`src/usb_device.cpp`): Smart detection of USB port state without relying on unavailable APIs
