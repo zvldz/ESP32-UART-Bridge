@@ -291,10 +291,6 @@ void initStandaloneMode() {
         log_msg(LOG_INFO, "Creating USB Host interface");
         usbInterface = createUsbHost(config.baudrate);
         break;
-      case USB_MODE_AUTO:
-        log_msg(LOG_INFO, "Creating USB Auto-detect interface");
-        usbInterface = createUsbAuto(config.baudrate);
-        break;
       case USB_MODE_DEVICE:
       default:
         log_msg(LOG_INFO, "Creating USB Device interface");
@@ -367,10 +363,6 @@ void initNetworkMode() {
       case USB_MODE_HOST:
         log_msg(LOG_INFO, "Creating USB Host interface in network mode");
         usbInterface = createUsbHost(config.baudrate);
-        break;
-      case USB_MODE_AUTO:
-        log_msg(LOG_INFO, "Creating USB Auto-detect interface in network mode");
-        usbInterface = createUsbAuto(config.baudrate);
         break;
       case USB_MODE_DEVICE:
       default:
