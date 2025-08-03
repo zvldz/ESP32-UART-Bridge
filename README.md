@@ -8,6 +8,8 @@
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
 
+<a href="https://www.buymeacoffee.com/8tSDjWbdc" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="36" ></a>
+
 > **⚠️ BETA SOFTWARE**: This is a beta version and may not work stably in all configurations. Please report any issues you encounter.
 
 ## Features
