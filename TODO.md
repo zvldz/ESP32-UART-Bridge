@@ -89,40 +89,45 @@
 
 ## PENDING TASKS 🔄
 
-### Priority 4 - Protocol Optimizations (Remaining)
+### Priority 4 - MAVLink Advanced Features
 
-#### 4.2 - MAVLink Parser - Advanced Features
-- [ ] **Priority 4.2.1 - Performance Analysis**
+- [ ] **Priority 4.1 - Performance Analysis**
   - Detailed profiling under high load conditions
   - Real-world performance optimization if needed
   - Document measured improvements vs adaptive buffering
   - Latency benchmarking with different MAVLink message rates
 
-- [ ] **Priority 4.2.2 - Validation Depth Decision**
+- [ ] **Priority 4.2 - Validation Depth Decision**
   - Implement extended validation based on false positive rate analysis
   - Add optional CRC check for packet integrity validation
   - Make validation level configurable (header-only vs full validation)
   - Balance between performance and reliability
 
-- [ ] **Priority 4.2.3 - Extended MAVLink Features**
+- [ ] **Priority 4.3 - Extended MAVLink Features**
   - Message type statistics and frequency analysis
   - System/Component ID tracking and validation
   - Configurable validation levels per use case
   - MAVLink message filtering capabilities
 
-- [ ] **Priority 4.2.4 - Performance Optimizations**
+- [ ] **Priority 4.4 - Performance Optimizations**
   - Adaptive algorithms for high packet rate scenarios
   - Caching mechanisms for repeated packet patterns
   - Hardware integration preparation for future ESP32 features
   - Memory usage optimization
 
-- [ ] **Priority 4.2.5 - Resynchronization Enhancement**
+- [ ] **Priority 4.5 - Resynchronization Enhancement**
   - Implement synchronization state tracking
   - Smarter recovery strategies after data corruption
   - Prevent data loss during resync operations
   - Configurable resync search window size
 
-#### 4.3 - Hardware Packet Detection Improvements
+- [ ] **Priority 4.6 - Protocol Statistics UI Enhancement**
+  - Improve protocol statistics display in web interface
+  - More compact and user-friendly presentation
+  - Better organization of existing statistics data
+
+### Priority 5 - Hardware Packet Detection Improvements
+
 - [ ] **Hardware-level Protocol Optimization**
   - Dynamic timeout based on detected protocol (not just MAVLink)
   - Pattern detection for text protocols using `uart_enable_pattern_det_baud_intr()`
@@ -130,7 +135,8 @@
   - Benefits ALL protocols, not protocol-specific
   - Implementation in `uart_dma.cpp` configuration
 
-#### 4.4 - Device 3 Integration
+### Priority 6 - Device 3 Integration
+
 - [ ] **Device 3 Adaptive Buffering with Protocol Support**
   - Currently uses simple batch transfer (64-byte blocks)
   - Implement adaptive buffering using Protocol Framework
@@ -144,40 +150,7 @@
     - **IoT**: Protocol-aware routing
     - **RS-485**: Intelligent gateway operation
 
-#### 4.5 - Multi-Protocol Architecture
-- [ ] **Advanced Protocol Management**
-  - Per-device protocol configuration (different protocols per Device)
-  - Independent protocol detectors per interface
-  - Support for protocol conversion (SBUS↔MAVLink, Modbus↔Text)
-  - Handle complex routing scenarios with protocol translation
-  - **Use Cases**:
-    - Device 1: MAVLink, Device 2: SBUS conversion
-    - Device 1: Modbus RTU, Device 3: JSON over network
-    - Device 1: NMEA GPS, Device 2: Binary protocol conversion
-
-### Priority 4.6 - Multi-Board Support
-
-- [ ] **ESP32-S3 Super Mini Support**
-  - Add board detection system with compile-time configuration
-  - Create separate PlatformIO environments for different boards:
-    - `waveshare-s3-zero` (full features including USB Host)
-    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
-  - Implement runtime USB Host capability checking
-  - Update web interface to hide USB Host option on unsupported boards
-  - Benefits:
-    - Broader hardware compatibility
-    - User choice between full features vs ultra-compact size
-    - Same codebase supports multiple popular ESP32-S3 boards
-  - **Board Comparison**:
-    - **Waveshare ESP32-S3-Zero**: 25x24mm, USB Host support, WS2812 LED (GPIO21)
-    - **ESP32-S3 Super Mini**: 22x18mm, 8MB PSRAM, RGB LED (GPIO48), no USB Host
-  - Implementation approach:
-    - Compile-time board detection via PlatformIO build flags
-    - Runtime validation of USB Host mode availability
-    - Conditional web interface options based on board capabilities
-    - Unified documentation with board-specific notes
-
-### Priority 5 - SBUS Protocol Support
+### Priority 7 - SBUS Protocol Support
 
 - [ ] **SBUS Mode** - UART to/from SBUS converter
   - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
@@ -204,7 +177,7 @@
     - Timing-critical operations on SBUS side, relaxed timing on UART side
   - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
 
-### Priority 5.1 - SBUS Failsafe Mode (после базового SBUS)
+### Priority 7.1 - SBUS Failsafe Mode (после базового SBUS)
 
 - [ ] **SBUS Failsafe/Redundancy Mode**
   - Automatic failover between multiple SBUS sources
@@ -234,7 +207,7 @@
     - Implement packet validation and timeout detection
     - Ensure frame-perfect switching without control glitches
 
-### Priority 5.2 - SBUS Hybrid Failover with Network Backup
+### Priority 7.2 - SBUS Hybrid Failover with Network Backup
 
 - [ ] **SBUS Hybrid Failover with Network Backup**
   - Multi-source SBUS with automatic failover including network channels
@@ -263,6 +236,40 @@
     - Handle network latency (20-200ms)
     - Smooth transitions without control glitches
     - Priority management with hysteresis
+
+### Priority 8 - Multi-Protocol Architecture
+
+- [ ] **Advanced Protocol Management**
+  - Per-device protocol configuration (different protocols per Device)
+  - Independent protocol detectors per interface
+  - Support for protocol conversion (SBUS↔MAVLink, Modbus↔Text)
+  - Handle complex routing scenarios with protocol translation
+  - **Use Cases**:
+    - Device 1: MAVLink, Device 2: SBUS conversion
+    - Device 1: Modbus RTU, Device 3: JSON over network
+    - Device 1: NMEA GPS, Device 2: Binary protocol conversion
+
+### Priority 9 - Multi-Board Support
+
+- [ ] **ESP32-S3 Super Mini Support**
+  - Add board detection system with compile-time configuration
+  - Create separate PlatformIO environments for different boards:
+    - `waveshare-s3-zero` (full features including USB Host)
+    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
+  - Implement runtime USB Host capability checking
+  - Update web interface to hide USB Host option on unsupported boards
+  - Benefits:
+    - Broader hardware compatibility
+    - User choice between full features vs ultra-compact size
+    - Same codebase supports multiple popular ESP32-S3 boards
+  - **Board Comparison**:
+    - **Waveshare ESP32-S3-Zero**: 25x24mm, USB Host support, WS2812 LED (GPIO21)
+    - **ESP32-S3 Super Mini**: 22x18mm, 8MB PSRAM, RGB LED (GPIO48), no USB Host
+  - Implementation approach:
+    - Compile-time board detection via PlatformIO build flags
+    - Runtime validation of USB Host mode availability
+    - Conditional web interface options based on board capabilities
+    - Unified documentation with board-specific notes
 
 ### Future Considerations
 
