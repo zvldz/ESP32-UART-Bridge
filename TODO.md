@@ -89,28 +89,6 @@
 
 ## PENDING TASKS 🔄
 
-### Priority 3 - Multi-Board Support
-
-- [ ] **ESP32-S3 Super Mini Support**
-  - Add board detection system with compile-time configuration
-  - Create separate PlatformIO environments for different boards:
-    - `waveshare-s3-zero` (full features including USB Host)
-    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
-  - Implement runtime USB Host capability checking
-  - Update web interface to hide USB Host option on unsupported boards
-  - Benefits:
-    - Broader hardware compatibility
-    - User choice between full features vs ultra-compact size
-    - Same codebase supports multiple popular ESP32-S3 boards
-  - **Board Comparison**:
-    - **Waveshare ESP32-S3-Zero**: 25x24mm, USB Host support, WS2812 LED (GPIO21)
-    - **ESP32-S3 Super Mini**: 22x18mm, 8MB PSRAM, RGB LED (GPIO48), no USB Host
-  - Implementation approach:
-    - Compile-time board detection via PlatformIO build flags
-    - Runtime validation of USB Host mode availability
-    - Conditional web interface options based on board capabilities
-    - Unified documentation with board-specific notes
-
 ### Priority 4 - Protocol Optimizations (Remaining)
 
 #### 4.2 - MAVLink Parser - Advanced Features
@@ -176,6 +154,28 @@
     - Device 1: MAVLink, Device 2: SBUS conversion
     - Device 1: Modbus RTU, Device 3: JSON over network
     - Device 1: NMEA GPS, Device 2: Binary protocol conversion
+
+### Priority 4.6 - Multi-Board Support
+
+- [ ] **ESP32-S3 Super Mini Support**
+  - Add board detection system with compile-time configuration
+  - Create separate PlatformIO environments for different boards:
+    - `waveshare-s3-zero` (full features including USB Host)
+    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
+  - Implement runtime USB Host capability checking
+  - Update web interface to hide USB Host option on unsupported boards
+  - Benefits:
+    - Broader hardware compatibility
+    - User choice between full features vs ultra-compact size
+    - Same codebase supports multiple popular ESP32-S3 boards
+  - **Board Comparison**:
+    - **Waveshare ESP32-S3-Zero**: 25x24mm, USB Host support, WS2812 LED (GPIO21)
+    - **ESP32-S3 Super Mini**: 22x18mm, 8MB PSRAM, RGB LED (GPIO48), no USB Host
+  - Implementation approach:
+    - Compile-time board detection via PlatformIO build flags
+    - Runtime validation of USB Host mode availability
+    - Conditional web interface options based on board capabilities
+    - Unified documentation with board-specific notes
 
 ### Priority 5 - SBUS Protocol Support
 
