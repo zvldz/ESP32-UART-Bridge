@@ -204,6 +204,66 @@
     - Timing-critical operations on SBUS side, relaxed timing on UART side
   - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
 
+### Priority 5.1 - SBUS Failsafe Mode (после базового SBUS)
+
+- [ ] **SBUS Failsafe/Redundancy Mode**
+  - Automatic failover between multiple SBUS sources
+  - **Device Role Configuration**:
+    - Device 1: SBUS output to flight controller
+    - Device 2: Primary SBUS receiver input
+    - Device 3: Backup SBUS receiver input
+  - **Failover Logic**:
+    - Monitor both SBUS inputs for valid packets
+    - Use Device 2 (primary) when signal is good
+    - Auto-switch to Device 3 (backup) on primary loss (>100ms timeout)
+    - Auto-return to primary when signal restored
+    - Send SBUS failsafe frame when both inputs lost
+  - **Technical Requirements**:
+    - Simultaneous monitoring of multiple SBUS streams
+    - Glitch-free switching between sources
+    - Preserve SBUS failsafe flags from receivers
+    - Configurable timeout thresholds
+    - Status indication (LED/Web) showing active source
+  - **Use Cases**:
+    - Long-range RC with diversity receivers
+    - Critical control systems requiring redundancy
+    - Competition systems with backup RC link
+  - **Implementation Approach**:
+    - Extend SBUS protocol handler for multi-input
+    - Add failover state machine
+    - Implement packet validation and timeout detection
+    - Ensure frame-perfect switching without control glitches
+
+### Priority 5.2 - SBUS Hybrid Failover with Network Backup
+
+- [ ] **SBUS Hybrid Failover with Network Backup**
+  - Multi-source SBUS with automatic failover including network channels
+  - **Architecture**:
+    - Device 1: SBUS output to flight controller
+    - Device 2: Primary RC receiver (local RF link)
+    - Device 3: Secondary RC receiver (optional)
+    - Device 4: Network SBUS stream (UDP) as backup channel
+  - **Failover Priority Logic**:
+    - Primary: Local RC receiver (lowest latency)
+    - Secondary: Network stream via WiFi/4G/Satellite
+    - Tertiary: Backup RC receiver (if configured)
+    - Failsafe: Predetermined values when all sources lost
+  - **Network Backup Features**:
+    - Automatic switch to network when RF signal lost
+    - Latency compensation and jitter buffering
+    - Seamless return to RF when signal restored
+    - Status indication of active source
+  - **Use Cases**:
+    - Long-range operations beyond RF range
+    - Operations in RF-challenging environments
+    - Remote piloting over internet
+    - Commercial UAVs with redundant control paths
+  - **Technical Challenges**:
+    - Synchronize multiple SBUS streams
+    - Handle network latency (20-200ms)
+    - Smooth transitions without control glitches
+    - Priority management with hysteresis
+
 ### Future Considerations
 
 - [ ] **Advanced Network Features**
@@ -219,15 +279,24 @@
     - Authentication options for secure access
     - Connection timeout and cleanup handling
 
-- [ ] **Advanced Configuration**
-  - Configurable GPIO pins via web interface
-  - Support for different ESP32 board variants
-
 - [ ] **High-Speed Testing**
   - Test operation at 921600 and 1000000 baud
   - Profile CPU usage and latency
   - Verify packet integrity under load
   - Document any limitations
+
+### Code Refactoring and Cleanup
+
+- [ ] **Final Code Cleanup** - After all features are implemented
+  - Remove unnecessary diagnostic code and debug prints
+  - Clean up commented-out code blocks
+  - Optimize memory usage and reduce code duplication
+  - Simplify overly complex functions
+  - Remove experimental/unused features
+  - Update code comments to reflect final implementation
+  - Ensure consistent code style across all files
+  - Remove temporary workarounds that are no longer needed
+  - **Note**: This should be done as the very last step to avoid breaking in-development features
 
 ## Libraries and Dependencies
 
