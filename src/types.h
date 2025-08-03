@@ -43,8 +43,7 @@ typedef enum {
 // USB operation modes
 enum UsbMode {
     USB_MODE_DEVICE = 0,
-    USB_MODE_HOST,
-    USB_MODE_AUTO
+    USB_MODE_HOST
 };
 
 // Log levels

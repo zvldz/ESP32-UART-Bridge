@@ -25,6 +25,5 @@ public:
 // Factory functions
 UsbInterface* createUsbDevice(uint32_t baudrate);
 UsbInterface* createUsbHost(uint32_t baudrate);
-UsbInterface* createUsbAuto(uint32_t baudrate);
 
 #endif // USB_INTERFACE_H

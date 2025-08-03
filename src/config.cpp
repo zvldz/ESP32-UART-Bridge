@@ -244,8 +244,6 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     String mode = doc["usb"]["mode"] | "device";
     if (mode == "host") {
       config->usb_mode = USB_MODE_HOST;
-    } else if (mode == "auto") {
-      config->usb_mode = USB_MODE_AUTO;
     } else {
       config->usb_mode = USB_MODE_DEVICE;  // Default to device mode
     }
@@ -319,9 +317,6 @@ String config_to_json(Config* config) {
   switch(config->usb_mode) {
     case USB_MODE_HOST:
       doc["usb"]["mode"] = "host";
-      break;
-    case USB_MODE_AUTO:
-      doc["usb"]["mode"] = "auto";
       break;
     case USB_MODE_DEVICE:
     default:

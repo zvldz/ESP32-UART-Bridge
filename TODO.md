@@ -1,6 +1,8 @@
 # TODO / Roadmap
 
-## Priority 1 - Configuration Import/Export ✅ COMPLETED
+## COMPLETED ✅
+
+### Priority 1 - Configuration Import/Export ✅ COMPLETED
 
 - [x] **Export Configuration** ✅ COMPLETED
   - Download current config as JSON file
@@ -28,10 +30,9 @@
   - Share configurations between devices
   - No need to reconfigure after firmware updates
 
+### Priority 2 - WiFi Client Mode ✅ COMPLETED
 
-## Priority 2 - WiFi Client Mode ✅ COMPLETED
-
-### 2.1 - Basic WiFi Client ✅ COMPLETED
+#### 2.1 - Basic WiFi Client ✅ COMPLETED
 - [x] **Basic WiFi Client Implementation** ✅ COMPLETED
   - Connect ESP32 to existing WiFi network instead of creating AP
   - Store WiFi credentials in LittleFS config file
@@ -39,7 +40,7 @@
   - Basic connection status indication
   - WiFi mode enum (AP, Client) implemented
 
-### 2.2 - Auto-connect and Fallback ✅ COMPLETED
+#### 2.2 - Auto-connect and Fallback ✅ COMPLETED
 - [x] **Auto-connect and Fallback Logic** ✅ COMPLETED
   - Auto-connect on boot with saved credentials
   - Triple click logic for mode switching between Standalone/Client/AP
@@ -49,7 +50,46 @@
   - Device 4 network awareness with EventGroup synchronization
   - Temporary/permanent network mode support
 
-## Priority 3 - Multi-Board Support
+### Priority 4 - Protocol Optimizations (Partial)
+
+#### 4.1 - Protocol Detection Framework ✅ COMPLETED
+- [x] **Protocol Detection Framework** ✅ COMPLETED
+  - Created base `ProtocolDetector` class with virtual interface
+  - Implemented protocol pipeline with comprehensive processing hooks
+  - Added `ProtocolType` enum and protocol configuration support
+  - Integrated protocol-aware logic into bridge processing and adaptive buffering
+  - Added protocol lifecycle management with initialization and maintenance
+  - All functions implemented as stubs with zero performance impact
+  - **Architecture ready** for Phase 4.2+ protocol implementations
+
+#### 4.2 - MAVLink Parser with Hardware Optimization ✅ COMPLETED
+- [x] **MAVLink Packet Detection** ✅ COMPLETED
+  - Implemented `MavlinkDetector` using Protocol Framework
+  - MAVLink v1/v2 header validation and packet boundary detection
+  - Protocol statistics tracking (packets, errors, sizes, rates)
+  - Configuration management with version migration (v6→v7)
+  - Web interface integration with Protocol Optimization dropdown and statistics display
+  - Error handling with resync logic (search for next start byte)
+  - **Performance Impact**: Eliminates UART FIFO overflows and reduces latency significantly
+  - **Benefits**: Perfect for high-baud MAVLink streams (115200+), preserves packet boundaries
+
+### Out of Priority
+
+- [x] **USB Backpressure Implementation** ✅ COMPLETED
+  - ✅ Behavioral USB port state detection implemented (v2.10.0)
+  - ✅ Early data dropping when COM port is closed prevents buffer overflow
+  - ✅ Dynamic thresholds based on buffer availability patterns
+  - ✅ Honest API returns 0 when unable to write, allowing caller data management
+  - ✅ Automatic protocol detector reset on port state changes
+  - ✅ Enhanced diagnostics - UART FIFO overflow now indicates real performance issues only
+
+### Network Discovery
+
+- [x] **mDNS/Bonjour support** ✅ COMPLETED (implemented in v2.8.0) - for easy device discovery
+
+## PENDING TASKS 🔄
+
+### Priority 3 - Multi-Board Support
 
 - [ ] **ESP32-S3 Super Mini Support**
   - Add board detection system with compile-time configuration
@@ -71,29 +111,9 @@
     - Conditional web interface options based on board capabilities
     - Unified documentation with board-specific notes
 
-## Priority 4 - Protocol Optimizations
+### Priority 4 - Protocol Optimizations (Remaining)
 
-### 4.1 - Protocol Detection Framework ✅ COMPLETED
-- [x] **Protocol Detection Framework** ✅ COMPLETED
-  - Created base `ProtocolDetector` class with virtual interface
-  - Implemented protocol pipeline with comprehensive processing hooks
-  - Added `ProtocolType` enum and protocol configuration support
-  - Integrated protocol-aware logic into bridge processing and adaptive buffering
-  - Added protocol lifecycle management with initialization and maintenance
-  - All functions implemented as stubs with zero performance impact
-  - **Architecture ready** for Phase 4.2+ protocol implementations
-
-### 4.2 - MAVLink Parser with Hardware Optimization ✅ COMPLETED
-- [x] **MAVLink Packet Detection** ✅ COMPLETED
-  - Implemented `MavlinkDetector` using Protocol Framework
-  - MAVLink v1/v2 header validation and packet boundary detection
-  - Protocol statistics tracking (packets, errors, sizes, rates)
-  - Configuration management with version migration (v6→v7)
-  - Web interface integration with Protocol Optimization dropdown and statistics display
-  - Error handling with resync logic (search for next start byte)
-  - **Performance Impact**: Eliminates UART FIFO overflows and reduces latency significantly
-  - **Benefits**: Perfect for high-baud MAVLink streams (115200+), preserves packet boundaries
-  
+#### 4.2 - MAVLink Parser - Advanced Features
 - [ ] **Priority 4.2.1 - Performance Analysis**
   - Detailed profiling under high load conditions
   - Real-world performance optimization if needed
@@ -124,7 +144,7 @@
   - Prevent data loss during resync operations
   - Configurable resync search window size
 
-### 4.3 - Hardware Packet Detection Improvements
+#### 4.3 - Hardware Packet Detection Improvements
 - [ ] **Hardware-level Protocol Optimization**
   - Dynamic timeout based on detected protocol (not just MAVLink)
   - Pattern detection for text protocols using `uart_enable_pattern_det_baud_intr()`
@@ -132,7 +152,7 @@
   - Benefits ALL protocols, not protocol-specific
   - Implementation in `uart_dma.cpp` configuration
 
-### 4.4 - Device 3 Integration
+#### 4.4 - Device 3 Integration
 - [ ] **Device 3 Adaptive Buffering with Protocol Support**
   - Currently uses simple batch transfer (64-byte blocks)
   - Implement adaptive buffering using Protocol Framework
@@ -146,7 +166,7 @@
     - **IoT**: Protocol-aware routing
     - **RS-485**: Intelligent gateway operation
 
-### 4.5 - Multi-Protocol Architecture
+#### 4.5 - Multi-Protocol Architecture
 - [ ] **Advanced Protocol Management**
   - Per-device protocol configuration (different protocols per Device)
   - Independent protocol detectors per interface
@@ -157,7 +177,7 @@
     - Device 1: Modbus RTU, Device 3: JSON over network
     - Device 1: NMEA GPS, Device 2: Binary protocol conversion
 
-## Priority 5 - SBUS Protocol Support
+### Priority 5 - SBUS Protocol Support
 
 - [ ] **SBUS Mode** - UART to/from SBUS converter
   - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
@@ -184,22 +204,7 @@
     - Timing-critical operations on SBUS side, relaxed timing on UART side
   - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
 
-## Out of Priority (Do when in the mood)
-
-- [ ] **Fix Memory Leaks** *(Low priority - objects live for entire runtime)*
-  - Add cleanup/shutdown functions for Device 2 and Device 3
-  - Add cleanup for UART logger in logging.cpp
-  - Consider using smart pointers (unique_ptr) for serial objects
-  - Note: Not critical as these objects are never destroyed during normal operation
-
-- [ ] **USB Backpressure Implementation**
-  - Prevent UART reading when USB buffer is full
-  - Reduce data loss at high speeds without flow control
-  - Add dynamic threshold based on baud rate
-  - Show warnings for high-speed configurations without flow control
-  - Consider: `if (usbInterface->availableForWrite() < bufferIndex) skip_uart_read();`
-
-## Future Considerations
+### Future Considerations
 
 - [ ] **Advanced Network Features**
   - **TCP Client Mode** - Connect to remote servers
@@ -213,21 +218,10 @@
     - Multiple client support with connection management
     - Authentication options for secure access
     - Connection timeout and cleanup handling
-    
-  - **WebSocket Real-time Interface** *(AsyncWebServer enables this)*
-    - Real-time log streaming via WebSocket
-    - Live statistics updates without polling
-    - Bidirectional communication for control commands
-    
-  - **Network Discovery**
-    - mDNS/Bonjour support for easy device discovery
-    - SSDP (Simple Service Discovery Protocol)
-    - Custom UDP broadcast announcement
 
 - [ ] **Advanced Configuration**
   - Configurable GPIO pins via web interface
   - Support for different ESP32 board variants
-  - Configuration profiles for common use cases
 
 - [ ] **High-Speed Testing**
   - Test operation at 921600 and 1000000 baud
@@ -247,26 +241,4 @@ lib_deps =
     ESP32Async/AsyncTCP@^3.4.5        # TCP support for async server
 ```
 
-### Planned Dependencies
-```ini
-lib_deps =
-    # Built-in libraries (no installation needed)
-    # - AsyncUDP (included in ESP32 Arduino Core)
-    # - mDNS (included in ESP32 Arduino Core)
-```
 
-## Notes
-
-- Current adaptive buffering achieves 95%+ efficiency for most protocols
-- USB Auto mode needs VBUS detection implementation
-- Consider security implications before adding network streaming modes
-- Maintain backward compatibility with existing installations
-- Version 2.6.0 introduces ESPAsyncWebServer for better performance and concurrent handling
-- DMA implementation enables hardware-based packet detection and minimal packet loss
-- Web interface modularization improves maintainability and development workflow
-- TaskScheduler implementation significantly simplifies periodic task management
-- Library selection focuses on well-maintained, performance-oriented solutions
-- Bridge mode renaming provides clearer architecture for future expansion
-- Permanent network mode enables always-on Wi-Fi operation for production deployments
-- AsyncWebServer migration improves memory usage and enables advanced features like WebSockets
-- Protocol optimizations will work together with adaptive buffering for best performance
