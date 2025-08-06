@@ -44,27 +44,13 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
         return 0;  // Need more data
     }
     
-    // Validate header if not done yet or version changed
-    if (!headerValidated || currentVersion != version) {
-        if (!validateHeader(data, len, version)) {
-            // Header validation failed - search for next start byte
-            int nextStart = findNextStartByte(data, len, 1);
-            if (nextStart > 0) {
-                log_msg(LOG_INFO, "MAV: Resync v%d header fail → next %d", version, nextStart);
-                // This is a resync event - log it
-                return -nextStart;  // Skip to next start position
-            }
-            return -1;  // Skip 1 byte and try again
-        }
-        headerValidated = true;
-        currentVersion = version;
-    }
-    
-    // Extract payload length
+    // Extract payload length FIRST - this is critical for validation
     uint8_t payloadLen = data[1];
+    
+    // CRITICAL CHECK: Validate payload length immediately
     if (payloadLen > MAVLINK_MAX_PAYLOAD_LEN) {
         log_msg(LOG_INFO, "MAV: Invalid payload len %d (max %d)", payloadLen, MAVLINK_MAX_PAYLOAD_LEN);
-        headerValidated = false;  // Reset validation state
+        // Search for next start byte
         int nextStart = findNextStartByte(data, len, 1);
         if (nextStart > 0) {
             return -nextStart;
@@ -72,21 +58,56 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
         return -1;
     }
     
-    // Calculate total packet size
-    size_t totalSize = headerLen + payloadLen + MAVLINK_CHECKSUM_LEN;
+    // Calculate expected total packet size
+    size_t expectedSize = headerLen + payloadLen + MAVLINK_CHECKSUM_LEN;
     
-    // For MAVLink v2, check for signature
-    if (version == 2) {
-        // Check incompat_flags (byte 2 in v2)
+    // For MAVLink v2, check for signature flag
+    if (version == 2 && len >= 3) {
         uint8_t incompatFlags = data[2];
-        if (incompatFlags & 0x01) {  // MAVLINK_IFLAG_SIGNED
-            totalSize += MAVLINK_SIGNATURE_LEN;
+        
+        // ENHANCED CHECK: Detect if this might be a false positive
+        // If we see another MAVLink start byte where we expect data, it's likely misaligned
+        if (len >= 4 && (data[3] == MAVLINK_STX_V1 || data[3] == MAVLINK_STX_V2)) {
+            log_msg(LOG_WARNING, "MAV: Detected nested start byte at offset 3, likely misaligned");
+            // Skip to the nested start byte
+            int nextStart = findNextStartByte(data, len, 1);
+            return -nextStart;
         }
         
-        // Check for unsupported incompat_flags (bits 1-7 reserved)
+        // Debug logging for strange flags (A. from action plan)
+        if (incompatFlags != 0x00 && incompatFlags != 0x01) {
+            log_msg(LOG_WARNING, "MAVLink v2: Unusual incompat_flags 0x%02X", incompatFlags);
+            
+            // Hex dump first 20 bytes of packet for context
+            char hexBuf[128];
+            int pos = 0;
+            size_t dumpLen = (len > 20) ? 20 : len;
+            
+            for (size_t i = 0; i < dumpLen; i++) {
+                pos += snprintf(hexBuf + pos, sizeof(hexBuf) - pos, "%02X ", data[i]);
+                if (i == 2) {
+                    // Mark the problematic byte
+                    pos += snprintf(hexBuf + pos, sizeof(hexBuf) - pos, "<-- ");
+                }
+            }
+            log_msg(LOG_WARNING, "Packet context: %s", hexBuf);
+        }
+        
+        if (incompatFlags & 0x01) {  // MAVLINK_IFLAG_SIGNED
+            expectedSize += MAVLINK_SIGNATURE_LEN;
+        }
+        
+        // Check for invalid incompat_flags that indicate misalignment
+        // Valid flags are only 0x00 or 0x01 currently
         if (incompatFlags & 0xFE) {
+            // Special case: if incompat_flags is 0xFD or 0xFE, it's likely another packet start
+            if (incompatFlags == 0xFD || incompatFlags == 0xFE) {
+                log_msg(LOG_WARNING, "MAV: incompat_flags is start byte (0x%02X), misaligned!", incompatFlags);
+                // We're looking at offset 2, but the real packet starts at offset 2
+                return -2;  // Skip 2 bytes to get to the real start
+            }
+            
             log_msg(LOG_DEBUG, "MAVLink v2: Unsupported incompat_flags 0x%02X", incompatFlags);
-            headerValidated = false;
             int nextStart = findNextStartByte(data, len, 1);
             if (nextStart > 0) {
                 return -nextStart;
@@ -95,16 +116,73 @@ int MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t len) {
         }
     }
     
-    // Check if we have complete packet
-    if (len < totalSize) {
+    // IMPORTANT: Check if we have enough data for the complete packet
+    if (len < expectedSize) {
+        // Additional safety check - make sure we're not waiting for an impossibly large packet
+        if (expectedSize > 300) {  // MAVLink max is ~280 bytes
+            log_msg(LOG_WARNING, "MAV: Unrealistic packet size %zu, likely misaligned", expectedSize);
+            int nextStart = findNextStartByte(data, len, 1);
+            return -nextStart;
+        }
         return 0;  // Need more data
     }
     
-    // Reset state for next packet
-    headerValidated = false;
-    currentVersion = 0;
+    // EXTRA VALIDATION: Check if there's another start byte where payload should be
+    // This catches many misalignment cases
+    if (expectedSize < len) {
+        // Check byte right after where packet should end
+        uint8_t nextByte = data[expectedSize];
+        if (nextByte == MAVLINK_STX_V1 || nextByte == MAVLINK_STX_V2) {
+            // Good, next packet starts right after this one
+        } else if (expectedSize + 1 < len) {
+            // Check one byte further (in case of off-by-one)
+            uint8_t nextNextByte = data[expectedSize + 1];
+            if (nextNextByte == MAVLINK_STX_V1 || nextNextByte == MAVLINK_STX_V2) {
+                log_msg(LOG_WARNING, "MAV: Next packet start is off by one, size might be wrong");
+            }
+        }
+    }
     
-    return static_cast<int>(totalSize);
+    // If packet seems way too small, it's likely a false positive
+    if (expectedSize < 8) {  // Minimum viable MAVLink packet
+        log_msg(LOG_WARNING, "MAV: Packet too small (%zu bytes), likely false positive", expectedSize);
+        int nextStart = findNextStartByte(data, len, 1);
+        return -nextStart;
+    }
+    
+    // Log packet size statistics (B. from action plan)
+    static uint32_t detectedPackets = 0;
+    static uint64_t totalSizeSum = 0;
+    static uint32_t minSize = 9999;
+    static uint32_t maxSize = 0;
+    
+    detectedPackets++;
+    totalSizeSum += expectedSize;
+    if (expectedSize < minSize) minSize = expectedSize;
+    if (expectedSize > maxSize) maxSize = expectedSize;
+    
+    // Log first packet and every 100th packet
+    if (detectedPackets == 1 || detectedPackets % 100 == 0) {
+        uint32_t avgSize = (detectedPackets > 0) ? (totalSizeSum / detectedPackets) : 0;
+        log_msg(LOG_INFO, "MAVLink stats after %u packets: avg=%u, min=%u, max=%u, current=%zu (v%d, payload=%d)",
+                detectedPackets, avgSize, minSize, maxSize, expectedSize, version, payloadLen);
+    }
+    
+    // Special logging for impossibly small packets
+    if (expectedSize < 12 && version == 2) {
+        log_msg(LOG_ERROR, "MAVLink v2 packet too small: %zu bytes (payload=%d)", 
+                expectedSize, payloadLen);
+        // Hex dump the packet
+        char hexBuf[64];
+        int pos = 0;
+        for (size_t i = 0; i < expectedSize && i < 20; i++) {
+            pos += snprintf(hexBuf + pos, sizeof(hexBuf) - pos, "%02X ", data[i]);
+        }
+        log_msg(LOG_ERROR, "Small packet dump: %s", hexBuf);
+    }
+    
+    // All checks passed - we have a valid packet
+    return static_cast<int>(expectedSize);
 }
 
 bool MavlinkDetector::validateHeader(const uint8_t* data, size_t len, uint8_t version) {
@@ -128,11 +206,39 @@ bool MavlinkDetector::validateHeader(const uint8_t* data, size_t len, uint8_t ve
 }
 
 int MavlinkDetector::findNextStartByte(const uint8_t* data, size_t len, size_t startPos) {
+    // Enhanced resync logging (C. from action plan)
+    static uint32_t resyncCount = 0;
+    bool logThisResync = false;
+    
+    // Track resync for logging
+    size_t searchStart = startPos;  // Save original position for logging
+    
     size_t searchEnd = (startPos + MAVLINK_MAX_SEARCH_WINDOW < len) ? 
                        startPos + MAVLINK_MAX_SEARCH_WINDOW : len;
     
     for (size_t i = startPos; i < searchEnd; i++) {
         if (data[i] == MAVLINK_STX_V1 || data[i] == MAVLINK_STX_V2) {
+            // Found next start byte - this is a resync event
+            resyncCount++;
+            
+            // Always log first 5 resyncs, then every 10th
+            if (resyncCount <= 5 || resyncCount % 10 == 0) {
+                logThisResync = true;
+                
+                log_msg(LOG_WARNING, "Protocol: Resync #%u at offset %zu, skipping %d bytes",
+                        resyncCount, searchStart, static_cast<int>(i - startPos));
+                
+                // Show what we're skipping
+                char hexBuf[64];
+                int pos = 0;
+                size_t showBytes = ((i - startPos) < 10) ? (i - startPos) : 10;
+                for (size_t j = 0; j < showBytes && (startPos + j) < len; j++) {
+                    pos += snprintf(hexBuf + pos, sizeof(hexBuf) - pos, "%02X ", 
+                                   data[startPos + j]);
+                }
+                log_msg(LOG_WARNING, "Skipping bytes: %s", hexBuf);
+            }
+            
             return static_cast<int>(i);
         }
     }
@@ -141,6 +247,14 @@ int MavlinkDetector::findNextStartByte(const uint8_t* data, size_t len, size_t s
     if (searchEnd < len && searchEnd == startPos + MAVLINK_MAX_SEARCH_WINDOW) {
         // Skip to end of search window to make faster progress
         // This helps when there's garbage data before valid packets
+        
+        // Log this large skip
+        resyncCount++;
+        if (resyncCount <= 5 || resyncCount % 10 == 0) {
+            log_msg(LOG_WARNING, "Protocol: Resync #%u - large skip %d bytes (no start found)",
+                    resyncCount, MAVLINK_MAX_SEARCH_WINDOW);
+        }
+        
         return static_cast<int>(MAVLINK_MAX_SEARCH_WINDOW);
     }
     

@@ -115,9 +115,6 @@ static inline void onProtocolPacketTransmitted(BridgeContext* ctx, size_t bytesS
             // Update total bytes only for actual transmitted data
             ctx->protocol.stats->totalBytes += bytesSent;
         }
-        
-        // Avoid String allocation in hot path - can cause heap fragmentation
-        // log_msg("Protocol packet transmitted: " + String(bytesSent) + " bytes", LOG_DEBUG);
     }
     resetProtocolState(ctx);
 }
@@ -287,13 +284,27 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
     // Analyze buffer starting from last analyzed position
     size_t bufferSize = *ctx->adaptive.bufferIndex;
     
-    // If buffer was transmitted, reset our analysis position
-    if (ctx->protocol.lastAnalyzedOffset > bufferSize) {
-        ctx->protocol.lastAnalyzedOffset = 0;
+    // Safety check: ensure analyzed offset is within valid range
+    // This should never happen with correct offset management, but protect against bugs
+    if (ctx->protocol.lastAnalyzedOffset >= bufferSize) {
+        // Log this unusual situation for debugging
+        static uint32_t offsetFixCount = 0;
+        offsetFixCount++;
+        if (offsetFixCount % 10 == 1) {  // Log first and every 10th occurrence
+            log_msg(LOG_WARNING, "Protocol: Fixed invalid analyzed offset %zu (bufSize=%zu), count=%u",
+                    ctx->protocol.lastAnalyzedOffset, bufferSize, offsetFixCount);
+        }
+    
+        // Don't reset to 0 - adjust to valid position at buffer end
+        ctx->protocol.lastAnalyzedOffset = bufferSize;
     }
     
+    // CRITICAL FIX: Track how many bytes we've skipped to prevent infinite loops
+    size_t totalSkipped = 0;
+    const size_t MAX_SKIP_PER_ITERATION = 100;  // Prevent runaway skipping
+    
     // Search for packets in the unanalyzed portion of buffer
-    while (ctx->protocol.lastAnalyzedOffset < bufferSize) {
+    while (ctx->protocol.lastAnalyzedOffset < bufferSize && totalSkipped < MAX_SKIP_PER_ITERATION) {
         size_t searchStart = ctx->protocol.lastAnalyzedOffset;
         
         // Validate search start is within buffer
@@ -318,6 +329,7 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
             searchPtr >= ctx->adaptive.buffer + ctx->adaptive.bufferSize) {
             log_msg(LOG_ERROR, "Invalid search pointer at offset %zu", searchStart);
             ctx->protocol.lastAnalyzedOffset++;
+            totalSkipped++;
             continue;
         }
 
@@ -333,6 +345,7 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                     log_msg(LOG_ERROR, "Invalid packet size %d at offset %zu", 
                             packetSize, searchStart);
                     ctx->protocol.lastAnalyzedOffset++;
+                    totalSkipped++;
                     continue;
                 }
                 
@@ -385,21 +398,40 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                 // packetSize < 0 - invalid data, skip bytes
                 int skipBytes = -packetSize;
                 
+                // CRITICAL FIX: Ensure we skip at least 1 byte to avoid infinite loop
+                if (skipBytes <= 0) {
+                    skipBytes = 1;
+                }
+                
+                // CRITICAL FIX: Ensure skip doesn't go beyond buffer
+                if (searchStart + skipBytes > bufferSize) {
+                    // Skip to end of buffer
+                    skipBytes = bufferSize - searchStart;
+                }
+                
                 // Log resync event
                 if (ctx->protocol.stats) {
                     ctx->protocol.stats->onResyncEvent();
                     ctx->protocol.stats->onDetectionError();
                 }
                 
-                // Skip forward
-                ctx->protocol.lastAnalyzedOffset = searchStart + skipBytes;
+                // Skip forward - FIXED to use absolute position
+                size_t newOffset = searchStart + skipBytes;
                 
-                // Log resync
+                // CRITICAL FIX: Make sure we're actually moving forward
+                if (newOffset <= ctx->protocol.lastAnalyzedOffset) {
+                    newOffset = ctx->protocol.lastAnalyzedOffset + 1;
+                }
+                
+                ctx->protocol.lastAnalyzedOffset = newOffset;
+                totalSkipped += (newOffset - searchStart);
+                
+                // Log resync with more detail
                 static uint32_t resyncCount = 0;
                 resyncCount++;
                 if (resyncCount % 10 == 0) {  // Log every 10 resyncs
-                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu, skipping %d bytes",
-                            resyncCount, searchStart, skipBytes);
+                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu, skipping %d bytes (new offset: %zu)",
+                            resyncCount, searchStart, skipBytes, ctx->protocol.lastAnalyzedOffset);
                 }
                 
                 continue;  // Keep searching
@@ -407,7 +439,15 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
         } else {
             // Not a valid packet start, move forward by 1 byte
             ctx->protocol.lastAnalyzedOffset++;
+            totalSkipped++;
         }
+    }
+    
+    // Check if we skipped too many bytes (sign of a problem)
+    if (totalSkipped >= MAX_SKIP_PER_ITERATION) {
+        log_msg(LOG_WARNING, "Protocol: Skipped %zu bytes in one iteration, may have sync issues", totalSkipped);
+        // Force transmission to clear buffer
+        return true;
     }
     
     // Check if we found any packets

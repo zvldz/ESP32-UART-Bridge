@@ -20,6 +20,12 @@
 #include "uart_interface.h"
 #include "uart_dma.h"
 
+// heap debug
+#include "esp_heap_caps.h"
+#include "esp_heap_trace.h"
+#define NUM_RECORDS 100
+static heap_trace_record_t traceBuffer[NUM_RECORDS];
+
 // Global objects
 Config config;
 UartStats uartStats = {0};
@@ -77,6 +83,11 @@ void disableBrownout() __attribute__((constructor));
 void setup() {
   // Disable USB Serial/JTAG peripheral interrupts
   disableUsbJtagInterrupts();
+
+  #ifdef DEBUG
+    heap_trace_init_standalone(traceBuffer, 100);
+    heap_trace_start(HEAP_TRACE_LEAKS);
+  #endif
 
   // Print boot info
   printBootInfo();

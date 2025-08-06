@@ -257,17 +257,29 @@ void logDmaStatistics(UartInterface* uartSerial) {
   }
 }
 
-#ifdef SERIAL_LOG_ENABLE
+#ifdef DEBUG
 // Force output to serial for critical debugging
 // Useful when normal logging system is not available
-void forceSerialLog(const String& message) {
+void forceSerialLog(const char* format, ...) {
     static bool serialInited = false;
     if (!serialInited) {
         Serial.begin(115200);
         vTaskDelay(pdMS_TO_TICKS(100));
         serialInited = true;
     }
-    Serial.printf("FORCE_LOG: %s\n", message.c_str());
+    
+    // Use stack buffer to avoid heap allocation
+    char buffer[256];
+    
+    // Format the message
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    // Output with prefix
+    Serial.print("FORCE_LOG: ");
+    Serial.println(buffer);
     Serial.flush();
 }
 #endif
