@@ -33,8 +33,8 @@ void setBridgeContext(BridgeContext* ctx);
 // Get bridge context for protocol stats access
 BridgeContext* getBridgeContext();
 
-#ifdef SERIAL_LOG_ENABLE
-void forceSerialLog(const String& message);
+#ifdef DEBUG
+    void forceSerialLog(const char* format, ...) __attribute__((format(printf, 1, 2)));
 #endif
 
 #endif // DIAGNOSTICS_H
