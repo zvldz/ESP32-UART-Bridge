@@ -7,6 +7,11 @@
 #include "usb_interface.h"
 #include "protocols/protocol_pipeline.h"  // Protocol detection hooks
 #include <Arduino.h>
+#include "diagnostics.h"
+
+// heap debug
+#include "esp_heap_caps.h"
+#include "esp_heap_trace.h"
 
 // Adaptive buffering timeout constants (in microseconds)
 #define ADAPTIVE_BUFFER_TIMEOUT_SMALL_US    200
@@ -93,29 +98,13 @@ static inline bool shouldTransmitBuffer(BridgeContext* ctx,
 
 // Transmit adaptive buffer to USB interface
 static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long currentTime) {
-    // Early check for USB readiness
-    if (!ctx->interfaces.usbInterface->connected()) {
-        // Port closed - drop entire buffer
-        if (*ctx->adaptive.bufferIndex > 0) {
-            *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
-            *ctx->diagnostics.totalDroppedBytes += *ctx->adaptive.bufferIndex;
-            (*ctx->diagnostics.dropEvents)++;
-            
-            if (*ctx->adaptive.bufferIndex > *ctx->diagnostics.maxDropSize) {
-                *ctx->diagnostics.maxDropSize = *ctx->adaptive.bufferIndex;
-            }
-            
-            *ctx->adaptive.bufferIndex = 0;
-            ctx->protocol.lastAnalyzedOffset = 0;
-            ctx->protocol.packetFound = false;
-            ctx->protocol.currentPacketStart = 0;
-        }
-        return;
-    }
-    
-    // === EXISTING CODE CONTINUES HERE ===
     size_t bytesToSend = *ctx->adaptive.bufferIndex;
     size_t transmitOffset = 0;  // Where to start transmitting from
+    
+    // Debug: Track transmission attempts
+    static uint32_t transmitAttempts = 0;
+    static uint32_t lastTransmitReport = 0;
+    transmitAttempts++;
     
     // Check if protocol found a packet
     if (ctx->protocol.enabled && ctx->protocol.packetFound) {
@@ -131,7 +120,7 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
         // Log packet transmission
         static uint32_t txPackets = 0;
         txPackets++;
-        if (txPackets % 100 == 0) {
+        if (txPackets % 1000 == 0) {  // Reduced frequency
             log_msg(LOG_INFO, "Protocol: Transmitted %u packets", txPackets);
         }
     }
@@ -173,6 +162,23 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
     // Check USB buffer availability to prevent blocking
     int availableSpace = ctx->interfaces.usbInterface->availableForWrite();
     
+    // Debug: Report USB status periodically
+    uint32_t now = millis();
+    if (now - lastTransmitReport > 5000) {  // Every 5 seconds
+        if (availableSpace == 0 || *ctx->adaptive.bufferIndex > ctx->adaptive.bufferSize / 2) {
+            #ifdef DEBUG
+            forceSerialLog("TX_STATUS: attempts=%u, bufIdx=%u/%u, USB_avail=%d, proto=%s",
+                          transmitAttempts,
+                          *ctx->adaptive.bufferIndex,
+                          ctx->adaptive.bufferSize,
+                          availableSpace,
+                          ctx->protocol.enabled ? "MAVLINK" : "NONE");
+            #endif
+            lastTransmitReport = now;
+            transmitAttempts = 0;  // Reset counter
+        }
+    }
+    
     if (availableSpace >= bytesToSend) {
         // Transmit the data
         ctx->interfaces.usbInterface->write(ctx->adaptive.buffer + transmitOffset, bytesToSend);
@@ -187,9 +193,10 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
         // Safety check - totalConsumed must not exceed buffer index
         if (totalConsumed > *ctx->adaptive.bufferIndex) {
             // Logic error detected - log and reset buffer
-            log_msg(LOG_ERROR, "TX error: consumed=%zu > bufferIndex=%zu, offset=%zu, sent=%zu",
-                    totalConsumed, *ctx->adaptive.bufferIndex, transmitOffset, bytesToSend);
-            
+            #ifdef DEBUG
+            forceSerialLog("TX_ERROR: consumed=%u > bufferIndex=%u, offset=%u, sent=%u",
+                          totalConsumed, *ctx->adaptive.bufferIndex, transmitOffset, bytesToSend);
+            #endif
             // Reset to safe state
             *ctx->adaptive.bufferIndex = 0;
             ctx->protocol.lastAnalyzedOffset = 0;
@@ -202,8 +209,10 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
 
         // Additional validation of remaining size
         if (remaining > ctx->adaptive.bufferSize) {
-            log_msg(LOG_ERROR, "Invalid remaining size: %zu > buffer size %zu", 
-                    remaining, ctx->adaptive.bufferSize);
+            #ifdef DEBUG
+            forceSerialLog("TX_ERROR: Invalid remaining=%u > bufSize=%u", 
+                          remaining, ctx->adaptive.bufferSize);
+            #endif
             *ctx->adaptive.bufferIndex = 0;
             ctx->protocol.lastAnalyzedOffset = 0;
             ctx->protocol.packetFound = false;
@@ -213,6 +222,18 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
 
         // Safe memmove only if there's data to move
         if (remaining > 0 && totalConsumed > 0) {
+            #ifdef DEBUG
+                // Only log problematic memmoves
+                if (remaining > 1000 || totalConsumed > 1000) {
+                    forceSerialLog("memmove#1: dst=%p, src=%p, size=%u, bufIdx=%u, totalConsumed=%u, remaining=%u", 
+                        ctx->adaptive.buffer, 
+                        ctx->adaptive.buffer + totalConsumed, 
+                        remaining,
+                        *ctx->adaptive.bufferIndex,
+                        totalConsumed,
+                        remaining);
+                }
+            #endif
             memmove(ctx->adaptive.buffer, 
                     ctx->adaptive.buffer + totalConsumed, 
                     remaining);
@@ -220,10 +241,22 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
 
         *ctx->adaptive.bufferIndex = remaining;
         
-        // Reset protocol analysis state
-        ctx->protocol.lastAnalyzedOffset = 0;
-        ctx->protocol.packetFound = false;
-        ctx->protocol.currentPacketStart = 0;
+        // FIXED: Properly adjust protocol offsets instead of resetting
+        // This maintains the correct analysis position after buffer shift
+        if (ctx->protocol.lastAnalyzedOffset >= totalConsumed) {
+            ctx->protocol.lastAnalyzedOffset -= totalConsumed;
+        } else {
+            ctx->protocol.lastAnalyzedOffset = 0;
+        }
+        
+        // Adjust packet start position if we have a found packet
+        if (ctx->protocol.packetFound && ctx->protocol.currentPacketStart >= totalConsumed) {
+            ctx->protocol.currentPacketStart -= totalConsumed;
+        } else {
+            // Packet was transmitted or invalid position
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
+        }
     } else if (availableSpace > 0) {
         // Partial transmission - this is tricky with offset
         // For now, fall back to transmitting from beginning
@@ -247,14 +280,28 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
         // Safe calculation of remaining bytes
         if (partialBytes > *ctx->adaptive.bufferIndex) {
             // Should never happen after min(), but be paranoid
-            log_msg(LOG_ERROR, "Partial TX error: sent %zu > available %zu",
-                    partialBytes, *ctx->adaptive.bufferIndex);
+            #ifdef DEBUG
+            forceSerialLog("PARTIAL_TX_ERROR: sent %u > available %u",
+                          partialBytes, *ctx->adaptive.bufferIndex);
+            #endif
             *ctx->adaptive.bufferIndex = 0;
         } else {
             size_t remaining = *ctx->adaptive.bufferIndex - partialBytes;
             
             // Move remaining data to front of buffer only if needed
             if (remaining > 0 && remaining <= ctx->adaptive.bufferSize) {
+                #ifdef DEBUG
+                    // Only log problematic partial transmissions
+                    if (remaining > 1000 || partialBytes > 1000) {
+                        forceSerialLog("memmove#2: dst=%p, src=%p, size=%u, bufIdx=%u, partialBytes=%u, remaining=%u", 
+                            ctx->adaptive.buffer, 
+                            ctx->adaptive.buffer + partialBytes, 
+                            remaining,
+                            *ctx->adaptive.bufferIndex,
+                            partialBytes,
+                            remaining);
+                    }
+                #endif
                 memmove(ctx->adaptive.buffer, 
                         ctx->adaptive.buffer + partialBytes, 
                         remaining);
@@ -263,14 +310,36 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
             *ctx->adaptive.bufferIndex = remaining;
         }
         
-        // Update protocol analysis state after partial transmission
-        if (ctx->protocol.lastAnalyzedOffset > availableSpace) {
-            ctx->protocol.lastAnalyzedOffset -= availableSpace;
+        // FIXED: Update protocol analysis state after partial transmission
+        // Properly adjust offset instead of crude logic
+        if (ctx->protocol.lastAnalyzedOffset >= partialBytes) {
+            ctx->protocol.lastAnalyzedOffset -= partialBytes;
         } else {
             ctx->protocol.lastAnalyzedOffset = 0;
         }
+        
+        // Adjust packet position for partial transmission
+        if (ctx->protocol.packetFound && ctx->protocol.currentPacketStart >= partialBytes) {
+            ctx->protocol.currentPacketStart -= partialBytes;
+        } else {
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
+        }
     } else {
         // No space available - USB buffer completely full
+        static uint32_t usbFullCount = 0;
+        static uint32_t lastUsbFullReport = 0;
+        usbFullCount++;
+        
+        // Report USB full condition periodically
+        if (usbFullCount % 100 == 1 || (now - lastUsbFullReport) > 5000) {
+            #ifdef DEBUG
+            forceSerialLog("USB_FULL#%u: bufIdx=%u/%u, no space for TX", 
+                          usbFullCount, *ctx->adaptive.bufferIndex, ctx->adaptive.bufferSize);
+            #endif
+            lastUsbFullReport = now;
+        }
+        
         if (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize) {
             // Must drop data to prevent our buffer overflow
             *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
@@ -282,20 +351,29 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
                 *ctx->diagnostics.maxDropSize = *ctx->adaptive.bufferIndex;
             }
             
+            #ifdef DEBUG
+            forceSerialLog("DROPPED: %u bytes, USB had no space", *ctx->adaptive.bufferIndex);
+            #endif
+            
             // HOOK: Post-transmission cleanup for dropped data
             onProtocolPacketTransmitted(ctx, *ctx->adaptive.bufferIndex);
             
             *ctx->adaptive.bufferIndex = 0;  // Drop buffer to prevent overflow
             
-            // Log will be handled by periodic diagnostics
+            // FIXED: Reset protocol state when dropping buffer
+            ctx->protocol.lastAnalyzedOffset = 0;
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
         }
         // If buffer not full yet, keep data and try again next iteration
     }
     
     // Final safety check - ensure buffer index is valid
     if (*ctx->adaptive.bufferIndex > ctx->adaptive.bufferSize) {
-        log_msg(LOG_ERROR, "Buffer index corrupted: %zu > %zu, forcing reset",
-                *ctx->adaptive.bufferIndex, ctx->adaptive.bufferSize);
+        #ifdef DEBUG
+        forceSerialLog("CORRUPTION: bufIdx=%u > bufSize=%u, forcing reset",
+                      *ctx->adaptive.bufferIndex, ctx->adaptive.bufferSize);
+        #endif
         *ctx->adaptive.bufferIndex = 0;
         ctx->protocol.lastAnalyzedOffset = 0;
         ctx->protocol.packetFound = false;
@@ -306,25 +384,152 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
 // Handle buffer timeout - force transmission after emergency timeout
 static inline void handleBufferTimeout(BridgeContext* ctx) {
     if (*ctx->adaptive.bufferIndex > 0) {
+        // CRITICAL: Validate buffer index first!
+        if (*ctx->adaptive.bufferIndex > ctx->adaptive.bufferSize) {
+            #ifdef DEBUG
+            forceSerialLog("ERROR: Buffer index corrupted in timeout: %u > %u", 
+                          *ctx->adaptive.bufferIndex, ctx->adaptive.bufferSize);
+            #endif
+            // Reset to safe state
+            *ctx->adaptive.bufferIndex = 0;
+            ctx->protocol.lastAnalyzedOffset = 0;
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
+            return;
+        }
+        
         unsigned long timeInBuffer = micros() - *ctx->adaptive.bufferStartTime;
         
         if (timeInBuffer >= ADAPTIVE_BUFFER_TIMEOUT_EMERGENCY_US) {
             // Emergency timeout - try to transmit
             int availableSpace = ctx->interfaces.usbInterface->availableForWrite();
             
+            // Validate availableSpace is reasonable
+            if (availableSpace < 0 || availableSpace > 65536) {
+                #ifdef DEBUG
+                forceSerialLog("ERROR: Invalid availableSpace: %d", availableSpace);
+                #endif
+                // Drop buffer to prevent corruption
+                *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
+                *ctx->diagnostics.totalDroppedBytes += *ctx->adaptive.bufferIndex;
+                (*ctx->diagnostics.dropEvents)++;
+                *ctx->adaptive.bufferIndex = 0;
+                // FIXED: Reset protocol state
+                ctx->protocol.lastAnalyzedOffset = 0;
+                ctx->protocol.packetFound = false;
+                ctx->protocol.currentPacketStart = 0;
+                return;
+            }
+            
             if (availableSpace >= *ctx->adaptive.bufferIndex) {
                 // Can write entire buffer
                 ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, *ctx->adaptive.bufferIndex);
                 *ctx->stats.device2TxBytes += *ctx->adaptive.bufferIndex;
                 *ctx->adaptive.bufferIndex = 0;
+                // FIXED: Reset protocol state after full transmission
+                ctx->protocol.lastAnalyzedOffset = 0;
+                ctx->protocol.packetFound = false;
+                ctx->protocol.currentPacketStart = 0;
             } else if (availableSpace > 0) {
-                // Write what we can
-                ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, availableSpace);
-                *ctx->stats.device2TxBytes += availableSpace;
-                memmove(ctx->adaptive.buffer, 
-                        ctx->adaptive.buffer + availableSpace, 
-                        *ctx->adaptive.bufferIndex - availableSpace);
-                *ctx->adaptive.bufferIndex -= availableSpace;
+                // Write what we can (safely)
+                size_t toWrite = (size_t)availableSpace;  // We know it's positive now
+                
+                // Double-check toWrite doesn't exceed buffer
+                if (toWrite > *ctx->adaptive.bufferIndex) {
+                    toWrite = *ctx->adaptive.bufferIndex;
+                }
+                
+                ctx->interfaces.usbInterface->write(ctx->adaptive.buffer, toWrite);
+                *ctx->stats.device2TxBytes += toWrite;
+                
+                // CRITICAL: Check for underflow before subtraction
+                if (*ctx->adaptive.bufferIndex < toWrite) {
+                    #ifdef DEBUG
+                    forceSerialLog("ERROR: Buffer underflow prevented: bufIdx=%u < toWrite=%u", 
+                                  *ctx->adaptive.bufferIndex, toWrite);
+                    #endif
+                    *ctx->adaptive.bufferIndex = 0;
+                    ctx->protocol.lastAnalyzedOffset = 0;
+                    ctx->protocol.packetFound = false;
+                    ctx->protocol.currentPacketStart = 0;
+                    return;
+                }
+                
+                // Safe calculation
+                size_t remaining = *ctx->adaptive.bufferIndex - toWrite;
+                
+                // Additional validation
+                if (remaining > ctx->adaptive.bufferSize) {
+                    #ifdef DEBUG
+                    forceSerialLog("ERROR: Invalid remaining in timeout: %u > bufSize=%u", 
+                                  remaining, ctx->adaptive.bufferSize);
+                    #endif
+                    *ctx->adaptive.bufferIndex = 0;
+                    ctx->protocol.lastAnalyzedOffset = 0;
+                    ctx->protocol.packetFound = false;
+                    ctx->protocol.currentPacketStart = 0;
+                    return;
+                }
+                
+                // Validate source pointer before memmove
+                if (toWrite > ctx->adaptive.bufferSize) {
+                    #ifdef DEBUG
+                    forceSerialLog("ERROR: toWrite exceeds buffer size: %u > %u", 
+                                  toWrite, ctx->adaptive.bufferSize);
+                    #endif
+                    *ctx->adaptive.bufferIndex = 0;
+                    ctx->protocol.lastAnalyzedOffset = 0;
+                    ctx->protocol.packetFound = false;
+                    ctx->protocol.currentPacketStart = 0;
+                    return;
+                }
+                
+                // Safe memmove only if needed
+                if (remaining > 0) {
+                    #ifdef DEBUG
+                        // Always log timeout memmoves as they're rare
+                        forceSerialLog("memmove#3: dst=%p, src=%p, size=%u, bufIdx=%u, toWrite=%u, remaining=%u, availSpace=%d", 
+                            ctx->adaptive.buffer, 
+                            ctx->adaptive.buffer + toWrite, 
+                            remaining,
+                            *ctx->adaptive.bufferIndex,
+                            toWrite,
+                            remaining,
+                            availableSpace);
+                    #endif
+                    
+                    // Final safety check - ensure source is within buffer bounds
+                    uint8_t* src = ctx->adaptive.buffer + toWrite;
+                    uint8_t* bufEnd = ctx->adaptive.buffer + ctx->adaptive.bufferSize;
+                    if (src >= bufEnd || src < ctx->adaptive.buffer) {
+                        #ifdef DEBUG
+                        forceSerialLog("ERROR: memmove source out of bounds: src=%p, buf=%p-%p", 
+                                      src, ctx->adaptive.buffer, bufEnd);
+                        #endif
+                        *ctx->adaptive.bufferIndex = 0;
+                        ctx->protocol.lastAnalyzedOffset = 0;
+                        ctx->protocol.packetFound = false;
+                        ctx->protocol.currentPacketStart = 0;
+                        return;
+                    }
+                    
+                    memmove(ctx->adaptive.buffer, src, remaining);
+                }
+                *ctx->adaptive.bufferIndex = remaining;
+                
+                // FIXED: Properly adjust protocol offsets after timeout memmove
+                if (ctx->protocol.lastAnalyzedOffset >= toWrite) {
+                    ctx->protocol.lastAnalyzedOffset -= toWrite;
+                } else {
+                    ctx->protocol.lastAnalyzedOffset = 0;
+                }
+                
+                if (ctx->protocol.packetFound && ctx->protocol.currentPacketStart >= toWrite) {
+                    ctx->protocol.currentPacketStart -= toWrite;
+                } else {
+                    ctx->protocol.packetFound = false;
+                    ctx->protocol.currentPacketStart = 0;
+                }
             } else {
                 // Buffer stuck - drop data
                 *ctx->diagnostics.droppedBytes += *ctx->adaptive.bufferIndex;
@@ -340,6 +545,11 @@ static inline void handleBufferTimeout(BridgeContext* ctx) {
                 
                 *ctx->adaptive.bufferIndex = 0;
                 
+                // FIXED: Reset protocol state when dropping
+                ctx->protocol.lastAnalyzedOffset = 0;
+                ctx->protocol.packetFound = false;
+                ctx->protocol.currentPacketStart = 0;
+                
                 // Log will be handled by periodic diagnostics
             }
         }
@@ -348,47 +558,41 @@ static inline void handleBufferTimeout(BridgeContext* ctx) {
 
 // Process adaptive buffering for a single byte
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, unsigned long currentTime) {
-    // Track connection state changes
-    static bool wasConnected = true;
-    bool isConnected = ctx->interfaces.usbInterface->connected();
+    // Debug counters for overflow tracking
+    static uint32_t overflowCount = 0;
+    static uint32_t lastOverflowReport = 0;
     
-    // Connection state changed from disconnected to connected
-    if (!wasConnected && isConnected) {
-        // Port just opened - reset protocol detection state
-        if (ctx->protocol.detector) {
-            // Reset protocol state through context
-            ctx->protocol.packetInProgress = false;
-            ctx->protocol.consecutiveErrors = 0;
-            // Detector will resync on next packet
-        }
-        log_msg(LOG_DEBUG, "USB: Port reopened");
+    // CRITICAL FIX: Prevent buffer overflow
+    if (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize) {
+        overflowCount++;
         
-        // Clear any partial data in adaptive buffer
-        *ctx->adaptive.bufferIndex = 0;
-        ctx->protocol.lastAnalyzedOffset = 0;
-        ctx->protocol.packetFound = false;
-        ctx->protocol.currentPacketStart = 0;
-    }
-    
-    wasConnected = isConnected;
-    
-    // Check if USB is ready to receive data
-    if (!isConnected) {
-        // USB port is closed - drop data immediately
-        (*ctx->diagnostics.droppedBytes)++;
-        (*ctx->diagnostics.totalDroppedBytes)++;
-        
-        // Log periodically to avoid spam
-        static unsigned long lastNotConnectedLog = 0;
-        if (millis() - lastNotConnectedLog > 5000) {
-            log_msg(LOG_INFO, "USB: Dropping data - port not connected");
-            lastNotConnectedLog = millis();
+        // Report every 100 overflows or every 5 seconds
+        uint32_t now = millis();
+        if (overflowCount % 100 == 1 || (now - lastOverflowReport) > 5000) {
+            #ifdef DEBUG
+            forceSerialLog("OVERFLOW#%u: bufIdx=%u, size=%u, proto=%s, baud=%u, USB_avail=%d", 
+                          overflowCount,
+                          *ctx->adaptive.bufferIndex, 
+                          ctx->adaptive.bufferSize,
+                          ctx->protocol.enabled ? "MAVLINK" : "NONE",
+                          ctx->system.config ? ctx->system.config->baudrate : 0,
+                          ctx->interfaces.usbInterface->availableForWrite());
+            lastOverflowReport = now;
+            #endif
         }
         
-        return;  // Don't buffer anything
+        // Force transmit when buffer is full
+        transmitAdaptiveBuffer(ctx, currentTime);
+        
+        // If still full, reset buffer (data loss but no crash)
+        if (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize) {
+            *ctx->adaptive.bufferIndex = 0;
+            ctx->protocol.lastAnalyzedOffset = 0;
+            ctx->protocol.packetFound = false;
+            ctx->protocol.currentPacketStart = 0;
+        }
     }
     
-    // === EXISTING CODE CONTINUES HERE ===
     // Start buffer timing on first byte
     if (*ctx->adaptive.bufferIndex == 0) {
         *ctx->adaptive.bufferStartTime = currentTime;
@@ -401,12 +605,7 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, u
     // Calculate pause since last byte
     unsigned long timeSinceLastByte = 0;
     if (*ctx->adaptive.lastByteTime > 0 && !ctx->interfaces.uartBridgeSerial->available()) {
-        // Small delay to detect real pause vs processing delay
-        delayMicroseconds(50);
-        
-        if (!ctx->interfaces.uartBridgeSerial->available()) {
-            timeSinceLastByte = micros() - *ctx->adaptive.lastByteTime;
-        }
+        timeSinceLastByte = micros() - *ctx->adaptive.lastByteTime;
     }
     
     // Check if we should transmit

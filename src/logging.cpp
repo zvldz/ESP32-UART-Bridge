@@ -114,46 +114,35 @@ void log_msg(LogLevel level, const char* fmt, ...) {
     // Ensure null termination
     msgBuf[sizeof(msgBuf) - 1] = '\0';
     
-    // Truncation warning for debug builds
-    #ifdef DEBUG
-    if (len >= sizeof(msgBuf)) {
-        // Message was truncated
-        const char* truncMsg = " [TRUNCATED]";
-        size_t truncLen = strlen(truncMsg);
-        if (sizeof(msgBuf) > truncLen) {
-            strcpy(msgBuf + sizeof(msgBuf) - truncLen - 1, truncMsg);
-        }
-    }
-    #endif
-    
     // Check if this message should be logged to web interface
     bool shouldLogToWeb = (config.log_level_web != LOG_OFF && level <= config.log_level_web);
     
-    // Web interface logging (with mutex)
-    if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
-        unsigned long uptimeMs = millis();
-        unsigned long seconds = uptimeMs / 1000;
-        unsigned long ms = uptimeMs % 1000;
-        
-        // Format timestamp + level + message
-        String logLine;
-        logLine.reserve(300);  // Pre-allocate to avoid fragmentation
-        logLine = "[" + String(seconds) + "." + String(ms / 100) + "s][" + 
-                  String(getLogLevelName(level)) + "] " + String(msgBuf);
-        
-        // Truncate if too long
-        if (logLine.length() > 250) {
-            logLine = logLine.substring(0, 247) + "...";
-        }
-        
-        // Store in circular buffer
-        logBuffer[logIndex] = logLine;
-        logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
-        if (logCount < LOG_BUFFER_SIZE) {
-            logCount++;
-        }
-        xSemaphoreGive(logMutex);
+// Web interface logging (with mutex)
+if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
+    unsigned long uptimeMs = millis();
+    unsigned long seconds = uptimeMs / 1000;
+    unsigned long ms = uptimeMs % 1000;
+    
+    // Format directly into a temporary buffer
+    char tempBuf[300];
+    int len = snprintf(tempBuf, sizeof(tempBuf), "[%lu.%lus][%s] %s",
+                       seconds, ms/100, getLogLevelName(level), msgBuf);
+    
+    // Ensure null termination and check length
+    if (len > 0 && len < sizeof(tempBuf)) {
+        // Only now assign to String in one operation
+        logBuffer[logIndex] = tempBuf;
+    } else {
+        // Fallback for too long messages
+        logBuffer[logIndex] = "[LOG TOO LONG]";
     }
+    
+    logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
+    if (logCount < LOG_BUFFER_SIZE) {
+        logCount++;
+    }
+    xSemaphoreGive(logMutex);
+}
     
     // UART logging (non-blocking)
     if (logSerial && config.device3.role == D3_UART3_LOG && 

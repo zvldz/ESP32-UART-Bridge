@@ -117,6 +117,6 @@ these features but is not justified for current requirements.
 #define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
 
 // Debug flags
-//#define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
+#define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
 
 #endif // DEFINES_H

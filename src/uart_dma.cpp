@@ -248,10 +248,21 @@ void UartDMA::uartEventTask(void* pvParameters) {
                     xQueueReset(uart->uart_queue);
                     break;
                     
-                case UART_BREAK:
-                    log_msg(LOG_DEBUG, "UART break detected");
+                case UART_BREAK: {
+                    static uint32_t breakCount = 0;
+                    static uint32_t lastBreakReport = 0;
+    
+                    breakCount++;
+                    uint32_t now = millis();
+    
+                    // Report first and then every 10 seconds
+                    if (breakCount == 1 || (now - lastBreakReport) > 10000) {
+                        log_msg(LOG_DEBUG, "UART break detected (total: %u)", breakCount);
+                        lastBreakReport = now;
+                    }
                     break;
-                    
+                }
+
                 case UART_PARITY_ERR:
                     log_msg(LOG_WARNING, "UART parity error");
                     break;
