@@ -4,7 +4,11 @@
 // CRITICAL: DO NOT REMOVE - Required for TaskScheduler to avoid multiple definition errors
 #define _TASK_INLINE inline
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvolatile"
+#pragma GCC diagnostic ignored "-Wdeprecated-volatile"
 #include <TaskScheduler.h>
+#pragma GCC diagnostic pop
 
 // Global scheduler instance
 extern Scheduler taskScheduler;

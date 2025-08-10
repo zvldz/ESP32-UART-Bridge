@@ -32,6 +32,25 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     const int UART_BLOCK_SIZE = 64;
     
     unsigned long currentTime = micros();
+    int timestampUpdateInterval = 1;  // Default: update every byte
+    
+    // Calculate update interval based on baudrate for protocol mode
+    if (ctx->protocol.enabled && ctx->system.config) {
+        uint32_t baudrate = ctx->system.config->baudrate;
+        if (baudrate >= 921600) {
+            timestampUpdateInterval = 32;  // Update every 32 bytes
+        } else if (baudrate >= 460800) {
+            timestampUpdateInterval = 16;  // Update every 16 bytes
+        } else if (baudrate >= 230400) {
+            timestampUpdateInterval = 8;   // Update every 8 bytes
+        } else if (baudrate >= 115200) {
+            timestampUpdateInterval = 4;   // Update every 4 bytes
+        } else {
+            timestampUpdateInterval = 1;   // Update every byte for slow speeds
+        }
+    }
+    
+    int bytesProcessed = 0;
     
     while (ctx->interfaces.uartBridgeSerial->available()) {
         // Notify LED with rate limiting
@@ -42,6 +61,11 @@ static inline void processDevice1Input(BridgeContext* ctx) {
         }
 
         uint8_t data = ctx->interfaces.uartBridgeSerial->read();
+        
+        // Update timestamp periodically based on baudrate
+        if (++bytesProcessed % timestampUpdateInterval == 0) {
+            currentTime = micros();
+        }
         
         // HOOK: Pre-process byte
         if (!preprocessProtocolByte(ctx, &data)) {

@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "protocol_detector.h"
+#include "mavlink_detector.h"  // For PacketDetectionResult
 #include "protocol_factory.h"
 
 // ========== Byte-level Processing Hooks ==========
@@ -41,10 +42,10 @@ static inline bool isValidPacketStart(BridgeContext* ctx,
 }
 
 // Find complete packet boundary
-static inline int findPacketBoundary(BridgeContext* ctx,
+static inline PacketDetectionResult findPacketBoundary(BridgeContext* ctx,
                                     const uint8_t* data,
                                     size_t len) {
-    if (!ctx->protocol.enabled || !ctx->protocol.detector) return 0;
+    if (!ctx->protocol.enabled || !ctx->protocol.detector) return PacketDetectionResult(0, 0);
     
     // FIXED: Use real detector instead of TODO stub!
     return ctx->protocol.detector->findPacketBoundary(data, len);
@@ -182,19 +183,23 @@ static inline bool isBufferCritical(BridgeContext* ctx) {
 }
 
 // Detect MAVFtp mode based on message ID
-static inline void detectMavftpMode(BridgeContext* ctx, uint32_t currentTime) {
-    if (!ctx->protocol.enabled || *ctx->adaptive.bufferIndex < 10) {
+static inline void detectMavftpMode(BridgeContext* ctx, uint32_t currentTime,
+                                   const uint8_t* packetData, size_t packetSize) {
+    if (!ctx->protocol.enabled || !packetData || packetSize < 10) {
         return;
     }
     
-    // Check message ID (byte 5 in MAVLink v1, byte 7 in v2)
+    // Check message ID from the actual packet data, not from buffer start
     uint8_t msgId = 0;
-    if (ctx->adaptive.buffer[0] == 0xFE && *ctx->adaptive.bufferIndex >= 6) {  // MAVLink v1
-        msgId = ctx->adaptive.buffer[5];
-    } else if (ctx->adaptive.buffer[0] == 0xFD && *ctx->adaptive.bufferIndex >= 10) {  // MAVLink v2
-        msgId = ctx->adaptive.buffer[7];
+    if (packetData[0] == 0xFE && packetSize >= 6) {  // MAVLink v1
+        msgId = packetData[5];
+    } else if (packetData[0] == 0xFD && packetSize >= 10) {  // MAVLink v2
+        msgId = packetData[7];
+    } else {
+        return;  // Not a valid MAVLink packet
     }
     
+    // Rest of the function remains the same...
     if (msgId == 110) {  // FILE_TRANSFER_PROTOCOL
         ctx->protocol.mavftpCount++;
         ctx->protocol.lastMavftpTime = currentTime;
@@ -270,8 +275,8 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
         
         if (timeInProgress > timeout) {
             // Timeout - reset detection state
-            log_msg(LOG_DEBUG, "Protocol: Detection timeout after %lums", 
-                    timeInProgress/1000);
+            log_msg(LOG_DEBUG, "Protocol: Detection timeout after %lu us (%lu ms)", 
+                    timeInProgress, timeInProgress/1000);
             ctx->protocol.packetInProgress = false;
             ctx->protocol.lastAnalyzedOffset = 0;  // Reset to reanalyze buffer
             if (ctx->protocol.stats) {
@@ -336,46 +341,73 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
         // Check if this position could be a packet start
         if (ctx->protocol.detector->canDetect(searchPtr, remainingBytes)) {
             // Try to find complete packet
-            int packetSize = ctx->protocol.detector->findPacketBoundary(
+            PacketDetectionResult detectResult = ctx->protocol.detector->findPacketBoundary(
                 searchPtr, remainingBytes);
             
-            if (packetSize > 0) {
-                // Validate packet size
-                if (packetSize > remainingBytes || packetSize > 512) {  // Max reasonable MAVLink size
-                    log_msg(LOG_ERROR, "Invalid packet size %d at offset %zu", 
-                            packetSize, searchStart);
-                    ctx->protocol.lastAnalyzedOffset++;
-                    totalSkipped++;
-                    continue;
+            // Check for error (skipBytes > remainingBytes would be a bug)
+            if (detectResult.skipBytes > remainingBytes) {
+                static uint32_t errorCount = 0;
+                static uint32_t lastErrorReport = 0;
+                errorCount++;
+                
+                uint32_t now = millis();
+                // Log with exponential backoff
+                if (errorCount == 1 || (now - lastErrorReport) > (1000 * min(errorCount, (uint32_t)10))) {
+                    log_msg(LOG_ERROR, "Detector error #%u: skipBytes=%d > remainingBytes=%zu", 
+                            errorCount, detectResult.skipBytes, remainingBytes);
+                    lastErrorReport = now;
                 }
                 
+                // Recovery: reset detector and skip one byte
+                ctx->protocol.detector->reset();
+                ctx->protocol.lastAnalyzedOffset++;
+                totalSkipped++;
+                continue;
+            }
+            
+            if (detectResult.packetSize > 0) {
                 // Complete packet found!
-                ctx->protocol.currentPacketStart = searchStart;
-                ctx->protocol.detectedPacketSize = packetSize;
+                // Adjust for skipped bytes at the beginning
+                ctx->protocol.currentPacketStart = searchStart + detectResult.skipBytes;
+                ctx->protocol.detectedPacketSize = detectResult.packetSize;
                 ctx->protocol.packetFound = true;
                 ctx->protocol.packetInProgress = false;
                 
                 // Update statistics
                 if (ctx->protocol.stats) {
-                    ctx->protocol.stats->onPacketDetected(packetSize, currentTime);
+                    ctx->protocol.stats->onPacketDetected(detectResult.packetSize, currentTime);
+                    if (detectResult.skipBytes > 0) {
+                        // Track skipped bytes in statistics
+                        ctx->protocol.stats->totalSkippedBytes += detectResult.skipBytes;
+                    }
                 }
                 
                 // Log detection
                 static uint32_t detectCount = 0;
                 detectCount++;
                 if (detectCount % 100 == 0) {  // Log every 100 packets
-                    log_msg(LOG_INFO, "Protocol: Detected %u packets, last at offset %zu, size %d",
-                            detectCount, searchStart, packetSize);
+                    log_msg(LOG_INFO, "Protocol: Detected %u packets, last at offset %zu, size %d (skipped %d)",
+                            detectCount, searchStart + detectResult.skipBytes, 
+                            detectResult.packetSize, detectResult.skipBytes);
                 }
                 
-                // Detect MAVFtp mode
-                detectMavftpMode(ctx, currentTime);
+                #ifdef DEBUG
+                // Debug: detailed detection info
+                if (detectCount <= 10 || detectCount % 1000 == 0) {
+                    log_msg(LOG_DEBUG, "FIX_PHASE_1: skipBytes=%d, packetSize=%d, offset=%zu", 
+                            detectResult.skipBytes, detectResult.packetSize, searchStart);
+                }
+                #endif
                 
-                // Check if critical packet
-                bool isCritical = isCriticalPacket(searchPtr, packetSize);
+                // Detect MAVFtp mode (use correct offset)
+                uint8_t* packetPtr = searchPtr + detectResult.skipBytes;
+                detectMavftpMode(ctx, currentTime, packetPtr, detectResult.packetSize);
+                
+                // Check if critical packet (use correct offset)
+                bool isCritical = isCriticalPacket(packetPtr, detectResult.packetSize);
                 
                 // Update analyzed position to after this packet
-                ctx->protocol.lastAnalyzedOffset = searchStart + packetSize;
+                ctx->protocol.lastAnalyzedOffset = searchStart + detectResult.skipBytes + detectResult.packetSize;
                 
                 // Decide whether to transmit immediately
                 if (isCritical || ctx->protocol.mavftpActive) {
@@ -386,7 +418,7 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                 // This allows batching multiple small packets
                 continue;
                 
-            } else if (packetSize == 0) {
+            } else if (detectResult.packetSize == 0 && remainingBytes > 0) {
                 // Need more data for complete packet
                 if (!ctx->protocol.packetInProgress) {
                     ctx->protocol.packetInProgress = true;
@@ -394,20 +426,9 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                 }
                 break;  // Wait for more data
                 
-            } else {
-                // packetSize < 0 - invalid data, skip bytes
-                int skipBytes = -packetSize;
-                
-                // CRITICAL FIX: Ensure we skip at least 1 byte to avoid infinite loop
-                if (skipBytes <= 0) {
-                    skipBytes = 1;
-                }
-                
-                // CRITICAL FIX: Ensure skip doesn't go beyond buffer
-                if (searchStart + skipBytes > bufferSize) {
-                    // Skip to end of buffer
-                    skipBytes = bufferSize - searchStart;
-                }
+            } else if (detectResult.packetSize < 0) {
+                // Error or request to skip bytes
+                int skipBytes = 1;  // Default skip
                 
                 // Log resync event
                 if (ctx->protocol.stats) {
@@ -415,23 +436,16 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                     ctx->protocol.stats->onDetectionError();
                 }
                 
-                // Skip forward - FIXED to use absolute position
-                size_t newOffset = searchStart + skipBytes;
-                
-                // CRITICAL FIX: Make sure we're actually moving forward
-                if (newOffset <= ctx->protocol.lastAnalyzedOffset) {
-                    newOffset = ctx->protocol.lastAnalyzedOffset + 1;
-                }
-                
-                ctx->protocol.lastAnalyzedOffset = newOffset;
-                totalSkipped += (newOffset - searchStart);
+                // Skip forward 
+                ctx->protocol.lastAnalyzedOffset++;
+                totalSkipped++;
                 
                 // Log resync with more detail
                 static uint32_t resyncCount = 0;
                 resyncCount++;
                 if (resyncCount % 10 == 0) {  // Log every 10 resyncs
-                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu, skipping %d bytes (new offset: %zu)",
-                            resyncCount, searchStart, skipBytes, ctx->protocol.lastAnalyzedOffset);
+                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu",
+                            resyncCount, searchStart);
                 }
                 
                 continue;  // Keep searching
