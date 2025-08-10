@@ -14,6 +14,11 @@ struct ProtocolStats {
     
     // Performance metrics
     uint32_t totalBytes;            // Total bytes processed through protocol detector
+    uint32_t totalSkippedBytes;     // Total bytes skipped before packet starts (garbage)
+    uint32_t partialTransmissions;  // Count of partial packet transmissions
+    uint32_t criticalPacketDelaySum; // Sum of delays for averaging
+    uint32_t criticalPacketCount;    // Count for averaging
+    uint32_t mavftpBlockEvents;      // Times MAVFtp blocked critical packets
     uint32_t minPacketSize;         // Smallest detected packet
     uint32_t maxPacketSize;         // Largest detected packet
     uint32_t avgPacketSize;         // Running average packet size
@@ -40,6 +45,11 @@ struct ProtocolStats {
         detectionErrors = 0;
         resyncEvents = 0;
         totalBytes = 0;
+        totalSkippedBytes = 0;
+        partialTransmissions = 0;
+        criticalPacketDelaySum = 0;
+        criticalPacketCount = 0;
+        mavftpBlockEvents = 0;
         minPacketSize = UINT32_MAX;
         maxPacketSize = 0;
         avgPacketSize = 0;
