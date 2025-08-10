@@ -1,10 +1,10 @@
 #include "logging.h"
 #include <Arduino.h>
 #include "types.h"
-#include "usb_interface.h"
+#include "usb/usb_interface.h"
 #include "config.h"
-#include "uart_interface.h"
-#include "uart_dma.h"
+#include "uart/uart_interface.h"
+#include "uart/uart_dma.h"
 #include "defines.h"
 
 // External objects

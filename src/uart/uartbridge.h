@@ -2,7 +2,7 @@
 #define UARTBRIDGE_H
 
 #include "types.h"
-#include "usb_interface.h"
+#include "../usb/usb_interface.h"
 #include "uart_interface.h"
 
 // UART bridge task function

@@ -3,8 +3,8 @@
 
 #include "types.h"
 #include "logging.h"
-#include "uart_interface.h"
-#include "usb_interface.h"
+#include "uart/uart_interface.h"
+#include "usb/usb_interface.h"
 #include "protocols/protocol_pipeline.h"  // Protocol detection hooks
 #include <Arduino.h>
 #include "diagnostics.h"

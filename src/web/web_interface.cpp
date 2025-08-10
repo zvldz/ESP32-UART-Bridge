@@ -11,8 +11,8 @@
 #include "logging.h"
 #include "config.h"
 #include "defines.h"
-#include "uart_interface.h"
-#include "usb_interface.h"
+#include "../uart/uart_interface.h"
+#include "../usb/usb_interface.h"
 #include "scheduler_tasks.h"
 
 // Include generated web content
