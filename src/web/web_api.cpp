@@ -3,13 +3,13 @@
 #include "web_interface.h"
 #include "logging.h"
 #include "config.h"
-#include "uartbridge.h"
-#include "flow_control.h"
+#include "../uart/uartbridge.h"
+#include "../uart/flow_control.h"
 #include "defines.h"
 #include "crashlog.h"
 #include "diagnostics.h"
 #include "scheduler_tasks.h"
-#include "wifi_manager.h"
+#include "../wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>

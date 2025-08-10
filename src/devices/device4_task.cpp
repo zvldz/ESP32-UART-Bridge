@@ -3,7 +3,7 @@
 #include "logging.h"
 #include "types.h"
 #include "diagnostics.h"
-#include "wifi_manager.h"
+#include "../wifi/wifi_manager.h"
 
 // External objects
 extern Config config;

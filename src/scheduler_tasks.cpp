@@ -9,8 +9,8 @@
 #include "logging.h"
 #include "defines.h"
 #include "types.h"
-#include "web_interface.h"
-#include "wifi_manager.h"
+#include "web/web_interface.h"
+#include "wifi/wifi_manager.h"
 
 // External objects
 extern Config config;

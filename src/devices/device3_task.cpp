@@ -4,7 +4,7 @@
 #include "leds.h"
 #include "types.h"
 #include "diagnostics.h"
-#include "uart_dma.h"
+#include "../uart/uart_dma.h"
 
 // External objects
 extern Config config;

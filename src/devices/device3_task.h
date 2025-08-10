@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include "uart_interface.h"
+#include "../uart/uart_interface.h"
 #include "defines.h"
 
 // Task function

@@ -5,11 +5,11 @@
 #include "leds.h"
 #include "logging.h"
 #include "defines.h"
-#include "uart_interface.h"
-#include "usb_interface.h"
+#include "uart/uart_interface.h"
+#include "usb/usb_interface.h"
 #include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
-#include "device3_task.h"
-#include "device4_task.h"
+#include "devices/device3_task.h"
+#include "devices/device4_task.h"
 #include "protocols/protocol_pipeline.h"  // Protocol detection hooks
 #include <Arduino.h>
 

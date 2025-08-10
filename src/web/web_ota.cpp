@@ -1,7 +1,7 @@
 #include "web_ota.h"
 #include "web_interface.h"
 #include "logging.h"
-#include "uart_interface.h"
+#include "../uart/uart_interface.h"
 #include "scheduler_tasks.h"
 #include <Update.h>
 #include <ESPAsyncWebServer.h>
