@@ -6,19 +6,19 @@
 #include "logging.h"
 #include "config.h"
 #include "leds.h"
-#include "web_interface.h"
-#include "uartbridge.h"
+#include "web/web_interface.h"
+#include "uart/uartbridge.h"
 #include "crashlog.h"
-#include "usb_interface.h"
+#include "usb/usb_interface.h"
 #include "diagnostics.h"
 #include "system_utils.h"
 #include "scheduler_tasks.h"
-#include "device_init.h"
-#include "wifi_manager.h"
+#include "devices/device_init.h"
+#include "wifi/wifi_manager.h"
 
 // DMA support - always enabled
-#include "uart_interface.h"
-#include "uart_dma.h"
+#include "uart/uart_interface.h"
+#include "uart/uart_dma.h"
 
 // heap debug
 #include "esp_heap_caps.h"

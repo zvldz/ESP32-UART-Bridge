@@ -2,7 +2,7 @@
 #include "logging.h"
 #include "crashlog.h"
 #include "esp_system.h"
-#include "uart_dma.h"
+#include "uart/uart_dma.h"
 #include "types.h"
 #include <Arduino.h>
 
