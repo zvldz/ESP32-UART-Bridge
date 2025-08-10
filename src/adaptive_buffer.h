@@ -117,6 +117,39 @@ static inline void transmitAdaptiveBuffer(BridgeContext* ctx, unsigned long curr
             bytesToSend = *ctx->adaptive.bufferIndex - transmitOffset;
         }
         
+        // Check if we have enough space for the complete packet
+        int availableSpace = ctx->interfaces.usbInterface->availableForWrite();
+        if (availableSpace < bytesToSend) {
+            // Check buffer criticality
+            size_t bufferFillPercent = (*ctx->adaptive.bufferIndex * 100) / ctx->adaptive.bufferSize;
+            
+            if (bufferFillPercent > 90) {
+                // Buffer critically full - log and force partial transmission
+                static uint32_t criticalCount = 0;
+                criticalCount++;
+                if (criticalCount % 10 == 1) {  // Log every 10th occurrence
+                    log_msg(LOG_WARNING, "Buffer critical (%zu%%), forcing partial packet transmission", 
+                            bufferFillPercent);
+                }
+                
+                // INCREMENT STATISTICS
+                if (ctx->protocol.stats) {
+                    ctx->protocol.stats->partialTransmissions++;
+                }
+                
+                // Continue with partial transmission
+            } else {
+                // Buffer not critical - wait for USB space
+                static uint32_t waitCount = 0;
+                waitCount++;
+                if (waitCount % 100 == 1) {  // Log periodically
+                    log_msg(LOG_DEBUG, "Waiting for USB space: need %zu, have %d", 
+                            bytesToSend, availableSpace);
+                }
+                return;  // Don't transmit partial packet
+            }
+        }
+        
         // Log packet transmission
         static uint32_t txPackets = 0;
         txPackets++;

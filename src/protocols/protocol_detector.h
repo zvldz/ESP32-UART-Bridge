@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Forward declaration
+struct PacketDetectionResult;
+
 // Base interface for protocol detection
 class ProtocolDetector {
 public:
@@ -13,8 +16,11 @@ public:
     virtual bool canDetect(const uint8_t* data, size_t len) = 0;
     
     // Find packet boundary in buffer
-    // Returns: > 0 = packet size, 0 = need more data, < 0 = error/not this protocol
-    virtual int findPacketBoundary(const uint8_t* data, size_t len) = 0;
+    // Returns PacketDetectionResult with packet size and bytes to skip
+    virtual PacketDetectionResult findPacketBoundary(const uint8_t* data, size_t len) = 0;
+    
+    // Reset detector state for cleanup
+    virtual void reset() = 0;
     
     // Protocol name for logging
     virtual const char* getName() const = 0;

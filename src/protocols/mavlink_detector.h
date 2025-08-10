@@ -1,63 +1,60 @@
-#ifndef MAVLINK_DETECTOR_H
-#define MAVLINK_DETECTOR_H
+#pragma once
 
 #include "protocol_detector.h"
+#include "protocol_stats.h"
+#include "../logging.h"
 
-// MAVLink protocol constants
-#define MAVLINK_STX_V1 0xFE
-#define MAVLINK_STX_V2 0xFD
-#define MAVLINK_V1_HEADER_LEN 6
-#define MAVLINK_V2_HEADER_LEN 10
-#define MAVLINK_MAX_PAYLOAD_LEN 255
-#define MAVLINK_CHECKSUM_LEN 2
-#define MAVLINK_SIGNATURE_LEN 13
-#define MAVLINK_MAX_SEARCH_WINDOW 300  // Must be larger than max MAVLink packet (280 bytes)
+// FastMAVLink configuration
+#include "fastmavlink_config.h"
 
-class MavlinkDetector : public ProtocolDetector {
-private:
-    // State for current packet detection
-    uint8_t currentVersion;     // 1 or 2, 0 if unknown
-    bool headerValidated;       // Header fields checked
+// FIRST include common.h (which defines FASTMAVLINK_MESSAGE_CRCS)
+#include "fastmavlink_lib/c_library/common/common.h"
+
+// THEN include fastmavlink.h (which uses FASTMAVLINK_MESSAGE_CRCS)
+#include "fastmavlink_lib/c_library/lib/fastmavlink.h"
+
+// Include specific message definitions for constants
+#include "fastmavlink_lib/c_library/common/mavlink_msg_param_value.h"
+#include "fastmavlink_lib/c_library/common/mavlink_msg_file_transfer_protocol.h"
+
+// Structure for packet detection result
+struct PacketDetectionResult {
+    int packetSize;    // Size of detected packet in bytes
+    int skipBytes;     // Number of bytes to skip before packet start (garbage/sync bytes)
     
-    // Validate header fields for medium-level checking
-    virtual bool validateHeader(const uint8_t* data, size_t len, uint8_t version);
-    virtual bool validateExtended(const uint8_t* data, size_t len) { 
-        return true;  // Not implemented - for future CRC/deep validation
-    }
-    virtual int findNextStartByte(const uint8_t* data, size_t len, size_t startPos);
-    
-public:
-    MavlinkDetector();
-    virtual ~MavlinkDetector() = default;
-    
-    // ProtocolDetector interface
-    bool canDetect(const uint8_t* data, size_t len) override;
-    int findPacketBoundary(const uint8_t* data, size_t len) override;
-    const char* getName() const override { return "MAVLink"; }
-    
-    // Protocol-specific optimizations
-    uint32_t getOptimalRxTimeout() const override { return 20; }  // 20 bit periods
-    uint32_t getMaxPacketSize() const override { return 280; }   // Max v2 packet
-    bool requiresTimingCheck() const override { return false; }
-    uint8_t getPriority() const override { return 50; }  // Medium priority
+    // Constructor for convenience
+    PacketDetectionResult() : packetSize(0), skipBytes(0) {}
+    PacketDetectionResult(int size, int skip) : packetSize(size), skipBytes(skip) {}
 };
 
-// TODO Phase 4.2.3: Extended validation
-// - validateExtended(): Optional deep validation for specific use cases
-// - validateCRC(): Full CRC validation for high-reliability scenarios
-// - Configuration option to select validation level (BASIC/EXTENDED/FULL)
-// - Performance impact measurement of each validation level
-// 
-// Future validation levels:
-// 1. BASIC (current): Start byte + payload length only
-// 2. EXTENDED: + optional constraints (configurable per deployment)
-// 3. FULL: + CRC check
-// 4. STATISTICAL: + pattern analysis for auto-detection
-//
-// NOTE: System/Component IDs are NOT validated as they vary by device:
-// - Flight controllers: usually 1/1
-// - GCS: often 255/X
-// - Modems: 51, 52, etc.
-// - Companion computers: various IDs
-
-#endif // MAVLINK_DETECTOR_H
+class MavlinkDetector : public ProtocolDetector {
+public:
+    MavlinkDetector();
+    ~MavlinkDetector() override = default;
+    
+    // ProtocolDetector interface
+    bool canDetect(const uint8_t* data, size_t length) override;
+    PacketDetectionResult findPacketBoundary(const uint8_t* data, size_t length) override;
+    void reset();
+    void setStats(ProtocolStats* stats) { this->stats = stats; }
+    const char* getName() const override { return "MAVLink/FastMAV"; }
+    
+    // Protocol characteristics
+    uint32_t getOptimalRxTimeout() const override { return 20; }
+    uint32_t getMaxPacketSize() const override { return 280; }
+    bool requiresTimingCheck() const override { return false; }
+    uint8_t getPriority() const override { return 50; }
+    
+private:
+    ProtocolStats* stats = nullptr;
+    
+    // FastMAVLink state
+    fmav_status_t fmavStatus;
+    uint8_t frameBuffer[296];  // Independent buffer for parser (DroneBridge approach)
+    
+    // Error counters for diagnostics
+    uint32_t signatureErrors = 0;
+    uint32_t crcErrors = 0;
+    uint32_t lengthErrors = 0;
+    uint32_t lastErrorReport = 0;
+};
