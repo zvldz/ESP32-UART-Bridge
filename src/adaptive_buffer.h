@@ -9,10 +9,6 @@
 #include <Arduino.h>
 #include "diagnostics.h"
 
-// heap debug
-#include "esp_heap_caps.h"
-#include "esp_heap_trace.h"
-
 // Adaptive buffering timeout constants (in microseconds)
 #define ADAPTIVE_BUFFER_TIMEOUT_SMALL_US    200
 #define ADAPTIVE_BUFFER_TIMEOUT_MEDIUM_US   1000

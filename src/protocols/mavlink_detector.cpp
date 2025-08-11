@@ -2,10 +2,11 @@
 #include <cstring>
 #include <Arduino.h>
 
-MavlinkDetector::MavlinkDetector() {
+MavlinkDetector::MavlinkDetector() 
+    : frameBuffer{0} {  // Initialize frame buffer with zeros
     fmav_init(); // Important! Called in example
     reset();
-    log_msg(LOG_INFO, "MAV: FastMAVLink detector initialized (DroneBridge approach)");
+    log_msg(LOG_INFO, "MAV: FastMAVLink detector initialized with independent frame buffer");
 }
 
 void MavlinkDetector::reset() {
@@ -31,24 +32,24 @@ bool MavlinkDetector::canDetect(const uint8_t* data, size_t length) {
 PacketDetectionResult MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t length) {
     if (length == 0) return PacketDetectionResult(0, 0);
     
-    // Process byte by byte using DroneBridge approach
+    // Process input data byte by byte for packet assembly
     for (size_t i = 0; i < length; i++) {
         fmav_result_t result = {0};
         
-        // Parse byte into independent frame buffer
+        // Parse byte into independent frame buffer to avoid conflicts with buffer management
         uint8_t res = fmav_parse_and_check_to_frame_buf(
-            &result,      // Result with metadata
-            frameBuffer,  // Independent buffer, NOT the data buffer!
-            &fmavStatus,  // Parser state (persistent between calls)
-            data[i]       // Single byte to parse
+            &result,      // Result structure with packet metadata
+            frameBuffer,  // Separate buffer for frame assembly (prevents memmove conflicts)
+            &fmavStatus,  // Parser state maintained across calls
+            data[i]       // Current byte to process
         );
         
         // Check if complete packet was assembled
         if (res) {
-            // Packet complete in frameBuffer!
-            // Calculate how many bytes to skip before packet start
-            // Example: if we processed 100 bytes (i=99, i+1=100) and packet is 80 bytes,
-            // then we had 20 bytes of garbage before packet start
+            // Complete packet assembled in frameBuffer
+            // Calculate bytes to skip (garbage/sync bytes before packet start)
+            // If processed 100 bytes total and packet is 80 bytes long,
+            // then 20 bytes of non-packet data preceded this packet
             size_t skipBytes = 0;
             if (i + 1 >= result.frame_len) {
                 skipBytes = (i + 1) - result.frame_len;

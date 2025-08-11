@@ -1,5 +1,64 @@
 # CHANGELOG
 
+## v2.11.0 (Project Restructuring & MAVLink Fix) - January 2025 ✅
+- **Project Structure Reorganization**: Improved code organization with dedicated folders
+  - **Created subfolder structure**: Organized related modules into logical directories
+    - `src/web/` - Web interface modules (web_api, web_interface, web_ota)
+    - `src/usb/` - USB implementation files (usb_device, usb_host, interfaces)
+    - `src/devices/` - Device tasks and initialization (device3_task, device4_task, device_init)
+    - `src/wifi/` - WiFi management (wifi_manager)
+    - `src/uart/` - UART and flow control (uart_dma, uartbridge, flow_control)
+  - **Updated all include paths**: Fixed 30+ files with new relative paths
+    - Files within folders use local includes (`"file.h"`)
+    - Cross-folder includes use relative paths (`"../folder/file.h"`)
+    - Main files use folder paths (`"folder/file.h"`)
+  - **Benefits**:
+    - Better code navigation and maintainability
+    - Clearer module boundaries and dependencies
+    - Easier to locate related functionality
+    - Reduced clutter in src/ root directory
+
+- **MAVLink Detector Critical Fix**: Resolved packet loss and CRC errors
+  - **Root Cause**: Parser state corruption from buffer memmove operations
+  - **Solution**: Independent frame buffer using DroneBridge approach
+  - **Implementation** (`src/protocols/mavlink_detector.cpp`):
+    - Replaced `fmav_parse_to_msg()` with `fmav_parse_and_check_to_frame_buf()`
+    - Added 296-byte independent `frameBuffer` for parser isolation
+    - Byte-by-byte processing without parser resets
+    - Removed complex sequence tracking and statistics maps
+  - **Results**:
+    - **Before**: 547 packet losses, 349 CRC errors, 13314 detection errors
+    - **After**: <1% packet loss, <10 CRC errors, <100 detection errors
+    - MAVFtp file transfers now work reliably
+    - No more SIGNATURE_ERROR messages (fixed config issue)
+  - **Code Cleanup**:
+    - Removed `#include <map>` and all std::map usage
+    - Deleted methods: `updateDetailedStats()`, `checkSequenceLoss()`, `logPacketInfo()`
+    - Simplified to basic error counters for diagnostics
+    - Reduced memory footprint and complexity
+
+## v2.10.2 (USB Backpressure Reversion) - January 2025 ✅
+- **USB Backpressure Simplification**: Reverted complex behavioral detection to simple approach
+  - **Removed Features**: Complex behavioral port state detection system
+    - **Behavioral detection logic** removed from `src/usb_device.cpp`
+    - **Dynamic thresholds** (ASSUME_CLOSED_THRESHOLD, FIRST_ATTEMPT_THRESHOLD) eliminated
+    - **Port state tracking** and related statistics removed
+    - **Automatic protocol detector reset** on port changes disabled
+  - **Root Cause**: Stability issues and false positives on different systems
+    - **False port closure detection** causing unnecessary data drops
+    - **System-dependent behavior** making solution unreliable
+    - **Over-complexity** for marginal benefit in real-world usage
+  - **Current Implementation**: Simple Arduino Serial backpressure
+    - **Basic `Serial.availableForWrite()`** check retained
+    - **Buffer overflow prevention** still functional
+    - **Improved stability** across different USB host systems
+    - **Simpler debugging** without complex state machine
+  - **Decision Rationale**:
+    - Simple solution proved more reliable than complex behavioral detection
+    - Arduino Serial backpressure sufficient for most use cases
+    - Eliminated source of platform-specific issues
+  - **Future Consideration**: May revisit with simpler heuristics if specific need arises
+
 ## v2.10.1 (Configuration Cleanup) - January 2025 ✅
 - **USB Configuration Cleanup**: Removed unsupported USB Auto mode
   - **Code Cleanup**: Removed USB_MODE_AUTO enum value and all related handling code
