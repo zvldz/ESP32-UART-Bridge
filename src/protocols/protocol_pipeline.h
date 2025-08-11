@@ -182,7 +182,8 @@ static inline bool isBufferCritical(BridgeContext* ctx) {
     return (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize - 64);
 }
 
-// Detect MAVFtp mode based on message ID
+// MAVLINK-SPECIFIC: Detect MAVFtp mode based on message ID
+// TODO: Move to MavlinkDetector after protocol stabilization
 static inline void detectMavftpMode(BridgeContext* ctx, uint32_t currentTime,
                                    const uint8_t* packetData, size_t packetSize) {
     if (!ctx->protocol.enabled || !packetData || packetSize < 10) {
@@ -228,7 +229,8 @@ static inline void detectMavftpMode(BridgeContext* ctx, uint32_t currentTime,
     }
 }
 
-// Check if packet is critical and should be sent immediately
+// MAVLINK-SPECIFIC: Check if packet is critical and should be sent immediately
+// TODO: Move to MavlinkDetector after protocol stabilization
 static inline bool isCriticalPacket(const uint8_t* data, size_t len) {
     if (len < 6) return false;
     
@@ -399,11 +401,12 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                 }
                 #endif
                 
-                // Detect MAVFtp mode (use correct offset)
+                // MAVLINK-SPECIFIC: Detect MAVFtp mode and check packet priority
+                // TODO: Make protocol-agnostic after MAVLink stabilization
                 uint8_t* packetPtr = searchPtr + detectResult.skipBytes;
                 detectMavftpMode(ctx, currentTime, packetPtr, detectResult.packetSize);
                 
-                // Check if critical packet (use correct offset)
+                // MAVLINK-SPECIFIC: Check if critical packet (use correct offset)
                 bool isCritical = isCriticalPacket(packetPtr, detectResult.packetSize);
                 
                 // Update analyzed position to after this packet
