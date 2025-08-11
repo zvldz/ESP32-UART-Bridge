@@ -35,7 +35,7 @@ public:
     // ProtocolDetector interface
     bool canDetect(const uint8_t* data, size_t length) override;
     PacketDetectionResult findPacketBoundary(const uint8_t* data, size_t length) override;
-    void reset();
+    void reset() override;
     void setStats(ProtocolStats* stats) { this->stats = stats; }
     const char* getName() const override { return "MAVLink/FastMAV"; }
     
@@ -50,7 +50,7 @@ private:
     
     // FastMAVLink state
     fmav_status_t fmavStatus;
-    uint8_t frameBuffer[296];  // Independent buffer for parser (DroneBridge approach)
+    uint8_t frameBuffer[296];  // Independent buffer for frame assembly
     
     // Error counters for diagnostics
     uint32_t signatureErrors = 0;

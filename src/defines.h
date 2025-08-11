@@ -116,7 +116,4 @@ these features but is not justified for current requirements.
 #define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
 #define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
 
-// Debug flags
-#define SERIAL_LOG_ENABLE  // Enable forceSerialLog() function
-
 #endif // DEFINES_H

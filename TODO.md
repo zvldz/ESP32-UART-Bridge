@@ -75,13 +75,6 @@
 
 ### Out of Priority
 
-- [x] **USB Backpressure Implementation** ✅ COMPLETED
-  - ✅ Behavioral USB port state detection implemented (v2.10.0)
-  - ✅ Early data dropping when COM port is closed prevents buffer overflow
-  - ✅ Dynamic thresholds based on buffer availability patterns
-  - ✅ Honest API returns 0 when unable to write, allowing caller data management
-  - ✅ Automatic protocol detector reset on port state changes
-  - ✅ Enhanced diagnostics - UART FIFO overflow now indicates real performance issues only
 
 ### Network Discovery
 
@@ -89,44 +82,72 @@
 
 ## PENDING TASKS 🔄
 
-### Priority 4 - MAVLink Advanced Features
+### Priority 4 - FastMAVLink Implementation 🔄 IN PROGRESS
 
-- [ ] **Priority 4.1 - Performance Analysis**
-  - Detailed profiling under high load conditions
-  - Real-world performance optimization if needed
-  - Document measured improvements vs adaptive buffering
-  - Latency benchmarking with different MAVLink message rates
+**Goal**: Replace problematic `fmav_parse_to_msg()` with independent frame buffer approach to eliminate packet loss and CRC errors caused by buffer memmove operations.
 
-- [ ] **Priority 4.2 - Validation Depth Decision**
-  - Implement extended validation based on false positive rate analysis
-  - Add optional CRC check for packet integrity validation
-  - Make validation level configurable (header-only vs full validation)
-  - Balance between performance and reliability
+**Progress Status:**
+- [x] ✅ **Root Cause Analysis** - Identified buffer corruption from memmove() conflicts
+- [x] ✅ **Solution Design** - Independent 296-byte frame buffer approach 
+- [x] ✅ **Code Implementation** - Replaced with `fmav_parse_and_check_to_frame_buf()`
+- [x] ✅ **Header File Cleanup** - Removed complex tracking structures and std::map usage
+- [x] ✅ **Error Handling Simplification** - Basic error counters instead of detailed statistics
+- [x] ✅ **Architecture Cleanup** - Removed updateDetailedStats(), checkSequenceLoss(), logPacketInfo()
 
-- [ ] **Priority 4.3 - Extended MAVLink Features**
-  - Message type statistics and frequency analysis
-  - System/Component ID tracking and validation
-  - Configurable validation levels per use case
-  - MAVLink message filtering capabilities
+**Current Implementation:**
+- Uses independent frameBuffer[296] to avoid conflicts with adaptive buffer memmove()
+- Byte-by-byte processing with persistent parser state
+- Simplified error handling with basic diagnostic counters
+- No parser resets after successful packets (automatic IDLE transition)
 
-- [ ] **Priority 4.4 - Performance Optimizations**
-  - Adaptive algorithms for high packet rate scenarios
-  - Caching mechanisms for repeated packet patterns
-  - Hardware integration preparation for future ESP32 features
-  - Memory usage optimization
+**Remaining Tasks:**
+- [ ] **Field Testing** - Validate <1% packet loss with Mission Planner
+- [ ] **MAVFtp Verification** - Test file transfer reliability  
+- [ ] **Performance Validation** - Ensure no regressions under high load
+- [ ] **Long-term Stability** - 24+ hour continuous operation test
+- [ ] **Documentation Update** - Update CHANGELOG.md with final results
 
-- [ ] **Priority 4.5 - Resynchronization Enhancement**
-  - Implement synchronization state tracking
-  - Smarter recovery strategies after data corruption
-  - Prevent data loss during resync operations
-  - Configurable resync search window size
+**Success Criteria:**
+- Packet loss < 1% (vs previous 547 losses)
+- CRC errors < 10 (vs previous 349 errors) 
+- Detection errors < 100 (vs previous 13,314 errors)
+- MAVFtp file transfers work reliably
+- No SIGNATURE_ERROR messages in logs
 
-- [ ] **Priority 4.6 - Protocol Statistics UI Enhancement**
-  - Improve protocol statistics display in web interface
-  - More compact and user-friendly presentation
-  - Better organization of existing statistics data
+**Next Priority**: After stabilization, proceed to MAVLink Routing (Priority 5)
 
-### Priority 5 - Hardware Packet Detection Improvements
+### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
+
+- [ ] **Implement MAVLink Message Routing**
+  - **Problem**: When multiple GCS connected (USB + UDP), all messages are duplicated to all interfaces causing:
+    - Excessive bandwidth usage (especially during parameter/log downloads)
+    - Command conflicts from different GCS
+    - Response confusion between GCS instances
+  - **Solution**: Intelligent routing based on target_sysid/target_compid:
+    - Track request source (which interface)
+    - Route responses only to requesting GCS
+    - Broadcast messages (HEARTBEAT, STATUS) - to all interfaces
+    - Unicast responses (PARAM_VALUE, FILE_TRANSFER_PROTOCOL) - only to requester
+  - **Configuration Parameters**:
+    - `ROUTING_ENABLED` - enable/disable routing
+    - `ROUTING_MODE`:
+      - `BROADCAST_ALL` - all to all (current behavior)
+      - `SMART_ROUTING` - intelligent routing
+      - `FILTER_HEAVY` - filter heavy messages (MAVFtp, parameters)
+  - **Use Cases**:
+    - Simultaneous Mission Planner (USB) + QGroundControl (UDP)
+    - Control channel redundancy
+    - Bandwidth saving on slow channels
+    - Isolation of critical commands from diagnostics
+  - **Priority**: Medium (system works without it, but would be more efficient with routing)
+  - **Dependencies**: After protocol detection fixes (current task)
+  - **Implementation Approach**:
+    - Create routing table mapping sysid/compid to interface
+    - Intercept MAVLink headers for routing decisions
+    - Maintain session state for request/response pairs
+    - Add web interface for routing configuration
+
+### Priority 6 - Hardware Packet Detection Improvements
 
 - [ ] **Hardware-level Protocol Optimization**
   - Dynamic timeout based on detected protocol (not just MAVLink)
@@ -273,6 +294,25 @@
 
 ### Future Considerations
 
+- [ ] **USB Backpressure Enhancement** - Revisit behavioral port detection
+  - **Background**: Complex USB port state detection was implemented in v2.10.0 but removed due to stability issues
+  - **Previous Implementation**:
+    - Behavioral detection using write buffer availability patterns
+    - Dynamic thresholds (ASSUME_CLOSED_THRESHOLD=20, FIRST_ATTEMPT_THRESHOLD=5)
+    - Early data dropping when COM port closed
+    - Automatic protocol detector reset on port state changes
+  - **Issues Encountered**:
+    - Stability problems on different systems
+    - False positives in port closure detection
+    - Over-complexity for marginal benefit
+  - **Current State**: Reverted to simple `Serial.availableForWrite()` approach
+  - **Future Approach** (if needed):
+    - Simpler heuristics with longer observation windows
+    - Configurable sensitivity levels
+    - Better testing across different USB host systems
+    - Optional feature (disabled by default)
+  - **Priority**: Low - current simple approach works well for most cases
+
 - [ ] **Advanced Network Features**
   - **TCP Client Mode** - Connect to remote servers
     - Automatic reconnection on disconnect
@@ -293,6 +333,26 @@
   - Document any limitations
 
 ### Code Refactoring and Cleanup
+
+- [ ] **Protocol Pipeline Refactoring** - After MAVLink stabilization
+  - Move MAVLink-specific functions from protocol_pipeline.h to MavlinkDetector
+    - `detectMavftpMode()` - purely MAVLink logic
+    - `isCriticalPacket()` - MAVLink message priority
+    - Message ID extraction logic
+  - Make protocol_pipeline.h truly protocol-agnostic
+  - Add proper protocol type checking before MAVLink-specific calls
+  - Consider virtual methods in ProtocolDetector base class:
+    - `isHighPriorityPacket()`
+    - `updateProtocolState()`
+    - `requiresExtendedTimeout()` - for adaptive_buffer.h
+  - Remove MAVLink-specific logic from adaptive_buffer.h:
+    - Replace direct `mavftpActive` checks with detector virtual method
+    - Replace hardcoded "MAVLINK" strings with dynamic protocol name
+  - Move MAVLink-specific fields from BridgeContext to MavlinkDetector:
+    - `bool mavftpActive`
+    - `uint32_t mavftpCount`
+    - `uint32_t lastMavftpTime`
+  - **Note**: Marked with "MAVLINK-SPECIFIC" comments in code
 
 - [ ] **Final Code Cleanup** - After all features are implemented
   - Remove unnecessary diagnostic code and debug prints
