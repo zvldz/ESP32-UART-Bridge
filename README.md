@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.10.1-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.12.1-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -17,9 +17,10 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
 - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection for drone/rover telemetry with zero latency and perfect packet preservation
 - **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
-- **Adaptive Buffering**: Automatically adjusts based on baud rate and inter-byte timing
-  - Uses configurable timeout thresholds (200μs/1ms/5ms/15ms)
-  - Groups bytes into packets based on inter-byte gaps
+- **Circular Buffer Architecture**: Zero-copy circular buffer with scatter-gather I/O for optimal performance
+  - Prevents data corruption from buffer operations
+  - Adaptive traffic detection (normal vs burst modes)
+  - Smart USB bottleneck handling with percentage-based thresholds
 - **Dynamic Buffer Sizing**: Automatically adjusts buffer size based on baud rate (256-2048 bytes)
 - **USB Host/Device Modes**: 
   - Device mode: Connect ESP32 to PC as USB serial device
@@ -472,8 +473,7 @@ The bridge features DMA-accelerated UART communication with adaptive buffering b
 - Works with any UART protocol without protocol-specific knowledge
 
 **Buffer sizing:**
-- ≤19200 baud: 256 bytes
-- 115200 baud: 288 bytes (optimized to reduce USB bottlenecks)
+- 115200 baud: 288 bytes (384 with protocol optimization)
 - 230400 baud: 768 bytes
 - 460800 baud: 1024 bytes
 - ≥921600 baud: 2048 bytes
@@ -483,8 +483,8 @@ The bridge features DMA-accelerated UART communication with adaptive buffering b
 - Hardware idle detection (10 character periods timeout)
 - Event-driven architecture for Device 1 (main UART)
 - Polling mode for Device 2/3 (secondary channels)
-- Zero-copy ring buffers (16KB)
-- Software timeout thresholds (200μs/1ms/5ms/15ms) for adaptive buffering
+- Circular buffer with shadow buffer for protocol parsing
+- Gap-based traffic detection with adaptive transmission thresholds
 
 The hardware idle detection works in conjunction with software buffering - the UART controller detects inter-packet gaps and triggers DMA transfers, while the software layer groups these transfers based on timing for optimal USB transmission.
 
@@ -519,15 +519,16 @@ Logs are viewable through the web interface. The system supports multiple output
 - **UART Output**: Optional logging to Device 3 UART TX pin (115200 baud)
 - **Network Logging**: UDP log streaming via Device 4 (when configured as Network Logger)
 
-### Adaptive Buffering Technology
+### Circular Buffer Technology
 
-The bridge uses time-based buffering that groups bytes into packets based on inter-byte gaps:
-- Monitors timing between received bytes
-- Groups bytes that arrive close together (within timeout thresholds)
-- Sends grouped data when gaps exceed the threshold
-- Buffer size automatically adjusts based on configured baud rate
+The bridge uses advanced circular buffer architecture for optimal data handling:
+- **Zero-copy operations**: Eliminates expensive memory copy operations
+- **Scatter-gather I/O**: Efficient transmission of fragmented data
+- **Traffic-aware buffering**: Automatic detection of normal vs burst traffic patterns
+- **Smart dropping**: Prevents system hangs with intelligent data management
+- **Protocol-aware**: Optimized packet boundary preservation for detected protocols
 
-This approach works well for many protocols without requiring protocol-specific knowledge. The timing thresholds (200μs/1ms/5ms/15ms) help preserve packet boundaries for protocols that use inter-frame gaps.
+This implementation provides superior performance and reliability compared to traditional linear buffering, especially under high data loads and varying traffic patterns.
 
 ## Development
 

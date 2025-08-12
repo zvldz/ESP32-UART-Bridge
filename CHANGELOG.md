@@ -1,5 +1,108 @@
 # CHANGELOG
 
+## v2.12.1 (Memory Optimization & Final Code Cleanup) - January 2025 ✅
+
+### Memory Optimization Phase 
+- **Legacy Buffer Removal**: Complete elimination of old buffer architecture
+  - **Memory Saved**: 384-2048 bytes of RAM (removed duplicate buffer allocation)
+  - **Code Cleanup**: Removed unused `adaptiveBuffer` allocation in `uartbridge.cpp:95-98`
+  - **Architecture**: Now uses only CircularBuffer implementation
+  - **Validation**: Ensured no remaining references to legacy buffer system
+
+### bufferIndex Removal Optimization
+- **Structure Cleanup**: Removed `bufferIndex` from `AdaptiveBufferContext` structure
+  - **Memory Saved**: Additional 8 bytes (pointer + int) per bridge context
+  - **Code Paths**: Eliminated all bufferIndex initialization and update code
+  - **Critical Fix**: Updated `isBufferCritical()` in `protocol_pipeline.h:182-188`
+    - **Before**: Used legacy `bufferIndex` for buffer fullness detection
+    - **After**: Direct CircularBuffer availability check: `circBuf->available() >= bufferSize - 64`
+  - **Validation**: Comprehensive search confirmed no remaining bufferIndex references
+
+### Production Code Cleanup
+- **Debug Code Removal**: All temporary diagnostic logging removed for production
+  - **Files Cleaned**: `circular_buffer.h`, `main.cpp`, `adaptive_buffer.h`
+  - **Log Reduction**: Removed verbose buffer initialization and operation logs
+  - **Performance**: Cleaner log output focused on critical events only
+  - **Maintenance**: Easy identification and removal of TEMPORARY DEBUG blocks
+
+### Final Architecture State
+- **Single Buffer**: CircularBuffer as the only data buffer implementation
+- **Zero Waste**: No duplicate memory allocations or unused legacy code
+- **Clean Codebase**: Production-ready with minimal diagnostic output
+- **Memory Efficient**: Optimized RAM usage through complete legacy removal
+
+## v2.12.0 (Circular Buffer Implementation & Adaptive Thresholds) - January 2025 🚀
+
+### Major Architecture Changes
+- **Circular Buffer Migration**: Replaced legacy linear buffer with modern circular buffer
+  - **Problem**: Old buffer used inefficient memmove operations causing data corruption
+  - **Solution**: Zero-copy circular buffer with scatter-gather I/O
+  - **Implementation**:
+    - New `CircularBuffer` class in `src/circular_buffer.h`
+    - Power-of-2 sizing for bitwise masking (256-2048 bytes)
+    - Shadow buffer (296 bytes) for protocol parsing continuity
+    - Thread-safe with FreeRTOS portMUX locks
+  - **Critical Fix**: Added missing `initAdaptiveBuffer()` call in `uartbridge.cpp`
+    - BridgeContext now properly initializes CircularBuffer
+    - Fixed nullptr issue preventing data transmission
+
+### Adaptive Traffic Detection
+- **Gap-based Traffic Detector**: Automatic mode switching based on data patterns
+  - **Normal Mode**: Standard telemetry (2ms timeout, 10% buffer threshold)
+  - **Burst Mode**: Parameter downloads (5ms timeout, 20% buffer threshold)
+  - **Detection Logic**:
+    - Fast data: <1ms gaps between bytes
+    - Burst trigger: 100+ consecutive fast bytes
+    - Burst end: >5ms pause in data stream
+  - **Benefits**: Optimizes for both low-latency telemetry and bulk transfers
+
+### USB Bottleneck Handling
+- **Smart Drop Strategy**: Prevents complete system hangs
+  - **Thresholds** (percentage-based, scales with buffer size):
+    - Warning: 85% (small), 70% (medium), 60% (large)
+    - Critical: 90% (small), 75% (medium), 65% (large)
+  - **Drop Policy**:
+    - Warning level: Drop 12.5% after 5 retry attempts
+    - Critical level: Drop 33% immediately
+  - **Improvement**: Better than old system which could hang indefinitely
+
+### Performance Optimizations
+- **Transmission Thresholds**:
+  - Normal: 128 bytes max (low latency priority)
+  - Burst: 200 bytes max (optimized for single MAVLink packet)
+- **Buffer Sizes** (auto-calculated based on baudrate):
+  - 115200: 288 bytes (384 with protocol)
+  - 230400: 768 bytes
+  - 460800: 1024 bytes
+  - 921600: 2048 bytes
+
+### Diagnostic Enhancements
+- **Comprehensive Debug Logging** (all marked TEMPORARY for easy removal):
+  - Buffer initialization and allocation
+  - Write operations and availability
+  - Transmission triggers with mode indication
+  - USB status and bottleneck events
+  - Segment information for scatter-gather
+- **Traffic Statistics**:
+  - Total bursts detected
+  - Maximum burst size
+  - Drop events and bytes
+
+### TODO.md Updates
+- Added Circular Buffer Optimizations (v2.6.x)
+- Added Protocol-aware Optimizations (v2.7.0)
+- Added USB Optimizations (v2.7.x)
+
+### Testing Recommendations
+1. **Low Traffic Test**: Normal telemetry should show "NORMAL mode"
+2. **High Traffic Test**: Parameter downloads should trigger "BURST mode"
+3. **USB Bottleneck Test**: Monitor for controlled drops vs hangs
+4. **Success Metrics**:
+   - Packet loss <5% (from 32+ events)
+   - CRC errors <20 (from 56)
+   - No transmission freezes
+   - Successful MAVLink parameter downloads
+
 ## v2.11.0 (Project Restructuring & MAVLink Fix) - January 2025 ✅
 - **Project Structure Reorganization**: Improved code organization with dedicated folders
   - **Created subfolder structure**: Organized related modules into logical directories

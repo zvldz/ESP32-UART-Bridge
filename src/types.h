@@ -221,6 +221,7 @@ inline void exitStatsCritical() {
 class UartInterface;
 class UsbInterface;
 class ProtocolDetector;
+class CircularBuffer;
 
 // Forward declaration for protocol statistics (will be defined in future phases)
 struct ProtocolStats;
@@ -241,11 +242,13 @@ struct BridgeContext {
     
     // Adaptive buffering state
     struct {
-        uint8_t* buffer;
+        // Legacy fields for compatibility
         size_t bufferSize;
-        int* bufferIndex;
         unsigned long* lastByteTime;
         unsigned long* bufferStartTime;
+        
+        // New circular buffer
+        CircularBuffer* circBuf;   // Main buffer implementation
     } adaptive;
     
     // Cached device flags (for performance)
@@ -322,6 +325,7 @@ struct BridgeContext {
         size_t lastAnalyzedOffset;      // Position in buffer we've analyzed up to
         size_t currentPacketStart;      // Start position of current packet in buffer
         bool packetFound;               // Valid packet found in buffer
+        size_t skipBytes;               // Bytes to skip before packet (from detector to TX)
     } protocol;
 };
 
@@ -333,7 +337,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     unsigned long* device3RxBytes, unsigned long* device3TxBytes,
     unsigned long* lastActivity, unsigned long* totalUartPackets,
     // Adaptive buffer
-    uint8_t* buffer, size_t bufferSize, int* bufferIndex,
+    size_t bufferSize,
     unsigned long* lastByteTime, unsigned long* bufferStartTime,
     // Device flags
     bool device2IsUSB, bool device2IsUART2, bool device3Active, bool device3IsBridge,
@@ -363,11 +367,10 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->stats.totalUartPackets = totalUartPackets;
     
     // Adaptive buffer
-    ctx->adaptive.buffer = buffer;
     ctx->adaptive.bufferSize = bufferSize;
-    ctx->adaptive.bufferIndex = bufferIndex;
     ctx->adaptive.lastByteTime = lastByteTime;
     ctx->adaptive.bufferStartTime = bufferStartTime;
+    ctx->adaptive.circBuf = nullptr;         // Will be allocated later
     
     // Device flags
     ctx->devices.device2IsUSB = device2IsUSB;
@@ -422,6 +425,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->protocol.lastAnalyzedOffset = 0;
     ctx->protocol.currentPacketStart = 0;
     ctx->protocol.packetFound = false;
+    ctx->protocol.skipBytes = 0;
 }
 
 #endif // TYPES_H

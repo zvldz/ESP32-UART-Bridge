@@ -70,13 +70,6 @@ void uartBridgeTask(void* parameter) {
     config.protocolOptimization != PROTOCOL_NONE
   );
 
-  uint8_t* adaptiveBuffer = (uint8_t*)pvPortMalloc(adaptiveBufferSize);
-  if (!adaptiveBuffer) {
-    log_msg(LOG_ERROR, "Failed to allocate adaptive buffer!");
-    vTaskDelete(NULL);
-    return;
-  }
-
   log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
           adaptiveBufferSize, config.baudrate);
 
@@ -100,7 +93,6 @@ void uartBridgeTask(void* parameter) {
   s_lastActivity = &localLastActivity;
 
   // Adaptive buffering variables
-  int bufferIndex = 0;
   unsigned long lastByteTime = 0;
   unsigned long bufferStartTime = 0;
 
@@ -133,7 +125,7 @@ void uartBridgeTask(void* parameter) {
     &localDevice3RxBytes, &localDevice3TxBytes,
     &localLastActivity, &localTotalUartPackets,
     // Adaptive buffer
-    adaptiveBuffer, adaptiveBufferSize, &bufferIndex,
+    adaptiveBufferSize,
     &lastByteTime, &bufferStartTime,
     // Device flags
     device2IsUSB, device2IsUART2, device3Active, device3IsBridge,
@@ -155,6 +147,9 @@ void uartBridgeTask(void* parameter) {
 
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
+
+  // Initialize CircularBuffer for new architecture
+  initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
   // Initialize protocol detection
   initProtocolDetection(&ctx, &config);
@@ -200,7 +195,7 @@ void uartBridgeTask(void* parameter) {
     }
 
     // Handle any remaining data in buffer (timeout-based flush) for USB
-    if (device2IsUSB && bufferIndex > 0) {
+    if (device2IsUSB && ctx.adaptive.circBuf && ctx.adaptive.circBuf->available() > 0) {
       handleBufferTimeout(&ctx);
     }
 
@@ -212,7 +207,5 @@ void uartBridgeTask(void* parameter) {
   }
   
   // This point is never reached in normal operation
-  // But if task ever exits, free the allocated buffer
-  vPortFree(adaptiveBuffer);
 }
 
