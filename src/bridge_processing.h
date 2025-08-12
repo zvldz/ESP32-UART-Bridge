@@ -7,7 +7,6 @@
 #include "defines.h"
 #include "uart/uart_interface.h"
 #include "usb/usb_interface.h"
-#include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
 #include "devices/device3_task.h"
 #include "devices/device4_task.h"
 #include "protocols/protocol_pipeline.h"  // Protocol detection hooks
@@ -16,6 +15,28 @@
 // Forward declarations for Device 4 functions
 static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len);
 static inline void processDevice4BridgeToUart(BridgeContext* ctx);
+
+// Device 4 Bridge TX implementation - BEFORE adaptive_buffer.h include!
+static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len) {
+    if (!device4BridgeMutex) return;
+    
+    if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        for (size_t i = 0; i < len; i++) {
+            int nextHead = (device4BridgeTxHead + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
+            if (nextHead != device4BridgeTxTail) {  // Buffer not full
+                device4BridgeTxBuffer[device4BridgeTxHead] = data[i];
+                device4BridgeTxHead = nextHead;
+            } else {
+                // Buffer full, stop adding
+                break;
+            }
+        }
+        xSemaphoreGive(device4BridgeMutex);
+    }
+}
+
+// NOW include adaptive_buffer.h - function is already defined!
+#include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
 
 // Check if we should yield to WiFi task
 static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
@@ -236,24 +257,7 @@ static inline void processDevice3BridgeInput(BridgeContext* ctx) {
     }
 }
 
-// Add UART data to Device 4 Bridge TX buffer (UART->UDP)
-static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len) {
-    if (!device4BridgeMutex) return;
-    
-    if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        for (size_t i = 0; i < len; i++) {
-            int nextHead = (device4BridgeTxHead + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
-            if (nextHead != device4BridgeTxTail) {  // Buffer not full
-                device4BridgeTxBuffer[device4BridgeTxHead] = data[i];
-                device4BridgeTxHead = nextHead;
-            } else {
-                // Buffer full, stop adding
-                break;
-            }
-        }
-        xSemaphoreGive(device4BridgeMutex);
-    }
-}
+// NOTE: addToDevice4BridgeTx definition moved above adaptive_buffer.h include
 
 // Process Device 4 Bridge RX data (UDP->UART)
 static inline void processDevice4BridgeToUart(BridgeContext* ctx) {

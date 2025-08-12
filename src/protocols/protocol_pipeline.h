@@ -2,6 +2,7 @@
 #define PROTOCOL_PIPELINE_H
 
 #include "types.h"
+#include "../circular_buffer.h"  // Full CircularBuffer definition needed
 #include "protocol_detector.h"
 #include "mavlink_detector.h"  // For PacketDetectionResult
 #include "protocol_factory.h"
@@ -179,7 +180,11 @@ static inline void configureHardwareForProtocol(BridgeContext* ctx, uint8_t prot
 
 // Check if buffer is critically full
 static inline bool isBufferCritical(BridgeContext* ctx) {
-    return (*ctx->adaptive.bufferIndex >= ctx->adaptive.bufferSize - 64);
+    // NEW: Use CircularBuffer directly
+    if (ctx->adaptive.circBuf) {
+        return (ctx->adaptive.circBuf->available() >= ctx->adaptive.bufferSize - 64);
+    }
+    return false;
 }
 
 // MAVLINK-SPECIFIC: Detect MAVFtp mode based on message ID
@@ -261,6 +266,7 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
                                       unsigned long currentTime,
                                       unsigned long timeSinceLastByte) {
     if (!ctx->protocol.enabled || !ctx->protocol.detector) return false;
+    if (!ctx->adaptive.circBuf) return false;
     
     // If we already found a packet, return true to transmit it
     if (ctx->protocol.packetFound) {
@@ -288,8 +294,8 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
         }
     }
     
-    // Analyze buffer starting from last analyzed position
-    size_t bufferSize = *ctx->adaptive.bufferIndex;
+    // Use CircularBuffer for analysis (NOT old buffer!)
+    size_t bufferSize = ctx->adaptive.circBuf->available();
     
     // Safety check: ensure analyzed offset is within valid range
     // This should never happen with correct offset management, but protect against bugs
@@ -306,190 +312,82 @@ static inline bool checkProtocolPacket(BridgeContext* ctx,
         ctx->protocol.lastAnalyzedOffset = bufferSize;
     }
     
-    // CRITICAL FIX: Track how many bytes we've skipped to prevent infinite loops
-    size_t totalSkipped = 0;
-    const size_t MAX_SKIP_PER_ITERATION = 100;  // Prevent runaway skipping
+    // NEW: Use CircularBuffer's contiguous parser view
+    // Get as much data as we can analyze in one go
+    size_t needed = min(bufferSize, (size_t)512);  // Reasonable chunk size
+    auto view = ctx->adaptive.circBuf->getContiguousForParser(needed);
     
-    // Search for packets in the unanalyzed portion of buffer
-    while (ctx->protocol.lastAnalyzedOffset < bufferSize && totalSkipped < MAX_SKIP_PER_ITERATION) {
-        size_t searchStart = ctx->protocol.lastAnalyzedOffset;
+    if (view.ptr == nullptr || view.safeLen == 0) {
+        return false;  // No data to analyze
+    }
+    
+    // Analyze the contiguous view
+    if (ctx->protocol.detector->canDetect(view.ptr, view.safeLen)) {
+        PacketDetectionResult detectResult = ctx->protocol.detector->findPacketBoundary(view.ptr, view.safeLen);
         
-        // Validate search start is within buffer
-        if (searchStart >= bufferSize) {
-            ctx->protocol.lastAnalyzedOffset = bufferSize;
-            break;
-        }
-        
-        // Additional safety check
-        if (searchStart > ctx->adaptive.bufferSize) {
-            log_msg(LOG_ERROR, "Invalid search offset: %zu > buffer size %zu", 
-                    searchStart, ctx->adaptive.bufferSize);
-            ctx->protocol.lastAnalyzedOffset = 0;
-            break;
-        }
-        
-        size_t remainingBytes = bufferSize - searchStart;
-        
-        // Validate pointer before detector call
-        uint8_t* searchPtr = ctx->adaptive.buffer + searchStart;
-        if (searchPtr < ctx->adaptive.buffer || 
-            searchPtr >= ctx->adaptive.buffer + ctx->adaptive.bufferSize) {
-            log_msg(LOG_ERROR, "Invalid search pointer at offset %zu", searchStart);
-            ctx->protocol.lastAnalyzedOffset++;
-            totalSkipped++;
-            continue;
-        }
-
-        // Check if this position could be a packet start
-        if (ctx->protocol.detector->canDetect(searchPtr, remainingBytes)) {
-            // Try to find complete packet
-            PacketDetectionResult detectResult = ctx->protocol.detector->findPacketBoundary(
-                searchPtr, remainingBytes);
+        if (detectResult.packetSize > 0) {
+            // Complete packet found!
+            // IMPORTANT: Don't call consume() here! 
+            // Save skipBytes for TX task to handle
+            ctx->protocol.currentPacketStart = detectResult.skipBytes;
+            ctx->protocol.detectedPacketSize = detectResult.packetSize;
+            ctx->protocol.skipBytes = detectResult.skipBytes;  // Save for TX
+            ctx->protocol.packetFound = true;
+            ctx->protocol.packetInProgress = false;
             
-            // Check for error (skipBytes > remainingBytes would be a bug)
-            if (detectResult.skipBytes > remainingBytes) {
-                static uint32_t errorCount = 0;
-                static uint32_t lastErrorReport = 0;
-                errorCount++;
-                
-                uint32_t now = millis();
-                // Log with exponential backoff
-                if (errorCount == 1 || (now - lastErrorReport) > (1000 * min(errorCount, (uint32_t)10))) {
-                    log_msg(LOG_ERROR, "Detector error #%u: skipBytes=%d > remainingBytes=%zu", 
-                            errorCount, detectResult.skipBytes, remainingBytes);
-                    lastErrorReport = now;
+            // Update statistics
+            if (ctx->protocol.stats) {
+                ctx->protocol.stats->onPacketDetected(detectResult.packetSize, currentTime);
+                if (detectResult.skipBytes > 0) {
+                    ctx->protocol.stats->totalSkippedBytes += detectResult.skipBytes;
                 }
-                
-                // Recovery: reset detector and skip one byte
-                ctx->protocol.detector->reset();
-                ctx->protocol.lastAnalyzedOffset++;
-                totalSkipped++;
-                continue;
             }
             
-            if (detectResult.packetSize > 0) {
-                // Complete packet found!
-                // Adjust for skipped bytes at the beginning
-                ctx->protocol.currentPacketStart = searchStart + detectResult.skipBytes;
-                ctx->protocol.detectedPacketSize = detectResult.packetSize;
-                ctx->protocol.packetFound = true;
-                ctx->protocol.packetInProgress = false;
-                
-                // Update statistics
-                if (ctx->protocol.stats) {
-                    ctx->protocol.stats->onPacketDetected(detectResult.packetSize, currentTime);
-                    if (detectResult.skipBytes > 0) {
-                        // Track skipped bytes in statistics
-                        ctx->protocol.stats->totalSkippedBytes += detectResult.skipBytes;
-                    }
-                }
-                
-                // Log detection
-                static uint32_t detectCount = 0;
-                detectCount++;
-                if (detectCount % 100 == 0) {  // Log every 100 packets
-                    log_msg(LOG_INFO, "Protocol: Detected %u packets, last at offset %zu, size %d (skipped %d)",
-                            detectCount, searchStart + detectResult.skipBytes, 
-                            detectResult.packetSize, detectResult.skipBytes);
-                }
-                
-                #ifdef DEBUG
-                // Debug: detailed detection info
-                if (detectCount <= 10 || detectCount % 1000 == 0) {
-                    log_msg(LOG_DEBUG, "FIX_PHASE_1: skipBytes=%d, packetSize=%d, offset=%zu", 
-                            detectResult.skipBytes, detectResult.packetSize, searchStart);
-                }
-                #endif
-                
-                // MAVLINK-SPECIFIC: Detect MAVFtp mode and check packet priority
-                // TODO: Make protocol-agnostic after MAVLink stabilization
-                uint8_t* packetPtr = searchPtr + detectResult.skipBytes;
-                detectMavftpMode(ctx, currentTime, packetPtr, detectResult.packetSize);
-                
-                // MAVLINK-SPECIFIC: Check if critical packet (use correct offset)
-                bool isCritical = isCriticalPacket(packetPtr, detectResult.packetSize);
-                
-                // Update analyzed position to after this packet
-                ctx->protocol.lastAnalyzedOffset = searchStart + detectResult.skipBytes + detectResult.packetSize;
-                
-                // Decide whether to transmit immediately
-                if (isCritical || ctx->protocol.mavftpActive) {
-                    return true;  // Transmit immediately
-                }
-                
-                // For non-critical packets, continue searching for more packets
-                // This allows batching multiple small packets
-                continue;
-                
-            } else if (detectResult.packetSize == 0 && remainingBytes > 0) {
-                // Need more data for complete packet
-                if (!ctx->protocol.packetInProgress) {
-                    ctx->protocol.packetInProgress = true;
-                    ctx->protocol.packetStartTime = currentTime;
-                }
-                break;  // Wait for more data
-                
-            } else if (detectResult.packetSize < 0) {
-                // Error or request to skip bytes
-                int skipBytes = 1;  // Default skip
-                
-                // Log resync event
-                if (ctx->protocol.stats) {
-                    ctx->protocol.stats->onResyncEvent();
-                    ctx->protocol.stats->onDetectionError();
-                }
-                
-                // Skip forward 
-                ctx->protocol.lastAnalyzedOffset++;
-                totalSkipped++;
-                
-                // Log resync with more detail
-                static uint32_t resyncCount = 0;
-                resyncCount++;
-                if (resyncCount % 10 == 0) {  // Log every 10 resyncs
-                    log_msg(LOG_DEBUG, "Protocol: Resync #%u at offset %zu",
-                            resyncCount, searchStart);
-                }
-                
-                continue;  // Keep searching
+            // Log detection periodically
+            static uint32_t detectCount = 0;
+            detectCount++;
+            if (detectCount % 100 == 0) {
+                log_msg(LOG_INFO, "Protocol: Detected %u packets, size %d (skip %d)",
+                        detectCount, detectResult.packetSize, detectResult.skipBytes);
             }
-        } else {
-            // Not a valid packet start, move forward by 1 byte
-            ctx->protocol.lastAnalyzedOffset++;
-            totalSkipped++;
+            
+            // MAVLINK-SPECIFIC: Check packet priority and MAVFtp mode
+            const uint8_t* packetPtr = view.ptr + detectResult.skipBytes;
+            detectMavftpMode(ctx, currentTime, packetPtr, detectResult.packetSize);
+            bool isCritical = isCriticalPacket(packetPtr, detectResult.packetSize);
+            
+            // Return true to transmit immediately if critical or MAVFtp active
+            return (isCritical || ctx->protocol.mavftpActive);
+            
+        } else if (detectResult.packetSize == 0) {
+            // Need more data for complete packet
+            if (!ctx->protocol.packetInProgress) {
+                ctx->protocol.packetInProgress = true;
+                ctx->protocol.packetStartTime = currentTime;
+            }
+            return false;  // Wait for more data
+            
+        } else if (detectResult.packetSize < 0) {
+            // Error or need to skip - this will be handled by TX task
+            if (ctx->protocol.stats) {
+                ctx->protocol.stats->onResyncEvent();
+                ctx->protocol.stats->onDetectionError();
+            }
+            
+            // Set skipBytes to 1 to advance by one byte
+            ctx->protocol.skipBytes = 1;
+            return false;  // Let TX handle the skip
         }
     }
     
-    // Check if we skipped too many bytes (sign of a problem)
-    if (totalSkipped >= MAX_SKIP_PER_ITERATION) {
-        log_msg(LOG_WARNING, "Protocol: Skipped %zu bytes in one iteration, may have sync issues", totalSkipped);
-        // Force transmission to clear buffer
-        return true;
-    }
-    
-    // Check if we found any packets
-    if (ctx->protocol.packetFound) {
-        return true;
-    }
-    
-    // Check if buffer is getting full
+    // Check buffer fill level
     if (bufferSize > ctx->adaptive.bufferSize * 0.8) {
         log_msg(LOG_DEBUG, "Protocol: Buffer 80% full, forcing transmission");
         return true;
     }
     
-    // Periodic state dump for debugging
-    static uint32_t lastStateDump = 0;
-    if (millis() - lastStateDump > 10000 && ctx->protocol.enabled) {
-        log_msg(LOG_DEBUG, "Protocol state: bufSize=%zu, bufIndex=%zu, analyzed=%zu, "
-                "pktFound=%d, pktStart=%zu, pktSize=%zu",
-                ctx->adaptive.bufferSize, *ctx->adaptive.bufferIndex,
-                ctx->protocol.lastAnalyzedOffset, ctx->protocol.packetFound,
-                ctx->protocol.currentPacketStart, ctx->protocol.detectedPacketSize);
-        lastStateDump = millis();
-    }
-    
     return false;  // Continue accumulating data
+    
 }
 
 // Main transmission decision with protocol awareness
