@@ -365,6 +365,24 @@
   - Remove temporary workarounds that are no longer needed
   - **Note**: This should be done as the very last step to avoid breaking in-development features
 
+### Circular Buffer Optimizations (v2.6.x)
+- [x] Basic circular buffer implementation
+- [x] Gap-based traffic detector  
+- [ ] Buffer utilization metrics monitoring in web UI
+- [ ] Configurable drop thresholds via web config
+
+### Protocol-aware Optimizations (v2.7.0)
+- [ ] MAVLink packet priorities (commands > telemetry > bulk)
+- [ ] UDP: 1 MAVLink packet = 1 datagram (requires parsing)
+- [ ] Separate critical/normal queues for USB
+- [ ] Adaptive timeouts based on msgid
+- [ ] MAVFtp session detection → bulk mode
+
+### USB Optimizations (v2.7.x)
+- [ ] Async USB transmission queue
+- [ ] USB flow control detection
+- [ ] Alternative: USB bulk endpoints instead of CDC
+
 ## Libraries and Dependencies
 
 ### Current Dependencies

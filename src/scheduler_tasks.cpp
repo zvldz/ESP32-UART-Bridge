@@ -1,7 +1,6 @@
 #include "scheduler_tasks.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wvolatile"
-//#pragma GCC diagnostic ignored "-Wdeprecated-volatile"
 #include <TaskScheduler.h>
 #pragma GCC diagnostic pop
 #include "diagnostics.h"
