@@ -1,6 +1,51 @@
 # CHANGELOG
 
-## v2.12.1 (Memory Optimization & Final Code Cleanup) - January 2025 ✅
+## v2.13.0 (Protocol Architecture Refactoring) 🚀
+
+### Major Architecture Overhaul: Parser + Sender Pattern
+- **Complete Protocol Architecture Redesign**: Implemented separation of packet parsing and transmission
+  - **New Data Flow**: UART RX → CircularBuffer → Parser → PacketQueue → Sender(s) → Device(s)  
+  - **Problem Solved**: Eliminated coupling between protocol detection and transmission logic
+  - **Benefits**: Clean architecture, better maintainability, protocol-agnostic design
+
+### Memory Pool Implementation
+- **Slab Allocator**: Thread-safe memory pool for packet management
+  - **Implementation**: `packet_memory_pool.h` with Meyers Singleton pattern
+  - **Pool Sizes**: 64B (control packets), 288B (MAVLink), 512B (RAW chunks)
+  - **Fallback**: Automatic heap allocation when pools exhausted
+  - **Thread Safety**: C++11+ guaranteed initialization safety
+
+### Protocol Pipeline Components
+- **Parser Framework**: Base `ProtocolParser` class with specialized implementations
+  - **RawParser**: Adaptive buffering without protocol parsing (default mode)
+  - **MAVLinkParser**: Packet boundary detection using FastMAVLink library
+  - **Future Ready**: Architecture supports SBUS, CRSF protocol additions
+
+- **Sender Framework**: Priority-based packet transmission system
+  - **UsbSender**: Exponential backoff for congestion handling
+  - **UartSender**: Inter-packet gap support for timing-sensitive protocols
+  - **UdpSender**: Batching capabilities for network efficiency
+  - **Priority Support**: CRITICAL > NORMAL > BULK packet prioritization
+
+### Transmission Improvements
+- **Backpressure Handling**: Intelligent packet dropping based on priority levels
+- **Partial Send Support**: USB/UART senders handle incomplete transmissions
+- **Queue Management**: Per-sender packet queues with size limits
+- **Flow Control**: Ready state checking prevents buffer overflow
+
+### Integration & Cleanup
+- **Pipeline Coordinator**: `ProtocolPipeline` class manages all parsers and senders
+- **Bridge Integration**: Seamless integration with existing UART bridge task
+- **Legacy Removal**: Cleaned up old protocol detection functions
+- **Code Quality**: All comments converted to English, consistent style
+
+### Performance Benefits
+- **Zero Copy**: Direct buffer access for parsing without data copying
+- **Memory Efficient**: Pool allocation prevents heap fragmentation
+- **Multi-core Ready**: Thread-safe design for ESP32 dual-core operation
+- **Scalable**: Easy addition of new protocols and output devices
+
+## v2.12.1 (Memory Optimization & Final Code Cleanup) ✅
 
 ### Memory Optimization Phase 
 - **Legacy Buffer Removal**: Complete elimination of old buffer architecture
@@ -31,7 +76,7 @@
 - **Clean Codebase**: Production-ready with minimal diagnostic output
 - **Memory Efficient**: Optimized RAM usage through complete legacy removal
 
-## v2.12.0 (Circular Buffer Implementation & Adaptive Thresholds) - January 2025 🚀
+## v2.12.0 (Circular Buffer Implementation & Adaptive Thresholds) 🚀
 
 ### Major Architecture Changes
 - **Circular Buffer Migration**: Replaced legacy linear buffer with modern circular buffer
@@ -103,7 +148,7 @@
    - No transmission freezes
    - Successful MAVLink parameter downloads
 
-## v2.11.0 (Project Restructuring & MAVLink Fix) - January 2025 ✅
+## v2.11.0 (Project Restructuring & MAVLink Fix) ✅
 - **Project Structure Reorganization**: Improved code organization with dedicated folders
   - **Created subfolder structure**: Organized related modules into logical directories
     - `src/web/` - Web interface modules (web_api, web_interface, web_ota)
@@ -140,7 +185,7 @@
     - Simplified to basic error counters for diagnostics
     - Reduced memory footprint and complexity
 
-## v2.10.2 (USB Backpressure Reversion) - January 2025 ✅
+## v2.10.2 (USB Backpressure Reversion) ✅
 - **USB Backpressure Simplification**: Reverted complex behavioral detection to simple approach
   - **Removed Features**: Complex behavioral port state detection system
     - **Behavioral detection logic** removed from `src/usb_device.cpp`
@@ -162,7 +207,7 @@
     - Eliminated source of platform-specific issues
   - **Future Consideration**: May revisit with simpler heuristics if specific need arises
 
-## v2.10.1 (Configuration Cleanup) - January 2025 ✅
+## v2.10.1 (Configuration Cleanup) ✅
 - **USB Configuration Cleanup**: Removed unsupported USB Auto mode
   - **Code Cleanup**: Removed USB_MODE_AUTO enum value and all related handling code
   - **Web Interface**: Removed "Auto (not supported)" option from USB mode selection
@@ -170,7 +215,7 @@
   - **Implementation**: Deleted UsbAuto class and createUsbAuto factory function
   - **Benefits**: Cleaner codebase, no misleading configuration options
 
-## v2.10.0 (USB Buffer Overflow Prevention) - January 2025 ✅
+## v2.10.0 (USB Buffer Overflow Prevention) ✅
 - **USB Buffer Overflow Prevention**: Behavioral port state detection to prevent buffer overflow
   - **Behavioral Port Detection** (`src/usb_device.cpp`): Smart detection of USB port state without relying on unavailable APIs
     - **Buffer monitoring**: Tracks write buffer availability patterns to detect port closure
@@ -191,7 +236,7 @@
     - **Fresh data guarantee**: Only current data transmitted after port reopens
     - **Zero stale data**: Prevents transmission of outdated information
 
-## v2.9.5 (Critical Memory Safety & Logging Refactoring) - January 2025 ✅
+## v2.9.5 (Critical Memory Safety & Logging Refactoring) ✅
 - **Critical Memory Safety Fixes**: Eliminated heap corruption and segmentation faults
   - **Adaptive Buffer Protection** (`src/adaptive_buffer.h`): Fixed buffer underflow and bounds checking
     - **Underflow prevention**: Added validation for `totalConsumed > bufferIndex` before size_t arithmetic
@@ -230,7 +275,7 @@
     - Single unified printf-style logging function for entire codebase
     - Improved code maintainability and consistency
 
-## v2.9.0 (MAVLink Protocol Implementation) - January 2025 ✅
+## v2.9.0 (MAVLink Protocol Implementation) ✅
 - **MAVLink Protocol Detector** - Phase 4.2 Complete
   - **Core MAVLink Implementation**: Full MAVLink v1/v2 packet detection
     - Created `src/protocols/mavlink_detector.h/cpp` with complete implementation
@@ -262,7 +307,7 @@
     - Maintained gzip compression for optimal size (70-78% reduction)
     - Preserved JavaScript/CSS minification for performance
 
-## v2.8.3 (Protocol Detection Framework) - July 2025 ✅
+## v2.8.3 (Protocol Detection Framework) ✅
 - **Protocol Detection Infrastructure** - Phase 4.1 Complete
   - **Framework Architecture**: Extensible protocol detection system
     - Created `src/protocols/` directory with base classes and interfaces
@@ -285,7 +330,7 @@
     - Clear separation of concerns between framework and protocol logic
     - Prepared for future protocol-specific optimizations
 
-## v2.8.2 (WiFi Manager ESP-IDF Migration) - July 2025 ✅
+## v2.8.2 (WiFi Manager ESP-IDF Migration) ✅
 - **Complete WiFi Manager Migration** - Completed
   - **Full ESP-IDF Implementation**: Migrated from Arduino WiFi API to native ESP-IDF
     - Replaced WiFi.h with esp_wifi.h, esp_event.h, esp_netif.h
@@ -307,7 +352,7 @@
     - Connection timeout handling and automatic retry logic
     - Scan failure recovery with WiFi subsystem reset
 
-## v2.8.1 (WiFi Client Mode Stability Fixes) - July 2025 ✅
+## v2.8.1 (WiFi Client Mode Stability Fixes) ✅
 - **WiFi Client Connection Logic** - Major stability improvements
   - **AP Mode Conflict Resolution**: Fixed dual AP+Client mode issue causing network conflicts
     - Added ESP-IDF level WiFi initialization with forced STA-only mode 
@@ -334,7 +379,7 @@
   - **Help Page**: Updated HTML help with key WiFi Client information and troubleshooting
   - **Troubleshooting**: Enhanced problem resolution guide with specific LED state meanings
 
-## v2.8.0 (WiFi Client Mode Implementation) - July 2025 ✅
+## v2.8.0 (WiFi Client Mode Implementation) ✅
 - **WiFi Client Mode** - Full implementation completed
   - **Dual WiFi Modes**: Support for both Access Point (AP) and Client (STA) modes
   - **WiFi Manager**: Complete state machine with scanning, connecting, and error handling
@@ -354,7 +399,7 @@
     - Visual feedback for all WiFi states and user interactions
     - Reliable network operations with proper synchronization
 
-## v2.7.3 (Configuration Import/Export + UI Improvements) - July 2025 ✅
+## v2.7.3 (Configuration Import/Export + UI Improvements) ✅
 - **Configuration Import/Export** - Completed
   - **Export Configuration**: Download current config as JSON file with unique filename
   - **Import Configuration**: Upload JSON config file with validation and auto-reboot  
@@ -367,7 +412,7 @@
     - No need to reconfigure after firmware updates
     - Reliable status display without "Failed to fetch" errors
 
-## v2.7.2 (Device 3/4 Code Refactoring) - July 2025 ✅
+## v2.7.2 (Device 3/4 Code Refactoring) ✅
 - **Device 3/4 Module Separation** - Completed
   - **File Structure**: Created independent device3_task.cpp/h and device4_task.cpp/h modules
   - **Code Reduction**: Reduced uartbridge.cpp from 600+ to 240 lines (360+ lines moved)
@@ -380,7 +425,7 @@
     - Clear module boundaries for future expansion
     - Preserved all existing functionality without changes
 
-## v2.7.1 (Device 3/4 Statistics Unification) - July 2025 ✅
+## v2.7.1 (Device 3/4 Statistics Unification) ✅
 - **Statistics Thread Safety** - Completed
   - **Device 4 Protection**: Added critical sections for all TX/RX statistics updates
   - **Device 3 Migration**: Moved from local variables to global variables approach
@@ -393,7 +438,7 @@
     - Maintainable unified codebase
     - Stable operation in concurrent scenarios
 
-## v2.7.0 (Device 4 Network Implementation) - July 2025 ✅
+## v2.7.0 (Device 4 Network Implementation) ✅
 - **Device 4 Network Functionality** - Completed
   - **Network Logger Mode**: Send system logs via UDP (broadcast or unicast)
   - **Network Bridge Mode**: Bidirectional UART<->UDP communication
@@ -418,7 +463,7 @@
     - Web interface now correctly displays selected Device 4 role
     - Removed duplicate role name transmission in config JSON
 
-## v2.6.0 (ESPAsyncWebServer Migration) - July 2025 ✅
+## v2.6.0 (ESPAsyncWebServer Migration) ✅
 - **Migrated to ESPAsyncWebServer** - Completed
   - **Libraries**: Updated to ESPAsyncWebServer v3.7.10 + AsyncTCP v3.4.5
   - **Template System**: Changed from custom `{{}}` to built-in `%PLACEHOLDER%` processor
@@ -430,7 +475,7 @@
   - **JavaScript Fixes**: Fixed Reset Statistics and Clear Crash History button handling
   - **Diagnostics**: Enhanced stack monitoring for WiFi/TCP tasks instead of web server task
 
-## v2.5.8 (Permanent Network Mode) - July 2025 ✅
+## v2.5.8 (Permanent Network Mode) ✅
 - **Permanent Network Mode Implementation** - Completed
   - Added `permanent_network_mode` configuration parameter in Config structure
   - Updated configuration version from 3 to 4 with automatic migration
@@ -450,7 +495,7 @@
   - Prevents version mismatches between firmware and documentation
   - **Fixed**: Removed blocking `exit(0)` that prevented compilation and upload
 
-## v2.5.7 (Device Init Refactoring) - July 2025 ✅
+## v2.5.7 (Device Init Refactoring) ✅
 - **Refactor Device Initialization** - Completed
   - Migrated `uartbridge_init()` from `uartbridge.cpp` to `device_init.cpp`
   - Renamed `uartbridge_init()` to `initMainUART()` for consistency
@@ -467,7 +512,7 @@
     - Added `diagnostics.h` include for helper functions
     - Total lines moved: ~85 lines to device_init module
 
-## v2.5.6 (Bridge Mode Renaming) - July 2025 ✅
+## v2.5.6 (Bridge Mode Renaming) ✅
 - **Rename Device Modes to Bridge Modes** - Completed
   - Renamed `DeviceMode` enum to `BridgeMode`
   - Renamed `MODE_NORMAL` to `BRIDGE_STANDALONE`
@@ -500,7 +545,7 @@
   - TaskScheduler functions renamed (enableRuntimeTasks → enableStandaloneTasks)
   - Network timeout only active when `isTemporaryNetwork=true`
 
-## v2.5.5 (Adaptive Buffer Optimization) - July 2025 ✅
+## v2.5.5 (Adaptive Buffer Optimization) ✅
 - **Fix FIFO Overflow at 115200 baud** - Completed
   - Identified root cause: increased buffer size (512 bytes) causing USB bottleneck
   - Created graduated buffer sizing for smoother performance:
@@ -521,7 +566,7 @@
   - Removed ~55 lines of duplicated code
   - Added temporary diagnostics (marked for removal after testing)
 
-## v2.5.4 (TaskScheduler Implementation) - July 2025 ✅
+## v2.5.4 (TaskScheduler Implementation) ✅
 - **Implement TaskScheduler** - Completed
   - Added TaskScheduler library to replace manual timer checks
   - Created `scheduler_tasks.cpp/h` for centralized task management
@@ -535,7 +580,7 @@
   - All tasks properly distributed in time to prevent simultaneous execution
   - Mode-specific task management (Runtime vs Setup modes)
 
-## v2.5.3 (Phase 2 Code Refactoring - Hybrid Approach) - July 2025 ✅
+## v2.5.3 (Phase 2 Code Refactoring - Hybrid Approach) ✅
 - **Phase 2 Refactoring - Hybrid Approach** - Completed
   - Further refactored uartbridge.cpp from ~555 to ~250 lines
   - Created BridgeContext structure for clean parameter passing
@@ -574,7 +619,7 @@
   - Performance preserved with inline functions
   - Ready for future extensions
 
-## v2.5.2 (Phase 1 Code Refactoring) - July 2025 ✅
+## v2.5.2 (Phase 1 Code Refactoring) ✅
 - **Refactor Large uartbridge.cpp File** - Phase 1 Complete
   - Original size: ~700 lines, reduced to ~555 lines
   - Created modular structure without breaking functionality
@@ -597,7 +642,7 @@
   - Project compiles successfully with new structure
   - All functionality preserved
 
-## v2.5.1 (Web Interface Modularization) - July 2025 ✅
+## v2.5.1 (Web Interface Modularization) ✅
 - **Split main.js into modules** - Completed
   - Created separate JS modules for better organization:
     - `utils.js` - Common utility functions
@@ -625,7 +670,7 @@
   - Removed unused `lastWdtFeed` variable from `uartbridge.cpp`
   - Fixed legacy code remnants
 
-## v2.5.0 (Complete ESP-IDF Migration + Performance) - July 2025 ✅
+## v2.5.0 (Complete ESP-IDF Migration + Performance) ✅
 - **Complete ESP-IDF Migration** - Completed
   - Migrated Device 2 UART to ESP-IDF/DMA ✅
   - Migrated Device 3 UART to ESP-IDF/DMA ✅
@@ -654,7 +699,7 @@
   - Prevents packet fragmentation at high speeds
   - Maintains low latency at all speeds
 
-## v2.4.0 (ESP-IDF Migration) - July 2025 ✅
+## v2.4.0 (ESP-IDF Migration) ✅
 - **Remove Arduino Framework Dependencies for Device1** - Completed
   - Migrated Device 1 UART to ESP-IDF driver with DMA
   - Removed all conditional compilation (#ifdef USE_UART_DMA)
@@ -685,7 +730,7 @@
   - Created common base class for code reuse
   - USB performance not critical compared to UART
 
-## v2.3.3 (Performance Optimization) - July 2025 ✅
+## v2.3.3 (Performance Optimization) ✅
 - **UART Bridge Performance Fix** - Completed
   - Fixed packet drops during MAVLink parameter downloads
   - Optimized device role checks with cached flags
@@ -698,7 +743,7 @@
   - Removed baudrate condition - always use 1KB buffers
   - Reduced WiFi yield time from 5ms to 3ms
 
-## v2.3.2 (Web Interface Migration) - July 2025 ✅
+## v2.3.2 (Web Interface Migration) ✅
 - **Web Interface Refactoring** - Completed
   - Migrated from embedded HTML strings to separate HTML/CSS/JS files
   - Created build-time processing with `embed_html.py` script
@@ -707,7 +752,7 @@
   - HTML/CSS/JS files now editable with proper IDE support
   - C++ code reduced by ~3000 lines
 
-## v2.3.1 - July 2025 ✅
+## v2.3.1 ✅
 - **Update Statistics System** - Completed
   - Replaced old `bytesUartToUsb`/`bytesUsbToUart` with per-device counters
   - Added `device1RxBytes`/`device1TxBytes`, `device2RxBytes`/`device2TxBytes`, `device3RxBytes`/`device3TxBytes`
@@ -726,7 +771,7 @@
   - Updated JavaScript to handle new JSON structure from `/status` endpoint
   - Fixed "Never" display for last activity
 
-## v2.3.0 - July 2025 ✅
+## v2.3.0 ✅
 - **Remove DEBUG_MODE** - Completed
   - Removed all DEBUG_MODE checks from code
   - Bridge always active in all modes
