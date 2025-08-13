@@ -34,12 +34,6 @@ extern UsbInterface* g_usbInterface;
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
 
-
-
-
-
-
-
 // UART Bridge Task - runs with high priority on Core 0
 void uartBridgeTask(void* parameter) {
   // Wait for system initialization
@@ -66,7 +60,6 @@ void uartBridgeTask(void* parameter) {
   unsigned long localDevice4TxPackets = 0;    // Device 4 TX packets
   unsigned long localLastActivity = 0;
   unsigned long localTotalUartPackets = 0;
-
 
   // Adaptive buffering variables
   unsigned long lastByteTime = 0;
@@ -181,18 +174,13 @@ void uartBridgeTask(void* parameter) {
       processDevice4BridgeToUart(&ctx);
     }
 
-    // Pipeline handles buffer timeouts automatically - no need for handleBufferTimeout
-
-    // HOOK: Check protocol timeouts
-    // checkProtocolTimeouts(&ctx);  // Removed - Pipeline handles this
-
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Pipeline statistics output (every 10 seconds)
     static uint32_t lastPipelineStats = 0;
     if (millis() - lastPipelineStats > 10000) {
         char statBuf[512];  // Increased buffer size
         ctx.protocolPipeline->getStatsString(statBuf, sizeof(statBuf));
-        log_msg(LOG_INFO, "Pipeline stats:\n%s", statBuf);
+        log_msg(LOG_INFO, "Pipeline stats: %s", statBuf);
         
         // Memory pool statistics
         PacketMemoryPool::getInstance()->getStats(statBuf, sizeof(statBuf));

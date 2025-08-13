@@ -125,18 +125,19 @@ public:
         }
     }
     
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Get detailed pipeline statistics as string (simplified version for now)
     void getStatsString(char* buffer, size_t bufSize) {
         size_t offset = 0;
         
         // Parser info
         offset += snprintf(buffer + offset, bufSize - offset,
-                          "Parser: %s\n", parser ? parser->getName() : "None");
+                          "[%s] ", parser ? parser->getName() : "None");
         
         // Buffer status
         if (inputBuffer) {
             offset += snprintf(buffer + offset, bufSize - offset,
-                              "Buffer: %zu/%zu bytes\n", 
+                              "Buf: %zu/%zu ", 
                               inputBuffer->available(), inputBuffer->getCapacity());
         }
         
@@ -144,7 +145,7 @@ public:
         for (size_t i = 0; i < senderCount; i++) {
             if (senders[i]) {
                 offset += snprintf(buffer + offset, bufSize - offset,
-                                  "%s: Sent=%u Dropped=%u (B:%u/N:%u/C:%u) Queue=%zu Max=%zu\n",
+                                  "%s: Sent=%u Dropped=%u (B:%u/N:%u/C:%u) Queue=%zu Max=%zu",
                                   senders[i]->getName(),
                                   senders[i]->getSentCount(),
                                   senders[i]->getDroppedCount(),
@@ -155,13 +156,8 @@ public:
                                   senders[i]->getMaxQueueDepth());
             }
         }
-        
-        // Protocol-specific info
-        if (parser && strcmp(parser->getName(), "RAW") == 0) {
-            offset += snprintf(buffer + offset, bufSize - offset,
-                              "RAW timeouts: 200μs/1ms/5ms/15ms\n");
-        }
     }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     // Method for distributing parsed packets (used by pipeline task)
     void distributeParsedPackets(ParseResult* result) {
