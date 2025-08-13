@@ -76,6 +76,7 @@ class PacketMemoryPool {
 private:
     // Pools for different packet sizes
     MemoryPool<64, 30> smallPool;     // Control packets (30 blocks)
+    MemoryPool<128, 20> mediumPool;   // For RAW chunks (120-240 divided in half)
     MemoryPool<288, 20> mavlinkPool;  // MAVLink v2 max (20 blocks)
     MemoryPool<512, 10> rawPool;      // RAW chunks (10 blocks)
     
@@ -94,6 +95,9 @@ public:
         if (size <= 64) {
             ptr = smallPool.allocate();
             allocatedSize = 64;
+        } else if (size <= 128) {
+            ptr = mediumPool.allocate();
+            allocatedSize = 128;            
         } else if (size <= 288) {
             ptr = mavlinkPool.allocate();
             allocatedSize = 288;
@@ -122,6 +126,8 @@ public:
         
         if (allocatedSize == 64) {
             smallPool.deallocate(ptr);
+        } else if (allocatedSize == 128) {
+            mediumPool.deallocate(ptr);
         } else if (allocatedSize == 288) {
             mavlinkPool.deallocate(ptr);
         } else if (allocatedSize == 512) {
