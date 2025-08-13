@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Forward declaration
+// Forward declarations
 struct PacketDetectionResult;
+class ProtocolStats;
 
 // Base interface for protocol detection
 class ProtocolDetector {
@@ -32,6 +33,15 @@ public:
     
     // Protocol priority for future multi-protocol support
     virtual uint8_t getPriority() const { return 50; }  // 0-100, higher = priority
+    
+    // Set statistics pointer for detector
+    virtual void setStats(ProtocolStats* statsPtr) { 
+        // Default empty implementation
+    }
+    
+    // Get minimum bytes needed for protocol detection
+    // Each protocol should return its minimum header size
+    virtual size_t getMinimumBytesNeeded() const = 0;
 };
 
 #endif // PROTOCOL_DETECTOR_H

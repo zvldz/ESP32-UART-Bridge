@@ -6,6 +6,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+// Forward declarations
+class ProtocolPipeline;
+
+// Protocol types from new architecture
+#include "protocols/protocol_types.h"
+
 // Bridge modes
 typedef enum {
   BRIDGE_STANDALONE,  // Standalone UART bridge mode
@@ -84,16 +90,8 @@ enum Device4Role {
     D4_LOG_NETWORK = 2      // Network Logger
 };
 
-// Protocol optimization types
-enum ProtocolType {
-    PROTOCOL_NONE = 0,       // Default - adaptive buffering only
-    PROTOCOL_MAVLINK = 1,    // MAVLink v1/v2
-    PROTOCOL_MODBUS_RTU = 2, // Modbus RTU
-    PROTOCOL_NMEA = 3,       // NMEA 0183
-    PROTOCOL_TEXT_LINE = 4,  // Line-based protocols
-    PROTOCOL_SBUS = 5,       // SBUS (future)
-    // Add more as needed
-};
+// OLD enum ProtocolType removed - now using protocol_types.h
+// PROTOCOL_NONE is now mapped to PROTOCOL_RAW in new architecture
 
 // Device 4 Configuration
 struct Device4Config {
@@ -305,6 +303,7 @@ struct BridgeContext {
         bool packetInProgress;           // Currently receiving packet
         uint32_t packetStartTime;        // When packet reception started
         ProtocolStats* stats;            // Protocol statistics (nullptr in Phase 4.1)
+        size_t minBytesNeeded;           // Cached minimum bytes for detection
         
         // Track last detected packet to avoid double counting
         size_t lastDetectedOffset;       // Position of last counted packet in buffer
@@ -327,6 +326,9 @@ struct BridgeContext {
         bool packetFound;               // Valid packet found in buffer
         size_t skipBytes;               // Bytes to skip before packet (from detector to TX)
     } protocol;
+    
+    // NEW: Protocol pipeline for Parser + Sender architecture
+    class ProtocolPipeline* protocolPipeline;
 };
 
 // Initialize BridgeContext with all necessary pointers
@@ -426,6 +428,9 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->protocol.currentPacketStart = 0;
     ctx->protocol.packetFound = false;
     ctx->protocol.skipBytes = 0;
+    
+    // NEW: Initialize protocol pipeline
+    ctx->protocolPipeline = nullptr;  // Will be initialized later
 }
 
 #endif // TYPES_H

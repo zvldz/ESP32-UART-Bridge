@@ -24,12 +24,52 @@ void MavlinkDetector::reset() {
 }
 
 bool MavlinkDetector::canDetect(const uint8_t* data, size_t length) {
-    // FastMAVLink can start parsing from any byte
-    // Keep original behavior - trust FastMAVLink to find sync
-    return length > 0;
+    // TEMPORARY DEBUG LOG - START
+    static uint32_t canDetectCalls = 0;
+    if (++canDetectCalls <= 10 || canDetectCalls % 100 == 0) {
+        log_msg(LOG_DEBUG, "[TEMP] MAV canDetect #%u: len=%zu, minBytes=%zu, data[0]=%02X", 
+                canDetectCalls, length, getMinimumBytesNeeded(), data ? data[0] : 0xFF);
+    }
+    // TEMPORARY DEBUG LOG - END
+    
+    // Check for sufficient data
+    if (!data || length < getMinimumBytesNeeded()) {
+        // TEMPORARY DEBUG LOG - START
+        static uint32_t insufficientCount = 0;
+        if (++insufficientCount <= 5) {
+            log_msg(LOG_DEBUG, "[TEMP] MAV canDetect: insufficient data (len=%zu, need=%zu)", 
+                    length, getMinimumBytesNeeded());
+        }
+        // TEMPORARY DEBUG LOG - END
+        return false;
+    }
+    
+    // Check for MAVLink start bytes
+    bool isV1 = (data[0] == 0xFE);
+    bool isV2 = (data[0] == 0xFD);
+    
+    // TEMPORARY DEBUG LOG - START
+    static uint32_t checkCount = 0;
+    if (++checkCount <= 10 || checkCount % 100 == 0) {
+        log_msg(LOG_DEBUG, "[TEMP] MAV canDetect #%u: isV1=%d, isV2=%d, byte0=%02X", 
+                checkCount, isV1, isV2, data[0]);
+    }
+    // TEMPORARY DEBUG LOG - END
+    
+    // FastMAVLink can start parsing from any byte, but we check for valid start
+    // to avoid unnecessary processing
+    return isV1 || isV2;
 }
 
 PacketDetectionResult MavlinkDetector::findPacketBoundary(const uint8_t* data, size_t length) {
+    // TEMPORARY DEBUG LOG - START
+    static uint32_t detectCalls = 0;
+    if (++detectCalls <= 10 || detectCalls % 100 == 0) {
+        log_msg(LOG_INFO, "[TEMP][DETECT] findPacketBoundary #%u: len=%zu", 
+                detectCalls, length);
+    }
+    // TEMPORARY DEBUG LOG - END
+    
     if (length == 0) return PacketDetectionResult(0, 0);
     
     // Process input data byte by byte for packet assembly
@@ -58,6 +98,12 @@ PacketDetectionResult MavlinkDetector::findPacketBoundary(const uint8_t* data, s
             // Update statistics if available
             if (stats) {
                 stats->onPacketDetected(result.frame_len, millis());
+                // Keep this for verification that fix works
+                static uint32_t detectCounter = 0;
+                if (++detectCounter % 100 == 0) {
+                    log_msg(LOG_INFO, "MAVLink: Detected %u packets (stats: %u total)", 
+                            detectCounter, stats->packetsDetected);
+                }
             }
             
             // Log packet detection periodically

@@ -1,6 +1,7 @@
 #include "uartbridge.h"
 #include "../bridge_processing.h"
 #include "../adaptive_buffer.h"
+#include "../protocols/protocol_pipeline.h"
 #include "flow_control.h"
 #include "../devices/device_init.h"
 #include "../diagnostics.h"
@@ -64,11 +65,8 @@ void uartBridgeTask(void* parameter) {
 
   log_msg(LOG_INFO, "UART task started on core %d", xPortGetCoreID());
 
-  // Dynamic buffer allocation based on baudrate and protocol setting
-  const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(
-    config.baudrate, 
-    config.protocolOptimization != PROTOCOL_NONE
-  );
+  // Dynamic buffer allocation based on baudrate
+  const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(config.baudrate);
 
   log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
           adaptiveBufferSize, config.baudrate);
@@ -151,11 +149,15 @@ void uartBridgeTask(void* parameter) {
   // Initialize CircularBuffer for new architecture
   initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
-  // Initialize protocol detection
-  initProtocolDetection(&ctx, &config);
+  // NEW: Initialize protocol pipeline instead of old detection
+  ctx.protocolPipeline = new ProtocolPipeline(&ctx);
+  ctx.protocolPipeline->init(&config);
+  
+  // OLD: Keep old protocol detection as fallback (will be removed later)
+  // initProtocolDetection(&ctx, &config);  // Removed - Pipeline does this
 
   // Configure hardware for selected protocol
-  configureHardwareForProtocol(&ctx, config.protocolOptimization);
+  // configureHardwareForProtocol(&ctx, config.protocolOptimization);  // Removed - Pipeline does this
 
   log_msg(LOG_INFO, "UART Bridge Task started");
   log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
@@ -163,7 +165,7 @@ void uartBridgeTask(void* parameter) {
 
   while (1) {
     // HOOK: Update protocol state
-    updateProtocolState(&ctx);
+    // updateProtocolState(&ctx);  // Removed - Pipeline handles this
     
     // Poll Device 2 UART if configured
     if (device2IsUART2 && device2Serial) {
@@ -194,18 +196,22 @@ void uartBridgeTask(void* parameter) {
       processDevice4BridgeToUart(&ctx);
     }
 
-    // Handle any remaining data in buffer (timeout-based flush) for USB
-    if (device2IsUSB && ctx.adaptive.circBuf && ctx.adaptive.circBuf->available() > 0) {
-      handleBufferTimeout(&ctx);
-    }
+    // Pipeline handles buffer timeouts automatically - no need for handleBufferTimeout
 
     // HOOK: Check protocol timeouts
-    checkProtocolTimeouts(&ctx);
+    // checkProtocolTimeouts(&ctx);  // Removed - Pipeline handles this
 
     // Fixed delay for multi-core systems (always 1ms)
     vTaskDelay(pdMS_TO_TICKS(1));
   }
   
-  // This point is never reached in normal operation
+  // This point is never reached in normal operation, but cleanup if we get here
+  if (ctx.protocolPipeline) {
+    delete ctx.protocolPipeline;
+    ctx.protocolPipeline = nullptr;
+  }
+  
+  // Cleanup adaptive buffer
+  cleanupAdaptiveBuffer(&ctx);
 }
 

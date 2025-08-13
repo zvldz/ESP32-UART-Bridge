@@ -29,7 +29,7 @@ extern void on_wifi_disconnected();
 extern EventGroupHandle_t networkEventGroup;
 #define NETWORK_CONNECTED_BIT BIT0
 
-// DNS Server (перенесен из web_interface.cpp для доступа из scheduler_tasks.cpp)
+// DNS Server (moved from web_interface.cpp for access from scheduler_tasks.cpp)
 extern DNSServer* dnsServer;
 
 #endif // WIFI_MANAGER_H

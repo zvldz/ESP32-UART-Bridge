@@ -45,8 +45,8 @@ void webserver_init(Config* config, UartStats* stats, SystemState* state) {
   state->networkStartTime = millis();
   state->isTemporaryNetwork = true;  // Setup AP is temporary
 
-  // ВАЖНО: WiFi и DNS теперь управляются через wifi_manager
-  // Эта функция только создает веб-сервер
+  // IMPORTANT: WiFi and DNS are now managed through wifi_manager
+  // This function only creates the web server
 
   // Create async web server
   server = new AsyncWebServer(80);
@@ -162,7 +162,7 @@ void webserver_cleanup() {
     delete server;
     server = nullptr;
   }
-  // DNS сервер теперь управляется через wifi_manager
+  // DNS server is now managed through wifi_manager
 }
 
 // Check WiFi timeout
