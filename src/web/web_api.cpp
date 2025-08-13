@@ -140,55 +140,10 @@ String getConfigJson() {
     // Protocol optimization configuration
     doc["protocolOptimization"] = config.protocolOptimization;
     
-    // Protocol statistics via bridge context accessor
+    // Protocol statistics via Pipeline
     BridgeContext* ctx = getBridgeContext();
-    if (ctx && ctx->protocol.stats) {
-        auto stats = ctx->protocol.stats;
-        doc["protocolStats"]["packetsDetected"] = stats->packetsDetected;
-        doc["protocolStats"]["packetsTransmitted"] = stats->packetsTransmitted;
-        doc["protocolStats"]["detectionErrors"] = stats->detectionErrors;
-        doc["protocolStats"]["resyncEvents"] = stats->resyncEvents;
-        doc["protocolStats"]["totalBytes"] = stats->totalBytes;
-        doc["protocolStats"]["minPacketSize"] = (stats->minPacketSize == UINT32_MAX) ? 0 : stats->minPacketSize;
-        doc["protocolStats"]["maxPacketSize"] = stats->maxPacketSize;
-        doc["protocolStats"]["avgPacketSize"] = stats->avgPacketSize;
-        doc["protocolStats"]["packetsPerSecond"] = stats->packetsPerSecond;
-        doc["protocolStats"]["consecutiveErrors"] = stats->consecutiveErrors;
-        doc["protocolStats"]["maxConsecutiveErrors"] = stats->maxConsecutiveErrors;
-        
-        // Format last packet time with overflow protection
-        if (stats->lastPacketTime == 0) {
-            doc["protocolStats"]["lastPacketTime"] = "Never";
-        } else {
-            unsigned long currentMillis = millis();
-            unsigned long timeDiff;
-            
-            // Handle millis() overflow properly (every ~49 days)
-            if (currentMillis >= stats->lastPacketTime) {
-                timeDiff = currentMillis - stats->lastPacketTime;
-            } else {
-                // Only consider it overflow if difference is huge (> 40 days)
-                if ((stats->lastPacketTime - currentMillis) > 3456000000UL) {  // ~40 days in ms
-                    stats->lastPacketTime = currentMillis;
-                    timeDiff = 0;
-                } else {
-                    // Small negative difference - just old packet, use simple calculation
-                    timeDiff = currentMillis + (UINT32_MAX - stats->lastPacketTime);
-                }
-            }
-            
-            // Reset very old time values (likely old data from previous session)
-            if (timeDiff > 86400000) {  // More than 24 hours in milliseconds
-                stats->lastPacketTime = currentMillis;
-                timeDiff = 0;
-            }
-            
-            if (timeDiff == 0) {
-                doc["protocolStats"]["lastPacketTime"] = "Just now";
-            } else {
-                doc["protocolStats"]["lastPacketTime"] = String(timeDiff / 1000) + " seconds ago";
-            }
-        }
+    if (ctx && ctx->protocolPipeline) {
+        ctx->protocolPipeline->appendStatsToJson(doc);
     }
     
     // Log display count

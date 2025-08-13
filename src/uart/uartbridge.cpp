@@ -37,24 +37,6 @@ UartInterface* device2Serial = nullptr;
 
 
 
-// Static variables for stats functions
-static unsigned long* s_device1RxBytes = nullptr;
-static unsigned long* s_device1TxBytes = nullptr;
-static unsigned long* s_device2RxBytes = nullptr;
-static unsigned long* s_device2TxBytes = nullptr;
-static unsigned long* s_device3RxBytes = nullptr;
-static unsigned long* s_device3TxBytes = nullptr;
-static unsigned long* s_lastActivity = nullptr;
-
-// Function implementations for scheduler
-void updateMainStats() {
-    if (!s_device1RxBytes) return;  // Not initialized yet
-    
-    updateSharedStats(*s_device1RxBytes, *s_device1TxBytes,
-                     *s_device2RxBytes, *s_device2TxBytes,
-                     *s_device3RxBytes, *s_device3TxBytes,
-                     *s_lastActivity);
-}
 
 
 
@@ -78,17 +60,13 @@ void uartBridgeTask(void* parameter) {
   unsigned long localDevice2TxBytes = 0;
   unsigned long localDevice3RxBytes = 0;
   unsigned long localDevice3TxBytes = 0;
+  unsigned long localDevice4RxBytes = 0;      // Device 4 RX bytes
+  unsigned long localDevice4TxBytes = 0;      // Device 4 TX bytes
+  unsigned long localDevice4RxPackets = 0;    // Device 4 RX packets
+  unsigned long localDevice4TxPackets = 0;    // Device 4 TX packets
   unsigned long localLastActivity = 0;
   unsigned long localTotalUartPackets = 0;
 
-  // Store pointers for stats functions
-  s_device1RxBytes = &localDevice1RxBytes;
-  s_device1TxBytes = &localDevice1TxBytes;
-  s_device2RxBytes = &localDevice2RxBytes;
-  s_device2TxBytes = &localDevice2TxBytes;
-  s_device3RxBytes = &localDevice3RxBytes;
-  s_device3TxBytes = &localDevice3TxBytes;
-  s_lastActivity = &localLastActivity;
 
   // Adaptive buffering variables
   unsigned long lastByteTime = 0;
@@ -121,6 +99,8 @@ void uartBridgeTask(void* parameter) {
     &localDevice1RxBytes, &localDevice1TxBytes,
     &localDevice2RxBytes, &localDevice2TxBytes,
     &localDevice3RxBytes, &localDevice3TxBytes,
+    &localDevice4RxBytes, &localDevice4TxBytes,
+    &localDevice4RxPackets, &localDevice4TxPackets,
     &localLastActivity, &localTotalUartPackets,
     // Adaptive buffer
     adaptiveBufferSize,
@@ -210,8 +190,8 @@ void uartBridgeTask(void* parameter) {
     // Pipeline statistics output (every 10 seconds)
     static uint32_t lastPipelineStats = 0;
     if (millis() - lastPipelineStats > 10000) {
-        char statBuf[256];
-        ctx.protocolPipeline->getStats(statBuf, sizeof(statBuf));
+        char statBuf[512];  // Increased buffer size
+        ctx.protocolPipeline->getStatsString(statBuf, sizeof(statBuf));
         log_msg(LOG_INFO, "Pipeline stats:\n%s", statBuf);
         
         // Memory pool statistics
