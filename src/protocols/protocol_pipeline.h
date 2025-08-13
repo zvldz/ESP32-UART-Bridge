@@ -27,7 +27,8 @@ public:
         parser(nullptr),
         senderCount(0),
         inputBuffer(nullptr),
-        ctx(context) {
+        ctx(context) {  // CRITICAL: Save context pointer
+
         memset(senders, 0, sizeof(senders));
     }
     
@@ -182,7 +183,20 @@ public:
     void appendStatsToJson(JsonDocument& doc) {
         JsonObject stats = doc["protocolStats"].to<JsonObject>();
         
-        // Basic protocol information
+        // CRITICAL FIX: Check all pointers before access
+        if (!ctx) {
+            stats["error"] = "Pipeline context not initialized";
+            log_msg(LOG_WARNING, "Pipeline: appendStatsToJson called with null context");
+            return;
+        }
+
+        if (!ctx->system.config) {
+            stats["error"] = "Configuration not available";
+            log_msg(LOG_WARNING, "Pipeline: Config pointer is null in appendStatsToJson");
+            return;
+        }
+
+        // Basic protocol information - now safe to access
         stats["protocolType"] = ctx->system.config->protocolOptimization;  // 0=RAW, 1=MAVLink, 2=SBUS
         stats["parserName"] = parser ? parser->getName() : "None";
         
@@ -195,7 +209,6 @@ public:
             // Protocol-specific metrics
             switch(ctx->system.config->protocolOptimization) {
                 case PROTOCOL_NONE:  // RAW (0)
-                    // For RAW, "packets" are actually chunks
                     parserStats["chunksCreated"] = ctx->protocol.stats->packetsTransmitted;
                     break;
                     
@@ -204,7 +217,7 @@ public:
                     parserStats["detectionErrors"] = ctx->protocol.stats->detectionErrors;
                     parserStats["resyncEvents"] = ctx->protocol.stats->resyncEvents;
                     break;
-                    
+
                 // Future: PROTOCOL_SBUS (2)
                 // parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
                 // parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
@@ -224,19 +237,24 @@ public:
                 lastActivityMs = currentMillis - ctx->protocol.stats->lastPacketTime;
             }
             parserStats["lastActivityMs"] = lastActivityMs;
+        } else {
+            // Stats not available yet
+            JsonObject parserStats = stats["parser"].to<JsonObject>();
+            parserStats["info"] = "Statistics not yet initialized";
         }
         
-        // Sender statistics
+        // Sender statistics - with null checks
         JsonArray sendersArray = stats["senders"].to<JsonArray>();
         for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {
+            if (senders[i]) {  // Check sender pointer
                 JsonObject sender = sendersArray.createNestedObject();
                 sender["name"] = senders[i]->getName();
                 sender["sent"] = senders[i]->getSentCount();
                 sender["dropped"] = senders[i]->getDroppedCount();
                 
-                // Priority breakdown for protocols that use it
-                if (ctx->system.config->protocolOptimization == PROTOCOL_MAVLINK) {
+                // Priority breakdown only for MAVLink
+                if (ctx->system.config && 
+                    ctx->system.config->protocolOptimization == PROTOCOL_MAVLINK) {
                     JsonObject drops = sender["dropsByPriority"].to<JsonObject>();
                     drops["bulk"] = senders[i]->getDroppedBulk();
                     drops["normal"] = senders[i]->getDroppedNormal();
@@ -248,12 +266,19 @@ public:
             }
         }
         
-        // Buffer statistics
+        // Buffer statistics - with null check
         if (inputBuffer) {
             JsonObject buffer = stats["buffer"].to<JsonObject>();
             buffer["used"] = inputBuffer->available();
             buffer["capacity"] = inputBuffer->getCapacity();
-            buffer["utilizationPercent"] = (inputBuffer->available() * 100) / inputBuffer->getCapacity();
+
+            // Avoid division by zero
+            size_t capacity = inputBuffer->getCapacity();
+            if (capacity > 0) {
+                buffer["utilizationPercent"] = (inputBuffer->available() * 100) / capacity;
+            } else {
+                buffer["utilizationPercent"] = 0;
+            }
         }
     }
     
