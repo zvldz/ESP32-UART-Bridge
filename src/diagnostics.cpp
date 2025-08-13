@@ -10,6 +10,14 @@
 extern UartStats uartStats;
 extern BridgeMode bridgeMode;
 
+// External statistics from device tasks
+extern unsigned long globalDevice3RxBytes;   // From device3_task.cpp
+extern unsigned long globalDevice3TxBytes;
+extern unsigned long globalDevice4RxBytes;   // From device4_task.cpp
+extern unsigned long globalDevice4TxBytes;
+extern unsigned long globalDevice4RxPackets;
+extern unsigned long globalDevice4TxPackets;
+
 // Global access to context (for TaskScheduler callbacks)
 static BridgeContext* g_bridgeContext = nullptr;
 
@@ -94,6 +102,7 @@ const char* getDevice4RoleName(uint8_t role) {
 void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
                       unsigned long device2Rx, unsigned long device2Tx,
                       unsigned long device3Rx, unsigned long device3Tx,
+                      unsigned long device4Rx, unsigned long device4Tx,
                       unsigned long lastActivity) {
   enterStatsCritical();
   uartStats.device1RxBytes = device1Rx;
@@ -102,6 +111,9 @@ void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
   uartStats.device2TxBytes = device2Tx;
   uartStats.device3RxBytes = device3Rx;
   uartStats.device3TxBytes = device3Tx;
+  uartStats.device4RxBytes = device4Rx;
+  uartStats.device4TxBytes = device4Tx;
+  // Note: device4RxPackets/TxPackets handled separately in updateDevice4Stats
   if (lastActivity > 0) {
     uartStats.lastActivityTime = lastActivity;
   }
@@ -283,4 +295,42 @@ void forceSerialLog(const char* format, ...) {
     Serial.flush();
 }
 #endif
+
+// Statistics update functions (called by scheduler)
+
+// Update statistics for Device 1 and 2 (Core 0 devices)
+void updateMainStats() {
+    // Get pointers from bridge context
+    BridgeContext* ctx = getBridgeContext();
+    if (!ctx) return;
+    
+    // Update only Device 1 and 2 (they work in uartBridgeTask)
+    updateSharedStats(
+        ctx->stats.device1RxBytes ? *ctx->stats.device1RxBytes : 0,
+        ctx->stats.device1TxBytes ? *ctx->stats.device1TxBytes : 0,
+        ctx->stats.device2RxBytes ? *ctx->stats.device2RxBytes : 0,
+        ctx->stats.device2TxBytes ? *ctx->stats.device2TxBytes : 0,
+        0, 0,  // Device 3 - updates separately
+        0, 0,  // Device 4 - updates separately
+        ctx->stats.lastActivity ? *ctx->stats.lastActivity : 0
+    );
+}
+
+// Update statistics for Device 3 (Core 1 device)
+void updateDevice3Stats() {
+    enterStatsCritical();
+    uartStats.device3RxBytes = globalDevice3RxBytes;
+    uartStats.device3TxBytes = globalDevice3TxBytes;
+    exitStatsCritical();
+}
+
+// Update statistics for Device 4 (Core 1 device)
+void updateDevice4Stats() {
+    enterStatsCritical();
+    uartStats.device4TxBytes = globalDevice4TxBytes;
+    uartStats.device4TxPackets = globalDevice4TxPackets;
+    uartStats.device4RxBytes = globalDevice4RxBytes;
+    uartStats.device4RxPackets = globalDevice4RxPackets;
+    exitStatsCritical();
+}
 

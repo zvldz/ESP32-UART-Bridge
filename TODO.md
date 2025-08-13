@@ -84,6 +84,46 @@
 
 ### Priority 4 - Protocol Architecture Refactoring ✅ COMPLETED
 
+#### 4.3 - Protocol Statistics Web Interface ✅ COMPLETED
+
+- [x] **Unified Protocol Statistics Display** ✅ COMPLETED
+  - **RAW Protocol Statistics**: Complete web interface for timing-based protocol mode
+    - Shows chunk processing metrics, buffer utilization, last activity timing
+    - Sender statistics with percentage-based drop analysis
+    - Real-time buffer usage monitoring
+  - **MAVLink Protocol Statistics**: Enhanced packet detection and analysis display
+    - Packet detection, transmission, errors, and resync events
+    - Priority-based drop analysis (Bulk/Normal/Critical breakdown)
+    - Detailed packet size analysis and timing information
+  - **Extensible Architecture**: Ready for future SBUS and other protocol implementations
+
+- [x] **Backend Implementation** ✅ COMPLETED
+  - **ProtocolPipeline.appendStatsToJson()**: Centralized statistics export method
+  - **JSON Structure Standardization**: Consistent format across all protocol types
+  - **ArduinoJson Integration**: Proper serialization for web interface consumption
+  - **Memory Efficient**: Uses existing pipeline structures without additional allocations
+
+- [x] **Frontend Implementation** ✅ COMPLETED  
+  - **Dynamic Protocol Detection**: Automatic UI rendering based on protocol type
+  - **Specialized Render Methods**: Protocol-specific statistics display components
+  - **Responsive Grid Layout**: Adapts to different screen sizes and content types
+  - **Sender Statistics Table**: Unified output device monitoring with protocol-aware analysis
+
+- [x] **Code Modernization** ✅ COMPLETED
+  - **Legacy Code Removal**: Eliminated old protocol statistics from web_api.cpp (~40 lines)
+  - **Modular JavaScript**: Added renderRawStats(), renderMavlinkStats(), renderSenderStats()
+  - **Error Handling**: Graceful fallback for unknown protocol types
+  - **Consistent Styling**: Professional grid-based layout with clear visual hierarchy
+
+**Benefits Achieved:**
+- RAW protocol no longer shows "No protocol statistics available"
+- Complete visibility into protocol pipeline performance for all protocol types
+- Professional, responsive statistics display with protocol-specific metrics
+- Extensible architecture ready for future protocol additions
+- Unified sender statistics across all output devices
+
+#### 4.2 - Parser + Sender Architecture Implementation ✅ COMPLETED
+
 - [x] **Parser + Sender Architecture Implementation** ✅ COMPLETED
   - Implemented complete separation of parsing and transmission logic
   - Created ProtocolPipeline coordinator with memory pool management

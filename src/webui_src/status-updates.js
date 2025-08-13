@@ -388,39 +388,175 @@ const StatusUpdates = {
         }
         
         const stats = data.protocolStats;
-        const protocolName = data.protocolOptimization === 1 ? 'MAVLink' : 'Unknown';
+        const protocolType = stats.protocolType || 0;
         
-        protocolStatsContent.innerHTML = `
+        // Protocol name mapping
+        const PROTOCOL_NAMES = {
+            0: 'RAW',
+            1: 'MAVLink',
+            2: 'SBUS'
+        };
+        
+        const protocolName = PROTOCOL_NAMES[protocolType] || 'Unknown';
+        
+        // Build HTML based on protocol type
+        let html = `<h4 style="margin: 0 0 15px 0; color: #333;">${protocolName} Protocol</h4>`;
+        
+        // Protocol-specific statistics
+        if (protocolType === 0) {
+            // RAW protocol statistics
+            html += this.renderRawStats(stats);
+        } else if (protocolType === 1) {
+            // MAVLink protocol statistics
+            html += this.renderMavlinkStats(stats);
+        } else {
+            // Future protocols (SBUS, etc.)
+            html += this.renderGenericStats(stats);
+        }
+        
+        // Sender statistics (common for all protocols)
+        if (stats.senders && stats.senders.length > 0) {
+            html += this.renderSenderStats(stats.senders, protocolType);
+        }
+        
+        // Footer note
+        html += `
+            <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666; margin-top: 15px;">
+                ℹ️ Protocol detection applies to Device 1↔2 data flow. Reset statistics to clear counters.
+            </div>
+        `;
+        
+        protocolStatsContent.innerHTML = html;
+    },
+
+    renderRawStats(stats) {
+        const p = stats.parser || {};
+        const b = stats.buffer || {};
+        
+        return `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Detection Summary</h5>
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Data Processing</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Protocol: <strong>${protocolName}</strong></div>
-                        <div>Rate: <strong>${stats.packetsPerSecond}/sec</strong></div>
-                        <div>Detected: <strong>${stats.packetsDetected}</strong></div>
-                        <div>Transmitted: <strong>${stats.packetsTransmitted}</strong></div>
-                        <div>Errors: <strong>${stats.detectionErrors}</strong></div>
-                        <div>Resyncs: <strong>${stats.resyncEvents}</strong></div>
+                        <div>Chunks Created:</div><div><strong>${p.chunksCreated || 0}</strong></div>
+                        <div>Bytes Processed:</div><div><strong>${Utils.formatBytes(p.bytesProcessed || 0)}</strong></div>
+                        <div>Average Chunk:</div><div><strong>${p.avgPacketSize || 0} bytes</strong></div>
+                        <div>Size Range:</div><div><strong>${p.minPacketSize || 0}-${p.maxPacketSize || 0}B</strong></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Buffer Status</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Buffer Usage:</div><div><strong>${b.used || 0}/${b.capacity || 0} bytes</strong></div>
+                        <div>Utilization:</div><div><strong>${b.utilizationPercent || 0}%</strong></div>
+                        <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs)}</strong></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderMavlinkStats(stats) {
+        const p = stats.parser || {};
+        
+        return `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Packet Detection</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Detected:</div><div><strong>${p.packetsDetected || 0}</strong></div>
+                        <div>Transmitted:</div><div><strong>${p.packetsTransmitted || 0}</strong></div>
+                        <div>Detection Errors:</div><div><strong>${p.detectionErrors || 0}</strong></div>
+                        <div>Resync Events:</div><div><strong>${p.resyncEvents || 0}</strong></div>
                     </div>
                 </div>
                 
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
                     <h5 style="margin: 0 0 10px 0; color: #333;">Packet Analysis</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Total Bytes: <strong>${stats.totalBytes}</strong></div>
-                        <div>Average Size: <strong>${stats.avgPacketSize}B</strong></div>
-                        <div>Min Size: <strong>${stats.minPacketSize}B</strong></div>
-                        <div>Max Size: <strong>${stats.maxPacketSize}B</strong></div>
-                        <div>Last Packet: <strong>${stats.lastPacketTime}</strong></div>
-                        <div>Max Errors: <strong>${stats.maxConsecutiveErrors}</strong></div>
+                        <div>Total Bytes:</div><div><strong>${Utils.formatBytes(p.bytesProcessed || 0)}</strong></div>
+                        <div>Average Size:</div><div><strong>${p.avgPacketSize || 0} bytes</strong></div>
+                        <div>Size Range:</div><div><strong>${p.minPacketSize || 0}-${p.maxPacketSize || 0}B</strong></div>
+                        <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs)}</strong></div>
                     </div>
                 </div>
             </div>
-            
-            <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666;">
-                ℹ️ Protocol detection applies to Device 1↔2 data flow only. Statistics reset on device restart or manual reset.
+        `;
+    },
+
+    renderGenericStats(stats) {
+        // Fallback for unknown protocols
+        const p = stats.parser || {};
+        
+        return `
+            <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                <h5 style="margin: 0 0 10px 0; color: #333;">Protocol Statistics</h5>
+                <div style="font-size: 14px;">
+                    <div>Packets: <strong>${p.packetsTransmitted || 0}</strong></div>
+                    <div>Bytes: <strong>${Utils.formatBytes(p.bytesProcessed || 0)}</strong></div>
+                </div>
             </div>
         `;
+    },
+
+    renderSenderStats(senders, protocolType) {
+        if (!senders || senders.length === 0) return '';
+        
+        let html = `
+            <div style="margin-top: 20px;">
+                <h5 style="margin: 0 0 10px 0; color: #333;">Output Devices</h5>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f0f0f0;">
+                            <th style="text-align: left; padding: 8px;">Device</th>
+                            <th style="text-align: left; padding: 8px;">Sent</th>
+                            <th style="text-align: left; padding: 8px;">Dropped</th>
+                            <th style="text-align: left; padding: 8px;">Queue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        senders.forEach(s => {
+            const dropRate = s.sent > 0 ? ((s.dropped / (s.sent + s.dropped)) * 100).toFixed(1) : 0;
+            
+            // Build dropped string based on protocol type
+            let droppedStr = `${s.dropped}`;
+            if (s.dropped > 0) {
+                if (protocolType === 1 && s.dropsByPriority) {
+                    // MAVLink - show priority breakdown
+                    droppedStr += ` (B:${s.dropsByPriority.bulk}/N:${s.dropsByPriority.normal}/C:${s.dropsByPriority.critical})`;
+                } else {
+                    // RAW and others - show percentage
+                    droppedStr += ` (${dropRate}%)`;
+                }
+            }
+            
+            html += `
+                <tr>
+                    <td style="padding: 8px; border-top: 1px solid #ddd;"><strong>${s.name}</strong></td>
+                    <td style="padding: 8px; border-top: 1px solid #ddd;">${s.sent}</td>
+                    <td style="padding: 8px; border-top: 1px solid #ddd;">${droppedStr}</td>
+                    <td style="padding: 8px; border-top: 1px solid #ddd;">${s.queueDepth}/${s.maxQueueDepth}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        return html;
+    },
+
+    formatLastActivity(ms) {
+        if (!ms || ms === 0) return 'just now';
+        if (ms < 1000) return `${ms}ms ago`;
+        if (ms < 60000) return `${Math.floor(ms/1000)}s ago`;
+        return `${Math.floor(ms/60000)}m ago`;
     }
 };
 
