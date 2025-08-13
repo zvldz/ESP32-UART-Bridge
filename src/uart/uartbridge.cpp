@@ -179,6 +179,11 @@ void uartBridgeTask(void* parameter) {
 
     processDevice1Input(&ctx);
     
+    // Process protocol pipeline
+    if (ctx.protocolPipeline) {
+        ctx.protocolPipeline->process();
+    }
+    
     // Process Device 2 based on type
     if (device2IsUSB) {
       processDevice2USB(&ctx);
@@ -200,6 +205,22 @@ void uartBridgeTask(void* parameter) {
 
     // HOOK: Check protocol timeouts
     // checkProtocolTimeouts(&ctx);  // Removed - Pipeline handles this
+
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // Pipeline statistics output (every 10 seconds)
+    static uint32_t lastPipelineStats = 0;
+    if (millis() - lastPipelineStats > 10000) {
+        char statBuf[256];
+        ctx.protocolPipeline->getStats(statBuf, sizeof(statBuf));
+        log_msg(LOG_INFO, "Pipeline stats:\n%s", statBuf);
+        
+        // Memory pool statistics
+        PacketMemoryPool::getInstance()->getStats(statBuf, sizeof(statBuf));
+        log_msg(LOG_INFO, "%s", statBuf);
+        
+        lastPipelineStats = millis();
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
 
     // Fixed delay for multi-core systems (always 1ms)
     vTaskDelay(pdMS_TO_TICKS(1));
