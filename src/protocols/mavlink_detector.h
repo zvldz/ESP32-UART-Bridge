@@ -36,8 +36,15 @@ public:
     bool canDetect(const uint8_t* data, size_t length) override;
     PacketDetectionResult findPacketBoundary(const uint8_t* data, size_t length) override;
     void reset() override;
-    void setStats(ProtocolStats* stats) { this->stats = stats; }
+    void setStats(ProtocolStats* statsPtr) override {
+        stats = statsPtr;
+    }
     const char* getName() const override { return "MAVLink/FastMAV"; }
+    
+    // Minimum bytes needed for MAVLink detection
+    size_t getMinimumBytesNeeded() const override { 
+        return 12;  // MAVLink v2 minimum header size (v1 needs 8, but v2 is more common)
+    }
     
     // Protocol characteristics
     uint32_t getOptimalRxTimeout() const override { return 20; }

@@ -82,9 +82,29 @@
 
 ## PENDING TASKS 🔄
 
-### Priority 4 - FastMAVLink Implementation 🔄 IN PROGRESS
+### Priority 4 - Protocol Architecture Refactoring ✅ COMPLETED
 
-**Goal**: Replace problematic `fmav_parse_to_msg()` with independent frame buffer approach to eliminate packet loss and CRC errors caused by buffer memmove operations.
+- [x] **Parser + Sender Architecture Implementation** ✅ COMPLETED
+  - Implemented complete separation of parsing and transmission logic
+  - Created ProtocolPipeline coordinator with memory pool management
+  - **Components Implemented**:
+    - `protocol_types.h` - Base types and packet structures with memory pools
+    - `packet_memory_pool.h` - Slab allocator with Meyers singleton (thread-safe)
+    - `protocol_parser.h` - Base parser interface
+    - `raw_parser.h` - Adaptive buffering without protocol parsing (default mode)
+    - `mavlink_parser.h` - MAVLink packet detection using FastMAVLink
+    - `packet_sender.h` - Base sender with priority queue management
+    - `usb_sender.h` - USB with exponential backoff for congestion
+    - `uart_sender.h` - UART with inter-packet gap support
+    - `udp_sender.h` - UDP with batching capabilities
+    - `protocol_pipeline.h` - Main coordinator managing parsers and senders
+  - **Benefits Achieved**:
+    - Clean separation: UART RX → CircularBuffer → Parser → PacketQueue → Sender(s) → Device(s)
+    - Memory pool prevents heap fragmentation during long operations
+    - Priority-based packet dropping (CRITICAL > NORMAL > BULK) for backpressure handling
+    - Thread-safe operations with proper synchronization
+    - Partial send support for USB/UART with send offset tracking
+    - Protocol-agnostic architecture ready for SBUS/CRSF future additions
 
 **Progress Status:**
 - [x] ✅ **Root Cause Analysis** - Identified buffer corruption from memmove() conflicts
@@ -372,11 +392,40 @@
 - [ ] Configurable drop thresholds via web config
 
 ### Protocol-aware Optimizations (v2.7.0)
-- [ ] MAVLink packet priorities (commands > telemetry > bulk)
-- [ ] UDP: 1 MAVLink packet = 1 datagram (requires parsing)
-- [ ] Separate critical/normal queues for USB
+- [x] MAVLink packet priorities (commands > telemetry > bulk) ✅ IMPLEMENTED in parser architecture
+- [x] UDP: 1 MAVLink packet = 1 datagram ✅ IMPLEMENTED via UdpSender batching
+- [x] Separate critical/normal queues ✅ IMPLEMENTED via PacketSender priority handling
 - [ ] Adaptive timeouts based on msgid
 - [ ] MAVFtp session detection → bulk mode
+
+## Future Protocol Pipeline Enhancements
+
+### Next Phase Improvements
+- [ ] **Priority Queue Implementation** - Replace std::queue with priority_queue for better packet prioritization
+- [ ] **Dynamic CPU Affinity** - Move tasks between cores based on load balancing requirements  
+- [ ] **Batch Processing** - Process multiple packets per call for improved efficiency
+- [ ] **Flow Control** - Add feedback from Senders to Parser for congestion management
+- [ ] **Advanced Memory Management** - Monitor memory pool utilization and implement dynamic pool resizing
+
+### TaskScheduler Integration Tasks
+- [ ] **Pipeline Statistics Logging** - Add periodic logging every 30 seconds
+- [ ] **Memory Pool Monitoring** - Check pool health every minute
+- [ ] **Queue Depth Monitoring** - Track sender queue depths every 10 seconds  
+- [ ] **Stuck Packet Cleanup** - Automatic cleanup of stalled packets
+
+### Protocol Pipeline TODO (from refactoring plan)
+- [ ] **Slab Allocator Monitoring** - Monitor memory pool fragmentation during long operations
+- [ ] **Priority Queue Enhancement** - Replace std::queue with priority_queue for better priority handling
+- [ ] **Dynamic CPU Affinity** - Move tasks between cores based on load
+- [ ] **Batch Processing** - Process multiple packets per call for efficiency
+- [ ] **Flow Control Implementation** - Add feedback from Senders to Parser for rate control
+- [ ] **TaskScheduler Integration** - Add periodic tasks for:
+  - Pipeline statistics logging every 30 seconds
+  - Memory pool health checks every minute  
+  - Queue depth monitoring every 10 seconds
+  - Automatic cleanup of stuck packets
+
+**Architecture Status**: Parser + Sender refactoring completed successfully. Memory pool implementation with Meyers singleton provides thread-safe operation. Ready for advanced protocol features.
 
 ### USB Optimizations (v2.7.x)
 - [ ] Async USB transmission queue

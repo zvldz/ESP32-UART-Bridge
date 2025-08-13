@@ -9,7 +9,7 @@
 #include "usb/usb_interface.h"
 #include "devices/device3_task.h"
 #include "devices/device4_task.h"
-#include "protocols/protocol_pipeline.h"  // Protocol detection hooks
+// Protocol detection hooks (forward declarations to avoid circular includes)
 #include <Arduino.h>
 
 // Forward declarations for Device 4 functions
@@ -88,10 +88,7 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             currentTime = micros();
         }
         
-        // HOOK: Pre-process byte
-        if (!preprocessProtocolByte(ctx, &data)) {
-            continue;
-        }
+        // HOOK: Pre-process byte (removed in new architecture)
         
         (*ctx->stats.device1RxBytes)++;
         
@@ -114,8 +111,7 @@ static inline void processDevice1Input(BridgeContext* ctx) {
 
         // Route to Device 2 based on its role
         if (ctx->devices.device2IsUSB) {
-            // HOOK: Notify protocol detector
-            onProtocolByteReceived(ctx, data);
+            // Pipeline reads from buffer automatically - no need for hooks
             
             // Device 2 is USB - use adaptive buffering from adaptive_buffer.h
             (*ctx->stats.totalUartPackets)++;

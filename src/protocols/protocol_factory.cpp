@@ -21,6 +21,7 @@ void initProtocolDetectionFactory(BridgeContext* ctx, ProtocolType protocolType)
         return;
     }
     
+    
     // Cleanup existing detector if any
     cleanupProtocolDetection(ctx);
     
@@ -35,6 +36,16 @@ void initProtocolDetectionFactory(BridgeContext* ctx, ProtocolType protocolType)
         ctx->protocol.stats->reset();
         log_msg(LOG_DEBUG, "Protocol statistics reset");
     }
+    
+    // CRITICAL FIX: Link statistics to detector!
+    if (ctx->protocol.detector && ctx->protocol.stats) {
+        ctx->protocol.detector->setStats(ctx->protocol.stats);
+        // Cache minimum bytes needed for this protocol
+        ctx->protocol.minBytesNeeded = ctx->protocol.detector->getMinimumBytesNeeded();
+        log_msg(LOG_INFO, "Protocol: %s requires minimum %zu bytes", 
+                ctx->protocol.detector->getName(), ctx->protocol.minBytesNeeded);
+    }
+    
     
     char logBuf[64];
     snprintf(logBuf, sizeof(logBuf), "Protocol detection initialized: %s", getProtocolName(protocolType));

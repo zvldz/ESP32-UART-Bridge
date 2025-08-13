@@ -140,6 +140,9 @@ public:
         }
     }
     
+    // Get buffer capacity
+    size_t getCapacity() const { return capacity; }
+    
     // Reserve-Copy-Commit write pattern for thread safety
     size_t write(const uint8_t* data, size_t len) {
         if (len == 0) return 0;
@@ -192,12 +195,12 @@ public:
         size_t currentPos = writePos;
         
         while (written < toWrite) {
-            size_t chunk = min(toWrite - written, capacity - currentPos);
+            size_t chunk = min((size_t)(toWrite - written), (size_t)(capacity - currentPos));
             memcpy(&mainBuffer[currentPos], &data[written], chunk);
             
             // Update shadow if writing to beginning
             if (currentPos < shadowSize) {
-                size_t shadowChunk = min(chunk, shadowSize - currentPos);
+                size_t shadowChunk = min((size_t)chunk, (size_t)(shadowSize - currentPos));
                 memcpy(&shadowBuffer[currentPos], &data[written], shadowChunk);
             }
             
@@ -288,6 +291,14 @@ public:
         }
         
         portEXIT_CRITICAL(&bufferMux);
+        
+        // TEMPORARY DEBUG LOG - START
+        static uint32_t parserViewCount = 0;
+        if (++parserViewCount <= 10 || parserViewCount % 100 == 0) {
+            log_msg(LOG_DEBUG, "[TEMP] CircBuf: view #%u - ptr=%p, safeLen=%zu (requested=%zu, avail=%zu)", 
+                    parserViewCount, view.ptr, view.safeLen, needed, avail);
+        }
+        // TEMPORARY DEBUG LOG - END
         
         return view;
     }

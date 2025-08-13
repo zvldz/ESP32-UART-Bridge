@@ -411,8 +411,13 @@ void handleSave(AsyncWebServerRequest *request) {
       // Reinitialize protocol detection with new settings
       BridgeContext* ctx = getBridgeContext();
       if (ctx) {
-        initProtocolDetection(ctx, &config);
-        log_msg(LOG_DEBUG, "Protocol detection reinitialized");
+        // Reinitialize Pipeline with new configuration
+        if (ctx->protocolPipeline) {
+          delete ctx->protocolPipeline;
+          ctx->protocolPipeline = new ProtocolPipeline(ctx);
+          ctx->protocolPipeline->init(&config);
+        }
+        log_msg(LOG_DEBUG, "Protocol pipeline reinitialized");
       } else {
         log_msg(LOG_WARNING, "Warning: BridgeContext not available for protocol reinit");
       }

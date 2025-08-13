@@ -313,21 +313,21 @@ void initStandaloneMode() {
 }
 
 void initNetworkMode() {
-  // Инициализация WiFi Manager
+  // Initialize WiFi Manager
   esp_err_t ret = wifi_manager_init();
   
   if (ret != ESP_OK && config.device4.role != D4_NONE) {
-    // Критическая ошибка только если Device 4 включен
+    // Critical error only if Device 4 is enabled
     log_msg(LOG_ERROR, "Failed to init WiFi, entering safe mode");
     systemState.wifiSafeMode = true;
     led_set_mode(LED_MODE_SAFE_MODE);
     return;
   } else if (ret != ESP_OK) {
-    // Device 4 выключен - продолжаем без WiFi
+    // Device 4 disabled - continue without WiFi
     log_msg(LOG_WARNING, "WiFi init failed, but Device 4 disabled - continuing");
   }
 
-  // Запуск WiFi в нужном режиме
+  // Start WiFi in appropriate mode
   if (systemState.tempForceApMode) {
     log_msg(LOG_INFO, "Starting temporary WiFi AP mode (forced by triple click)");
     wifi_manager_start_ap(config.ssid, config.password);
