@@ -234,6 +234,10 @@ struct BridgeContext {
         unsigned long* device2TxBytes;
         unsigned long* device3RxBytes;
         unsigned long* device3TxBytes;
+        unsigned long* device4RxBytes;      // Device 4 RX bytes
+        unsigned long* device4TxBytes;      // Device 4 TX bytes
+        unsigned long* device4RxPackets;    // Device 4 RX packet count
+        unsigned long* device4TxPackets;    // Device 4 TX packet count
         unsigned long* lastActivity;
         unsigned long* totalUartPackets;
     } stats;
@@ -337,6 +341,8 @@ inline void initBridgeContext(BridgeContext* ctx,
     unsigned long* device1RxBytes, unsigned long* device1TxBytes,
     unsigned long* device2RxBytes, unsigned long* device2TxBytes,
     unsigned long* device3RxBytes, unsigned long* device3TxBytes,
+    unsigned long* device4RxBytes, unsigned long* device4TxBytes,
+    unsigned long* device4RxPackets, unsigned long* device4TxPackets,
     unsigned long* lastActivity, unsigned long* totalUartPackets,
     // Adaptive buffer
     size_t bufferSize,
@@ -365,6 +371,10 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->stats.device2TxBytes = device2TxBytes;
     ctx->stats.device3RxBytes = device3RxBytes;
     ctx->stats.device3TxBytes = device3TxBytes;
+    ctx->stats.device4RxBytes = device4RxBytes;
+    ctx->stats.device4TxBytes = device4TxBytes;
+    ctx->stats.device4RxPackets = device4RxPackets;
+    ctx->stats.device4TxPackets = device4TxPackets;
     ctx->stats.lastActivity = lastActivity;
     ctx->stats.totalUartPackets = totalUartPackets;
     

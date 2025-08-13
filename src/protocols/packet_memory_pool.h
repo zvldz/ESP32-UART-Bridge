@@ -142,9 +142,11 @@ public:
         snprintf(buffer, bufSize,
                 "Pool Stats:\n"
                 "  Small(64B): alloc=%u free=%u fail=%u\n"
+                "  Medium(128B): alloc=%u free=%u fail=%u\n"
                 "  MAVLink(288B): alloc=%u free=%u fail=%u\n"
                 "  RAW(512B): alloc=%u free=%u fail=%u\n",
                 smallPool.getAllocCount(), smallPool.getFreeCount(), smallPool.getFailCount(),
+                mediumPool.getAllocCount(), mediumPool.getFreeCount(), mediumPool.getFailCount(),
                 mavlinkPool.getAllocCount(), mavlinkPool.getFreeCount(), mavlinkPool.getFailCount(),
                 rawPool.getAllocCount(), rawPool.getFreeCount(), rawPool.getFailCount());
     }

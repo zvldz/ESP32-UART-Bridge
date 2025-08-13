@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.13.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.13.2-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -15,7 +15,11 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
-- **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection for drone/rover telemetry with zero latency and perfect packet preservation
+- **Advanced Protocol Pipeline**: Modern Parser + Sender architecture with memory pool management
+  - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection with zero latency
+  - **Raw Protocol Mode**: Adaptive buffering for unknown protocols with timing-based optimization
+  - **Memory Pool**: Efficient packet memory management to prevent heap fragmentation
+  - **Priority-based Transmission**: CRITICAL > NORMAL > BULK packet prioritization with intelligent dropping
 - **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
 - **Circular Buffer Architecture**: Zero-copy circular buffer with scatter-gather I/O for optimal performance
   - Prevents data corruption from buffer operations
@@ -41,12 +45,12 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## Current Limitations
 
-- **Device 3 Adaptive Buffering**: Not yet implemented (uses simple 64-byte blocks)
-- **Packet Boundaries**: Currently preserved only for Device 1 → Device 2 path
-- **Protocol Detection**: Limited to MAVLink (other protocols use timing-based optimization)
-- **USB Buffer**: Can overflow at very high sustained data rates
+- **Device 3 Adaptive Buffering**: Not yet integrated with new protocol pipeline (uses legacy approach)
+- **Protocol Pipeline**: Currently supports MAVLink and Raw modes (SBUS, CRSF planned for future)
+- **Transmission Modes**: USB/UART senders support partial send recovery, UDP sender does not
 - **Device 2/3**: Use polling mode instead of event-driven architecture
 - **Device 4**: UDP only (TCP support planned for future versions)
+- **Multi-device Pipeline**: Protocol pipeline optimized for single input → multiple outputs
 
 ## Hardware
 
@@ -285,6 +289,7 @@ The web interface allows configuration of:
 - **USB Mode**: Device (default) or Host mode
 - **Network Mode**: Temporary setup or permanent Wi-Fi operation
 - **Device Roles**: Configure Device 2, 3, and 4 functionality
+- **Protocol Optimization**: Choose RAW (timing-based) or MAVLink (packet-aware) optimization
 
 ## Device Roles
 
@@ -416,10 +421,13 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 **General fix:** Look for options to disable DTR/RTS control, hardware flow control, or "serial handshaking" in your application's connection settings.
 
 ### Protocol-Specific Considerations
-- **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding (supports v1/v2 at any baud rate)
-- **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud
-- **AT command modems**: May require specific line endings (CR, LF, or CR+LF)
-- **Modbus RTU**: Uses strict timing requirements - the bridge's timeout-based buffering may work at some baud rates but is not specifically optimized for Modbus
+- **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding 
+  - Supports v1/v2 protocols at any baud rate with perfect packet boundaries
+  - Memory pool optimization prevents heap fragmentation during intensive communication
+  - Priority-based transmission ensures critical packets are delivered first
+- **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud (use RAW mode for timing-based optimization)
+- **AT command modems**: May require specific line endings (CR, LF, or CR+LF) (use RAW mode)
+- **Modbus RTU**: Uses strict timing requirements - RAW mode provides timing-based buffering but is not Modbus-optimized
 
 ### Device 4 Network Usage Examples
 
@@ -494,9 +502,25 @@ Current implementation achieves:
 - Reliable operation up to 1000000 baud
 - Reduced CPU usage thanks to DMA
 
-**Note:** The bridge does NOT parse or understand specific protocols. It uses timing-based heuristics to group bytes into packets, which works well for most protocols but is not protocol-aware.
+**Protocol Pipeline Architecture:**
+The bridge now uses a modern Parser + Sender architecture:
+- **RAW mode**: Uses timing-based heuristics to group bytes (works with most protocols)
+- **MAVLink mode**: Protocol-aware parsing with perfect packet boundaries
+- **Memory Pool**: Efficient packet allocation prevents heap fragmentation
+- **Multi-Sender**: Single parsed stream distributed to multiple output devices (USB, UART, UDP)
+- **Priority System**: Critical packets bypass normal queuing for guaranteed delivery
 
 ## Advanced Features
+
+### Protocol Statistics
+
+The bridge provides real-time protocol statistics through the web interface:
+- **RAW Protocol Statistics**: Shows chunk processing, buffer utilization, and timing-based metrics for unknown protocols
+- **MAVLink Protocol Statistics**: Displays packet detection, errors, resync events, and priority-based transmission analysis
+- **Output Device Monitoring**: Real-time statistics for all active senders (USB, UART, UDP) with queue depths and drop analysis
+- **Performance Metrics**: Buffer usage, transmission rates, and last activity timing
+
+Access protocol statistics via the web interface Status tab to monitor data flow and diagnose communication issues.
 
 ### Crash Diagnostics
 The device automatically logs system crashes including:

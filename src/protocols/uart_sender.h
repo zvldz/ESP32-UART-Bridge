@@ -10,8 +10,8 @@ private:
     uint32_t lastSendTime;
     
 public:
-    UartSender(UartInterface* uart) :  // Takes UartInterface
-        PacketSender(20, 8192),
+    UartSender(UartInterface* uart, unsigned long* txCounter = nullptr) :
+        PacketSender(20, 8192, txCounter),  // Pass TX counter to base class
         uartInterface(uart),
         lastSendTime(0) {
         log_msg(LOG_INFO, "UartSender initialized");
@@ -53,6 +53,11 @@ public:
             
             if (sent > 0) {
                 item.sendOffset += sent;
+                
+                // Update global TX counter
+                if (globalTxBytesCounter) {
+                    *globalTxBytesCounter += sent;
+                }
                 
                 // Check if packet fully sent
                 if (item.sendOffset >= item.packet.size) {

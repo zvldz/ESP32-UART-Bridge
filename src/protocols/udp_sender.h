@@ -22,8 +22,8 @@ private:
     }
     
 public:
-    UdpSender() : 
-        PacketSender(20, 8192),  // 20 packets, 8KB
+    UdpSender(unsigned long* txCounter = nullptr) : 
+        PacketSender(20, 8192, txCounter),  // Pass TX counter to base class
         batchSize(0),
         lastBatchTime(0) {
         log_msg(LOG_INFO, "UdpSender initialized");
@@ -103,6 +103,11 @@ private:
         // Actual UDP send implementation
         // This depends on your network stack
         addToDevice4BridgeTx(data, size);
+        
+        // Update global TX counter
+        if (globalTxBytesCounter) {
+            *globalTxBytesCounter += size;
+        }
     }
 };
 

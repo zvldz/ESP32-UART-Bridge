@@ -10,9 +10,6 @@
 // Task function
 void device4Task(void* parameter);
 
-// Statistics update function
-void updateDevice4Stats();
-
 // Log buffer
 extern uint8_t device4LogBuffer[DEVICE4_LOG_BUFFER_SIZE];
 extern int device4LogHead;

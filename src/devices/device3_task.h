@@ -10,9 +10,6 @@
 // Task function
 void device3Task(void* parameter);
 
-// Statistics update function
-void updateDevice3Stats();
-
 // External interfaces (defined in device_init.cpp)
 extern UartInterface* device3Serial;
 

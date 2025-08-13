@@ -1,5 +1,69 @@
 # CHANGELOG
 
+## v2.13.2 (Protocol Statistics Web Interface) ✅
+
+### Protocol Statistics Implementation
+- **Unified Protocol Statistics**: Complete web interface implementation for all protocol types
+  - **RAW Protocol Statistics**: Now shows detailed chunk processing, buffer usage, and output device metrics
+  - **MAVLink Protocol Statistics**: Enhanced packet detection stats with priority-based drop analysis
+  - **Extensible Architecture**: Ready for future SBUS and other protocol implementations
+
+### Web Interface Enhancements
+- **Protocol Pipeline Integration**: Centralized statistics through ProtocolPipeline.appendStatsToJson()
+- **Dynamic Protocol Display**: 
+  - RAW mode shows "Chunks Created", buffer utilization, timing-based processing metrics
+  - MAVLink mode shows "Packets Detected", detection errors, resync events with precise packet analysis
+  - Automatic protocol type detection and appropriate UI rendering
+- **Sender Statistics Table**: Unified output device statistics with protocol-aware drop analysis
+  - MAVLink: Priority breakdown (Bulk/Normal/Critical packet drops)
+  - RAW: Percentage-based drop rate calculation
+  - Queue depth monitoring and maximum queue tracking
+
+### Backend Architecture
+- **ProtocolPipeline Statistics**: Added appendStatsToJson() method for unified data export
+- **JSON Structure Standardization**: Consistent protocol statistics format across all protocol types
+- **Memory Efficient**: Uses existing pipeline structures without additional allocations
+- **ArduinoJson Integration**: Proper JSON serialization for web interface consumption
+
+### Code Modernization
+- **Eliminated Legacy Stats**: Removed old protocol statistics code from web_api.cpp (~40 lines)
+- **Modular JavaScript**: Added specialized render methods for different protocol types
+- **Responsive Design**: Grid-based layout adapts to different screen sizes
+- **Error Handling**: Graceful fallback for unknown or future protocol types
+
+## v2.13.1 (Statistics Synchronization Unification) ✅
+
+### Statistics Architecture Refactoring
+- **Unified Statistics Management**: Centralized all device statistics functions in diagnostics.cpp
+  - **Problem Solved**: Eliminated duplicate statistics functions across multiple files
+  - **Core 0/Core 1 Separation**: Clean separation by CPU cores for optimal performance
+  - **Thread Safety**: All device statistics properly synchronized using critical sections
+
+### Function Consolidation
+- **Moved to diagnostics.cpp**:
+  - `updateMainStats()` - Updates Device 1/2 statistics (Core 0 devices)
+  - `updateDevice3Stats()` - Updates Device 3 statistics (Core 1 device)  
+  - `updateDevice4Stats()` - Updates Device 4 statistics (Core 1 device)
+- **Removed Duplicate Code**:
+  - Deleted `updateMainStats()` from uartbridge.cpp
+  - Deleted `updateDevice3Stats()` from device3_task.cpp
+  - Removed static pointer variables no longer needed
+  - Clean extern declarations in scheduler_tasks.cpp
+
+### Architecture Benefits
+- **Proper Core Distribution**:
+  - Core 0: Device 1 (UART1) + Device 2 (USB/UART2) → unified in `updateMainStats()`
+  - Core 1: Device 3 (UART3) + Device 4 (UDP) → separate functions for each
+- **Reduced Race Conditions**: Each device's statistics updated in single location
+- **Better Maintainability**: All statistics logic centralized in diagnostics module
+- **Performance**: Minimal blocking between cores, optimized update intervals
+
+### Device 4 Statistics Integration
+- **BridgeContext Integration**: Added Device 4 fields to main bridge context
+- **Pipeline Statistics**: UdpSender properly updates TX byte counters
+- **Scheduler Tasks**: Device 4 statistics task properly restored and configured
+- **Global Variables**: Maintained existing globalDevice4* variables for task communication
+
 ## v2.13.0 (Protocol Architecture Refactoring) 🚀
 
 ### Major Architecture Overhaul: Parser + Sender Pattern

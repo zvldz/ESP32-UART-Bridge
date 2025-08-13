@@ -29,12 +29,6 @@ SemaphoreHandle_t device3Mutex = nullptr;
 unsigned long globalDevice3TxBytes = 0;
 unsigned long globalDevice3RxBytes = 0;
 
-void updateDevice3Stats() {
-    enterStatsCritical();
-    uartStats.device3TxBytes = globalDevice3TxBytes;
-    uartStats.device3RxBytes = globalDevice3RxBytes;
-    exitStatsCritical();
-}
 
 // Device 3 Task - runs on Core 0 with UART task
 void device3Task(void* parameter) {

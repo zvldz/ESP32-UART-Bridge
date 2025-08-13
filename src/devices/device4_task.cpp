@@ -255,11 +255,3 @@ void device4Task(void* parameter) {
     }
 }
 
-void updateDevice4Stats() {
-    enterStatsCritical();
-    uartStats.device4TxBytes = globalDevice4TxBytes;
-    uartStats.device4TxPackets = globalDevice4TxPackets;
-    uartStats.device4RxBytes = globalDevice4RxBytes;
-    uartStats.device4RxPackets = globalDevice4RxPackets;
-    exitStatsCritical();
-}

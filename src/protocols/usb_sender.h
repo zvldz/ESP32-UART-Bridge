@@ -11,8 +11,8 @@ private:
     uint32_t backoffDelay;  // Exponential backoff for USB congestion
     
 public:
-    UsbSender(UsbInterface* usb) : 
-        PacketSender(30, 10240),  // Larger queue for USB (30 packets, 10KB)
+    UsbSender(UsbInterface* usb, unsigned long* txCounter = nullptr) : 
+        PacketSender(30, 10240, txCounter),  // Pass TX counter to base class
         usbInterface(usb),
         lastSendAttempt(0),
         backoffDelay(0) {
@@ -61,6 +61,11 @@ public:
             if (sent > 0) {
                 item.sendOffset += sent;
                 backoffDelay = 0;  // Reset backoff on successful send
+                
+                // Update global TX counter
+                if (globalTxBytesCounter) {
+                    *globalTxBytesCounter += sent;
+                }
                 
                 // Check if packet fully sent
                 if (item.sendOffset >= item.packet.size) {

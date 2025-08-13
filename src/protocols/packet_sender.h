@@ -34,9 +34,11 @@ protected:
     uint32_t dropBulk;         // Dropped BULK priority
     uint32_t dropNormal;       // Dropped NORMAL priority
     uint32_t maxQueueDepth;    // Max queue depth seen
+    unsigned long* globalTxBytesCounter;  // Pointer to global TX counter
     
 public:
-    PacketSender(size_t maxPackets = 20, size_t maxBytes = 8192) : 
+    PacketSender(size_t maxPackets = 20, size_t maxBytes = 8192, 
+                 unsigned long* txCounter = nullptr) : 
         maxQueuePackets(maxPackets),
         maxQueueBytes(maxBytes),
         currentQueueBytes(0),
@@ -44,7 +46,8 @@ public:
         totalDropped(0),
         dropBulk(0),
         dropNormal(0),
-        maxQueueDepth(0) {}
+        maxQueueDepth(0),
+        globalTxBytesCounter(txCounter) {}
     
     virtual ~PacketSender() {
         // Clean queue - CRITICAL: free all packets
@@ -118,6 +121,19 @@ public:
     uint32_t getDroppedCount() const { return totalDropped; }
     size_t getQueueDepth() const { return packetQueue.size(); }
     size_t getQueueBytes() const { return currentQueueBytes; }
+    
+    // Get detailed drop statistics
+    uint32_t getDroppedBulk() const { return dropBulk; }
+    uint32_t getDroppedNormal() const { return dropNormal; }
+    uint32_t getDroppedCritical() const { return totalDropped - dropBulk - dropNormal; }
+    size_t getMaxQueueDepth() const { return maxQueueDepth; }
+    
+    // Get total bytes sent estimate (for display)
+    uint32_t getTotalBytesSent() const { 
+        // Calculate from packets sent * average size
+        // This is internal counter, different from global device counter
+        return totalSent * 100;  // Approximate
+    }
     
     void getDetailedStats(char* buffer, size_t bufSize) {
         snprintf(buffer, bufSize,
