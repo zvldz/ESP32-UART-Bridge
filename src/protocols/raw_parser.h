@@ -18,6 +18,10 @@ private:
     static constexpr size_t PACKET_SIZE_SMALL = 12;
     static constexpr size_t PACKET_SIZE_MEDIUM = 64;
     static constexpr size_t MAX_RAW_CHUNK = 512;  // CRITICAL: Cap RAW size
+
+    // Memory pool standard sizes for optimal allocation
+    // Chunks will be rounded to these sizes to avoid heap usage
+    // Pool sizes: 64, 128, 288, 512 bytes
     
     uint32_t lastParseTime;
     uint32_t bufferStartTime;
@@ -77,15 +81,27 @@ public:
         
         if (shouldTransmit) {
             // CRITICAL: Limit chunk size to prevent memory issues
-            size_t chunkSize = min((size_t)available, (size_t)MAX_RAW_CHUNK);
-            
+            size_t available_data = min((size_t)available, (size_t)MAX_RAW_CHUNK);
+
+            // NEW: Round to standard pool sizes for efficient memory usage
+            size_t chunkSize;
+            if (available_data <= 64) {
+                chunkSize = available_data;  // Small packets as-is
+            } else if (available_data <= 128) {
+                chunkSize = min(available_data, (size_t)128);
+            } else if (available_data <= 288) {
+                chunkSize = min(available_data, (size_t)288);
+            } else {
+                chunkSize = min(available_data, (size_t)512);
+            }
+
             // Create a single "packet" with chunk data
             result.count = 1;
             result.packets = new ParsedPacket[1];
-            
+
             // Get data from buffer
             auto segments = buffer->getReadSegments();
-            size_t totalSize = min((size_t)segments.total(), (size_t)chunkSize);
+            size_t totalSize = min((size_t)segments.total(), chunkSize);  // Use rounded size
             
             // Allocate from pool
             size_t allocSize;
