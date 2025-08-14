@@ -83,16 +83,22 @@ public:
             // CRITICAL: Limit chunk size to prevent memory issues
             size_t available_data = min((size_t)available, (size_t)MAX_RAW_CHUNK);
 
-            // NEW: Round to standard pool sizes for efficient memory usage
-            size_t chunkSize;
+            // Determine allocation size rounded up to pool sizes
+            size_t allocSize;
+            size_t dataSize;
+
             if (available_data <= 64) {
-                chunkSize = available_data;  // Small packets as-is
+                allocSize = available_data;  // Small packets fit in 64B pool
+                dataSize = available_data;
             } else if (available_data <= 128) {
-                chunkSize = min(available_data, (size_t)128);
+                allocSize = 128;  // Always use 128B pool
+                dataSize = available_data;
             } else if (available_data <= 288) {
-                chunkSize = min(available_data, (size_t)288);
+                allocSize = 288;  // Always use 288B pool  
+                dataSize = min(available_data, (size_t)288);
             } else {
-                chunkSize = min(available_data, (size_t)512);
+                allocSize = 512;  // Always use 512B pool
+                dataSize = min(available_data, (size_t)512);
             }
 
             // Create a single "packet" with chunk data
@@ -101,36 +107,35 @@ public:
 
             // Get data from buffer
             auto segments = buffer->getReadSegments();
-            size_t totalSize = min((size_t)segments.total(), chunkSize);  // Use rounded size
-            
-            // Allocate from pool
-            size_t allocSize;
-            result.packets[0].data = memPool->allocate(totalSize, allocSize);
+
+            // Allocate from pool using rounded size
+            size_t actualAllocSize;
+            result.packets[0].data = memPool->allocate(allocSize, actualAllocSize);
             
             if (!result.packets[0].data) {
                 // Pool exhausted - critical error
-                log_msg(LOG_ERROR, "RAW: Failed to allocate %zu bytes", totalSize);
+                log_msg(LOG_ERROR, "RAW: Failed to allocate %zu bytes", allocSize);
                 delete[] result.packets;
                 result.packets = nullptr;
                 result.count = 0;
                 return result;
             }
             
-            result.packets[0].size = totalSize;
-            result.packets[0].allocSize = allocSize;
+            result.packets[0].size = dataSize;  // Actual data size
+            result.packets[0].allocSize = actualAllocSize;  // Allocation size from pool
             result.packets[0].pool = memPool;
             result.packets[0].priority = PRIORITY_NORMAL;
             result.packets[0].timestamp = currentTime;
             
-            // Copy from segments
+            // Copy actual data (not allocation size)
             size_t copied = 0;
             if (segments.first.size > 0) {
-                size_t toCopy = min((size_t)segments.first.size, (size_t)totalSize);
+                size_t toCopy = min((size_t)segments.first.size, dataSize);
                 memcpy(result.packets[0].data, segments.first.data, toCopy);
                 copied += toCopy;
             }
-            if (copied < totalSize && segments.second.size > 0) {
-                size_t toCopy = min((size_t)segments.second.size, (size_t)(totalSize - copied));
+            if (copied < dataSize && segments.second.size > 0) {
+                size_t toCopy = min((size_t)segments.second.size, (dataSize - copied));
                 memcpy(result.packets[0].data + copied, segments.second.data, toCopy);
                 copied += toCopy;
             }
@@ -140,16 +145,16 @@ public:
             result.packets[0].hints.canBatch = true;
             result.packets[0].hints.keepWhole = false;
             
-            result.bytesConsumed = totalSize;
+            result.bytesConsumed = dataSize;  // Consume actual data size
             
             // Reset timing
             bufferStartTime = 0;
             
             // Update stats
             if (stats) {
-                stats->totalBytes += totalSize;
+                stats->totalBytes += dataSize;
                 stats->packetsTransmitted++;
-                stats->updatePacketSize(totalSize);  // This updates min/max/avg automatically
+                stats->updatePacketSize(dataSize);  // This updates min/max/avg automatically
             }
         }
         
