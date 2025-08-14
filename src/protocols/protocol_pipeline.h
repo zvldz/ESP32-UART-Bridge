@@ -206,12 +206,15 @@ public:
             switch(ctx->system.config->protocolOptimization) {
                 case PROTOCOL_NONE:  // RAW (0)
                     parserStats["chunksCreated"] = ctx->protocol.stats->packetsTransmitted;
+                    parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
                     break;
                     
                 case PROTOCOL_MAVLINK:  // MAVLink (1)
                     parserStats["packetsDetected"] = ctx->protocol.stats->packetsDetected;
                     parserStats["detectionErrors"] = ctx->protocol.stats->detectionErrors;
                     parserStats["resyncEvents"] = ctx->protocol.stats->resyncEvents;
+                    parserStats["packetsTransmitted"] = ctx->protocol.stats->packetsTransmitted;
+                    parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
                     break;
 
                 // Future: PROTOCOL_SBUS (2)

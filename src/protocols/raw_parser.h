@@ -149,6 +149,7 @@ public:
             if (stats) {
                 stats->totalBytes += totalSize;
                 stats->packetsTransmitted++;
+                stats->updatePacketSize(totalSize);  // This updates min/max/avg automatically
             }
         }
         
@@ -159,6 +160,11 @@ public:
     void reset() override {
         lastParseTime = 0;
         bufferStartTime = 0;
+
+        if (stats) {
+            stats->reset();  // Use built-in reset method
+        }
+
         log_msg(LOG_DEBUG, "RawParser reset");
     }
     
