@@ -119,6 +119,10 @@ void uartBridgeTask(void* parameter) {
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
 
+  // Create protocol statistics BEFORE pipeline initialization
+  ctx.protocol.stats = new ProtocolStats();
+  log_msg(LOG_INFO, "Protocol statistics created");
+
   // Initialize CircularBuffer for new architecture
   initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
