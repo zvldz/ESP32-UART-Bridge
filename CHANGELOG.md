@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## v2.14.0 (PyMAVLink Migration & Architecture Cleanup) ✅
+
+### MAVLink Library Migration
+- **PyMAVLink Integration**: Complete migration from FastMAVLink to PyMAVLink
+  - **Removed FastMAVLink**: Eliminated entire fastmavlink_lib directory and dependencies
+  - **PyMAVLink Implementation**: Full pymavlink generated headers integration (common + ardupilotmega)
+  - **Configuration**: Updated platformio.ini with proper pymavlink compiler flags
+  - **Compatibility**: Maintained full MAVLink protocol support with improved parsing efficiency
+
+### Architecture Simplification
+- **Protocol Detection Removal**: Eliminated complex protocol detection system
+  - **Removed Files**: mavlink_detector.h/cpp, protocol_detector.h, protocol_factory.h/cpp
+  - **Direct Parser Creation**: Protocol pipeline now creates parsers directly based on configuration
+  - **Simplified Logic**: PROTOCOL_MAVLINK → MavlinkParser, PROTOCOL_NONE → RawParser
+- **MAVLink Function Migration**: Moved MAVLink-specific logic from pipeline to parser
+  - **MavlinkParser Enhancement**: Added non-MAVLink stream detection and warnings
+  - **Smart Buffering**: Parser handles invalid data gracefully with progress warnings
+  - **Error Recovery**: Automatic detection of non-MAVLink streams with user guidance
+
+### Code Structure Cleanup
+- **types.h Optimization**: Cleaned protocol structure from detection artifacts
+  - **Removed Fields**: detector pointer, minBytesNeeded (detection-specific)
+  - **Preserved Fields**: type, stats, enabled flag for runtime control
+  - **Initialization**: Proper protocol structure initialization in initBridgeContext()
+- **Include Cleanup**: Removed all FastMAVLink and detector includes across codebase
+- **Factory Pattern Removal**: Eliminated initProtocolDetectionFactory() and cleanup functions
+
+### Technical Improvements
+- **Memory Efficiency**: Reduced memory footprint by removing detection overhead
+- **Processing Speed**: Direct parser instantiation eliminates detection delays
+- **Maintainability**: Simplified codebase with clear parser responsibilities
+- **Future Ready**: Clean architecture for additional protocol support
+
 ## v2.13.2 (Protocol Statistics Web Interface) ✅
 
 ### Protocol Statistics Implementation
@@ -30,6 +63,24 @@
 - **Modular JavaScript**: Added specialized render methods for different protocol types
 - **Responsive Design**: Grid-based layout adapts to different screen sizes
 - **Error Handling**: Graceful fallback for unknown or future protocol types
+
+### Critical Fixes and Optimizations
+- **Fixed Protocol Statistics Crashes**: Added comprehensive null pointer checks in appendStatsToJson()
+  - **Problem**: Null pointer access causing packet losses and system instability
+  - **Solution**: Added checks for !ctx, !ctx->system.config before accessing pointers
+  - **Result**: Eliminated crashes during statistics export in web interface
+- **Fixed RAW Parser Statistics**: RAW protocol now properly updates statistics in web interface
+  - **Problem**: RAW parser showed zeros for all metrics despite active data processing
+  - **Solution**: Used existing updatePacketSize() and stats->reset() methods instead of creating new fields
+  - **Result**: Real-time statistics display for chunk processing, bytes transmitted, size ranges
+- **Memory Pool Optimization**: RAW parser now uses standard pool sizes for efficiency
+  - **Problem**: Arbitrary chunk sizes (98, 103, 115 bytes) caused "Pool exhausted" warnings
+  - **Solution**: Round allocation sizes to pool standards (64, 128, 288, 512 bytes) while preserving actual data size
+  - **Result**: Eliminated pool warnings, improved memory efficiency, reduced heap fragmentation
+- **Statistics Reset Fix**: "Reset Statistics" button now properly clears all protocol metrics
+  - **Problem**: New protocol fields not reset when user clicked reset button
+  - **Solution**: Enhanced reset() methods to clear all statistics fields including protocol-specific ones
+  - **Result**: Complete statistics reset functionality across all protocols
 
 ## v2.13.1 (Statistics Synchronization Unification) ✅
 

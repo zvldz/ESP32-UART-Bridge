@@ -218,7 +218,7 @@ inline void exitStatsCritical() {
 // Forward declarations for interface types
 class UartInterface;
 class UsbInterface;
-class ProtocolDetector;
+// class ProtocolDetector; // Removed - using direct parsers now
 class CircularBuffer;
 
 // Forward declaration for protocol statistics (will be defined in future phases)
@@ -299,15 +299,14 @@ struct BridgeContext {
         UartStats* globalStats;
     } system;
     
-    // Protocol detection state
+    // Protocol state (simplified)
     struct {
-        bool enabled;                    // Is protocol detection active
-        ProtocolDetector* detector;      // Current protocol detector
+        ProtocolType type;               // Protocol type from config
+        ProtocolStats* stats;            // Protocol statistics
+        bool enabled;                    // Protocol detection enabled flag
         size_t detectedPacketSize;       // Size of detected packet
         bool packetInProgress;           // Currently receiving packet
         uint32_t packetStartTime;        // When packet reception started
-        ProtocolStats* stats;            // Protocol statistics (nullptr in Phase 4.1)
-        size_t minBytesNeeded;           // Cached minimum bytes for detection
         
         // Track last detected packet to avoid double counting
         size_t lastDetectedOffset;       // Position of last counted packet in buffer
@@ -319,10 +318,7 @@ struct BridgeContext {
         uint32_t lastValidPacketTime;   // Timestamp of last valid packet
         bool temporarilyDisabled;       // Reserved for future auto-disable feature
         
-        // MAVFtp mode detection
-        bool mavftpActive;              // True when FILE_TRANSFER_PROTOCOL detected
-        uint32_t lastMavftpTime;        // Time of last MAVFtp packet
-        uint16_t mavftpCount;           // Counter of consecutive MAVFtp packets
+        // MAVFtp logic moved to MavlinkParser
         
         // Buffer analysis state
         size_t lastAnalyzedOffset;      // Position in buffer we've analyzed up to
@@ -420,7 +416,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     
     // CRITICAL FIX: Initialize protocol structure to prevent crashes
     ctx->protocol.enabled = false;
-    ctx->protocol.detector = nullptr;
+    ctx->protocol.type = PROTOCOL_NONE;
     ctx->protocol.detectedPacketSize = 0;
     ctx->protocol.packetInProgress = false;
     ctx->protocol.packetStartTime = 0;
@@ -431,9 +427,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->protocol.consecutiveErrors = 0;
     ctx->protocol.lastValidPacketTime = 0;
     ctx->protocol.temporarilyDisabled = false;
-    ctx->protocol.mavftpActive = false;
-    ctx->protocol.lastMavftpTime = 0;
-    ctx->protocol.mavftpCount = 0;
+    // MAVFtp initialization moved to MavlinkParser
     ctx->protocol.lastAnalyzedOffset = 0;
     ctx->protocol.currentPacketStart = 0;
     ctx->protocol.packetFound = false;
