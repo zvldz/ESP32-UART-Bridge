@@ -1,180 +1,43 @@
 # TODO / Roadmap
 
-## COMPLETED ✅
-
-### Priority 1 - Configuration Import/Export ✅ COMPLETED
-
-- [x] **Export Configuration** ✅ COMPLETED
-  - Download current config as JSON file
-  - Endpoint: `/config/export`
-  - Default filename: "esp32-bridge-config-[ID].json" with unique ID
-  - Includes ALL settings including passwords
-  - Reuses existing JSON serialization from config.cpp
-  
-- [x] **Import Configuration** ✅ COMPLETED
-  - Upload JSON config file via web interface
-  - Endpoint: `/config/import`
-  - Form-based upload (similar to OTA update)
-  - Validation of JSON structure and config version
-  - Apply settings and automatic reboot
-  
-- [x] **Web Interface Updates** ✅ COMPLETED
-  - New section "Configuration Backup" 
-  - Button "Export Config" → downloads current configuration
-  - Form "Import Config" with file selector
-  - Progress indication during import
-  
-- [x] **Implementation benefits** ✅ ACHIEVED:
-  - Quick device provisioning
-  - Configuration backup/restore
-  - Share configurations between devices
-  - No need to reconfigure after firmware updates
-
-### Priority 2 - WiFi Client Mode ✅ COMPLETED
-
-#### 2.1 - Basic WiFi Client ✅ COMPLETED
-- [x] **Basic WiFi Client Implementation** ✅ COMPLETED
-  - Connect ESP32 to existing WiFi network instead of creating AP
-  - Store WiFi credentials in LittleFS config file
-  - Web interface for WiFi network selection and password entry
-  - Basic connection status indication
-  - WiFi mode enum (AP, Client) implemented
-
-#### 2.2 - Auto-connect and Fallback ✅ COMPLETED
-- [x] **Auto-connect and Fallback Logic** ✅ COMPLETED
-  - Auto-connect on boot with saved credentials
-  - Triple click logic for mode switching between Standalone/Client/AP
-  - Configurable retry attempts and timeouts (5 retries, 10s intervals)
-  - Advanced status indication (LED: searching/connected/error)
-  - State machine for network mode transitions implemented
-  - Device 4 network awareness with EventGroup synchronization
-  - Temporary/permanent network mode support
-
-### Priority 4 - Protocol Optimizations (Partial)
-
-#### 4.1 - Protocol Detection Framework ✅ COMPLETED
-- [x] **Protocol Detection Framework** ✅ COMPLETED
-  - Created base `ProtocolDetector` class with virtual interface
-  - Implemented protocol pipeline with comprehensive processing hooks
-  - Added `ProtocolType` enum and protocol configuration support
-  - Integrated protocol-aware logic into bridge processing and adaptive buffering
-  - Added protocol lifecycle management with initialization and maintenance
-  - All functions implemented as stubs with zero performance impact
-  - **Architecture ready** for Phase 4.2+ protocol implementations
-
-#### 4.2 - MAVLink Parser with Hardware Optimization ✅ COMPLETED
-- [x] **MAVLink Packet Detection** ✅ COMPLETED
-  - Implemented `MavlinkDetector` using Protocol Framework
-  - MAVLink v1/v2 header validation and packet boundary detection
-  - Protocol statistics tracking (packets, errors, sizes, rates)
-  - Configuration management with version migration (v6→v7)
-  - Web interface integration with Protocol Optimization dropdown and statistics display
-  - Error handling with resync logic (search for next start byte)
-  - **Performance Impact**: Eliminates UART FIFO overflows and reduces latency significantly
-  - **Benefits**: Perfect for high-baud MAVLink streams (115200+), preserves packet boundaries
-
-### Out of Priority
-
-
-### Network Discovery
-
-- [x] **mDNS/Bonjour support** ✅ COMPLETED (implemented in v2.8.0) - for easy device discovery
-
 ## PENDING TASKS 🔄
 
-### Priority 4 - Protocol Architecture Refactoring ✅ COMPLETED
+### Priority 1 - PyMAVLink Migration ⚠️ PARTIALLY COMPLETED
 
-#### 4.3 - Protocol Statistics Web Interface ✅ COMPLETED
+#### 1.1 - PyMAVLink Library Migration ✅ COMPLETED
+- [x] **FastMAVLink → PyMAVLink Migration** ✅ COMPLETED
+  - Complete removal of FastMAVLink library and dependencies
+  - Full PyMAVLink integration with proper compilation flags
+  - Architecture simplification with removal of protocol detection system
+  - MAVLink-specific logic moved from pipeline to MavlinkParser
+  - Enhanced error handling for non-MAVLink streams
 
-- [x] **Unified Protocol Statistics Display** ✅ COMPLETED
-  - **RAW Protocol Statistics**: Complete web interface for timing-based protocol mode
-    - Shows chunk processing metrics, buffer utilization, last activity timing
-    - Sender statistics with percentage-based drop analysis
-    - Real-time buffer usage monitoring
-  - **MAVLink Protocol Statistics**: Enhanced packet detection and analysis display
-    - Packet detection, transmission, errors, and resync events
-    - Priority-based drop analysis (Bulk/Normal/Critical breakdown)
-    - Detailed packet size analysis and timing information
-  - **Extensible Architecture**: Ready for future SBUS and other protocol implementations
+#### 1.2 - Priority Queue Implementation 🔄 PENDING
+- [x] **Basic Architecture** ✅ COMPLETED - Priority-aware packet structures implemented
+- [ ] **Queue Priority Usage** 🔄 PENDING - Implement actual priority-based queue processing
+  - Replace simple FIFO with priority-based packet transmission
+  - CRITICAL packets first, then NORMAL, then BULK
+  - Drop BULK packets first during congestion
 
-- [x] **Backend Implementation** ✅ COMPLETED
-  - **ProtocolPipeline.appendStatsToJson()**: Centralized statistics export method
-  - **JSON Structure Standardization**: Consistent format across all protocol types
-  - **ArduinoJson Integration**: Proper serialization for web interface consumption
-  - **Memory Efficient**: Uses existing pipeline structures without additional allocations
+#### 1.3 - UDP Packet Optimization 🔄 PENDING  
+- [ ] **UDP Packet-by-Packet Transmission** 🔄 PENDING
+  - Check current UDP batching behavior
+  - Ensure MAVLink packets are sent individually (1 packet = 1 UDP datagram)
+  - Optimize for real-time transmission vs bandwidth efficiency
 
-- [x] **Frontend Implementation** ✅ COMPLETED  
-  - **Dynamic Protocol Detection**: Automatic UI rendering based on protocol type
-  - **Specialized Render Methods**: Protocol-specific statistics display components
-  - **Responsive Grid Layout**: Adapts to different screen sizes and content types
-  - **Sender Statistics Table**: Unified output device monitoring with protocol-aware analysis
+#### 1.4 - Priority System Optimization 🔄 PENDING
+- [ ] **Priority Classification Review** 🔄 PENDING
+  - Audit current CRITICAL priority assignments
+  - Remove excessive CRITICAL classifications
+  - Ensure only truly critical packets (HEARTBEAT, commands) get CRITICAL priority
+  - Most telemetry should be NORMAL, bulk data should be BULK
 
-- [x] **Code Modernization** ✅ COMPLETED
-  - **Legacy Code Removal**: Eliminated old protocol statistics from web_api.cpp (~40 lines)
-  - **Modular JavaScript**: Added renderRawStats(), renderMavlinkStats(), renderSenderStats()
-  - **Error Handling**: Graceful fallback for unknown protocol types
-  - **Consistent Styling**: Professional grid-based layout with clear visual hierarchy
-
-**Benefits Achieved:**
-- RAW protocol no longer shows "No protocol statistics available"
-- Complete visibility into protocol pipeline performance for all protocol types
-- Professional, responsive statistics display with protocol-specific metrics
-- Extensible architecture ready for future protocol additions
-- Unified sender statistics across all output devices
-
-#### 4.2 - Parser + Sender Architecture Implementation ✅ COMPLETED
-
-- [x] **Parser + Sender Architecture Implementation** ✅ COMPLETED
-  - Implemented complete separation of parsing and transmission logic
-  - Created ProtocolPipeline coordinator with memory pool management
-  - **Components Implemented**:
-    - `protocol_types.h` - Base types and packet structures with memory pools
-    - `packet_memory_pool.h` - Slab allocator with Meyers singleton (thread-safe)
-    - `protocol_parser.h` - Base parser interface
-    - `raw_parser.h` - Adaptive buffering without protocol parsing (default mode)
-    - `mavlink_parser.h` - MAVLink packet detection using FastMAVLink
-    - `packet_sender.h` - Base sender with priority queue management
-    - `usb_sender.h` - USB with exponential backoff for congestion
-    - `uart_sender.h` - UART with inter-packet gap support
-    - `udp_sender.h` - UDP with batching capabilities
-    - `protocol_pipeline.h` - Main coordinator managing parsers and senders
-  - **Benefits Achieved**:
-    - Clean separation: UART RX → CircularBuffer → Parser → PacketQueue → Sender(s) → Device(s)
-    - Memory pool prevents heap fragmentation during long operations
-    - Priority-based packet dropping (CRITICAL > NORMAL > BULK) for backpressure handling
-    - Thread-safe operations with proper synchronization
-    - Partial send support for USB/UART with send offset tracking
-    - Protocol-agnostic architecture ready for SBUS/CRSF future additions
-
-**Progress Status:**
-- [x] ✅ **Root Cause Analysis** - Identified buffer corruption from memmove() conflicts
-- [x] ✅ **Solution Design** - Independent 296-byte frame buffer approach 
-- [x] ✅ **Code Implementation** - Replaced with `fmav_parse_and_check_to_frame_buf()`
-- [x] ✅ **Header File Cleanup** - Removed complex tracking structures and std::map usage
-- [x] ✅ **Error Handling Simplification** - Basic error counters instead of detailed statistics
-- [x] ✅ **Architecture Cleanup** - Removed updateDetailedStats(), checkSequenceLoss(), logPacketInfo()
-
-**Current Implementation:**
-- Uses independent frameBuffer[296] to avoid conflicts with adaptive buffer memmove()
-- Byte-by-byte processing with persistent parser state
-- Simplified error handling with basic diagnostic counters
-- No parser resets after successful packets (automatic IDLE transition)
-
-**Remaining Tasks:**
-- [ ] **Field Testing** - Validate <1% packet loss with Mission Planner
-- [ ] **MAVFtp Verification** - Test file transfer reliability  
-- [ ] **Performance Validation** - Ensure no regressions under high load
-- [ ] **Long-term Stability** - 24+ hour continuous operation test
-- [ ] **Documentation Update** - Update CHANGELOG.md with final results
-
-**Success Criteria:**
-- Packet loss < 1% (vs previous 547 losses)
-- CRC errors < 10 (vs previous 349 errors) 
-- Detection errors < 100 (vs previous 13,314 errors)
-- MAVFtp file transfers work reliably
-- No SIGNATURE_ERROR messages in logs
-
-**Next Priority**: After stabilization, proceed to MAVLink Routing (Priority 5)
+#### 1.5 - Temporary Diagnostic Cleanup 🔄 PENDING
+- [ ] **Remove Debug Code** 🔄 PENDING
+  - Find and remove temporary diagnostic prints
+  - Clean up experimental code blocks
+  - Remove "TEMPORARY DEBUG" sections
+  - Finalize production-ready code
 
 ### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
 
@@ -393,26 +256,6 @@
   - Document any limitations
 
 ### Code Refactoring and Cleanup
-
-- [ ] **Protocol Pipeline Refactoring** - After MAVLink stabilization
-  - Move MAVLink-specific functions from protocol_pipeline.h to MavlinkDetector
-    - `detectMavftpMode()` - purely MAVLink logic
-    - `isCriticalPacket()` - MAVLink message priority
-    - Message ID extraction logic
-  - Make protocol_pipeline.h truly protocol-agnostic
-  - Add proper protocol type checking before MAVLink-specific calls
-  - Consider virtual methods in ProtocolDetector base class:
-    - `isHighPriorityPacket()`
-    - `updateProtocolState()`
-    - `requiresExtendedTimeout()` - for adaptive_buffer.h
-  - Remove MAVLink-specific logic from adaptive_buffer.h:
-    - Replace direct `mavftpActive` checks with detector virtual method
-    - Replace hardcoded "MAVLINK" strings with dynamic protocol name
-  - Move MAVLink-specific fields from BridgeContext to MavlinkDetector:
-    - `bool mavftpActive`
-    - `uint32_t mavftpCount`
-    - `uint32_t lastMavftpTime`
-  - **Note**: Marked with "MAVLINK-SPECIFIC" comments in code
 
 - [ ] **Final Code Cleanup** - After all features are implemented
   - Remove unnecessary diagnostic code and debug prints
