@@ -42,6 +42,26 @@ public:
     void setStats(ProtocolStats* s) { 
         stats = s; 
     }
+    
+    // Adaptive timeout support - check if protocol needs extended timeouts
+    virtual bool requiresExtendedTimeout() const { 
+        return false;  // By default use normal timeout
+    }
+    
+    // EXPERIMENTAL: Flush strategy hooks
+    // TODO: Remove if not effective in production
+    virtual bool shouldFlushNow(size_t pendingPackets, uint32_t timeSinceLastMs) const {
+        // Default: flush after 2ms or 10 packets
+        return timeSinceLastMs > 2 || pendingPackets >= 10;
+    }
+    
+    virtual uint32_t getBatchTimeoutMs() const {
+        // Default: 2ms batching window
+        return 2;
+    }
+    
+    // EXPERIMENTAL: For future use if needed
+    // virtual size_t getMaxBatchSize() const { return 10; }
 };
 
 #endif // PROTOCOL_PARSER_H

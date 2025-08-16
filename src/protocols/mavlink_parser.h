@@ -5,318 +5,308 @@
 #include "protocol_stats.h"
 #include "../logging.h"
 
-// FastMAVLink configuration
-#include "fastmavlink_config.h"
+// --- MAVLink convenience setup must come BEFORE including mavlink.h ---
+#ifndef MAVLINK_USE_CONVENIENCE_FUNCTIONS
+#define MAVLINK_USE_CONVENIENCE_FUNCTIONS 1
+#endif
+#ifndef MAVLINK_COMM_NUM_BUFFERS
+#define MAVLINK_COMM_NUM_BUFFERS 1
+#endif
 
-// FIRST include common.h (which defines FASTMAVLINK_MESSAGE_CRCS)
-#include "fastmavlink_lib/c_library/common/common.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif
 
-// THEN include fastmavlink.h (which uses FASTMAVLINK_MESSAGE_CRCS)
-#include "fastmavlink_lib/c_library/lib/fastmavlink.h"
+// Pull basic types first so we can predeclare symbols used by helpers
+#include "mavlink/mavlink_types.h"
 
-// Include specific message definitions for constants
-#include "fastmavlink_lib/c_library/common/mavlink_msg_param_value.h"
-#include "fastmavlink_lib/c_library/common/mavlink_msg_file_transfer_protocol.h"
+// Predeclare the global and the byte-send hook BEFORE helpers see them
+extern mavlink_system_t mavlink_system;
+void comm_send_ch(mavlink_channel_t chan, uint8_t ch);
 
-// Structure for packet detection result (legacy compatibility)
-struct PacketDetectionResult {
-    int packetSize;    // Size of detected packet in bytes
-    int skipBytes;     // Number of bytes to skip before packet start (garbage/sync bytes)
-    
-    // Constructor for convenience
-    PacketDetectionResult() : packetSize(0), skipBytes(0) {}
-    PacketDetectionResult(int size, int skip) : packetSize(size), skipBytes(skip) {}
-};
+// Now include full MAVLink (helpers will find the symbols above)
+#include "mavlink/ardupilotmega/mavlink.h"
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 class MavlinkParser : public ProtocolParser {
 private:
     PacketMemoryPool* memPool;
     
-    // FastMAVLink state
-    fmav_status_t fmavStatus;
-    uint8_t frameBuffer[296];  // Independent buffer for frame assembly
+    // pymavlink structures
+    mavlink_message_t rxMessage;        // Current message being parsed
+    mavlink_status_t rxStatus;          // Parser status
+    uint8_t rxChannel;                  // Channel ID (usually 0)
     
-    // Error counters for diagnostics
-    uint32_t signatureErrors = 0;
-    uint32_t crcErrors = 0;
-    uint32_t lengthErrors = 0;
-    uint32_t lastErrorReport = 0;
+    // MAVFtp detection (simple counter approach)
+    bool mavftpActive = false;
+    uint32_t nonMavftpPacketCount = 0;
     
-    uint8_t getPacketPriority(uint8_t msgId) {
-        switch(msgId) {
-            case 0:   // HEARTBEAT
-            case 1:   // SYS_STATUS
-            case 24:  // GPS_RAW_INT
-            case 30:  // ATTITUDE
-                return PRIORITY_CRITICAL;
-            
-            case 110: // FILE_TRANSFER_PROTOCOL
-                return PRIORITY_BULK;
-            
-            default:
-                return PRIORITY_NORMAL;
-        }
-    }
+    // Last packet priority for flush strategy
+    uint8_t lastPacketPriority = PRIORITY_NORMAL;
     
-    uint8_t extractMessageId(const uint8_t* data, size_t len) {
-        if (len < 6) return 0xFF;
-        
-        if (data[0] == 0xFE && len >= 6) {  // MAVLink v1
-            return data[5];
-        } else if (data[0] == 0xFD && len >= 10) {  // MAVLink v2
-            return data[7];
-        }
-        return 0xFF;  // Unknown
-    }
+    // TEMPORARY DEBUG: Remove after testing
+    uint32_t debugTotalParsed = 0;
+    uint32_t debugCrcErrors = 0;
     
-    // Legacy method for compatibility with existing detection code
-    PacketDetectionResult findPacketBoundary(const uint8_t* data, size_t length) {
-        if (length == 0) return PacketDetectionResult(0, 0);
-        
-        // Process input data byte by byte for packet assembly
-        for (size_t i = 0; i < length; i++) {
-            fmav_result_t result = {0};
-            
-            // Parse byte into independent frame buffer to avoid conflicts with buffer management
-            uint8_t res = fmav_parse_and_check_to_frame_buf(
-                &result,      // Result structure with packet metadata
-                frameBuffer,  // Separate buffer for frame assembly (prevents memmove conflicts)
-                &fmavStatus,  // Parser state maintained across calls
-                data[i]       // Current byte to process
-            );
-            
-            // Check if complete packet was assembled
-            if (res) {
-                // Complete packet assembled in frameBuffer
-                // Calculate bytes to skip (garbage/sync bytes before packet start)
-                // If processed 100 bytes total and packet is 80 bytes long,
-                // then 20 bytes of non-packet data preceded this packet
-                size_t skipBytes = 0;
-                if (i + 1 >= result.frame_len) {
-                    skipBytes = (i + 1) - result.frame_len;
-                }
-                
-                // Update statistics if available
-                if (stats) {
-                    stats->onPacketDetected(result.frame_len, micros());
-                    // Keep this for verification that fix works
-                    static uint32_t detectCounter = 0;
-                    if (++detectCounter % 100 == 0) {
-                        log_msg(LOG_INFO, "MAVLink: Detected %u packets (stats: %u total)", 
-                                detectCounter, stats->packetsDetected);
-                    }
-                }
-                
-                // Return packet info
-                // Parser automatically resets to IDLE state after complete packet
-                return PacketDetectionResult(result.frame_len, skipBytes);
-            }
-            
-            // Check for specific errors (but don't reset parser!)
-            if (result.res == FASTMAVLINK_PARSE_RESULT_SIGNATURE_ERROR) {
-                signatureErrors++;
-                if (signatureErrors <= 5 || signatureErrors % 100 == 1) {
-                    log_msg(LOG_WARNING, "MAV: Signature error #%u (should not happen!)", signatureErrors);
-                }
-                if (stats) {
-                    stats->onDetectionError();
-                }
-            } else if (result.res == FASTMAVLINK_PARSE_RESULT_CRC_ERROR) {
-                crcErrors++;
-                if (crcErrors <= 5 || crcErrors % 100 == 1) {
-                    log_msg(LOG_WARNING, "MAV: CRC error #%u", crcErrors);
-                }
-                if (stats) {
-                    stats->onDetectionError();
-                }
-            } else if (result.res == FASTMAVLINK_PARSE_RESULT_LENGTH_ERROR) {
-                lengthErrors++;
-                if (lengthErrors <= 5 || lengthErrors % 100 == 1) {
-                    log_msg(LOG_WARNING, "MAV: Length error #%u", lengthErrors);
-                }
-                if (stats) {
-                    stats->onDetectionError();
-                }
-            }
-        }
-        
-        // No complete packet found in this data
-        return PacketDetectionResult(0, 0);
-    }
+    // Detection of non-MAVLink stream
+    uint32_t bytesWithoutPacket = 0;
+    uint32_t lastNoPacketWarning = 0;
 
 public:
-    MavlinkParser() : frameBuffer{0} {  // Initialize frame buffer with zeros
+    MavlinkParser() : rxChannel(0) {
         memPool = PacketMemoryPool::getInstance();
-        fmav_init(); // Important! Called in example
-        reset();
-        log_msg(LOG_INFO, "MAV: FastMAVLink parser initialized with independent frame buffer");
+        
+        // Initialize pymavlink status
+        memset(&rxStatus, 0, sizeof(rxStatus));
+        memset(&rxMessage, 0, sizeof(rxMessage));
+        
+        log_msg(LOG_INFO, "pymav: Parser initialized");
     }
     
+    virtual ~MavlinkParser() = default;
+    
+    // Main parse method
     ParseResult parse(CircularBuffer* buffer, uint32_t currentTime) override {
         ParseResult result;
         
         size_t available = buffer->available();
-        if (available < getMinimumBytes()) {
-            return result;  // Need more data
+        if (available == 0) {
+            return result;
         }
         
-        // Get contiguous view for parsing
-        size_t needed = min((size_t)available, (size_t)512);
+        // Get view for parsing
+        size_t needed = min(available, (size_t)512);
         auto view = buffer->getContiguousForParser(needed);
         
-        if (!view.ptr || view.safeLen < getMinimumBytes()) {
+        if (!view.ptr || view.safeLen == 0) {
             return result;
         }
         
-        // Check for MAVLink start bytes
-        if (view.ptr[0] != 0xFE && view.ptr[0] != 0xFD) {
-            // Not MAVLink, skip one byte
-            result.bytesConsumed = 1;
-            if (stats) stats->onDetectionError();
-            return result;
-        }
-        
-        // Try to find complete packets
-        size_t maxPackets = 10;  // Process up to 10 packets per call
+        // Temporary array for packets
+        const size_t maxPackets = 10;
         ParsedPacket* tempPackets = new ParsedPacket[maxPackets];
         size_t packetCount = 0;
-        size_t offset = 0;
+        size_t bytesProcessed = 0;
         
-        while (offset < view.safeLen && packetCount < maxPackets) {
-            // Use existing findPacketBoundary logic
-            PacketDetectionResult pdr = findPacketBoundary(
-                view.ptr + offset, 
-                view.safeLen - offset
+        // Parse bytes one by one (pymavlink style)
+        for (size_t i = 0; i < view.safeLen; i++) {
+            uint8_t byte = view.ptr[i];
+            bytesProcessed++;
+            
+            // Parse byte through pymavlink
+            uint8_t parseResult = mavlink_parse_char(
+                rxChannel,
+                byte,
+                &rxMessage,
+                &rxStatus
             );
             
-            if (pdr.packetSize > 0) {
-                // Complete packet found
-                size_t allocSize;
-                tempPackets[packetCount].data = memPool->allocate(pdr.packetSize, allocSize);
+            if (parseResult == MAVLINK_FRAMING_OK) {
+                // Complete message received
+                handleParsedMessage(&rxMessage, currentTime, 
+                                  tempPackets, packetCount, maxPackets);
                 
-                if (!tempPackets[packetCount].data) {
-                    log_msg(LOG_ERROR, "MAV: Failed to allocate %d bytes", pdr.packetSize);
-                    break;  // Can't allocate more packets
+                // TEMPORARY DEBUG
+                if (++debugTotalParsed % 100 == 0) {
+                    log_msg(LOG_DEBUG, "pymav: Parsed %u messages, MAVFtp=%s",
+                            debugTotalParsed, mavftpActive ? "active" : "inactive");
                 }
-                
-                memcpy(tempPackets[packetCount].data, 
-                       view.ptr + offset + pdr.skipBytes, 
-                       pdr.packetSize);
-                
-                tempPackets[packetCount].size = pdr.packetSize;
-                tempPackets[packetCount].allocSize = allocSize;
-                tempPackets[packetCount].pool = memPool;
-                tempPackets[packetCount].timestamp = currentTime;
-                
-                // Extract message ID for priority
-                uint8_t msgId = extractMessageId(
-                    view.ptr + offset + pdr.skipBytes, 
-                    pdr.packetSize
-                );
-                tempPackets[packetCount].priority = getPacketPriority(msgId);
-                
-                // Set hints based on message type
-                tempPackets[packetCount].hints.keepWhole = true;  // For UDP
-                tempPackets[packetCount].hints.canFragment = false;
-                if (tempPackets[packetCount].priority == PRIORITY_CRITICAL) {
-                    tempPackets[packetCount].hints.urgentFlush = true;
-                }
-                
-                packetCount++;
-                offset += pdr.skipBytes + pdr.packetSize;
-                
-                // Update stats
+            }
+            else if (parseResult == MAVLINK_FRAMING_BAD_CRC) {
+                // CRC error
                 if (stats) {
-                    stats->packetsDetected++;
-                    stats->totalBytes += pdr.packetSize;
-                    if (pdr.skipBytes > 0) {
-                        stats->totalSkippedBytes += pdr.skipBytes;
-                    }
+                    stats->onDetectionError();
                 }
-            } else if (pdr.packetSize == 0) {
-                // Incomplete packet, need more data
-                break;
-            } else {
-                // Error, skip byte
-                offset++;
-                if (stats) stats->onDetectionError();
+                
+                // TEMPORARY DEBUG
+                if (++debugCrcErrors % 10 == 0) {
+                    log_msg(LOG_DEBUG, "pymav: CRC errors = %u", debugCrcErrors);
+                }
             }
         }
         
-        // Copy found packets to result
+        // Handle case when no packets found
+        if (packetCount == 0 && bytesProcessed > 0) {
+            bytesWithoutPacket += bytesProcessed;
+            
+            // Warn every 10KB of non-MAVLink data
+            if (bytesWithoutPacket > 10000 && 
+                bytesWithoutPacket - lastNoPacketWarning > 10000) {
+                log_msg(LOG_WARNING, "pymav: No valid MAVLink packets in %u bytes - check data source or switch to RAW mode",
+                        bytesWithoutPacket);
+                lastNoPacketWarning = bytesWithoutPacket;
+            }
+            
+            // Consume small amount to avoid buffer deadlock
+            // but not too much to allow MAVLink sync if it appears
+            result.bytesConsumed = min(bytesProcessed, (size_t)10);
+        } else if (packetCount > 0) {
+            // Found packets - reset warning counters
+            bytesWithoutPacket = 0;
+            lastNoPacketWarning = 0;
+            result.bytesConsumed = bytesProcessed;
+        } else {
+            // No bytes processed - avoid deadlock
+            result.bytesConsumed = min((size_t)1, view.safeLen);
+        }
+        
+        // Return found packets
         if (packetCount > 0) {
             result.count = packetCount;
             result.packets = new ParsedPacket[packetCount];
-            for (size_t i = 0; i < packetCount; i++) {
-                result.packets[i] = tempPackets[i];
-            }
-            result.bytesConsumed = offset;
+            memcpy(result.packets, tempPackets, sizeof(ParsedPacket) * packetCount);
         }
         
         delete[] tempPackets;
         return result;
     }
     
-    void prioritizePackets(
-        ParsedPacket* packets, 
-        size_t count,
-        size_t availableSpace
-    ) override {
-        // Mark BULK packets for dropping if needed
-        size_t criticalSize = 0;
-        size_t normalSize = 0;
-        size_t bulkSize = 0;
-        
-        for (size_t i = 0; i < count; i++) {
-            switch (packets[i].priority) {
-                case PRIORITY_CRITICAL:
-                    criticalSize += packets[i].size;
-                    break;
-                case PRIORITY_NORMAL:
-                    normalSize += packets[i].size;
-                    break;
-                case PRIORITY_BULK:
-                    bulkSize += packets[i].size;
-                    break;
-            }
-        }
-        
-        // If critical packets don't fit, we have a problem
-        if (criticalSize > availableSpace) {
-            log_msg(LOG_ERROR, "Critical packets don't fit in available space!");
-            return;
-        }
-        
-        // Drop bulk first, then normal if needed
-        if (criticalSize + normalSize > availableSpace) {
-            // Drop all bulk
-            for (size_t i = 0; i < count; i++) {
-                if (packets[i].priority == PRIORITY_BULK) {
-                    packets[i].size = 0;  // Mark for dropping
-                }
-            }
-        }
-    }
-    
     void reset() override {
-        // Reset FastMAVLink parser state
-        fmav_status_reset(&fmavStatus);
-        // Note: frameBuffer does NOT need clearing - parser manages it
+        // Reset pymavlink parser state
+        memset(&rxStatus, 0, sizeof(rxStatus));
+        memset(&rxMessage, 0, sizeof(rxMessage));
         
-        // Reset error counters
-        signatureErrors = 0;
-        crcErrors = 0;
-        lengthErrors = 0;
-        lastErrorReport = 0;
+        // Reset detection state
+        mavftpActive = false;
+        nonMavftpPacketCount = 0;
+        lastPacketPriority = PRIORITY_NORMAL;
         
-        log_msg(LOG_DEBUG, "MAV: Parser reset");
+        // Reset debug counters
+        debugTotalParsed = 0;
+        debugCrcErrors = 0;
+        
+        // Reset non-MAVLink stream detection
+        bytesWithoutPacket = 0;
+        lastNoPacketWarning = 0;
+        
+        log_msg(LOG_DEBUG, "pymav: Parser reset");
     }
     
     const char* getName() const override {
-        return "MAVLink/FastMAV";
+        return "MAVLink/pymav";
     }
     
     size_t getMinimumBytes() const override {
-        return 12;  // MAVLink v2 minimum header size (v1 needs 8, but v2 is more common)
+        return 3;  // STX + length + ...
+    }
+    
+    // Extended timeout for bulk transfers
+    bool requiresExtendedTimeout() const override {
+        return mavftpActive;
+    }
+    
+    // EXPERIMENTAL: Flush strategy hooks
+    bool shouldFlushNow(size_t pendingPackets, uint32_t timeSinceLastMs) const override {
+        // Critical packets - flush immediately
+        if (lastPacketPriority == PRIORITY_CRITICAL) {
+            return true;
+        }
+        
+        // During MAVFtp - batch longer for efficiency
+        if (mavftpActive) {
+            return timeSinceLastMs > 10 || pendingPackets >= 20;
+        }
+        
+        // Normal operation - standard batching
+        return timeSinceLastMs > 5 || pendingPackets >= 5;
+    }
+    
+    uint32_t getBatchTimeoutMs() const override {
+        return mavftpActive ? 10 : 5;
+    }
+
+private:
+    // Handle successfully parsed message
+    void handleParsedMessage(mavlink_message_t* msg, uint32_t currentTime,
+                            ParsedPacket* tempPackets, size_t& packetCount, 
+                            size_t maxPackets) {
+        if (packetCount >= maxPackets) {
+            return;  // Buffer full
+        }
+        
+        // Detect MAVFtp mode
+        detectMavftpMode(msg->msgid);
+        
+        // Get packet priority
+        uint8_t priority = getPacketPriority(msg->msgid);
+        lastPacketPriority = priority;
+        
+        // Calculate total packet size
+        uint16_t packetLen = mavlink_msg_get_send_buffer_length(msg);
+        
+        // Allocate memory from pool
+        size_t allocSize;
+        uint8_t* packetData = (uint8_t*)memPool->allocate(packetLen, allocSize);
+        
+        if (!packetData) {
+            log_msg(LOG_WARNING, "pymav: Failed to allocate %u bytes", packetLen);
+            return;
+        }
+        
+        // Serialize message to buffer
+        uint16_t len = mavlink_msg_to_send_buffer(packetData, msg);
+        
+        // Fill packet structure
+        tempPackets[packetCount].data = packetData;
+        tempPackets[packetCount].size = len;
+        tempPackets[packetCount].allocSize = allocSize;
+        tempPackets[packetCount].pool = memPool;
+        tempPackets[packetCount].timestamp = currentTime;
+        tempPackets[packetCount].priority = priority;
+        
+        // Hints for optimization
+        tempPackets[packetCount].hints.keepWhole = true;
+        tempPackets[packetCount].hints.canFragment = false;
+        tempPackets[packetCount].hints.urgentFlush = (priority == PRIORITY_CRITICAL);
+        
+        packetCount++;
+        
+        // Update statistics
+        if (stats) {
+            stats->onPacketDetected(len, currentTime);
+        }
+    }
+    
+    // Detect MAVFtp session
+    void detectMavftpMode(uint32_t msgId) {
+        // MAVFtp message ID = 110
+        if (msgId == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL) {
+            if (!mavftpActive) {
+                mavftpActive = true;
+                log_msg(LOG_INFO, "pymav: MAVFtp session started");
+            }
+            nonMavftpPacketCount = 0;
+        } else if (mavftpActive) {
+            nonMavftpPacketCount++;
+            if (nonMavftpPacketCount > 50) {
+                mavftpActive = false;
+                log_msg(LOG_INFO, "pymav: MAVFtp session ended");
+            }
+        }
+    }
+    
+    // Get packet priority for optimization
+    uint8_t getPacketPriority(uint32_t msgId) {
+        switch(msgId) {
+            case MAVLINK_MSG_ID_HEARTBEAT:
+            case MAVLINK_MSG_ID_COMMAND_LONG:
+            case MAVLINK_MSG_ID_COMMAND_ACK:
+            case MAVLINK_MSG_ID_SYS_STATUS:
+            case MAVLINK_MSG_ID_ATTITUDE:
+                return PRIORITY_CRITICAL;
+                
+            case MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL:
+            case MAVLINK_MSG_ID_PARAM_VALUE:
+            case MAVLINK_MSG_ID_PARAM_REQUEST_READ:
+            case MAVLINK_MSG_ID_PARAM_REQUEST_LIST:
+                return PRIORITY_BULK;
+                
+            default:
+                return PRIORITY_NORMAL;
+        }
     }
 };

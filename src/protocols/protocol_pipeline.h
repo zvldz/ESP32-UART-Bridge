@@ -90,6 +90,10 @@ public:
         // Process send queues for all senders
         for (size_t i = 0; i < senderCount; i++) {
             if (senders[i]) {
+                // EXPERIMENTAL: Could apply parser flush strategy here
+                // if (parser && parser->shouldFlushNow(pendingPackets, timeSinceLastFlush)) {
+                //     senders[i]->forceFlush();
+                // }
                 senders[i]->processSendQueue();
             }
         }
@@ -173,6 +177,22 @@ public:
                 senders[i]->processSendQueue();
             }
         }
+    }
+    
+    // Get parser instance for external access (e.g., adaptive timeouts)
+    ProtocolParser* getParser() const {
+        return parser;
+    }
+    
+    // EXPERIMENTAL: Apply parser-specific batching strategies to senders
+    void applyBatchingStrategies() {
+        if (!parser) return;
+        
+        uint32_t batchTimeout = parser->getBatchTimeoutMs();
+        
+        // TODO: Apply to UDP sender if available
+        // For now just expose timeout value for future use
+        // UdpSender could check this value in processSendQueue()
     }
     
     // Protocol statistics for web interface
