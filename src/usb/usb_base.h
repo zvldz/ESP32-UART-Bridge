@@ -9,13 +9,13 @@
 // Base class for USB implementations with common ring buffer logic
 class UsbBase : public UsbInterface {
 protected:
-    // Common buffer sizes
-    static constexpr size_t RX_BUFFER_SIZE = 1024;
-    static constexpr size_t TX_BUFFER_SIZE = 1024;
+    // Use common buffer sizes from interface
+    static constexpr size_t RX_BUFFER_SIZE = UsbBufferSizes::RX_BUFFER_SIZE;
+    static constexpr size_t TX_BUFFER_SIZE = UsbBufferSizes::TX_BUFFER_SIZE;
     
     // Ring buffers
-    uint8_t rx_buffer[RX_BUFFER_SIZE];
-    uint8_t tx_buffer[TX_BUFFER_SIZE];
+    uint8_t rx_buffer[UsbBufferSizes::RX_BUFFER_SIZE];
+    uint8_t tx_buffer[UsbBufferSizes::TX_BUFFER_SIZE];
     volatile size_t rx_head;
     volatile size_t rx_tail;
     volatile size_t tx_head;

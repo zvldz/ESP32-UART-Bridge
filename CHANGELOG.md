@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## v2.15.1 (Task Priority Optimization & USB Batching Improvements) 🚀
+
+### Task Priority Rebalancing ✅ COMPLETED
+- **DMA Task Priority Increase**: Elevated DMA task priority above UartBridge task
+  - **Problem Solved**: Eliminated UART FIFO overflow issues during high-throughput operations
+  - **Result**: Stable data loading without packet loss
+  - **Architecture**: Better real-time performance for DMA operations
+  - **Impact**: More reliable MAVFtp and bulk transfer operations
+
+### USB Batching Timeout Optimization ✅ COMPLETED
+- **Adaptive Batch Timeouts**: Different timeouts for normal vs bulk modes
+  - **Normal Mode**: 5ms timeout for low latency telemetry
+  - **Bulk Mode**: 20ms timeout for optimal MAVFtp batching efficiency
+  - **Smart Fallback**: Partial batch transmission on timeout to prevent data stalling
+  - **Buffer Size Unification**: TX buffer increased to 2048 bytes across USB Device/Host modes
+- **Complete Partial Write Elimination**: Full architectural cleanup
+  - **Removed**: Pending buffer structure, flushPending() method
+  - **Simplified**: Single packet and batch transmission without partial writes
+  - **Enhanced**: Timeout-based partial batch transmission for stuck scenarios
+
+### System Stability Improvements ✅ COMPLETED
+- **USB Block Detection Timeout**: Increased from 500ms to 1000ms for better detection accuracy
+- **Pool Exhausted Logging**: Rate limiting (1/second) and reduced severity (INFO vs WARNING)
+- **Statistics Interface Fix**: Real MAVLink statistics instead of hardcoded zeros
+  - **Backend**: getSender() methods for accessing real USB transmission counters
+  - **Frontend**: Updated web interface with accurate packet counts and error statistics
+
 ## v2.15.0 (MAVLink Parser Refactoring to Byte-wise Parsing) 🚀
 
 ### Major MAVLink Parser Simplification

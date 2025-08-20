@@ -96,6 +96,17 @@ public:
                 senders[i]->processSendQueue(bulkMode);
             }
         }
+
+        /*
+        // Give time to other tasks
+        if (bulkMode) {
+            static uint32_t lastYieldTime = 0;
+            if ((millis() - lastYieldTime) >= 10) {
+                vTaskDelay(1);
+                lastYieldTime = millis();
+            }
+        }
+        */
     }
     
     void handleBackpressure() {

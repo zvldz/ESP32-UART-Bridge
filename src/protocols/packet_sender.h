@@ -10,7 +10,7 @@
 // Queued packet with send progress tracking
 struct QueuedPacket {
     ParsedPacket packet;
-    size_t sendOffset;      // How much already sent (for partial send)
+    size_t sendOffset;      // TODO: Remove after UDP/UART refactoring (only they use partial write now)
     uint32_t enqueueTime;   // When packet was queued
     
     QueuedPacket() : sendOffset(0), enqueueTime(0) {}
