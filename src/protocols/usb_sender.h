@@ -18,23 +18,7 @@ private:
     static constexpr size_t MAX_BATCH_PACKETS = 8;
     uint8_t batchBuffer[BATCH_BUFFER_SIZE];
     
-    // NEW: Pending batch for partial writes
-    struct {
-        uint8_t data[BATCH_BUFFER_SIZE];
-        size_t totalSize = 0;
-        size_t sentOffset = 0;
-        size_t packetCount = 0;
-        
-        bool active() const { return totalSize > 0; }
-        void clear() { totalSize = sentOffset = packetCount = 0; }
-        
-        void set(const uint8_t* src, size_t size, size_t offset, size_t count) {
-            memcpy(data, src, size);
-            totalSize = size;
-            sentOffset = offset;
-            packetCount = count;
-        }
-    } pending;
+    // REMOVED: Pending batch structure - no more partial writes
     
     // NEW: Batch window timing
     uint32_t batchWindowStart = 0;
@@ -42,7 +26,8 @@ private:
     // NEW: Thresholds
     static constexpr size_t BATCH_N_PACKETS = 4;
     static constexpr size_t BATCH_X_BYTES = 448;
-    static constexpr uint32_t BATCH_T_MS = 5;
+    static constexpr uint32_t BATCH_T_MS = 5;        // Normal mode
+    static constexpr uint32_t BATCH_T_MS_BULK = 20;  // Bulk mode - optimal batching
     
     // NEW: Track bulk mode transitions
     bool lastBulkMode = false;
@@ -96,74 +81,33 @@ private:
         }
         currentQueueBytes = 0;
         
-        // Clear pending buffer
-        pending.clear();
-        
         // Reset batch window
         batchWindowStart = 0;
     }
     
-    // Helper: Flush pending batch
-    bool flushPending() {
-        if (!pending.active()) return true;
-        
-        size_t remaining = pending.totalSize - pending.sentOffset;
-        int avail = usbInterface->availableForWrite();
-        
-        if (avail <= 0) {
-            applyBackoff();
-            return false;
-        }
-        
-        size_t toSend = std::min(remaining, (size_t)avail);
-        size_t sent = usbInterface->write(
-            pending.data + pending.sentOffset, toSend);
-        
-        if (sent > 0) {
-            pending.sentOffset += sent;
-            resetBackoff();
-            updateTxCounter(sent);
-            
-            // Check if fully sent
-            if (pending.sentOffset >= pending.totalSize) {
-                // NOW safe to remove packets from queue
-                commitPackets(pending.packetCount);
-                pending.clear();
-                return true;
-            }
-        } else {
-            applyBackoff();
-        }
-        return false;  // Still pending
-    }
+    // REMOVED: flushPending() - no more partial writes
     
-    // Helper: Send single packet (handles partial)
+    // Helper: Send single packet - NO PARTIAL WRITE
     bool sendSinglePacket() {
         if (packetQueue.empty() || !isReady()) return false;
         
         QueuedPacket* item = &packetQueue.front();
         int avail = usbInterface->availableForWrite();
         
-        if (avail <= 0) {
-            applyBackoff();
+        // Check if entire packet fits
+        if (avail < (int)item->packet.size) {
+            // Packet doesn't fit - wait for next iteration
             return false;
         }
         
-        size_t remaining = item->packet.size - item->sendOffset;
-        size_t toSend = std::min(remaining, (size_t)avail);
-        size_t sent = usbInterface->write(
-            item->packet.data + item->sendOffset, toSend);
+        // Send entire packet only
+        size_t sent = usbInterface->write(item->packet.data, item->packet.size);
         
         if (sent > 0) {
-            item->sendOffset += sent;
             resetBackoff();
             updateTxCounter(sent);
-            
-            if (item->sendOffset >= item->packet.size) {
-                // Fully sent
-                commitPackets(1);
-                return true;
-            }
+            commitPackets(1);  // Remove packet from queue
+            return true;
         } else {
             applyBackoff();
         }
@@ -183,8 +127,8 @@ public:
     void processSendQueue(bool bulkMode = false) override {
         uint32_t now = millis();
         
-        // NEW: USB block detection - only check if we have data to send
-        if (!packetQueue.empty() || pending.active()) {
+        // NEW: USB block detection - only check if we have data to send in not bulk mode
+        if (!bulkMode && !packetQueue.empty()) {
             size_t currentAvailable = usbInterface->availableForWrite();
             
             if (currentAvailable == lastAvailableForWrite) {
@@ -239,17 +183,7 @@ public:
             lastBulkMode = bulkMode;
         }
         
-        // STEP 1: Always flush pending first
-        if (pending.active()) {
-            if (!flushPending()) return;
-            // Pending done, continue to maybe batch more
-        }
-        
-        // STEP 2: Handle partial head packet
-        if (!packetQueue.empty() && packetQueue.front().sendOffset > 0) {
-            sendSinglePacket();
-            return;  // Don't batch until head is clear
-        }
+        // REMOVED: STEP 1 & 2 - no more pending/partial logic
         
         // STEP 3: Non-bulk mode - single packet
         if (!bulkMode) {
@@ -296,12 +230,13 @@ public:
         // Decide if should flush
         bool shouldFlush = false;
         uint32_t windowAge = now - batchWindowStart;
+        uint32_t batchTimeout = bulkMode ? BATCH_T_MS_BULK : BATCH_T_MS;
         
         if (batchPackets >= BATCH_N_PACKETS) {
             shouldFlush = true;  // Enough packets
         } else if (batchSize >= BATCH_X_BYTES) {
             shouldFlush = true;  // Enough bytes
-        } else if (windowAge >= BATCH_T_MS) {
+        } else if (windowAge >= batchTimeout) {
             shouldFlush = true;  // Timeout
         } else if (batchPackets == packetQueue.size() && batchPackets > 0) {
             shouldFlush = true;  // No more coming
@@ -323,31 +258,55 @@ public:
                 offset += item.packet.size;
             }
             
-            // Attempt send
-            size_t toSend = std::min(offset, (size_t)avail);
-            size_t sent = usbInterface->write(batchBuffer, toSend);
+            // NEW: Check if entire batch fits
+            if (avail < (int)offset) {
+                // Batch doesn't fit entirely
+                if (windowAge >= batchTimeout) {
+                    // Timeout expired - send what fits
+                    size_t partialOffset = 0;
+                    size_t partialPackets = 0;
+                    
+                    // Calculate how many packets fit
+                    for (size_t i = 0; i < batchPackets; i++) {
+                        size_t packetSize = packetQueue[i].packet.size;
+                        if (partialOffset + packetSize <= (size_t)avail) {
+                            partialOffset += packetSize;
+                            partialPackets++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // Send partial batch
+                    if (partialPackets > 0) {
+                        size_t sent = usbInterface->write(batchBuffer, partialOffset);
+                        if (sent > 0) {
+                            resetBackoff();
+                            updateTxCounter(sent);
+                            commitPackets(partialPackets);
+                        }
+                    }
+                    batchWindowStart = 0;  // Reset window
+                }
+                return;
+            }
+            
+            // Send entire batch only
+            size_t sent = usbInterface->write(batchBuffer, offset);
             
             if (sent > 0) {
                 resetBackoff();
                 updateTxCounter(sent);
+                commitPackets(batchPackets);  // Commit all packets
                 
-                if (sent < offset) {
-                    // Partial - save to pending
-                    pending.set(batchBuffer, offset, sent, batchPackets);
-                    log_msg(LOG_DEBUG, "[USB] Partial batch: %zu/%zu bytes",
-                            sent, offset);
-                } else {
-                    // Full send - commit packets
-                    commitPackets(batchPackets);
-                    
-                    // Log batch success (sample)
-                    static uint32_t batchCount = 0;
-                    if (++batchCount % 20 == 0) {
-                        log_msg(LOG_DEBUG, "[USB] Batch #%u: %zu packets, %zu bytes",
-                                batchCount, batchPackets, offset);
-                    }
+                // Log batch success (keep existing logging)
+                static uint32_t batchCount = 0;
+                if (++batchCount % 20 == 0) {
+                    log_msg(LOG_DEBUG, "[USB] Batch #%u: %zu packets, %zu bytes",
+                            batchCount, batchPackets, offset);
                 }
-                batchWindowStart = 0;  // Reset window
+                
+                batchWindowStart = 0;
             } else {
                 applyBackoff();
             }

@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.15.0"
+#define DEVICE_VERSION "2.15.1"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -107,7 +107,7 @@ these features but is not justified for current requirements.
 #define CRASHLOG_UPDATE_INTERVAL_MS 5000     // How often to update RTC variables
 
 // FreeRTOS priorities for multi-core ESP32
-#define UART_TASK_PRIORITY (configMAX_PRIORITIES - 1)  // Highest priority for UART
+#define UART_TASK_PRIORITY (configMAX_PRIORITIES - 4)  // Highest priority for UART !!
 #define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 15) // Lower priority for web server
 
 // Core assignments for multi-core ESP32

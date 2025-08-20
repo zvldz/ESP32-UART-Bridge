@@ -17,7 +17,7 @@ public:
         size_t dmaRxBufSize = 8192;       // DMA RX buffer size
         size_t dmaTxBufSize = 8192;       // DMA TX buffer size  
         size_t ringBufSize = 16384;       // Application ring buffer size
-        uint8_t eventTaskPriority = 20;   // Priority for event task (if used)
+        uint8_t eventTaskPriority = (configMAX_PRIORITIES - 1);   // Priority for event task (if used) (20)
         size_t eventQueueSize = 30;       // UART event queue size
     };
     

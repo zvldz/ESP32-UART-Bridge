@@ -37,12 +37,21 @@
   - Collect multiple MAVLink packets into single UDP datagram (up to MTU)
   - Use hints.keepWhole from parser for packet integrity
   - Add UDP_BATCH_DISABLE config option for legacy GCS compatibility
+  - **NEW**: Consider removing partial write support (similar to USB optimization)
 - [ ] **Protocol-driven Optimizations** 🔄 PENDING (partially implemented)
   - ✅ MAVFtp: Extended timeouts (20ms) - COMPLETED
   - 🔄 SBUS/CRSF (future): Minimal latency requirements
   - 🔄 Modbus RTU (future): Inter-frame timing preservation
   - Device 3 (Mirror) can utilize same optimizations
   - Architecture ready - just add new protocol implementations
+
+#### 1.3.1 - UART Sender Analysis 🔄 NEW
+- [ ] **UART Sender Optimization Review** 🔄 PENDING
+  - Analyze if Device 3 (UART mirror) needs MAVLink parsing
+  - Consider removing partial write support for consistency
+  - Evaluate if MAVLink-aware buffering provides benefits for UART
+  - Question: Does protocol parsing make sense for simple UART mirroring?
+  - Potential simplification: Raw byte stream for Device 3
 
 #### 1.4 - USB Batching Implementation ✅ COMPLETED
 - [x] **USB Batch Transmission** ✅ COMPLETED
@@ -62,7 +71,28 @@
   - Diagnostic messages for debugging blocked/unblocked states
   - Memory-safe queue clearing with proper packet.free() calls
 
-#### 1.6 - Temporary Diagnostic Cleanup 🔄 PENDING
+#### 1.6 - Task Priority Optimization ✅ COMPLETED
+- [x] **DMA Task Priority Elevation** ✅ COMPLETED
+  - Elevated DMA task priority above UartBridge task priority
+  - Solved UART FIFO overflow issues during high-throughput operations
+  - Achieved stable data loading without packet loss
+  - Improved real-time performance for DMA operations
+  - Enhanced reliability for MAVFtp and bulk transfer operations
+
+#### 1.7 - USB Timeout & Partial Write Optimization ✅ COMPLETED  
+- [x] **Adaptive USB Batch Timeouts** ✅ COMPLETED
+  - Normal mode: 5ms timeout for low latency telemetry
+  - Bulk mode: 20ms timeout for optimal MAVFtp batching
+  - Smart fallback: partial batch transmission on timeout
+- [x] **Complete Partial Write Elimination** ✅ COMPLETED
+  - Removed pending buffer structure and flushPending() method
+  - Simplified transmission logic without partial writes
+  - Enhanced timeout-based partial batch transmission for edge cases
+- [x] **System Stability Improvements** ✅ COMPLETED
+  - USB block detection timeout increased to 1000ms
+  - Pool exhausted logging rate limiting and severity reduction
+
+#### 1.8 - Temporary Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
   - Find and remove temporary diagnostic prints
   - Clean up experimental code blocks
