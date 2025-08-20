@@ -180,6 +180,12 @@ public:
         return parser;
     }
     
+    // Get sender access methods for statistics
+    size_t getSenderCount() const { return senderCount; }
+    PacketSender* getSender(size_t index) const {
+        return (index < senderCount) ? senders[index] : nullptr;
+    }
+    
     // EXPERIMENTAL: Apply parser-specific batching strategies to senders
     void applyBatchingStrategies() {
         if (!parser) return;
@@ -226,11 +232,30 @@ public:
                     break;
                     
                 case PROTOCOL_MAVLINK:  // MAVLink (1)
-                    parserStats["packetsDetected"] = ctx->protocol.stats->packetsDetected;
+                    // Rename "packetsDetected" to "packetsParsed" for clarity
+                    parserStats["packetsParsed"] = ctx->protocol.stats->packetsDetected;
+                    
+                    // Get sent/dropped from USB sender (Device 2)
+                    uint32_t packetsSent = 0;
+                    uint32_t packetsDropped = 0;
+                    for (size_t i = 0; i < getSenderCount(); i++) {
+                        PacketSender* sender = getSender(i);
+                        if (sender && strcmp(sender->getName(), "USB") == 0) {
+                            packetsSent = sender->getSentCount();
+                            packetsDropped = sender->getDroppedCount();
+                            break;
+                        }
+                    }
+                    parserStats["packetsSent"] = packetsSent;
+                    parserStats["packetsDropped"] = packetsDropped;
+                    
+                    // Detection errors from parser
                     parserStats["detectionErrors"] = ctx->protocol.stats->detectionErrors;
-                    parserStats["resyncEvents"] = ctx->protocol.stats->resyncEvents;
-                    parserStats["packetsTransmitted"] = ctx->protocol.stats->packetsTransmitted;
-                    parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
+                    
+                    // Remove deprecated fields - DO NOT send to frontend
+                    // parserStats["resyncEvents"] - removed
+                    // parserStats["packetsTransmitted"] - removed  
+                    // parserStats["bytesProcessed"] - removed for MAVLink
                     break;
 
                 // Future: PROTOCOL_SBUS (2)

@@ -80,6 +80,9 @@ private:
     MemoryPool<288, 20> mavlinkPool;  // MAVLink v2 max (20 blocks)
     MemoryPool<512, 10> rawPool;      // RAW chunks (10 blocks)
     
+    // Rate limiting for "Pool exhausted" messages
+    uint32_t lastExhaustedLog = 0;
+    
     // Private constructor for singleton
     PacketMemoryPool() = default;
     
@@ -112,8 +115,12 @@ public:
         }
         
         if (!ptr) {
-            // Pool exhausted - fall back to heap
-            log_msg(LOG_WARNING, "Pool exhausted for size %zu, using heap", size);
+            // Pool exhausted - fall back to heap with rate limiting
+            uint32_t now = millis();
+            if (now - lastExhaustedLog > 1000) {  // Log no more than once per second
+                log_msg(LOG_INFO, "Pool exhausted for size %zu, using heap", size);  // INFO instead of WARNING
+                lastExhaustedLog = now;
+            }
             ptr = new uint8_t[size];
             allocatedSize = size;
         }

@@ -48,7 +48,7 @@ private:
     bool lastBulkMode = false;
     
     // NEW: USB block detection
-    static constexpr uint32_t USB_BLOCKED_TIMEOUT_MS = 500;
+    static constexpr uint32_t USB_BLOCKED_TIMEOUT_MS = 1000;  // Increased from 500ms
     size_t lastAvailableForWrite = 0;
     uint32_t availableNotChangedSince = 0;
     bool usbBlocked = false;

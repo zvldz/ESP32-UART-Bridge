@@ -149,6 +149,12 @@ public:
                 &rxStatus
             );
             
+            // Count detection errors (CRC, signature failures)
+            if (parseResult == MAVLINK_FRAMING_BAD_CRC || 
+                parseResult == MAVLINK_FRAMING_BAD_SIGNATURE) {
+                if (stats) stats->onDetectionError();
+            }
+            
             if (parseResult == MAVLINK_FRAMING_OK) {
                 // Complete message received
                 bulkDetector.onPacket(rxMessage.msgid);
@@ -158,7 +164,7 @@ public:
                                       tempPackets.get(), packetCount, maxPackets);
                 }
             }
-            // Note: Ignore MAVLINK_FRAMING_INCOMPLETE, MAVLINK_FRAMING_BAD_CRC
+            // Note: Ignore MAVLINK_FRAMING_INCOMPLETE
             // pymavlink handles all states internally
         }
         

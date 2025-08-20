@@ -463,19 +463,18 @@ const StatusUpdates = {
         return `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Packet Detection</h5>
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Packet Statistics</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Detected:</div><div><strong>${p.packetsDetected || 0}</strong></div>
-                        <div>Transmitted:</div><div><strong>${p.packetsTransmitted || 0}</strong></div>
-                        <div>Detection Errors:</div><div><strong>${p.detectionErrors || 0}</strong></div>
-                        <div>Resync Events:</div><div><strong>${p.resyncEvents || 0}</strong></div>
+                        <div>Parsed:</div><div><strong>${p.packetsParsed || 0}</strong></div>
+                        <div>Sent:</div><div><strong>${p.packetsSent || 0}</strong></div>
+                        <div>Dropped:</div><div><strong>${p.packetsDropped || 0}</strong></div>
+                        <div>Errors:</div><div><strong>${p.detectionErrors || 0}</strong></div>
                     </div>
                 </div>
                 
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
                     <h5 style="margin: 0 0 10px 0; color: #333;">Packet Analysis</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Total Bytes:</div><div><strong>${Utils.formatBytes(p.bytesProcessed || 0)}</strong></div>
                         <div>Average Size:</div><div><strong>${p.avgPacketSize || 0} bytes</strong></div>
                         <div>Size Range:</div><div><strong>${p.minPacketSize || 0}-${p.maxPacketSize || 0}B</strong></div>
                         <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs)}</strong></div>
