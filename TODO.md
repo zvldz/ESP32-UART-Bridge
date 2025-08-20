@@ -2,6 +2,16 @@
 
 ## PENDING TASKS 🔄
 
+### Circular Buffer Optimizations (v2.6.x)
+- [x] Basic circular buffer implementation
+- [x] Gap-based traffic detector  
+
+
+### Protocol-aware Optimizations (v2.7.0)
+- [x] MAVLink packet priorities (commands > telemetry > bulk) ✅ IMPLEMENTED in parser architecture
+- [x] UDP: 1 MAVLink packet = 1 datagram ✅ IMPLEMENTED via UdpSender batching
+- [x] Separate critical/normal queues ✅ IMPLEMENTED via PacketSender priority handling
+
 ### Priority 1 - PyMAVLink Migration ⚠️ PARTIALLY COMPLETED
 
 #### 1.1 - PyMAVLink Library Migration ✅ COMPLETED
@@ -213,25 +223,6 @@
 
 ### Future Considerations
 
-- [ ] **USB Backpressure Enhancement** - Revisit behavioral port detection
-  - **Background**: Complex USB port state detection was implemented in v2.10.0 but removed due to stability issues
-  - **Previous Implementation**:
-    - Behavioral detection using write buffer availability patterns
-    - Dynamic thresholds (ASSUME_CLOSED_THRESHOLD=20, FIRST_ATTEMPT_THRESHOLD=5)
-    - Early data dropping when COM port closed
-    - Automatic protocol detector reset on port state changes
-  - **Issues Encountered**:
-    - Stability problems on different systems
-    - False positives in port closure detection
-    - Over-complexity for marginal benefit
-  - **Current State**: Reverted to simple `Serial.availableForWrite()` approach
-  - **Future Approach** (if needed):
-    - Simpler heuristics with longer observation windows
-    - Configurable sensitivity levels
-    - Better testing across different USB host systems
-    - Optional feature (disabled by default)
-  - **Priority**: Low - current simple approach works well for most cases
-
 - [ ] **Advanced Network Features**
   - **TCP Client Mode** - Connect to remote servers
     - Automatic reconnection on disconnect
@@ -264,19 +255,6 @@
   - Remove temporary workarounds that are no longer needed
   - **Note**: This should be done as the very last step to avoid breaking in-development features
 
-### Circular Buffer Optimizations (v2.6.x)
-- [x] Basic circular buffer implementation
-- [x] Gap-based traffic detector  
-- [ ] Buffer utilization metrics monitoring in web UI
-- [ ] Configurable drop thresholds via web config
-
-### Protocol-aware Optimizations (v2.7.0)
-- [x] MAVLink packet priorities (commands > telemetry > bulk) ✅ IMPLEMENTED in parser architecture
-- [x] UDP: 1 MAVLink packet = 1 datagram ✅ IMPLEMENTED via UdpSender batching
-- [x] Separate critical/normal queues ✅ IMPLEMENTED via PacketSender priority handling
-- [ ] Adaptive timeouts based on msgid
-- [ ] MAVFtp session detection → bulk mode
-
 ## Future Protocol Pipeline Enhancements
 
 ### Next Phase Improvements
@@ -292,24 +270,7 @@
 - [ ] **Queue Depth Monitoring** - Track sender queue depths every 10 seconds  
 - [ ] **Stuck Packet Cleanup** - Automatic cleanup of stalled packets
 
-### Protocol Pipeline TODO (from refactoring plan)
-- [ ] **Slab Allocator Monitoring** - Monitor memory pool fragmentation during long operations
-- [ ] **Priority Queue Enhancement** - Replace std::queue with priority_queue for better priority handling
-- [ ] **Dynamic CPU Affinity** - Move tasks between cores based on load
-- [ ] **Batch Processing** - Process multiple packets per call for efficiency
-- [ ] **Flow Control Implementation** - Add feedback from Senders to Parser for rate control
-- [ ] **TaskScheduler Integration** - Add periodic tasks for:
-  - Pipeline statistics logging every 30 seconds
-  - Memory pool health checks every minute  
-  - Queue depth monitoring every 10 seconds
-  - Automatic cleanup of stuck packets
-
 **Architecture Status**: Parser + Sender refactoring completed successfully. Memory pool implementation with Meyers singleton provides thread-safe operation. Ready for advanced protocol features.
-
-### USB Optimizations (v2.7.x)
-- [ ] Async USB transmission queue
-- [ ] USB flow control detection
-- [ ] Alternative: USB bulk endpoints instead of CDC
 
 ## Libraries and Dependencies
 
