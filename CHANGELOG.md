@@ -37,6 +37,18 @@
 - **Startup Protection**: No more `Pool exhausted for size X, using heap` messages when USB dead
 - **Enhanced enqueue()**: Override in UsbSender to limit packets during blocked state
 
+### MAVLink Statistics Web Interface Fix ✅ COMPLETED
+- **Accurate Statistics Display**: Fixed web interface showing zeros for MAVLink stats
+  - **Backend Changes**: Added getSender() methods to ProtocolPipeline for sender access
+  - **Real Data Sources**: packetsSent/packetsDropped now from actual USB sender statistics
+  - **Proper Error Counting**: Detection errors now counted from MAVLINK_FRAMING_BAD_CRC/BAD_SIGNATURE
+  - **Field Renaming**: packetsDetected → packetsParsed for clarity
+- **Frontend Updates**: Redesigned renderMavlinkStats() with relevant metrics
+  - **Packet Statistics Panel**: Parsed, Sent, Dropped, Errors
+  - **Packet Analysis Panel**: Average Size, Size Range, Last Activity  
+  - **Removed Deprecated**: Resync Events, Total Bytes, Transmitted fields
+- **Data Integrity**: All statistics now show real values instead of hardcoded zeros
+
 ### Protocol Pipeline Fix
 - **Critical Logic Fix**: Fixed incorrect consume order in protocol_pipeline.h
   - **Before**: Only consumed bytes when packets found (data loss!)
