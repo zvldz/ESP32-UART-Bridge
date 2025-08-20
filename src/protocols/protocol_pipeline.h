@@ -74,18 +74,18 @@ public:
         // Parse packets from input buffer
         ParseResult result = parser->parse(inputBuffer, now);
         
-        if (result.count > 0) {
-            // Distribute packets to all senders
-            broadcastPackets(result.packets, result.count);
-            
-            // Consume processed bytes from input buffer
-            if (result.bytesConsumed > 0) {
-                inputBuffer->consume(result.bytesConsumed);
-            }
-            
-            // Clean up parse result
-            result.free();
+        // ALWAYS consume bytes if parser processed them
+        if (result.bytesConsumed > 0) {
+            inputBuffer->consume(result.bytesConsumed);
         }
+        
+        // THEN distribute packets if parser found them
+        if (result.count > 0) {
+            broadcastPackets(result.packets, result.count);
+        }
+        
+        // Clean up parse result
+        result.free();
         
         // Process send queues for all senders
         for (size_t i = 0; i < senderCount; i++) {
@@ -107,7 +107,6 @@ public:
                         senders[i]->getName(),
                         senders[i]->getQueueDepth());
                 
-                // Could implement priority dropping here
             }
         }
     }
@@ -129,8 +128,7 @@ public:
         }
     }
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
-    // Get detailed pipeline statistics as string (simplified version for now)
+    // Get detailed pipeline statistics as string 
     void getStatsString(char* buffer, size_t bufSize) {
         size_t offset = 0;
         
@@ -149,19 +147,15 @@ public:
         for (size_t i = 0; i < senderCount; i++) {
             if (senders[i]) {
                 offset += snprintf(buffer + offset, bufSize - offset,
-                                  "%s: Sent=%u Dropped=%u (B:%u/N:%u/C:%u) Queue=%zu Max=%zu",
+                                  "%s: Sent=%u Dropped=%u Queue=%zu Max=%zu ",
                                   senders[i]->getName(),
                                   senders[i]->getSentCount(),
                                   senders[i]->getDroppedCount(),
-                                  senders[i]->getDroppedBulk(),
-                                  senders[i]->getDroppedNormal(),
-                                  senders[i]->getDroppedCritical(),
                                   senders[i]->getQueueDepth(),
                                   senders[i]->getMaxQueueDepth());
             }
         }
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     // Method for distributing parsed packets (used by pipeline task)
     void distributeParsedPackets(ParseResult* result) {
@@ -271,14 +265,6 @@ public:
                 sender["sent"] = senders[i]->getSentCount();
                 sender["dropped"] = senders[i]->getDroppedCount();
                 
-                // Priority breakdown only for MAVLink
-                if (ctx->system.config && 
-                    ctx->system.config->protocolOptimization == PROTOCOL_MAVLINK) {
-                    JsonObject drops = sender["dropsByPriority"].to<JsonObject>();
-                    drops["bulk"] = senders[i]->getDroppedBulk();
-                    drops["normal"] = senders[i]->getDroppedNormal();
-                    drops["critical"] = senders[i]->getDroppedCritical();
-                }
                 
                 sender["queueDepth"] = senders[i]->getQueueDepth();
                 sender["maxQueueDepth"] = senders[i]->getMaxQueueDepth();

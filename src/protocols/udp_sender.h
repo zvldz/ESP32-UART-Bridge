@@ -10,6 +10,7 @@ private:
     uint8_t batchBuffer[1400];  // MTU safe size
     size_t batchSize;
     uint32_t lastBatchTime;
+    uint32_t lastStatsLog;   // For periodic statistics logging
     static constexpr uint32_t BATCH_TIMEOUT_US = 5000;  // 5ms
     
     void flushBatch() {
@@ -23,10 +24,11 @@ private:
     
 public:
     UdpSender(unsigned long* txCounter = nullptr) : 
-        PacketSender(20, 8192, txCounter),  // Pass TX counter to base class
+        PacketSender(20, 8192, txCounter),  // Return to original sizes
         batchSize(0),
-        lastBatchTime(0) {
-        log_msg(LOG_INFO, "UdpSender initialized");
+        lastBatchTime(0),
+        lastStatsLog(0) {
+        log_msg(LOG_DEBUG, "UdpSender initialized");
     }
     
     ~UdpSender() {
@@ -37,50 +39,51 @@ public:
     void processSendQueue() override {
         uint32_t now = micros();
         
+        // Process packets from FIFO queue
         while (!packetQueue.empty()) {
-            QueuedPacket& item = packetQueue.front();
+            QueuedPacket* item = &packetQueue.front();
             
-            // UDP doesn't support partial send - wait if packet doesn't fit
-            if (item.sendOffset > 0) {
+            // UDP doesn't support partial send - skip malformed packets
+            if (item->sendOffset > 0) {
                 log_msg(LOG_ERROR, "UDP: Partial send not supported!");
-                // Skip this packet
-                item.packet.free();
+                currentQueueBytes -= item->packet.size;
+                item->packet.free();
                 packetQueue.pop();
-                currentQueueBytes -= item.packet.size;
                 continue;
             }
             
-            if (item.packet.hints.keepWhole) {
-                // Send as separate UDP datagram
+            // KEEP BATCHING LOGIC - this was added after priorities!
+            if (item->packet.hints.keepWhole) {
+                // Send as separate UDP datagram (MAVLink packets)
                 flushBatch();  // Flush any pending batch first
-                sendUdpDatagram(item.packet.data, item.packet.size);
+                sendUdpDatagram(item->packet.data, item->packet.size);
                 totalSent++;
-            } else if (item.packet.hints.canBatch) {
-                // Add to batch
-                if (batchSize + item.packet.size > sizeof(batchBuffer)) {
+            } else if (item->packet.hints.canBatch) {
+                // Add to batch (non-MAVLink data)
+                if (batchSize + item->packet.size > sizeof(batchBuffer)) {
                     flushBatch();  // Batch full, flush first
                 }
                 
-                if (item.packet.size <= sizeof(batchBuffer)) {
-                    memcpy(batchBuffer + batchSize, item.packet.data, item.packet.size);
-                    batchSize += item.packet.size;
+                if (item->packet.size <= sizeof(batchBuffer)) {
+                    memcpy(batchBuffer + batchSize, item->packet.data, item->packet.size);
+                    batchSize += item->packet.size;
                     lastBatchTime = now;
                 } else {
                     // Single packet too big for batch - send alone
                     flushBatch();
-                    sendUdpDatagram(item.packet.data, item.packet.size);
+                    sendUdpDatagram(item->packet.data, item->packet.size);
                     totalSent++;
                 }
             } else {
                 // Send immediately
                 flushBatch();
-                sendUdpDatagram(item.packet.data, item.packet.size);
+                sendUdpDatagram(item->packet.data, item->packet.size);
                 totalSent++;
             }
             
-            // Packet processed - free and remove
-            currentQueueBytes -= item.packet.size;
-            item.packet.free();
+            // Packet processed - remove from queue
+            currentQueueBytes -= item->packet.size;
+            item->packet.free();
             packetQueue.pop();
         }
         
