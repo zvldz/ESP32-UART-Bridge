@@ -87,14 +87,13 @@ public:
         // Clean up parse result
         result.free();
         
-        // Process send queues for all senders
+        // Get bulk mode state from parser (once per cycle)
+        bool bulkMode = parser ? parser->isBurstActive() : false;
+
+        // Process send queues for all senders with bulk mode state
         for (size_t i = 0; i < senderCount; i++) {
             if (senders[i]) {
-                // EXPERIMENTAL: Could apply parser flush strategy here
-                // if (parser && parser->shouldFlushNow(pendingPackets, timeSinceLastFlush)) {
-                //     senders[i]->forceFlush();
-                // }
-                senders[i]->processSendQueue();
+                senders[i]->processSendQueue(bulkMode);
             }
         }
     }
@@ -166,9 +165,12 @@ public:
     
     // Method for processing senders (used by pipeline task)
     void processSenders() {
+        // Get bulk mode state from parser (once per cycle)
+        bool bulkMode = parser ? parser->isBurstActive() : false;
+        
         for (size_t i = 0; i < senderCount; i++) {
             if (senders[i]) {
-                senders[i]->processSendQueue();
+                senders[i]->processSendQueue(bulkMode);
             }
         }
     }

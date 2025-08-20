@@ -17,7 +17,7 @@ enum ProtocolType {
 // Transmission hints for optimized sending
 struct TransmitHints {
     bool keepWhole;          // Don't fragment (important for UDP)
-    bool urgentFlush;        // Send immediately, don't batch
+    bool urgentFlush;        // DEPRECATED: Not used, bulk mode now comes from parser
     uint32_t interPacketGap; // Microseconds between packets (for UART)
     bool canFragment;        // OK to send partially if needed
     bool canBatch;           // OK to group with other packets (for UDP)

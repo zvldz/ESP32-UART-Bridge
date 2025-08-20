@@ -16,11 +16,16 @@
   - **Targeted Detection**: Only counts FILE_TRANSFER_PROTOCOL and PARAM messages
   - **Adaptive Flushing**: Immediate flush in bulk mode, batched in normal mode
 
-### USB Micro-batching
-- **Bulk Mode Optimization**: Collect up to 8 packets (2KB) before sending
-  - **Efficiency**: Reduces USB overhead during file transfers
-  - **Smart Detection**: Uses urgentFlush hint to detect bulk mode
-  - **Fallback**: Normal single-packet mode for regular telemetry
+### USB Batching Architecture v2 ✅ COMPLETED
+- **Complete Rewrite**: Full USB sender architecture overhaul for data integrity
+  - **Pending Buffer**: Added protection against partial write data loss
+  - **Helper Methods**: applyBackoff(), resetBackoff(), inBackoff(), updateTxCounter(), commitPackets(), flushPending(), sendSinglePacket()
+  - **4-Step Algorithm**: Linear processing - flush pending → handle partials → single packets → bulk batching
+  - **N/X/T Thresholds**: 4 packets OR 448 bytes OR 5ms timeout for batch flushing
+  - **Bulk Mode Transitions**: Force flush on bulk mode exit to prevent latency
+- **Memory Pool Enhancement**: Increased 128B pool from 20 to 60 blocks for MAVFtp transfers
+- **Queue Architecture**: Migrated from std::queue to std::deque for direct indexing and batch planning
+- **Compiler Fixes**: Resolved type deduction errors in min() calls with explicit std:: namespace
 
 ### Protocol Pipeline Fix
 - **Critical Logic Fix**: Fixed incorrect consume order in protocol_pipeline.h

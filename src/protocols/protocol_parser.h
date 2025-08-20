@@ -29,6 +29,11 @@ public:
     // Get minimum bytes needed for parsing
     virtual size_t getMinimumBytes() const = 0;
     
+    // Get current burst/bulk mode state
+    virtual bool isBurstActive() const { 
+        return false;  // Default: no burst mode
+    }
+    
     // Handle backpressure - which packets to drop
     virtual void prioritizePackets(
         ParsedPacket* packets, 

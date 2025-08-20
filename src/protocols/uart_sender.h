@@ -17,7 +17,8 @@ public:
         log_msg(LOG_DEBUG, "UartSender initialized");
     }
     
-    void processSendQueue() override {
+    void processSendQueue(bool bulkMode = false) override {
+        // UART sender may ignore bulkMode parameter
         uint32_t now = micros();
         
         // Process packets from simple FIFO queue
@@ -67,7 +68,7 @@ public:
                     lastSendTime = now;
                     currentQueueBytes -= item->packet.size;
                     item->packet.free();
-                    packetQueue.pop();
+                    packetQueue.pop_front();
                 }
             } else {
                 break;  // Send failed

@@ -36,7 +36,8 @@ public:
         flushBatch();
     }
     
-    void processSendQueue() override {
+    void processSendQueue(bool bulkMode = false) override {
+        // UDP sender may use bulkMode for optimizations
         uint32_t now = micros();
         
         // Process packets from FIFO queue
@@ -48,7 +49,7 @@ public:
                 log_msg(LOG_ERROR, "UDP: Partial send not supported!");
                 currentQueueBytes -= item->packet.size;
                 item->packet.free();
-                packetQueue.pop();
+                packetQueue.pop_front();
                 continue;
             }
             
@@ -84,7 +85,7 @@ public:
             // Packet processed - remove from queue
             currentQueueBytes -= item->packet.size;
             item->packet.free();
-            packetQueue.pop();
+            packetQueue.pop_front();
         }
         
         // Check batch timeout
