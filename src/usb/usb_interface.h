@@ -7,6 +7,12 @@
 // Global USB mode variable
 extern UsbMode usbMode;
 
+// Common USB buffer sizes for Device and Host modes
+namespace UsbBufferSizes {
+    static constexpr size_t RX_BUFFER_SIZE = 1024;  // Keep RX at 1024
+    static constexpr size_t TX_BUFFER_SIZE = 2048;  // Increase TX to 2048
+}
+
 // Abstract interface for USB communication
 class UsbInterface {
 public:
