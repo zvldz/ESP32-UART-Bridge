@@ -47,6 +47,12 @@ private:
     // NEW: Track bulk mode transitions
     bool lastBulkMode = false;
     
+    // NEW: USB block detection
+    static constexpr uint32_t USB_BLOCKED_TIMEOUT_MS = 500;
+    size_t lastAvailableForWrite = 0;
+    uint32_t availableNotChangedSince = 0;
+    bool usbBlocked = false;
+    
     // Helper: Apply backoff
     void applyBackoff(uint32_t delayUs = 1000) {
         lastSendAttempt = micros();
@@ -79,6 +85,22 @@ private:
             packetQueue.front().packet.free();
             packetQueue.pop_front();  // Note: pop_front() for deque
         }
+    }
+    
+    // NEW: Helper to clear all queues
+    void clearAllQueues() {
+        // Clear main queue with proper memory deallocation
+        while (!packetQueue.empty()) {
+            packetQueue.front().packet.free();
+            packetQueue.pop_front();
+        }
+        currentQueueBytes = 0;
+        
+        // Clear pending buffer
+        pending.clear();
+        
+        // Reset batch window
+        batchWindowStart = 0;
     }
     
     // Helper: Flush pending batch
@@ -159,10 +181,52 @@ public:
     }
     
     void processSendQueue(bool bulkMode = false) override {
+        uint32_t now = millis();
+        
+        // NEW: USB block detection - only check if we have data to send
+        if (!packetQueue.empty() || pending.active()) {
+            size_t currentAvailable = usbInterface->availableForWrite();
+            
+            if (currentAvailable == lastAvailableForWrite) {
+                // Value hasn't changed
+                if (availableNotChangedSince == 0) {
+                    availableNotChangedSince = now;
+                } else if (!usbBlocked && (now - availableNotChangedSince > USB_BLOCKED_TIMEOUT_MS)) {
+                    // USB is blocked - clear everything
+                    usbBlocked = true;
+                    clearAllQueues();
+                    
+                    // === USB BLOCK DIAGNOSTIC === (Remove after testing)
+                    log_msg(LOG_WARNING, "[USB-DIAG] USB blocked (availableForWrite=%zu unchanged for %ums) - dropping all packets", 
+                            currentAvailable, USB_BLOCKED_TIMEOUT_MS);
+                    // === END DIAGNOSTIC ===
+                }
+            } else {
+                // Value changed - USB is alive
+                if (usbBlocked) {
+                    // === USB BLOCK DIAGNOSTIC === (Remove after testing)  
+                    log_msg(LOG_INFO, "[USB-DIAG] USB unblocked (availableForWrite: %zu -> %zu) - resuming normal operation",
+                            lastAvailableForWrite, currentAvailable);
+                    // === END DIAGNOSTIC ===
+                    
+                    usbBlocked = false;
+                }
+                
+                availableNotChangedSince = 0;
+                lastAvailableForWrite = currentAvailable;  // Always update when changed
+            }
+        } else {
+            // No data to send - reset detection timer but keep current block state
+            availableNotChangedSince = 0;
+        }
+        
+        // If USB is blocked, don't process anything
+        if (usbBlocked) {
+            return;
+        }
+        
         // Skip if in backoff
         if (inBackoff()) return;
-        
-        uint32_t now = millis();
         
         // Track bulk mode transitions
         if (bulkMode != lastBulkMode) {
@@ -298,6 +362,23 @@ public:
     
     const char* getName() const override {
         return "USB";
+    }
+    
+    bool enqueue(const ParsedPacket& packet) override {
+        // NEW: When USB is blocked, keep only 1 packet for testing
+        if (usbBlocked) {
+            if (packetQueue.empty()) {
+                // Accept this packet as test packet
+                // Continue with normal enqueue logic below
+            } else {
+                // Already have a test packet - drop new ones
+                // Don't count as dropped - this is expected when USB is dead
+                return false;
+            }
+        }
+        
+        // Call parent enqueue implementation
+        return PacketSender::enqueue(packet);
     }
 };
 
