@@ -8,6 +8,9 @@
 
 // Calculate adaptive buffer size based on baud rate
 static inline size_t calculateAdaptiveBufferSize(uint32_t baudrate) {
+    // TODO: Analyze after MAVLink stabilization - consider minimum 2048 for all speeds
+    // Current adaptive sizing may be too small for burst traffic at low baudrates
+    
     // Larger buffers for higher speeds to prevent FIFO overflow
     if (baudrate >= 921600) return 2048;
     if (baudrate >= 460800) return 1024;

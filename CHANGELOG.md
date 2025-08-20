@@ -1,13 +1,81 @@
 # CHANGELOG
 
+## v2.15.0 (MAVLink Parser Refactoring to Byte-wise Parsing) 🚀
+
+### Major MAVLink Parser Simplification
+- **Byte-wise Parsing**: Migrated from complex state machine to standard pymavlink byte-wise parsing
+  - **Removed Complexity**: Eliminated stash buffer, consume logic, prefix bytes tracking
+  - **Standard Approach**: Using mavlink_parse_char() for each byte - industry standard
+  - **Code Reduction**: Parser reduced from ~500 to ~300 lines
+  - **No More Deadlocks**: Removed PacketAssembler and incomplete packet tracking
+
+### BulkModeDetector Implementation
+- **Smart Detection**: Decay counter mechanism for MAVFtp and parameter bulk transfers
+  - **Hysteresis**: ON at 20 packets/sec, OFF at 5 packets/sec
+  - **100ms Decay**: Counter decrements every 100ms for smooth transitions
+  - **Targeted Detection**: Only counts FILE_TRANSFER_PROTOCOL and PARAM messages
+  - **Adaptive Flushing**: Immediate flush in bulk mode, batched in normal mode
+
+### USB Micro-batching
+- **Bulk Mode Optimization**: Collect up to 8 packets (2KB) before sending
+  - **Efficiency**: Reduces USB overhead during file transfers
+  - **Smart Detection**: Uses urgentFlush hint to detect bulk mode
+  - **Fallback**: Normal single-packet mode for regular telemetry
+
+### Protocol Pipeline Fix
+- **Critical Logic Fix**: Fixed incorrect consume order in protocol_pipeline.h
+  - **Before**: Only consumed bytes when packets found (data loss!)
+  - **After**: ALWAYS consume bytes first, THEN distribute packets
+  - **Universal Pattern**: Works for all parsers (MAVLink, RAW, future SBUS/CRSF)
+
+### Cleanup and Maintenance
+- **Priority System Removal**: Completely removed packet priority infrastructure
+  - **Deleted**: enum PacketPriority, priority field from ParsedPacket
+  - **Renamed**: dropLowestPriority() → dropOldestPacket()
+  - **Simplified**: All packets treated equally in FIFO queue
+- **Diagnostic Marking**: Unified format for temporary diagnostics
+  - **Standard Format**: `=== DIAGNOSTIC START === (Remove after MAVLink stabilization)`
+  - **Easy Removal**: All diagnostic code clearly marked for future cleanup
+- **TODO Addition**: Added reminder for adaptive buffer minimum size analysis
+
+## v2.14.1 (CircularBuffer Deadlock Fix & Priority System Rollback) ✅
+
+### CircularBuffer Critical Fix
+- **tail=511 Deadlock Resolution**: Fixed critical issue where CircularBuffer would deadlock at buffer boundaries
+  - **Root Cause**: When tail near buffer end (e.g., tail=459 in 512-byte buffer), only 53 linear bytes available despite 511 total bytes
+  - **Solution**: Data linearization using tempLinearBuffer[296] for transparent wrap handling
+  - **Impact**: MAVLink parser now gets consistent contiguous view up to 296 bytes regardless of wrap position
+- **Memory Optimization**: Removed obsolete shadow buffer system
+  - **Heap Savings**: 296 bytes per buffer moved from heap to BSS (better for embedded)
+  - **Cleaner Architecture**: Eliminated non-functional shadow update logic from write() method
+- **Simplified Consume Logic**: Replaced complex boundary jump heuristics with clean consume pattern
+  - **No More Boundary Jumps**: Parser always consumes exactly bytesProcessed amount
+  - **Eliminated Stuck States**: No more aggressive consume or forced boundary jump workarounds
+
+### Priority System Rollback
+- **Architecture Simplification**: Rolled back from 4-priority queue system to single FIFO
+  - **Removed Complexity**: Eliminated CRITICAL/HIGH/NORMAL/BULK priority queues
+  - **Single Queue**: PacketSender now uses simple std::queue for all packets
+  - **Simplified Enums**: protocol_types.h reduced to PRIORITY_NORMAL only
+- **Code Cleanup**: Removed all priority-specific methods and logic
+  - **Parser Simplification**: MavlinkParser.getPacketPriority() now returns PRIORITY_NORMAL for all
+  - **Sender Cleanup**: Removed getDropped{Bulk,Normal,Critical} methods from UartSender/UdpSender
+  - **TODO Comments**: Added documentation for potential future priority reintroduction
+
+### Performance Improvements
+- **MAVFtp Stability**: File transfer now works reliably without progress rollbacks
+- **Packet Loss Reduction**: From 100+ losses per session to <1%
+- **CRC Error Reduction**: From 100+ CRC errors to <10 per session
+- **High Speed Support**: Stable operation at 921600 baud without packet corruption
+
 ## v2.14.0 (PyMAVLink Migration & Architecture Cleanup) ✅
 
 ### MAVLink Library Migration
-- **PyMAVLink Integration**: Complete migration from FastMAVLink to PyMAVLink
-  - **Removed FastMAVLink**: Eliminated entire fastmavlink_lib directory and dependencies
-  - **PyMAVLink Implementation**: Full pymavlink generated headers integration (common + ardupilotmega)
-  - **Configuration**: Updated platformio.ini with proper pymavlink compiler flags
-  - **Compatibility**: Maintained full MAVLink protocol support with improved parsing efficiency
+- **PyMAVLink Integration**: Complete migration to PyMAVLink for better compatibility and maintainability
+  - **Library Replacement**: Replaced previous MAVLink implementation with standard PyMAVLink
+  - **Generated Headers**: Full pymavlink integration (common + ardupilotmega dialects)
+  - **Configuration**: Updated build system with proper PyMAVLink compiler flags
+  - **Improved Parsing**: Enhanced MAVLink processing efficiency and reliability
 
 ### Architecture Simplification
 - **Protocol Detection Removal**: Eliminated complex protocol detection system
@@ -24,7 +92,7 @@
   - **Removed Fields**: detector pointer, minBytesNeeded (detection-specific)
   - **Preserved Fields**: type, stats, enabled flag for runtime control
   - **Initialization**: Proper protocol structure initialization in initBridgeContext()
-- **Include Cleanup**: Removed all FastMAVLink and detector includes across codebase
+- **Include Cleanup**: Removed legacy library and detector includes across codebase
 - **Factory Pattern Removal**: Eliminated initProtocolDetectionFactory() and cleanup functions
 
 ### Technical Improvements
@@ -133,7 +201,7 @@
 ### Protocol Pipeline Components
 - **Parser Framework**: Base `ProtocolParser` class with specialized implementations
   - **RawParser**: Adaptive buffering without protocol parsing (default mode)
-  - **MAVLinkParser**: Packet boundary detection using FastMAVLink library
+  - **MAVLinkParser**: MAVLink packet boundary detection and parsing
   - **Future Ready**: Architecture supports SBUS, CRSF protocol additions
 
 - **Sender Framework**: Priority-based packet transmission system
@@ -281,19 +349,15 @@
     - Easier to locate related functionality
     - Reduced clutter in src/ root directory
 
-- **MAVLink Detector Critical Fix**: Resolved packet loss and CRC errors
-  - **Root Cause**: Parser state corruption from buffer memmove operations
-  - **Solution**: Independent frame buffer using DroneBridge approach
-  - **Implementation** (`src/protocols/mavlink_detector.cpp`):
-    - Replaced `fmav_parse_to_msg()` with `fmav_parse_and_check_to_frame_buf()`
-    - Added 296-byte independent `frameBuffer` for parser isolation
-    - Byte-by-byte processing without parser resets
-    - Removed complex sequence tracking and statistics maps
+- **MAVLink Parser Critical Fix**: Resolved packet loss and CRC errors
+  - **Root Cause**: Parser state corruption from buffer operations
+  - **Solution**: Independent frame buffer approach with improved isolation
+  - **Implementation**: Enhanced parser with stable buffer management and simplified error handling
   - **Results**:
     - **Before**: 547 packet losses, 349 CRC errors, 13314 detection errors
     - **After**: <1% packet loss, <10 CRC errors, <100 detection errors
     - MAVFtp file transfers now work reliably
-    - No more SIGNATURE_ERROR messages (fixed config issue)
+    - Eliminated configuration-related parsing errors
   - **Code Cleanup**:
     - Removed `#include <map>` and all std::map usage
     - Deleted methods: `updateDetailedStats()`, `checkSequenceLoss()`, `logPacketInfo()`

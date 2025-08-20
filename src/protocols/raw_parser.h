@@ -124,7 +124,6 @@ public:
             result.packets[0].size = dataSize;  // Actual data size
             result.packets[0].allocSize = actualAllocSize;  // Allocation size from pool
             result.packets[0].pool = memPool;
-            result.packets[0].priority = PRIORITY_NORMAL;
             result.packets[0].timestamp = currentTime;
             
             // Copy actual data (not allocation size)

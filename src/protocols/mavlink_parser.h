@@ -1,36 +1,11 @@
 #pragma once
 
+#include <memory>
 #include "protocol_parser.h"
 #include "packet_memory_pool.h"
 #include "protocol_stats.h"
+#include "mavlink_include.h"      // Unified MAVLink header inclusion point
 #include "../logging.h"
-
-// --- MAVLink convenience setup must come BEFORE including mavlink.h ---
-#ifndef MAVLINK_USE_CONVENIENCE_FUNCTIONS
-#define MAVLINK_USE_CONVENIENCE_FUNCTIONS 1
-#endif
-#ifndef MAVLINK_COMM_NUM_BUFFERS
-#define MAVLINK_COMM_NUM_BUFFERS 1
-#endif
-
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif
-
-// Pull basic types first so we can predeclare symbols used by helpers
-#include "mavlink/mavlink_types.h"
-
-// Predeclare the global and the byte-send hook BEFORE helpers see them
-extern mavlink_system_t mavlink_system;
-void comm_send_ch(mavlink_channel_t chan, uint8_t ch);
-
-// Now include full MAVLink (helpers will find the symbols above)
-#include "mavlink/ardupilotmega/mavlink.h"
-
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
 
 class MavlinkParser : public ProtocolParser {
 private:
@@ -41,20 +16,90 @@ private:
     mavlink_status_t rxStatus;          // Parser status
     uint8_t rxChannel;                  // Channel ID (usually 0)
     
-    // MAVFtp detection (simple counter approach)
-    bool mavftpActive = false;
-    uint32_t nonMavftpPacketCount = 0;
+    // Bulk mode detector with decay counter
+    class BulkModeDetector {
+    private:
+        uint32_t recentPackets = 0;      // Counter with decay
+        uint32_t lastDecayMs = 0;        // Last decay timestamp
+        bool bulkActive = false;         // Current bulk mode state
+        uint32_t bulkStartMs = 0;        // When bulk started
+        uint32_t bulkEndMs = 0;          // When bulk ended
+        
+        // Thresholds with hysteresis
+        static constexpr uint32_t BULK_ON_THRESHOLD = 20;   // Turn on at 20
+        static constexpr uint32_t BULK_OFF_THRESHOLD = 5;   // Turn off at 5
+        static constexpr uint32_t DECAY_INTERVAL_MS = 100; // Decay every 100ms
+        static constexpr uint32_t PACKET_INCREMENT = 2;     // Add 2 per packet
+        
+    public:
+        BulkModeDetector() : lastDecayMs(millis()) {}
+        
+        // Call for each relevant packet
+        void onPacket(uint32_t msgId) {
+            // Count only FTP and PARAM packets
+            if (msgId == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL ||
+                msgId == MAVLINK_MSG_ID_PARAM_VALUE ||
+                msgId == MAVLINK_MSG_ID_PARAM_REQUEST_READ ||
+                msgId == MAVLINK_MSG_ID_PARAM_REQUEST_LIST) {
+                
+                // Increase counter (saturate at 50 to prevent overflow)
+                recentPackets = min((uint32_t)50, recentPackets + PACKET_INCREMENT);
+                
+                // Check activation threshold
+                if (!bulkActive && recentPackets >= BULK_ON_THRESHOLD) {
+                    bulkActive = true;
+                    bulkStartMs = millis();
+                    log_msg(LOG_INFO, "Bulk mode ON (counter=%u)", recentPackets);
+                }
+            }
+            
+            // Always update decay (for any packet)
+            update();
+        }
+        
+        // Update decay counter
+        void update() {
+            uint32_t now = millis();
+            
+            // Decay counter every 100ms
+            while (now - lastDecayMs >= DECAY_INTERVAL_MS) {
+                if (recentPackets > 0) {
+                    recentPackets--;
+                }
+                lastDecayMs += DECAY_INTERVAL_MS;
+                
+                // Check deactivation threshold
+                if (bulkActive && recentPackets < BULK_OFF_THRESHOLD) {
+                    bulkActive = false;
+                    bulkEndMs = now;
+                    uint32_t duration = (bulkEndMs - bulkStartMs) / 1000;
+                    log_msg(LOG_INFO, "Bulk mode OFF (counter=%u, duration=%us)", 
+                            recentPackets, duration);
+                }
+            }
+        }
+        
+        bool isActive() const { return bulkActive; }
+        uint32_t getCounter() const { return recentPackets; }
+        
+        void reset() {
+            recentPackets = 0;
+            bulkActive = false;
+            lastDecayMs = millis();
+            bulkStartMs = 0;
+            bulkEndMs = 0;
+        }
+    };
     
-    // Last packet priority for flush strategy
-    uint8_t lastPacketPriority = PRIORITY_NORMAL;
+    BulkModeDetector bulkDetector;  // Instance of bulk detector
     
-    // TEMPORARY DEBUG: Remove after testing
-    uint32_t debugTotalParsed = 0;
-    uint32_t debugCrcErrors = 0;
-    
-    // Detection of non-MAVLink stream
-    uint32_t bytesWithoutPacket = 0;
-    uint32_t lastNoPacketWarning = 0;
+    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+    struct DiagnosticCounters {
+        uint32_t totalParsed = 0;
+        uint32_t highLatencyWarnings = 0;
+        uint32_t lastReportTimeMs = 0;
+    } diagCounters;
+    // === DIAGNOSTIC END ===
 
 public:
     MavlinkParser() : rxChannel(0) {
@@ -64,12 +109,12 @@ public:
         memset(&rxStatus, 0, sizeof(rxStatus));
         memset(&rxMessage, 0, sizeof(rxMessage));
         
-        log_msg(LOG_INFO, "pymav: Parser initialized");
+        log_msg(LOG_DEBUG, "pymav: Parser initialized");
     }
     
     virtual ~MavlinkParser() = default;
     
-    // Main parse method
+    // Main parse method - simplified byte-wise parsing
     ParseResult parse(CircularBuffer* buffer, uint32_t currentTime) override {
         ParseResult result;
         
@@ -78,26 +123,25 @@ public:
             return result;
         }
         
-        // Get view for parsing
-        size_t needed = min(available, (size_t)512);
+        // Get view - up to 296 bytes (MAVLink max + margin)
+        const size_t MAVLINK_MAX_FRAME = 296;
+        size_t needed = min(available, MAVLINK_MAX_FRAME);
         auto view = buffer->getContiguousForParser(needed);
         
         if (!view.ptr || view.safeLen == 0) {
             return result;
         }
         
-        // Temporary array for packets
+        // Temporary storage for packets
         const size_t maxPackets = 10;
-        ParsedPacket* tempPackets = new ParsedPacket[maxPackets];
+        std::unique_ptr<ParsedPacket[]> tempPackets(new ParsedPacket[maxPackets]);
         size_t packetCount = 0;
-        size_t bytesProcessed = 0;
         
-        // Parse bytes one by one (pymavlink style)
+        // Feed each byte to pymavlink parser (STANDARD APPROACH)
         for (size_t i = 0; i < view.safeLen; i++) {
             uint8_t byte = view.ptr[i];
-            bytesProcessed++;
             
-            // Parse byte through pymavlink
+            // Standard pymavlink byte-wise parsing
             uint8_t parseResult = mavlink_parse_char(
                 rxChannel,
                 byte,
@@ -107,61 +151,41 @@ public:
             
             if (parseResult == MAVLINK_FRAMING_OK) {
                 // Complete message received
-                handleParsedMessage(&rxMessage, currentTime, 
-                                  tempPackets, packetCount, maxPackets);
+                bulkDetector.onPacket(rxMessage.msgid);
                 
-                // TEMPORARY DEBUG
-                if (++debugTotalParsed % 100 == 0) {
-                    log_msg(LOG_DEBUG, "pymav: Parsed %u messages, MAVFtp=%s",
-                            debugTotalParsed, mavftpActive ? "active" : "inactive");
+                if (packetCount < maxPackets) {
+                    handleParsedMessage(&rxMessage, currentTime, 
+                                      tempPackets.get(), packetCount, maxPackets);
                 }
             }
-            else if (parseResult == MAVLINK_FRAMING_BAD_CRC) {
-                // CRC error
-                if (stats) {
-                    stats->onDetectionError();
-                }
-                
-                // TEMPORARY DEBUG
-                if (++debugCrcErrors % 10 == 0) {
-                    log_msg(LOG_DEBUG, "pymav: CRC errors = %u", debugCrcErrors);
-                }
-            }
+            // Note: Ignore MAVLINK_FRAMING_INCOMPLETE, MAVLINK_FRAMING_BAD_CRC
+            // pymavlink handles all states internally
         }
         
-        // Handle case when no packets found
-        if (packetCount == 0 && bytesProcessed > 0) {
-            bytesWithoutPacket += bytesProcessed;
-            
-            // Warn every 10KB of non-MAVLink data
-            if (bytesWithoutPacket > 10000 && 
-                bytesWithoutPacket - lastNoPacketWarning > 10000) {
-                log_msg(LOG_WARNING, "pymav: No valid MAVLink packets in %u bytes - check data source or switch to RAW mode",
-                        bytesWithoutPacket);
-                lastNoPacketWarning = bytesWithoutPacket;
-            }
-            
-            // Consume small amount to avoid buffer deadlock
-            // but not too much to allow MAVLink sync if it appears
-            result.bytesConsumed = min(bytesProcessed, (size_t)10);
-        } else if (packetCount > 0) {
-            // Found packets - reset warning counters
-            bytesWithoutPacket = 0;
-            lastNoPacketWarning = 0;
-            result.bytesConsumed = bytesProcessed;
-        } else {
-            // No bytes processed - avoid deadlock
-            result.bytesConsumed = min((size_t)1, view.safeLen);
-        }
+        // ALWAYS consume entire view - no partial consume
+        result.bytesConsumed = view.safeLen;
         
-        // Return found packets
+        // Copy packets to result
         if (packetCount > 0) {
             result.count = packetCount;
             result.packets = new ParsedPacket[packetCount];
-            memcpy(result.packets, tempPackets, sizeof(ParsedPacket) * packetCount);
+            memcpy(result.packets, tempPackets.get(), sizeof(ParsedPacket) * packetCount);
         }
         
-        delete[] tempPackets;
+        // Update bulk detector
+        bulkDetector.update();
+        
+        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+        // Report diagnostics every second
+        uint32_t nowMs = millis();
+        if (nowMs - diagCounters.lastReportTimeMs > 1000) {
+            log_msg(LOG_INFO, "[DIAG] Parser: parsed=%u bulk_counter=%u bulk=%d",
+                    diagCounters.totalParsed, bulkDetector.getCounter(),
+                    bulkDetector.isActive() ? 1 : 0);
+            diagCounters.lastReportTimeMs = nowMs;
+        }
+        // === DIAGNOSTIC END ===
+        
         return result;
     }
     
@@ -170,18 +194,8 @@ public:
         memset(&rxStatus, 0, sizeof(rxStatus));
         memset(&rxMessage, 0, sizeof(rxMessage));
         
-        // Reset detection state
-        mavftpActive = false;
-        nonMavftpPacketCount = 0;
-        lastPacketPriority = PRIORITY_NORMAL;
-        
-        // Reset debug counters
-        debugTotalParsed = 0;
-        debugCrcErrors = 0;
-        
-        // Reset non-MAVLink stream detection
-        bytesWithoutPacket = 0;
-        lastNoPacketWarning = 0;
+        // Reset bulk detector
+        bulkDetector.reset();
         
         log_msg(LOG_DEBUG, "pymav: Parser reset");
     }
@@ -196,27 +210,25 @@ public:
     
     // Extended timeout for bulk transfers
     bool requiresExtendedTimeout() const override {
-        return mavftpActive;
+        return bulkDetector.isActive();
     }
     
-    // EXPERIMENTAL: Flush strategy hooks
+    // Flush strategy hooks
     bool shouldFlushNow(size_t pendingPackets, uint32_t timeSinceLastMs) const override {
-        // Critical packets - flush immediately
-        if (lastPacketPriority == PRIORITY_CRITICAL) {
-            return true;
+        // During bulk mode - flush immediately for low latency
+        if (bulkDetector.isActive()) {
+            return pendingPackets > 0;  // Any packet triggers flush
         }
         
-        // During MAVFtp - batch longer for efficiency
-        if (mavftpActive) {
-            return timeSinceLastMs > 10 || pendingPackets >= 20;
-        }
-        
-        // Normal operation - standard batching
-        return timeSinceLastMs > 5 || pendingPackets >= 5;
+        // Normal operation - standard batching for efficiency
+        return timeSinceLastMs > 3 || pendingPackets >= 5;
     }
     
+    // EXPERIMENTAL: Dynamic batch timeout based on traffic type
     uint32_t getBatchTimeoutMs() const override {
-        return mavftpActive ? 10 : 5;
+        // Longer batching for bulk mode improves efficiency
+        // Normal telemetry needs lower latency
+        return bulkDetector.isActive() ? 20 : 5;  // 20ms for bulk, 5ms for normal
     }
 
 private:
@@ -227,13 +239,6 @@ private:
         if (packetCount >= maxPackets) {
             return;  // Buffer full
         }
-        
-        // Detect MAVFtp mode
-        detectMavftpMode(msg->msgid);
-        
-        // Get packet priority
-        uint8_t priority = getPacketPriority(msg->msgid);
-        lastPacketPriority = priority;
         
         // Calculate total packet size
         uint16_t packetLen = mavlink_msg_get_send_buffer_length(msg);
@@ -256,12 +261,28 @@ private:
         tempPackets[packetCount].allocSize = allocSize;
         tempPackets[packetCount].pool = memPool;
         tempPackets[packetCount].timestamp = currentTime;
-        tempPackets[packetCount].priority = priority;
+        
+        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+        tempPackets[packetCount].parseTimeMicros = micros();
+        tempPackets[packetCount].seqNum = ++globalSeqNum;
+        tempPackets[packetCount].mavlinkMsgId = msg->msgid;
+        
+        diagCounters.totalParsed++;
+        
+        // Log every 100th packet for sampling
+        if (diagCounters.totalParsed % 100 == 0) {
+            log_msg(LOG_DEBUG, "[DIAG] Parse #%u: msgid=%u, seq=%u, bulk=%d counter=%u",
+                    diagCounters.totalParsed, msg->msgid, 
+                    tempPackets[packetCount].seqNum, 
+                    bulkDetector.isActive() ? 1 : 0,
+                    bulkDetector.getCounter());
+        }
+        // === DIAGNOSTIC END ===
         
         // Hints for optimization
         tempPackets[packetCount].hints.keepWhole = true;
         tempPackets[packetCount].hints.canFragment = false;
-        tempPackets[packetCount].hints.urgentFlush = (priority == PRIORITY_CRITICAL);
+        tempPackets[packetCount].hints.urgentFlush = bulkDetector.isActive();
         
         packetCount++;
         
@@ -271,42 +292,5 @@ private:
         }
     }
     
-    // Detect MAVFtp session
-    void detectMavftpMode(uint32_t msgId) {
-        // MAVFtp message ID = 110
-        if (msgId == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL) {
-            if (!mavftpActive) {
-                mavftpActive = true;
-                log_msg(LOG_INFO, "pymav: MAVFtp session started");
-            }
-            nonMavftpPacketCount = 0;
-        } else if (mavftpActive) {
-            nonMavftpPacketCount++;
-            if (nonMavftpPacketCount > 50) {
-                mavftpActive = false;
-                log_msg(LOG_INFO, "pymav: MAVFtp session ended");
-            }
-        }
-    }
-    
-    // Get packet priority for optimization
-    uint8_t getPacketPriority(uint32_t msgId) {
-        switch(msgId) {
-            case MAVLINK_MSG_ID_HEARTBEAT:
-            case MAVLINK_MSG_ID_COMMAND_LONG:
-            case MAVLINK_MSG_ID_COMMAND_ACK:
-            case MAVLINK_MSG_ID_SYS_STATUS:
-            case MAVLINK_MSG_ID_ATTITUDE:
-                return PRIORITY_CRITICAL;
-                
-            case MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL:
-            case MAVLINK_MSG_ID_PARAM_VALUE:
-            case MAVLINK_MSG_ID_PARAM_REQUEST_READ:
-            case MAVLINK_MSG_ID_PARAM_REQUEST_LIST:
-                return PRIORITY_BULK;
-                
-            default:
-                return PRIORITY_NORMAL;
-        }
-    }
+private:
 };

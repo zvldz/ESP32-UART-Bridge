@@ -21,6 +21,7 @@ struct QueuedPacket {
 
 class PacketSender {
 protected:
+    // Single FIFO queue
     std::queue<QueuedPacket> packetQueue;
     
     // Queue limits
@@ -31,8 +32,6 @@ protected:
     // Statistics
     uint32_t totalSent;
     uint32_t totalDropped;
-    uint32_t dropBulk;         // Dropped BULK priority
-    uint32_t dropNormal;       // Dropped NORMAL priority
     uint32_t maxQueueDepth;    // Max queue depth seen
     unsigned long* globalTxBytesCounter;  // Pointer to global TX counter
     
@@ -44,8 +43,6 @@ public:
         currentQueueBytes(0),
         totalSent(0), 
         totalDropped(0),
-        dropBulk(0),
-        dropNormal(0),
         maxQueueDepth(0),
         globalTxBytesCounter(txCounter) {}
     
@@ -60,44 +57,48 @@ public:
     
     // Check if sender will accept packet
     bool willAccept(size_t size) const {
-        if (packetQueue.size() >= maxQueuePackets) return false;
-        if (currentQueueBytes + size > maxQueueBytes) return false;
-        return true;
+        return packetQueue.size() < maxQueuePackets && 
+               currentQueueBytes + size <= maxQueueBytes;
     }
     
-    // Add packet to queue (makes copy)
+    // Add packet to queue
     virtual bool enqueue(const ParsedPacket& packet) {
-        // Check limits
+        // Check if we can accept
         if (!willAccept(packet.size)) {
-            // Try to make space by dropping lower priority
-            if (packet.priority == PRIORITY_CRITICAL) {
-                // Critical packet - try to drop BULK first
-                if (!dropLowestPriority()) {
-                    // Couldn't make space
-                    totalDropped++;
-                    log_msg(LOG_WARNING, "%s: Dropped CRITICAL packet (queue full)", getName());
-                    return false;
-                }
-            } else {
-                // Non-critical - just drop it
+            // Try to drop oldest packet to make room
+            if (!dropOldestPacket()) {
                 totalDropped++;
-                if (packet.priority == PRIORITY_BULK) dropBulk++;
-                else if (packet.priority == PRIORITY_NORMAL) dropNormal++;
                 return false;
             }
         }
         
-        // Make copy and enqueue
-        ParsedPacket copy = packet.duplicate();
-        if (!copy.data) {
-            // Memory allocation failed
+        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+        // Track enqueue time
+        ParsedPacket copy = packet;
+        copy.enqueueTimeMicros = micros();
+        
+        // Check parsing latency
+        uint32_t parseLatency = copy.enqueueTimeMicros - copy.parseTimeMicros;
+        if (parseLatency > 5000) {  // > 5ms
+            log_msg(LOG_WARNING, "[DIAG] High parse->enq latency: %ums for seq=%u msgid=%u",
+                    parseLatency/1000, copy.seqNum, copy.mavlinkMsgId);
+        }
+        
+        // Make copy and enqueue (use modified copy with diagnostic data)
+        ParsedPacket finalCopy = copy.duplicate();
+        // === DIAGNOSTIC END ===
+        // === ORIGINAL: ParsedPacket copy = packet.duplicate();
+        
+        if (!finalCopy.data) {
             log_msg(LOG_ERROR, "%s: Failed to duplicate packet", getName());
             totalDropped++;
             return false;
         }
         
-        packetQueue.push(QueuedPacket(copy));
-        currentQueueBytes += copy.size;
+        // Enqueue
+        QueuedPacket qp(finalCopy);
+        packetQueue.push(qp);
+        currentQueueBytes += finalCopy.size;
         
         // Update max depth
         if (packetQueue.size() > maxQueueDepth) {
@@ -121,53 +122,32 @@ public:
     uint32_t getDroppedCount() const { return totalDropped; }
     size_t getQueueDepth() const { return packetQueue.size(); }
     size_t getQueueBytes() const { return currentQueueBytes; }
-    
-    // Get detailed drop statistics
-    uint32_t getDroppedBulk() const { return dropBulk; }
-    uint32_t getDroppedNormal() const { return dropNormal; }
-    uint32_t getDroppedCritical() const { return totalDropped - dropBulk - dropNormal; }
     size_t getMaxQueueDepth() const { return maxQueueDepth; }
     
     // Get total bytes sent estimate (for display)
     uint32_t getTotalBytesSent() const { 
-        // Calculate from packets sent * average size
-        // This is internal counter, different from global device counter
         return totalSent * 100;  // Approximate
     }
     
     void getDetailedStats(char* buffer, size_t bufSize) {
         snprintf(buffer, bufSize,
-                "%s: Sent=%u Dropped=%u (B:%u/N:%u) Queue=%zu/%zu MaxQ=%u",
-                getName(), totalSent, totalDropped, dropBulk, dropNormal,
-                packetQueue.size(), currentQueueBytes, maxQueueDepth);
+                "%s: Sent=%u Dropped=%u Queue=%zu/%zu bytes=%zu/%zu",
+                getName(), totalSent, totalDropped,
+                packetQueue.size(), maxQueuePackets,
+                currentQueueBytes, maxQueueBytes);
     }
     
 protected:
-    // Try to drop lowest priority packet to make space
-    bool dropLowestPriority() {
-        // Find and drop first BULK packet
-        std::queue<QueuedPacket> tempQueue;
-        bool dropped = false;
-        
-        while (!packetQueue.empty()) {
-            QueuedPacket& item = packetQueue.front();
-            
-            if (!dropped && item.packet.priority == PRIORITY_BULK && item.sendOffset == 0) {
-                // Drop this packet (only if not partially sent!)
-                currentQueueBytes -= item.packet.size;
-                item.packet.free();
-                totalDropped++;
-                dropBulk++;
-                dropped = true;
-            } else {
-                tempQueue.push(item);
-            }
+    // Drop oldest packet if queue full
+    bool dropOldestPacket() {
+        if (!packetQueue.empty()) {
+            currentQueueBytes -= packetQueue.front().packet.size;
+            packetQueue.front().packet.free();
             packetQueue.pop();
+            totalDropped++;
+            return true;
         }
-        
-        // Restore queue
-        packetQueue = tempQueue;
-        return dropped;
+        return false;
     }
 };
 

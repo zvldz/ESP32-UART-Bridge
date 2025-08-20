@@ -14,13 +14,6 @@ enum ProtocolType {
     PROTOCOL_CRSF = 3,      // Future: CRSF protocol
 };
 
-// Packet priority levels
-enum PacketPriority {
-    PRIORITY_CRITICAL = 0,   // Must send immediately (HEARTBEAT, control)
-    PRIORITY_NORMAL = 1,     // Regular telemetry
-    PRIORITY_BULK = 2        // File transfers, logs
-};
-
 // Transmission hints for optimized sending
 struct TransmitHints {
     bool keepWhole;          // Don't fragment (important for UDP)
@@ -43,18 +36,34 @@ struct TransmitHints {
 // Forward declaration
 class PacketMemoryPool;
 
+// === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+// Global sequence counter for packet tracking
+static uint32_t globalSeqNum = 0;
+// === DIAGNOSTIC END ===
+
 // Parsed packet structure
 struct ParsedPacket {
     uint8_t* data;           // Pointer to packet data
     size_t size;             // Packet size
     size_t allocSize;        // Allocated size (for pool)
-    uint8_t priority;        // PacketPriority enum value
     uint32_t timestamp;      // When packet was received (micros)
     TransmitHints hints;     // Transmission optimization hints
     PacketMemoryPool* pool;  // Pool to return memory to
     
+    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+    uint32_t parseTimeMicros;     // When packet was parsed
+    uint32_t enqueueTimeMicros;   // When packet was enqueued  
+    uint32_t seqNum;              // This packet's sequence number
+    uint16_t mavlinkMsgId;        // MAVLink message ID for tracking
+    // === DIAGNOSTIC END ===
+    
     ParsedPacket() : data(nullptr), size(0), allocSize(0), 
-                    priority(PRIORITY_NORMAL), timestamp(0), pool(nullptr) {}
+                    timestamp(0), pool(nullptr)
+    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+                    , parseTimeMicros(0), enqueueTimeMicros(0), 
+                    seqNum(0), mavlinkMsgId(0)
+    // === DIAGNOSTIC END ===
+    {}
     
     // Duplicate packet (allocates from pool if available)
     ParsedPacket duplicate() const;

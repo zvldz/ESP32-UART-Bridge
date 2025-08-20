@@ -521,16 +521,11 @@ const StatusUpdates = {
         senders.forEach(s => {
             const dropRate = s.sent > 0 ? ((s.dropped / (s.sent + s.dropped)) * 100).toFixed(1) : 0;
             
-            // Build dropped string based on protocol type
+            // Build dropped string with percentage
             let droppedStr = `${s.dropped}`;
             if (s.dropped > 0) {
-                if (protocolType === 1 && s.dropsByPriority) {
-                    // MAVLink - show priority breakdown
-                    droppedStr += ` (B:${s.dropsByPriority.bulk}/N:${s.dropsByPriority.normal}/C:${s.dropsByPriority.critical})`;
-                } else {
-                    // RAW and others - show percentage
-                    droppedStr += ` (${dropRate}%)`;
-                }
+                // Show percentage for all protocols (priority breakdown removed)
+                droppedStr += ` (${dropRate}%)`;
             }
             
             html += `

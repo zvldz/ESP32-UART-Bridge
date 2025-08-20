@@ -23,7 +23,7 @@ struct CircularBufferStats {
     uint32_t droppedBytes;
     uint32_t overflowEvents;
     uint32_t wrapCount;
-    uint32_t shadowUpdates;
+    uint32_t wrapLinearizations;
     uint32_t partialWrites;   // Number of partial write operations
     uint32_t maxDepth;
     // TODO v2: add p95/p99 latency metrics
@@ -38,12 +38,19 @@ struct ContiguousView {
 class CircularBuffer {
 private:
     uint8_t* mainBuffer;      // Main circular buffer
-    uint8_t* shadowBuffer;    // Shadow for parser continuity (+296 bytes)
     size_t capacity;          // Main buffer size (power of 2)
     size_t capacityMask;      // Fast wrap mask (capacity - 1)
     size_t head;              // Write position
     size_t tail;              // Read position
-    size_t shadowSize = 296;  // Shadow size (max MAVLink v2 + margin)
+    
+    // Temporary buffer for linearizing wrapped data in getContiguousForParser()
+    // Size: 296 bytes = MAVLink v2 max frame (280) + margin (16)
+    // 
+    // IMPORTANT: This buffer is used when data wraps around main buffer boundary.
+    // If future parsers need larger contiguous views:
+    // 1. Increase this buffer size, OR  
+    // 2. Use getReadSegments() for manual wrap handling
+    uint8_t tempLinearBuffer[296];
     
     // Synchronization
     portMUX_TYPE bufferMux = portMUX_INITIALIZER_UNLOCKED;
@@ -90,21 +97,19 @@ public:
         capacityMask = capacity - 1;
         
         // Allocate DMA-compatible memory for UART operations
-        size_t totalSize = capacity + shadowSize;
         // IMPORTANT: MALLOC_CAP_DMA for DMA compatibility!
-        mainBuffer = (uint8_t*)heap_caps_malloc(totalSize, MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
+        mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
         
         if (!mainBuffer) {
-            log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes (DMA)", totalSize);
+            log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes (DMA)", capacity);
             // Fallback to regular memory if DMA unavailable
-            mainBuffer = (uint8_t*)heap_caps_malloc(totalSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
             
             if (!mainBuffer) {
                 // Try smaller size
                 capacity = roundToPowerOf2(requestedSize / 2);
                 capacityMask = capacity - 1;
-                totalSize = capacity + shadowSize;
-                mainBuffer = (uint8_t*)heap_caps_malloc(totalSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+                mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
                 
                 if (!mainBuffer) {
                     // Critical failure
@@ -113,12 +118,11 @@ public:
             }
         }
         
-        shadowBuffer = mainBuffer + capacity;
         head = tail = 0;
         memset(&stats, 0, sizeof(stats));
         lastWriteTimeMicros = micros();  // Unified time base!
         
-        log_msg(LOG_INFO, "CircBuf: Allocated %zu+%zu bytes", capacity, shadowSize);
+        log_msg(LOG_INFO, "CircBuf: Allocated %zu bytes (tempLinearBuffer: %zu bytes BSS)", capacity, sizeof(tempLinearBuffer));
     }
     
     // Free space calculation (leave 1 byte empty for full/empty distinction)
@@ -142,6 +146,11 @@ public:
     
     // Get buffer capacity
     size_t getCapacity() const { return capacity; }
+    
+    // Get free space available for writing
+    size_t getFreeSpace() const {
+        return capacity - available();
+    }
     
     // Reserve-Copy-Commit write pattern for thread safety
     size_t write(const uint8_t* data, size_t len) {
@@ -198,12 +207,6 @@ public:
             size_t chunk = min((size_t)(toWrite - written), (size_t)(capacity - currentPos));
             memcpy(&mainBuffer[currentPos], &data[written], chunk);
             
-            // Update shadow if writing to beginning
-            if (currentPos < shadowSize) {
-                size_t shadowChunk = min((size_t)chunk, (size_t)(shadowSize - currentPos));
-                memcpy(&shadowBuffer[currentPos], &data[written], shadowChunk);
-            }
-            
             currentPos = (currentPos + chunk) & capacityMask;
             written += chunk;
         }
@@ -220,10 +223,7 @@ public:
             stats.wrapCount++;
         }
         
-        // Update shadow statistics
-        if (writePos < shadowSize) {
-            stats.shadowUpdates++;
-        }
+        // Note: stats.wrapLinearizations tracks when data is copied to tempLinearBuffer
         
         // Update max depth
         size_t currentDepth = available();
@@ -261,44 +261,77 @@ public:
         return segments;
     }
     
-    // Contiguous reading ONLY for parser (zero-copy!)
+    // Contiguous reading ONLY for parser (with automatic linearization)
+    // 
+    // WARNING: For wrapped data, returns pointer to internal tempLinearBuffer!
+    // This means:
+    // 1. view.ptr may NOT point to mainBuffer (when data wraps)
+    // 2. Limited to 296 bytes max (MAVLink v2 frame size)
+    // 3. NOT suitable for DMA operations (use getReadSegments() instead)
+    // 
+    // Safe for: MAVLink parser (reads and copies data immediately)
+    // 
+    // If other parsers need >296 bytes OR direct mainBuffer access:
+    // - Increase tempLinearBuffer size, OR
+    // - Use getReadSegments() for manual segment handling
     ContiguousView getContiguousForParser(size_t needed) {
-        // INVARIANT: returned safeLen <= (capacity - tail) + shadowSize
-        // Shadow guarantees continuity only for first shadowSize bytes!
-        
         portENTER_CRITICAL(&bufferMux);
         
-        ContiguousView view;
+        ContiguousView view{nullptr, 0};
         size_t avail = available();
         
+        // Limit request to available data
         if (needed > avail) {
-            needed = avail;  // Can't give more than available
+            needed = avail;
         }
         
+        // Return empty view if no data
+        if (needed == 0) {
+            portEXIT_CRITICAL(&bufferMux);
+            return view;
+        }
+        
+        // Case 1: Linear data - direct pointer to main buffer
         if (tail + needed <= capacity) {
-            // All data in main buffer - direct pointer
             view.ptr = &mainBuffer[tail];
             view.safeLen = needed;
-        } else if (needed <= shadowSize) {
-            // Data wrapped, but fits in shadow
-            // Shadow ALREADY updated in write(), just use it!
-            view.ptr = &mainBuffer[tail];
-            view.safeLen = needed;  // Guaranteed safe through shadow
-        } else {
-            // Can only give linear part
-            view.ptr = &mainBuffer[tail];
-            view.safeLen = capacity - tail;
+            portEXIT_CRITICAL(&bufferMux);
+            return view;
         }
+        
+        // Case 2: Wrapped data - linearize into temp buffer
+        // Limit to temp buffer size
+        if (needed > sizeof(tempLinearBuffer)) {
+            needed = sizeof(tempLinearBuffer);
+        }
+        
+        // Copy wrapped data: [tail..capacity) + [0..remaining)
+        size_t firstPart = capacity - tail;
+        size_t secondPart = needed - firstPart;
+        
+        // Copy tail to end of main buffer
+        memcpy(tempLinearBuffer, &mainBuffer[tail], firstPart);
+        
+        // Copy beginning of main buffer if needed
+        if (secondPart > 0) {
+            memcpy(tempLinearBuffer + firstPart, &mainBuffer[0], secondPart);
+        }
+        
+        // Return pointer to linearized data
+        view.ptr = tempLinearBuffer;
+        view.safeLen = needed;
+        
+        // Update statistics
+        stats.wrapLinearizations++;  // Count wrap linearization events
         
         portEXIT_CRITICAL(&bufferMux);
         
-        // TEMPORARY DEBUG LOG - START
-        static uint32_t parserViewCount = 0;
-        if (++parserViewCount <= 10 || parserViewCount % 100 == 0) {
-            log_msg(LOG_DEBUG, "[TEMP] CircBuf: view #%u - ptr=%p, safeLen=%zu (requested=%zu, avail=%zu)", 
-                    parserViewCount, view.ptr, view.safeLen, needed, avail);
+        // Optional: Log wrap events (reduce frequency)
+        static uint32_t wrapLogCount = 0;
+        if (++wrapLogCount % 100 == 0) {
+            log_msg(LOG_DEBUG, "CircBuf: Wrapped read #%u at tail=%zu, linearized %zu bytes", 
+                    wrapLogCount, tail, needed);
         }
-        // TEMPORARY DEBUG LOG - END
         
         return view;
     }
