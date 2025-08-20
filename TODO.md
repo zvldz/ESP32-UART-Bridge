@@ -43,7 +43,16 @@
   - Implemented N/X/T thresholds (4 packets/448 bytes/5ms timeout)
   - Complete architecture rewrite with helper methods
 
-#### 1.5 - Temporary Diagnostic Cleanup 🔄 PENDING
+#### 1.5 - USB Block Detection ✅ COMPLETED
+- [x] **USB Block Detection & Memory Pool Protection** ✅ COMPLETED
+  - Detect when USB is blocked (COM port closed on host)
+  - Prevent memory pool exhaustion during startup
+  - Auto-clear queues when USB unresponsive for 500ms
+  - Keep 1 test packet for recovery detection
+  - Diagnostic messages for debugging blocked/unblocked states
+  - Memory-safe queue clearing with proper packet.free() calls
+
+#### 1.6 - Temporary Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
   - Find and remove temporary diagnostic prints
   - Clean up experimental code blocks
