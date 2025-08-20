@@ -33,7 +33,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.14.0"
+#define DEVICE_VERSION "2.15.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0

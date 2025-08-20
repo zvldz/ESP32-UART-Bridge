@@ -4,7 +4,7 @@
 #include "protocol_types.h"
 #include "../types.h"
 #include "../logging.h"
-#include <queue>
+#include <deque>
 #include <Arduino.h>
 
 // Queued packet with send progress tracking
@@ -22,7 +22,7 @@ struct QueuedPacket {
 class PacketSender {
 protected:
     // Single FIFO queue
-    std::queue<QueuedPacket> packetQueue;
+    std::deque<QueuedPacket> packetQueue;
     
     // Queue limits
     size_t maxQueuePackets;    // Max number of packets
@@ -50,7 +50,7 @@ public:
         // Clean queue - CRITICAL: free all packets
         while (!packetQueue.empty()) {
             packetQueue.front().packet.free();
-            packetQueue.pop();
+            packetQueue.pop_front();
         }
         currentQueueBytes = 0;
     }
@@ -97,7 +97,7 @@ public:
         
         // Enqueue
         QueuedPacket qp(finalCopy);
-        packetQueue.push(qp);
+        packetQueue.push_back(qp);
         currentQueueBytes += finalCopy.size;
         
         // Update max depth
@@ -109,7 +109,8 @@ public:
     }
     
     // Process queue and send packets (MUST handle partial send!)
-    virtual void processSendQueue() = 0;
+    // @param bulkMode - true if parser detected bulk transfer
+    virtual void processSendQueue(bool bulkMode = false) = 0;
     
     // Check if device is ready
     virtual bool isReady() const = 0;
@@ -143,7 +144,7 @@ protected:
         if (!packetQueue.empty()) {
             currentQueueBytes -= packetQueue.front().packet.size;
             packetQueue.front().packet.free();
-            packetQueue.pop();
+            packetQueue.pop_front();
             totalDropped++;
             return true;
         }

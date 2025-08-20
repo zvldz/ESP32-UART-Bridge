@@ -230,6 +230,11 @@ public:
         // Normal telemetry needs lower latency
         return bulkDetector.isActive() ? 20 : 5;  // 20ms for bulk, 5ms for normal
     }
+    
+    // Get current burst mode state from detector
+    bool isBurstActive() const override {
+        return bulkDetector.isActive();
+    }
 
 private:
     // Handle successfully parsed message
@@ -282,7 +287,7 @@ private:
         // Hints for optimization
         tempPackets[packetCount].hints.keepWhole = true;
         tempPackets[packetCount].hints.canFragment = false;
-        tempPackets[packetCount].hints.urgentFlush = bulkDetector.isActive();
+        tempPackets[packetCount].hints.urgentFlush = false;  // Deprecated, not used
         
         packetCount++;
         
