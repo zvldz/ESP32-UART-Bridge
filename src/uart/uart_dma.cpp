@@ -140,6 +140,11 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
         return;
     }
     
+    // Set RX FIFO "full" interrupt threshold to 100 bytes.
+    // This affects when UART_DATA event is generated due to FIFO fullness.
+    // Note: This is NOT the same as rx_flow_ctrl_thresh (RTS hardware flow control).
+    uart_set_rx_full_threshold(uart_num, 100);
+
     // Configure RX timeout (important for packet detection)
     // Timeout in UART symbols (bits). For 8N1, one symbol = 10 bits
     // At 115200 baud: 10 bits = ~87us per symbol
