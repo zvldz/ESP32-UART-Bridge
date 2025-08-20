@@ -11,21 +11,23 @@ private:
     
 public:
     UartSender(UartInterface* uart, unsigned long* txCounter = nullptr) :
-        PacketSender(20, 8192, txCounter),  // Pass TX counter to base class
+        PacketSender(20, 8192, txCounter),  // Return to original sizes  
         uartInterface(uart),
         lastSendTime(0) {
-        log_msg(LOG_INFO, "UartSender initialized");
+        log_msg(LOG_DEBUG, "UartSender initialized");
     }
     
     void processSendQueue() override {
-        while (!packetQueue.empty() && isReady()) {
-            QueuedPacket& item = packetQueue.front();
+        uint32_t now = micros();
+        
+        // Process packets from simple FIFO queue
+        while (isReady() && !packetQueue.empty()) {
+            QueuedPacket* item = &packetQueue.front();
             
             // Check inter-packet gap if specified
-            if (item.packet.hints.interPacketGap > 0 && item.sendOffset == 0) {
-                uint32_t now = micros();
-                if (now - lastSendTime < item.packet.hints.interPacketGap) {
-                    break;
+            if (item->packet.hints.interPacketGap > 0 && item->sendOffset == 0) {
+                if (now - lastSendTime < item->packet.hints.interPacketGap) {
+                    break;  // Wait for inter-packet gap
                 }
             }
             
@@ -34,25 +36,25 @@ public:
             size_t space = (space_raw > 0) ? (size_t)space_raw : 0;
             
             if (space == 0) {
-                break;
+                break;  // UART buffer full
             }
             
-            // Calculate how much to send
-            size_t remaining = item.packet.size - item.sendOffset;
+            // Calculate how much to send (partial send support)
+            size_t remaining = item->packet.size - item->sendOffset;
             size_t toSend = (remaining < space) ? remaining : space;
             
             if (toSend == 0) {
-                break;
+                break;  // Can't make progress
             }
             
             // Send what we can
             size_t sent = uartInterface->write(
-                item.packet.data + item.sendOffset,
+                item->packet.data + item->sendOffset,
                 toSend
             );
             
             if (sent > 0) {
-                item.sendOffset += sent;
+                item->sendOffset += sent;
                 
                 // Update global TX counter
                 if (globalTxBytesCounter) {
@@ -60,17 +62,15 @@ public:
                 }
                 
                 // Check if packet fully sent
-                if (item.sendOffset >= item.packet.size) {
+                if (item->sendOffset >= item->packet.size) {
                     totalSent++;
-                    currentQueueBytes -= item.packet.size;
-                    lastSendTime = micros();
-                    
-                    // Free packet memory
-                    item.packet.free();
+                    lastSendTime = now;
+                    currentQueueBytes -= item->packet.size;
+                    item->packet.free();
                     packetQueue.pop();
                 }
             } else {
-                break;
+                break;  // Send failed
             }
         }
     }

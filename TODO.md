@@ -12,25 +12,33 @@
   - MAVLink-specific logic moved from pipeline to MavlinkParser
   - Enhanced error handling for non-MAVLink streams
 
-#### 1.2 - Priority Queue Implementation 🔄 PENDING
-- [x] **Basic Architecture** ✅ COMPLETED - Priority-aware packet structures implemented
-- [ ] **Queue Priority Usage** 🔄 PENDING - Implement actual priority-based queue processing
-  - Replace simple FIFO with priority-based packet transmission
-  - CRITICAL packets first, then NORMAL, then BULK
-  - Drop BULK packets first during congestion
+#### 1.2 - CircularBuffer Optimization ✅ COMPLETED
+- [x] **Fixed tail=511 deadlock** ✅ COMPLETED - Linearization via tempLinearBuffer
+- [x] **Removed shadow buffer system** ✅ COMPLETED - Saved 296 bytes heap per buffer  
+- [x] **Simplified consume logic** ✅ COMPLETED - No more boundary jump heuristics
+  - Data wrapping now handled transparently with memcpy to temp buffer
+  - Parser always gets contiguous view up to 296 bytes
+  - Clean consume: always bytesProcessed amount
 
-#### 1.3 - UDP Packet Optimization 🔄 PENDING  
-- [ ] **UDP Packet-by-Packet Transmission** 🔄 PENDING
-  - Check current UDP batching behavior
-  - Ensure MAVLink packets are sent individually (1 packet = 1 UDP datagram)
-  - Optimize for real-time transmission vs bandwidth efficiency
+#### 1.3 - Protocol-Aware Transport Optimization 🔄 PENDING  
+- [ ] **Protocol-driven UDP Batching** 🔄 PENDING
+  - Replace hardcoded BATCH_TIMEOUT_US with getBatchTimeoutMs() from parser
+  - Implement MAVFtp-aware batching (20ms vs 5ms for normal telemetry)
+  - Collect multiple MAVLink packets into single UDP datagram (up to MTU)
+  - Use hints.keepWhole from parser for packet integrity
+  - Add UDP_BATCH_DISABLE config option for legacy GCS compatibility
+- [ ] **Protocol-driven Optimizations** 🔄 PENDING (partially implemented)
+  - ✅ MAVFtp: Extended timeouts (20ms) - COMPLETED
+  - 🔄 SBUS/CRSF (future): Minimal latency requirements
+  - 🔄 Modbus RTU (future): Inter-frame timing preservation
+  - Device 3 (Mirror) can utilize same optimizations
+  - Architecture ready - just add new protocol implementations
 
-#### 1.4 - Priority System Optimization 🔄 PENDING
-- [ ] **Priority Classification Review** 🔄 PENDING
-  - Audit current CRITICAL priority assignments
-  - Remove excessive CRITICAL classifications
-  - Ensure only truly critical packets (HEARTBEAT, commands) get CRITICAL priority
-  - Most telemetry should be NORMAL, bulk data should be BULK
+#### 1.4 - USB Batching Implementation 🔄 PENDING
+- [ ] **USB Batch Transmission** 🔄 PENDING
+  - Collect multiple packets and send with single write() call
+  - Reduce system call overhead for high-throughput scenarios
+  - Implement adaptive batching based on queue depth and timing
 
 #### 1.5 - Temporary Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
@@ -70,31 +78,7 @@
     - Maintain session state for request/response pairs
     - Add web interface for routing configuration
 
-### Priority 6 - Hardware Packet Detection Improvements
-
-- [ ] **Hardware-level Protocol Optimization**
-  - Dynamic timeout based on detected protocol (not just MAVLink)
-  - Pattern detection for text protocols using `uart_enable_pattern_det_baud_intr()`
-  - FIFO threshold optimization for different packet sizes
-  - Benefits ALL protocols, not protocol-specific
-  - Implementation in `uart_dma.cpp` configuration
-
-### Priority 6 - Device 3 Integration
-
-- [ ] **Device 3 Adaptive Buffering with Protocol Support**
-  - Currently uses simple batch transfer (64-byte blocks)
-  - Implement adaptive buffering using Protocol Framework
-  - Share protocol detector with main channel (Device 1→2)
-  - Add packet boundary preservation for detected protocols
-  - Extend statistics for multi-device scenarios
-  - Improve Mirror/Bridge mode performance for packet-based protocols
-  - Benefits for various use cases:
-    - **Industrial**: Modbus RTU frame timing preservation
-    - **Marine**: Complete NMEA sentences
-    - **IoT**: Protocol-aware routing
-    - **RS-485**: Intelligent gateway operation
-
-### Priority 7 - SBUS Protocol Support
+### Priority 6 - SBUS Protocol Support
 
 - [ ] **SBUS Mode** - UART to/from SBUS converter
   - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
@@ -121,7 +105,7 @@
     - Timing-critical operations on SBUS side, relaxed timing on UART side
   - **Note**: SBUS cannot be transmitted directly over network due to inverted signal and strict timing requirements
 
-### Priority 7.1 - SBUS Failsafe Mode (после базового SBUS)
+### Priority 6.1 - SBUS Failsafe Mode (после базового SBUS)
 
 - [ ] **SBUS Failsafe/Redundancy Mode**
   - Automatic failover between multiple SBUS sources
@@ -151,7 +135,7 @@
     - Implement packet validation and timeout detection
     - Ensure frame-perfect switching without control glitches
 
-### Priority 7.2 - SBUS Hybrid Failover with Network Backup
+### Priority 6.2 - SBUS Hybrid Failover with Network Backup
 
 - [ ] **SBUS Hybrid Failover with Network Backup**
   - Multi-source SBUS with automatic failover including network channels
@@ -181,7 +165,7 @@
     - Smooth transitions without control glitches
     - Priority management with hysteresis
 
-### Priority 8 - Multi-Protocol Architecture
+### Priority 7 - Multi-Protocol Architecture
 
 - [ ] **Advanced Protocol Management**
   - Per-device protocol configuration (different protocols per Device)
@@ -193,7 +177,7 @@
     - Device 1: Modbus RTU, Device 3: JSON over network
     - Device 1: NMEA GPS, Device 2: Binary protocol conversion
 
-### Priority 9 - Multi-Board Support
+### Priority 8 - Multi-Board Support
 
 - [ ] **ESP32-S3 Super Mini Support**
   - Add board detection system with compile-time configuration

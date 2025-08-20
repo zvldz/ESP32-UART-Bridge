@@ -220,19 +220,6 @@ void UartDMA::uartEventTask(void* pvParameters) {
                 case UART_FIFO_OVF:
                     log_msg(LOG_WARNING, "UART FIFO overflow");
                     
-                    // TEMPORARY DIAGNOSTIC CODE
-                    // Added to diagnose FIFO overflow issue
-                    /*
-                    {
-                        size_t buffered_len = 0;
-                        uart_get_buffered_data_len(uart->uart_num, &buffered_len);
-                        size_t ring_available = uart->getRxBytesAvailable();
-                        log_msg("FIFO overflow details: DMA buffer=" + String(buffered_len) + 
-                                " bytes, ring buffer=" + String(ring_available) + 
-                                " bytes available", LOG_WARNING);
-                    }
-                    */
-                    // END TEMPORARY DIAGNOSTIC CODE
 
                     uart->overrun_flag = true;
                     uart->overrun_count = uart->overrun_count + 1;
