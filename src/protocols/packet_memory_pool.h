@@ -76,7 +76,7 @@ class PacketMemoryPool {
 private:
     // Pools for different packet sizes
     MemoryPool<64, 30> smallPool;     // Control packets (30 blocks)
-    MemoryPool<128, 20> mediumPool;   // For RAW chunks (120-240 divided in half)
+    MemoryPool<128, 60> mediumPool;   // Increased for MAVFtp bulk transfers
     MemoryPool<288, 20> mavlinkPool;  // MAVLink v2 max (20 blocks)
     MemoryPool<512, 10> rawPool;      // RAW chunks (10 blocks)
     
