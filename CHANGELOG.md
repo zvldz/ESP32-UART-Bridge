@@ -27,6 +27,16 @@
 - **Queue Architecture**: Migrated from std::queue to std::deque for direct indexing and batch planning
 - **Compiler Fixes**: Resolved type deduction errors in min() calls with explicit std:: namespace
 
+### USB Block Detection & Memory Pool Protection ✅ COMPLETED
+- **Blocked USB Detection**: Smart detection when COM port closed on host side
+  - **Timeout-based Logic**: 500ms timeout when availableForWrite() value unchanged
+  - **Memory Pool Protection**: Auto-clear all queues to prevent pool exhaustion on startup
+  - **Recovery Detection**: Keep 1 test packet for automatic unblock detection
+  - **Diagnostic Logging**: `[USB-DIAG] USB blocked/unblocked` messages for debugging
+- **Memory-Safe Operations**: Proper packet.free() calls in clearAllQueues()
+- **Startup Protection**: No more `Pool exhausted for size X, using heap` messages when USB dead
+- **Enhanced enqueue()**: Override in UsbSender to limit packets during blocked state
+
 ### Protocol Pipeline Fix
 - **Critical Logic Fix**: Fixed incorrect consume order in protocol_pipeline.h
   - **Before**: Only consumed bytes when packets found (data loss!)
