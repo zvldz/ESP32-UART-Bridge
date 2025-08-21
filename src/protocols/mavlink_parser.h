@@ -293,7 +293,6 @@ private:
         // Hints for optimization
         tempPackets[packetCount].hints.keepWhole = true;
         tempPackets[packetCount].hints.canFragment = false;
-        tempPackets[packetCount].hints.urgentFlush = false;  // Deprecated, not used
         
         packetCount++;
         
