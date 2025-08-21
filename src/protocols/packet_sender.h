@@ -10,7 +10,7 @@
 // Queued packet with send progress tracking
 struct QueuedPacket {
     ParsedPacket packet;
-    size_t sendOffset;      // TODO: Remove after UDP/UART refactoring (only they use partial write now)
+    size_t sendOffset;      // For UART partial send support (UDP/USB ignore this)
     uint32_t enqueueTime;   // When packet was queued
     
     QueuedPacket() : sendOffset(0), enqueueTime(0) {}
@@ -125,10 +125,6 @@ public:
     size_t getQueueBytes() const { return currentQueueBytes; }
     size_t getMaxQueueDepth() const { return maxQueueDepth; }
     
-    // Get total bytes sent estimate (for display)
-    uint32_t getTotalBytesSent() const { 
-        return totalSent * 100;  // Approximate
-    }
     
     void getDetailedStats(char* buffer, size_t bufSize) {
         snprintf(buffer, bufSize,

@@ -419,6 +419,27 @@ const StatusUpdates = {
             html += this.renderSenderStats(stats.senders, protocolType);
         }
         
+        // Check for UDP batching stats
+        if (stats.udpBatching) {
+            if (stats.udpBatching.batching) {
+                const status = stats.udpBatching.totalBatches > 0 ? 
+                    `${stats.udpBatching.avgPacketsPerBatch} pkts/batch avg, ${stats.udpBatching.maxPacketsInBatch} max, ${stats.udpBatching.batchEfficiency} efficiency` :
+                    'Ready (no MAVLink traffic yet)';
+                    
+                html += `
+                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 4px;">
+                        <strong>UDP Batching:</strong> <span style="color: #2e7d2e;">ENABLED</span> - ${status}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                        <strong>UDP Batching:</strong> <span style="color: #6c757d;">DISABLED</span> - Single packet per datagram
+                    </div>
+                `;
+            }
+        }
+        
         // Footer note
         html += `
             <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666; margin-top: 15px;">
