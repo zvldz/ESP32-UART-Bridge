@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v2.15.2 (UDP Sender Refactoring & Protocol-Aware Batching) 🚀
+
+### UDP Sender Architecture Overhaul ✅ COMPLETED
+- **Protocol-Aware Batching**: Separate MAVLink and RAW packet batching strategies
+  - **MAVLink Packets**: Optimized batching with keepWhole integrity (2-5 packets per batch)
+  - **RAW Data**: Legacy batching for non-protocol data streams
+  - **Smart Routing**: Automatic packet classification using keepWhole flag from parsers
+  - **Adaptive Thresholds**: Different limits for normal (2 packets/600 bytes/5ms) vs bulk mode (5 packets/1200 bytes/20ms)
+
+### Network Transmission Efficiency ✅ COMPLETED
+- **MTU-Aware Batching**: Up to 1400 bytes per UDP datagram for optimal network utilization
+- **Bulk Mode Integration**: Extended timeouts (20ms) for MAVFtp transfers, low latency (5ms) for telemetry
+- **Timeout-Based Flushing**: Prevents packet stalling during low-traffic periods
+- **Protocol Consistency**: Unified approach with USB sender optimizations
+
+### Code Architecture Cleanup ✅ COMPLETED
+- **TransmitHints Simplification**: Removed deprecated canBatch and urgentFlush flags
+- **Parser Updates**: Cleaned up mavlink_parser.h and raw_parser.h hint assignments
+- **Diagnostic Logging**: Added UDP-specific debug traces for batch operations and timeout events
+- **Memory Safety**: Proper destructor with batch flushing before cleanup
+
 ## v2.15.1 (Task Priority Optimization & USB Batching Improvements) 🚀
 
 ### Task Priority Rebalancing ✅ COMPLETED

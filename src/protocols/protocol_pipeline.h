@@ -309,6 +309,15 @@ public:
             }
         }
         
+        // Add UDP batching stats for UDP sender
+        for (size_t i = 0; i < senderCount; i++) {
+            if (senders[i] && strcmp(senders[i]->getName(), "UDP") == 0) {
+                JsonObject udpStats = stats["udpBatching"].to<JsonObject>();
+                ((UdpSender*)senders[i])->getBatchingStats(udpStats);
+                break;
+            }
+        }
+        
         // Buffer statistics - with null check
         if (inputBuffer) {
             JsonObject buffer = stats["buffer"].to<JsonObject>();

@@ -211,8 +211,6 @@ public:
         for (size_t i = 0; i < maxScan; i++) {
             const QueuedPacket& item = packetQueue[i];
             
-            // Skip partially sent packets
-            if (item.sendOffset > 0) break;
             
             // Check if fits
             if (batchSize + item.packet.size > BATCH_BUFFER_SIZE) break;
