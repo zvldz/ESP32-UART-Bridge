@@ -141,7 +141,6 @@ public:
             
             // Set hints for raw data
             result.packets[0].hints.canFragment = true;
-            result.packets[0].hints.canBatch = true;
             result.packets[0].hints.keepWhole = false;
             
             result.bytesConsumed = dataSize;  // Consume actual data size
