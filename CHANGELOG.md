@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## v2.15.3 (Device 4 Pipeline Integration Experiment) 🧪 EXPERIMENTAL
+
+### Device 4 Pipeline Architecture Integration ✅ COMPLETED
+- **SPSC Queue Implementation**: Lock-free Single Producer Single Consumer queue for inter-core communication
+  - **Core 0 → Core 1**: UdpTxQueue with 4-slot circular buffer (1500 bytes per slot)
+  - **Memory Barriers**: __sync_synchronize() for ESP32 dual-core data consistency
+  - **Producer**: UdpSender on Core 0 (Pipeline processing)
+  - **Consumer**: Device4Task on Core 1 (AsyncUDP transmission)
+  
+### Cross-Core Data Flow Optimization ✅ COMPLETED  
+- **UART1 → UDP Path**: processDevice1Input() → CircularBuffer → Pipeline → UdpSender → UdpTxQueue → Device4Task → AsyncUDP
+- **UDP → UART1 Path**: AsyncUDP onPacket → g_pipeline->injectFromDevice4() → CircularBuffer (SOURCE_DEVICE4) → Pipeline → UartSender
+- **Pipeline Export**: Global g_pipeline pointer for cross-core Device4 access with memory barriers
+- **Source Identification**: CircularBuffer extended with DataSource markers (UART1, DEVICE4, LOGGER)
+
+### Protocol Pipeline Integration ✅ COMPLETED
+- **MAVLink Processing**: Device 4 now processes MAVLink packets through Pipeline instead of raw UDP bypass
+- **UDP Batching**: MAVLink packets properly batched before UDP transmission via Device 4
+- **Statistics Fix**: UDP statistics now show actual packet counts instead of Sent=0
+- **Legacy Code Removal**: Replaced addToDevice4BridgeTx() calls with Pipeline data flow
+
+### Synchronization & Initialization ✅ COMPLETED
+- **Proper Init Order**: UdpSender::initQueue() called before Device4Task creation in main.cpp
+- **Cross-Core Waiting**: Device4Task waits for both UdpTxQueue and g_pipeline availability
+- **Adaptive Delays**: Device4Task uses 1ms (active) / 5ms (idle) delays for efficient queue processing
+- **Atomic Statistics**: Cross-core counters using __sync_fetch_and_add() for thread safety
+
+### Experimental Status & Future Decisions ⚠️
+- **Purpose**: Test inter-core SPSC queue performance and Pipeline integration effectiveness
+- **Evaluation Criteria**: 
+  - Packet loss under high load vs old architecture
+  - Latency improvements for MAVLink vs raw UDP bypass
+  - System stability during extended operation
+  - Memory usage and CPU overhead on both cores
+- **Next Steps**: Based on testing results, either:
+  - **Success**: Simplify architecture by removing bridge buffer layer
+  - **Issues**: Revert to direct UDP transmission with architectural lessons learned
+- **Benefits if Successful**: Unified protocol processing, improved batching, better statistics, cleaner code
+
 ## v2.15.2 (UDP Sender Refactoring & Protocol-Aware Batching) 🚀
 
 ### UDP Sender Architecture Overhaul ✅ COMPLETED

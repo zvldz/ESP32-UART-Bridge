@@ -16,20 +16,16 @@ extern int device4LogHead;
 extern int device4LogTail;
 extern SemaphoreHandle_t device4LogMutex;
 
-// Bridge buffers (only used in Bridge mode)
-extern uint8_t device4BridgeTxBuffer[DEVICE4_BRIDGE_BUFFER_SIZE];
-extern uint8_t device4BridgeRxBuffer[DEVICE4_BRIDGE_BUFFER_SIZE];
-extern int device4BridgeTxHead;
-extern int device4BridgeTxTail;
-extern int device4BridgeRxHead;
-extern int device4BridgeRxTail;
-extern SemaphoreHandle_t device4BridgeMutex;
+// REMOVED: Bridge buffers - now using Pipeline + UdpTxQueue
 
 // Global statistics
 extern unsigned long globalDevice4TxBytes;
 extern unsigned long globalDevice4TxPackets;
 extern unsigned long globalDevice4RxBytes;
 extern unsigned long globalDevice4RxPackets;
+
+// Device 1 TX statistics for UDP→UART forwarding
+extern unsigned long device1TxBytesFromDevice4;
 
 // AsyncUDP instance
 extern AsyncUDP* device4UDP;

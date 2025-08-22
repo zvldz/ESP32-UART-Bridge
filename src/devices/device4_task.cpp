@@ -4,11 +4,16 @@
 #include "types.h"
 #include "diagnostics.h"
 #include "../wifi/wifi_manager.h"
+#include "../protocols/protocol_pipeline.h"
+#include "../protocols/udp_sender.h"
 
 // External objects
 extern Config config;
 extern UartStats uartStats;
 extern SystemState systemState;
+
+// External UART1 interface for direct UDP → UART write
+extern UartInterface* uartBridgeSerial;
 
 // Device 4 log buffer
 uint8_t device4LogBuffer[DEVICE4_LOG_BUFFER_SIZE];
@@ -22,20 +27,37 @@ unsigned long globalDevice4TxPackets = 0;
 unsigned long globalDevice4RxBytes = 0;
 unsigned long globalDevice4RxPackets = 0;
 
+// Device 1 TX statistics for UDP→UART forwarding
+unsigned long device1TxBytesFromDevice4 = 0;
+
 // AsyncUDP instance
 AsyncUDP* device4UDP = nullptr;
 
-// Device 4 Bridge buffers (only if Bridge mode is used)
-uint8_t device4BridgeTxBuffer[DEVICE4_BRIDGE_BUFFER_SIZE];
-uint8_t device4BridgeRxBuffer[DEVICE4_BRIDGE_BUFFER_SIZE];
-int device4BridgeTxHead = 0;
-int device4BridgeTxTail = 0;
-int device4BridgeRxHead = 0;
-int device4BridgeRxTail = 0;
-SemaphoreHandle_t device4BridgeMutex = nullptr;
+// REMOVED: Bridge buffers - now using Pipeline + UdpTxQueue
+
+// Global Pipeline access from uartbridge.cpp
+extern ProtocolPipeline* g_pipeline;
 
 void device4Task(void* parameter) {
     log_msg(LOG_INFO, "Device 4 task started on core %d", xPortGetCoreID());
+    
+    // Wait for UDP TX queue initialization
+    log_msg(LOG_INFO, "Device4: Waiting for UDP TX queue...");
+    while (UdpSender::getTxQueue() == nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    __sync_synchronize();  // Acquire semantics
+    
+    UdpTxQueue* txQueue = UdpSender::getTxQueue();
+    log_msg(LOG_INFO, "Device4: TX queue ready");
+    
+    // Wait for Pipeline
+    log_msg(LOG_INFO, "Device4: Waiting for Pipeline...");
+    while (g_pipeline == nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    __sync_synchronize();
+    log_msg(LOG_INFO, "Device4: Pipeline ready");
     
     // Wait for network mode to be active first
     const uint32_t maxNetworkWaitTime = 3000;  // 3 seconds
@@ -89,22 +111,13 @@ void device4Task(void* parameter) {
         return;
     }
     
-    // Create Bridge mutex if needed
-    if (config.device4.role == D4_NETWORK_BRIDGE) {
-        device4BridgeMutex = xSemaphoreCreateMutex();
-        if (!device4BridgeMutex) {
-            log_msg(LOG_ERROR, "Device 4: Failed to create bridge mutex");
-            delete device4UDP;
-            vTaskDelete(NULL);
-            return;
-        }
-    }
+    // REMOVED: Bridge mutex - no longer needed with Pipeline architecture
     
     // Determine broadcast or unicast
     bool isBroadcast = (strcmp(config.device4_config.target_ip, "192.168.4.255") == 0) ||
                        (strstr(config.device4_config.target_ip, ".255") != nullptr);
     
-    // Setup listener for Bridge mode
+    // Setup listener for Bridge mode - NEW ARCHITECTURE
     if (config.device4.role == D4_NETWORK_BRIDGE) {
         if (!device4UDP->listen(config.device4_config.port)) {
             log_msg(LOG_ERROR, "Device 4: Failed to listen on port %d", config.device4_config.port);
@@ -112,56 +125,91 @@ void device4Task(void* parameter) {
             log_msg(LOG_INFO, "Device 4: Listening on port %d", config.device4_config.port);
             
             device4UDP->onPacket([](AsyncUDPPacket packet) {
-                if (config.device4.role == D4_NETWORK_BRIDGE && device4BridgeMutex) {
-                    if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-                        size_t len = packet.length();
-                        uint8_t* data = packet.data();
-                        
-                        // Store incoming UDP data in Bridge RX buffer
-                        for (size_t i = 0; i < len; i++) {
-                            int nextHead = (device4BridgeRxHead + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
-                            if (nextHead != device4BridgeRxTail) {  // Buffer not full
-                                device4BridgeRxBuffer[device4BridgeRxHead] = data[i];
-                                device4BridgeRxHead = nextHead;
-                            } else {
-                                // Buffer full, drop packet
-                                log_msg(LOG_WARNING, "Device 4: Bridge RX buffer full, dropping packet");
-                                break;
-                            }
-                        }
-                        
-                        xSemaphoreGive(device4BridgeMutex);
-                        
-                        // Update statistics
-                        enterStatsCritical();
-                        globalDevice4RxBytes += len;
-                        globalDevice4RxPackets++;
-                        exitStatsCritical();
+                if (config.device4.role == D4_NETWORK_BRIDGE && uartBridgeSerial) {
+                    size_t len = packet.length();
+                    uint8_t* data = packet.data();
+                    
+                    // Direct write to UART1 interface
+                    uartBridgeSerial->write(data, len);
+                    
+                    // Update RX statistics
+                    __sync_fetch_and_add(&globalDevice4RxBytes, len);
+                    __sync_fetch_and_add(&globalDevice4RxPackets, 1);
+                    
+                    // Update UART1 TX statistics (thread-safe)
+                    __sync_fetch_and_add(&device1TxBytesFromDevice4, len);
+                    
+                    // Log for verification
+                    static int count = 0;
+                    if (++count % 10 == 0) {
+                        log_msg(LOG_INFO, "[Device4] Forwarded %d UDP packets to UART1", count);
                     }
                 }
             });
         }
     }
     
-    // Main loop for log transmission and Bridge mode
+    // Parse target IP for UDP transmission (remove duplicate isBroadcast)
+    IPAddress targetIP;
+    if (!isBroadcast) {
+        targetIP.fromString(config.device4_config.target_ip);
+    }
+    
+    // Main loop - NEW ARCHITECTURE
     while (1) {
         // Check if WiFi client mode is still connected
         if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
             if (!wifi_manager_is_connected()) {
-                log_msg(LOG_WARNING, "Device 4: WiFi client disconnected, waiting for reconnection...");
+                log_msg(LOG_WARNING, "Device 4: WiFi disconnected, dropping queue...");
                 
-                // Wait for reconnection
-                bits = xEventGroupWaitBits(networkEventGroup, 
+                // FIXED: Clear queue when WiFi is down to prevent stale data accumulation
+                uint8_t dumpPacket[1500];
+                int droppedCount = 0;
+                while (txQueue->dequeue(dumpPacket, sizeof(dumpPacket)) > 0) {
+                    droppedCount++;
+                }
+                if (droppedCount > 0) {
+                    log_msg(LOG_INFO, "Device 4: Dropped %d stale packets", droppedCount);
+                }
+                
+                // Wait for reconnection (reduced timeout from 10s to 1s)
+                EventBits_t bits = xEventGroupWaitBits(networkEventGroup, 
                                           NETWORK_CONNECTED_BIT, 
                                           pdFALSE, pdTRUE, 
-                                          pdMS_TO_TICKS(10000));  // 10 second timeout
+                                          pdMS_TO_TICKS(1000));  // 1 second timeout
                 
                 if (!(bits & NETWORK_CONNECTED_BIT)) {
-                    log_msg(LOG_WARNING, "Device 4: WiFi reconnection timeout, continuing...");
-                    // Continue anyway - might reconnect later
+                    // Not reconnected - continue loop (will drop new packets)
+                    vTaskDelay(pdMS_TO_TICKS(100));  // Small delay
+                    continue;  // Start loop over
                 } else {
-                    log_msg(LOG_INFO, "Device 4: WiFi client reconnected");
+                    log_msg(LOG_INFO, "Device 4: WiFi reconnected");
                 }
+            }
+        }
+        
+        // === NEW: Pipeline → UDP transmission ===
+        uint8_t packet[1500];
+        size_t size;
+        int packetsProcessed = 0;  // Count processed packets for adaptive delay
+        
+        // Drain queue efficiently
+        while ((size = txQueue->dequeue(packet, sizeof(packet))) > 0) {
+            packetsProcessed++;  // Count processed packets
+            
+            // Send via AsyncUDP
+            if (isBroadcast) {
+                device4UDP->broadcastTo(packet, size, config.device4_config.port);
+            } else {
+                device4UDP->writeTo(packet, size, targetIP, config.device4_config.port);
+            }
+            
+            // Update packet counter (bytes already counted in UdpSender)
+            __sync_fetch_and_add(&globalDevice4TxPackets, 1);
+            
+            // Optional: yield to other tasks if sending many packets
+            if (packetsProcessed % 10 == 0) {
+                taskYIELD();
             }
         }
         
@@ -208,50 +256,16 @@ void device4Task(void* parameter) {
             }
         }
         
-        // Bridge mode: Check Bridge TX buffer and send UDP->UART data
-        if (config.device4.role == D4_NETWORK_BRIDGE && device4BridgeMutex) {
-            if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-                // Send Bridge TX data via UDP
-                if (device4BridgeTxHead != device4BridgeTxTail) {
-                    uint8_t tempBuffer[512];
-                    int count = 0;
-                    
-                    while (device4BridgeTxHead != device4BridgeTxTail && count < sizeof(tempBuffer)) {
-                        tempBuffer[count++] = device4BridgeTxBuffer[device4BridgeTxTail];
-                        device4BridgeTxTail = (device4BridgeTxTail + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
-                    }
-                    
-                    xSemaphoreGive(device4BridgeMutex);
-                    
-                    // Send collected data via UDP
-                    if (count > 0) {
-                        size_t sent = 0;
-                        
-                        if (isBroadcast) {
-                            sent = device4UDP->broadcastTo(tempBuffer, count, 
-                                                          config.device4_config.port);
-                        } else {
-                            IPAddress targetIP;
-                            if (targetIP.fromString(config.device4_config.target_ip)) {
-                                sent = device4UDP->writeTo(tempBuffer, count, targetIP, 
-                                                         config.device4_config.port);
-                            }
-                        }
-                        
-                        if (sent == count) {
-                            enterStatsCritical();
-                            globalDevice4TxBytes += count;
-                            globalDevice4TxPackets++;
-                            exitStatsCritical();
-                        }
-                    }
-                } else {
-                    xSemaphoreGive(device4BridgeMutex);
-                }
-            }
-        }
+        // REMOVED: Bridge mode TX buffer handling - now using UdpTxQueue via Pipeline
         
-        vTaskDelay(pdMS_TO_TICKS(50));  // 50ms for low latency
+        // FIXED: Adaptive delay based on actual packets processed
+        if (packetsProcessed > 0) {
+            // Had packets - minimal delay to keep processing efficiently
+            taskYIELD();  // Give other tasks a chance but return quickly
+        } else {
+            // Queue was empty - longer sleep to reduce CPU usage
+            vTaskDelay(pdMS_TO_TICKS(5));   // 5ms when idle
+        }
     }
 }
 
