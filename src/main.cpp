@@ -17,6 +17,7 @@
 #include "wifi/wifi_manager.h"
 #include "uart/uart_interface.h"
 #include "uart/uart_dma.h"
+#include "protocols/udp_sender.h"
 
 // Global objects
 Config config;
@@ -548,6 +549,15 @@ void createTasks() {
   );
 
   log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
+
+  // Initialize UDP TX queue before Device 4 task starts
+  if (config.device4.role == D4_NETWORK_BRIDGE) {
+    UdpSender::initQueue();
+    log_msg(LOG_INFO, "UDP TX queue initialized for Device 4");
+    
+    // Small delay to ensure UART Bridge task has time to initialize Pipeline
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
 
   // Create Device 3 task only if needed
   if (config.device3.role != D3_NONE && config.device3.role != D3_UART3_LOG) {

@@ -12,28 +12,9 @@
 // Protocol detection hooks (forward declarations to avoid circular includes)
 #include <Arduino.h>
 
-// Forward declarations for Device 4 functions
-static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len);
-static inline void processDevice4BridgeToUart(BridgeContext* ctx);
-
-// Device 4 Bridge TX implementation - BEFORE adaptive_buffer.h include!
-static inline void addToDevice4BridgeTx(const uint8_t* data, size_t len) {
-    if (!device4BridgeMutex) return;
-    
-    if (xSemaphoreTake(device4BridgeMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        for (size_t i = 0; i < len; i++) {
-            int nextHead = (device4BridgeTxHead + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
-            if (nextHead != device4BridgeTxTail) {  // Buffer not full
-                device4BridgeTxBuffer[device4BridgeTxHead] = data[i];
-                device4BridgeTxHead = nextHead;
-            } else {
-                // Buffer full, stop adding
-                break;
-            }
-        }
-        xSemaphoreGive(device4BridgeMutex);
-    }
-}
+// Forward declaration for Pipeline
+class ProtocolPipeline;
+extern ProtocolPipeline* g_pipeline;
 
 // NOW include adaptive_buffer.h - function is already defined!
 #include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
@@ -88,8 +69,6 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             currentTime = micros();
         }
         
-        // HOOK: Pre-process byte (removed in new architecture)
-        
         (*ctx->stats.device1RxBytes)++;
         
         // Copy to Device 3 if in Mirror or Bridge mode
@@ -104,9 +83,10 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             }
         }
         
-        // Copy to Device 4 if in Bridge mode (UART->UDP)
-        if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
-            addToDevice4BridgeTx(&data, 1);
+        // NEW: Copy to Device 4 via Pipeline (UART->UDP)
+        if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
+            // No need to inject back into Pipeline - data already in input buffer
+            // Pipeline will automatically process and route to UdpSender
         }
 
         // Route to Device 2 based on its role
@@ -140,10 +120,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                         }
                     }
                     
-                    // Copy to Device 4 if in Bridge mode
-                    if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
-                        uint8_t byteCopy = (uint8_t)nextByte;
-                        addToDevice4BridgeTx(&byteCopy, 1);
+                    // NEW: Copy to Device 4 via Pipeline (UART->UDP)
+                    if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
+                        // Data already goes through Pipeline via input buffer processing
                     }
                 }
             }
@@ -154,9 +133,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                 *ctx->stats.device2TxBytes += batchSize;
             }
             
-            // Send batch to Device 4 if in Bridge mode
-            if (batchSize > 0 && ctx->system.config->device4.role == D4_NETWORK_BRIDGE) {
-                addToDevice4BridgeTx(batchBuffer, batchSize);
+            // NEW: Send batch to Device 4 via Pipeline (UART->UDP)
+            if (batchSize > 0 && ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
+                // Data is already in Pipeline input buffer, will be processed automatically
             }
         }
 
@@ -249,35 +228,6 @@ static inline void processDevice3BridgeInput(BridgeContext* ctx) {
         if (bytesToWrite > 0 && ctx->interfaces.uartBridgeSerial->availableForWrite() >= bytesToWrite) {
             ctx->interfaces.uartBridgeSerial->write(writeBuffer, bytesToWrite);
             *ctx->stats.device1TxBytes += bytesToWrite;
-        }
-    }
-}
-
-// NOTE: addToDevice4BridgeTx definition moved above adaptive_buffer.h include
-
-// Process Device 4 Bridge RX data (UDP->UART)
-static inline void processDevice4BridgeToUart(BridgeContext* ctx) {
-    const int UART_BLOCK_SIZE = 64;
-    
-    if (!device4BridgeMutex) return;
-    
-    if (xSemaphoreTake(device4BridgeMutex, 0) == pdTRUE) {
-        // Process in blocks for efficiency
-        int bytesToWrite = 0;
-        uint8_t writeBuffer[UART_BLOCK_SIZE];
-        
-        while (device4BridgeRxHead != device4BridgeRxTail && bytesToWrite < UART_BLOCK_SIZE) {
-            writeBuffer[bytesToWrite++] = device4BridgeRxBuffer[device4BridgeRxTail];
-            device4BridgeRxTail = (device4BridgeRxTail + 1) % DEVICE4_BRIDGE_BUFFER_SIZE;
-        }
-        
-        xSemaphoreGive(device4BridgeMutex);
-        
-        // Write collected data to Device 1 UART
-        if (bytesToWrite > 0 && ctx->interfaces.uartBridgeSerial->availableForWrite() >= bytesToWrite) {
-            ctx->interfaces.uartBridgeSerial->write(writeBuffer, bytesToWrite);
-            *ctx->stats.device1TxBytes += bytesToWrite;
-            *ctx->stats.lastActivity = millis();
         }
     }
 }

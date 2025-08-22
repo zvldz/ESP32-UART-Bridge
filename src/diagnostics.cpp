@@ -331,6 +331,9 @@ void updateDevice4Stats() {
     uartStats.device4TxPackets = globalDevice4TxPackets;
     uartStats.device4RxBytes = globalDevice4RxBytes;
     uartStats.device4RxPackets = globalDevice4RxPackets;
+    // Add Device4→Device1 forwarded bytes (UDP→UART)
+    extern unsigned long device1TxBytesFromDevice4;
+    uartStats.device1TxBytes += device1TxBytesFromDevice4;
     exitStatsCritical();
 }
 

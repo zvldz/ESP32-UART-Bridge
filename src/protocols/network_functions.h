@@ -8,8 +8,8 @@
 // Function declarations for network operations
 // These are implemented in bridge_processing.h but declared here to avoid circular dependencies
 
-// Add data to Device4 (UDP) transmission buffer
-extern void addToDevice4BridgeTx(const uint8_t* data, size_t size);
+// REMOVED: addToDevice4BridgeTx - replaced by Pipeline architecture
+// NEW: Data flows through ProtocolPipeline -> UdpSender -> UdpTxQueue automatically
 
 // Check if Device4 is active
 extern bool isDevice4Active();
