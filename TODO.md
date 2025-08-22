@@ -274,6 +274,17 @@
 
 ### Code Refactoring and Cleanup
 
+- [ ] **Flow Control System Improvements** - v2.6.x
+  - Current implementation only detects RTS/CTS wiring connectivity  
+  - Missing runtime flow control status monitoring
+  - No integration with actual UART transmission flow control
+  - Consider adding:
+    - Real-time CTS status checking before transmission
+    - RTS buffer level monitoring and automatic control
+    - Flow control effectiveness metrics (pauses, overruns)
+    - Integration with UART DMA transmission queues
+  - **Priority**: Low (current basic detection works for wire verification)
+
 - [ ] **Final Code Cleanup** - After all features are implemented
   - Remove unnecessary diagnostic code and debug prints
   - Clean up commented-out code blocks

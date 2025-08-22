@@ -197,17 +197,6 @@ public:
         return (index < senderCount) ? senders[index] : nullptr;
     }
     
-    // EXPERIMENTAL: Apply parser-specific batching strategies to senders
-    void applyBatchingStrategies() {
-        if (!parser) return;
-        
-        uint32_t batchTimeout = parser->getBatchTimeoutMs();
-        
-        // TODO: Apply to UDP sender if available
-        // For now just expose timeout value for future use
-        // UdpSender could check this value in processSendQueue()
-    }
-    
     // Protocol statistics for web interface
     void appendStatsToJson(JsonDocument& doc) {
         JsonObject stats = doc["protocolStats"].to<JsonObject>();

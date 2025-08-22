@@ -34,6 +34,9 @@ extern UsbInterface* g_usbInterface;
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
 
+// Global pointer for Device4 access (cross-core communication)
+ProtocolPipeline* g_pipeline = nullptr;
+
 // UART Bridge Task - runs with high priority on Core 0
 void uartBridgeTask(void* parameter) {
   // Wait for system initialization
@@ -130,6 +133,11 @@ void uartBridgeTask(void* parameter) {
   ctx.protocolPipeline = new ProtocolPipeline(&ctx);
   ctx.protocolPipeline->init(&config);
   
+  // Export for Device4 (cross-core access)
+  g_pipeline = ctx.protocolPipeline;
+  __sync_synchronize();  // Ensure visibility to other cores
+  log_msg(LOG_INFO, "[Pipeline] Exported for Device4 access");
+  
   // OLD: Keep old protocol detection as fallback (will be removed later)
   // initProtocolDetection(&ctx, &config);  // Removed - Pipeline does this
 
@@ -173,10 +181,7 @@ void uartBridgeTask(void* parameter) {
       processDevice3BridgeInput(&ctx);
     }
     
-    // Process Device 4 Bridge mode input (UDP->UART)
-    if (config.device4.role == D4_NETWORK_BRIDGE && systemState.networkActive) {
-      processDevice4BridgeToUart(&ctx);
-    }
+    // Device 4 Bridge mode (UDP->UART) now handled directly in device4_task.cpp
 
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Pipeline statistics output (every 10 seconds)

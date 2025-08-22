@@ -3,10 +3,20 @@
 
 #include "packet_sender.h"
 #include "network_functions.h"
+#include "udp_tx_queue.h"
 #include <ArduinoJson.h>
 
 class UdpSender : public PacketSender {
 private:
+    // Global queue pointer (shared between cores)
+    static UdpTxQueue* txQueue;
+    
+    // Statistics for queue management
+    struct {
+        uint32_t datagramsSent = 0;
+        uint32_t bufferOverflows = 0;
+        uint32_t lastOverflowLog = 0;
+    } queueStats;
     // Batch buffer constants
     static constexpr size_t MTU_SIZE = 1400;
     static constexpr size_t MAX_BATCH_PACKETS = 10;
@@ -182,10 +192,6 @@ private:
         if (mavlinkBatchSize > 0) {
             uint32_t timeout = bulkMode ? MAVLINK_BATCH_TIMEOUT_MS_BULK : MAVLINK_BATCH_TIMEOUT_MS_NORMAL;
             if ((now - mavlinkBatchStartMs) >= timeout) {
-                // === DIAGNOSTIC START === (Remove after UDP stabilization)
-                log_msg(LOG_DEBUG, "[UDP-DIAG] MAVLink batch timeout: %ums (%s mode)", 
-                        now - mavlinkBatchStartMs, bulkMode ? "BULK" : "NORMAL");
-                // === DIAGNOSTIC END ===
                 flushMavlinkBatch();
             }
         }
@@ -193,10 +199,6 @@ private:
         // Check RAW batch timeout
         if (rawBatchSize > 0) {
             if ((now - lastBatchTime) >= RAW_BATCH_TIMEOUT_MS) {
-                // === DIAGNOSTIC START === (Remove after UDP stabilization)
-                log_msg(LOG_DEBUG, "[UDP-DIAG] RAW batch timeout: %ums", 
-                        now - lastBatchTime);
-                // === DIAGNOSTIC END ===
                 flushRawBatch();
             }
         }
@@ -293,16 +295,52 @@ public:
         // === DIAGNOSTIC END ===
     }
     
-private:
-    void sendUdpDatagram(uint8_t* data, size_t size) {
-        // Actual UDP send implementation
-        // This depends on your network stack
-        addToDevice4BridgeTx(data, size);
-        
-        // Update global TX counter
-        if (globalTxBytesCounter) {
-            *globalTxBytesCounter += size;
+    // Static initialization (called before tasks start)
+    static void initQueue() {
+        if (!txQueue) {
+            txQueue = new UdpTxQueue();
+            __sync_synchronize();  // Publish to other cores
+            log_msg(LOG_INFO, "[UDP] TX queue initialized");
         }
+    }
+    
+    // Get queue for device4Task
+    static UdpTxQueue* getTxQueue() {
+        return txQueue;
+    }
+    
+private:
+    // Replace sendUdpDatagram with enqueueDatagram
+    void enqueueDatagram(uint8_t* data, size_t size) {
+        if (!txQueue) {
+            log_msg(LOG_ERROR, "[UDP] TX queue not initialized!");
+            return;
+        }
+        
+        if (txQueue->enqueue(data, size)) {
+            queueStats.datagramsSent++;
+            
+            // Update global TX counter (atomic)
+            if (globalTxBytesCounter) {
+                __sync_fetch_and_add(globalTxBytesCounter, size);
+            }
+        } else {
+            // Queue full
+            queueStats.bufferOverflows++;
+            totalDropped++;
+            
+            // Rate-limited logging
+            uint32_t now = millis();
+            if (now - queueStats.lastOverflowLog > 1000) {
+                log_msg(LOG_WARNING, "[UDP] TX queue overflow #%u", queueStats.bufferOverflows);
+                queueStats.lastOverflowLog = now;
+            }
+        }
+    }
+    
+    // Legacy function for compatibility - now enqueues to SPSC queue
+    void sendUdpDatagram(uint8_t* data, size_t size) {
+        enqueueDatagram(data, size);
     }
 };
 
