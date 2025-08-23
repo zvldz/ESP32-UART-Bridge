@@ -1,5 +1,8 @@
 #include "udp_sender.h"
-#include "udp_tx_queue.h"
 
-// Static member definition
-UdpTxQueue* UdpSender::txQueue = nullptr;
+// Static member definitions
+unsigned long UdpSender::udpTxBytes = 0;
+unsigned long UdpSender::udpTxPackets = 0;
+unsigned long UdpSender::udpRxBytes = 0;
+unsigned long UdpSender::udpRxPackets = 0;
+unsigned long UdpSender::device1TxBytesFromDevice4 = 0;

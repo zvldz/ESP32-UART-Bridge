@@ -80,9 +80,8 @@ these features but is not justified for current requirements.
 #define DEVICE3_UART_BUFFER_SIZE 2048
 #define DEVICE3_LOG_BUFFER_SIZE 256  // For UART logger TX only
 
-// Device 4 buffering
-#define DEVICE4_LOG_BUFFER_SIZE 2048
-#define DEVICE4_BRIDGE_BUFFER_SIZE 2048
+// UDP buffering (was Device 4)
+#define UDP_BRIDGE_BUFFER_SIZE 2048
 
 // UART task statistics update interval
 #define UART_STATS_UPDATE_INTERVAL_MS 500  // How often UART task updates shared statistics

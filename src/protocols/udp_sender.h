@@ -3,20 +3,17 @@
 
 #include "packet_sender.h"
 #include "network_functions.h"
-#include "udp_tx_queue.h"
 #include <ArduinoJson.h>
+#include <AsyncUDP.h>
+#include "../wifi/wifi_manager.h"
 
 class UdpSender : public PacketSender {
 private:
-    // Global queue pointer (shared between cores)
-    static UdpTxQueue* txQueue;
     
-    // Statistics for queue management
-    struct {
-        uint32_t datagramsSent = 0;
-        uint32_t bufferOverflows = 0;
-        uint32_t lastOverflowLog = 0;
-    } queueStats;
+    // Direct UDP transport
+    AsyncUDP* udpTransport;  // Passed from outside
+    IPAddress targetIP;      // Parsed target IP
+    bool isBroadcast;        // Broadcast flag
     // Batch buffer constants
     static constexpr size_t MTU_SIZE = 1400;
     static constexpr size_t MAX_BATCH_PACKETS = 10;
@@ -205,11 +202,22 @@ private:
     }
     
 public:
-    UdpSender(unsigned long* txCounter = nullptr) : 
-        PacketSender(20, 8192, txCounter),  // Return to original sizes
+    UdpSender(AsyncUDP* udp, unsigned long* txCounter = nullptr) : 
+        PacketSender(20, 8192, txCounter),
+        udpTransport(udp),
         rawBatchSize(0),
         lastBatchTime(0),
         lastStatsLog(0) {
+        
+        // Parse target IP
+        extern Config config;
+        isBroadcast = (strcmp(config.device4_config.target_ip, "192.168.4.255") == 0) ||
+                      (strstr(config.device4_config.target_ip, ".255") != nullptr);
+        
+        if (!isBroadcast) {
+            targetIP.fromString(config.device4_config.target_ip);
+        }
+        
         log_msg(LOG_DEBUG, "UdpSender initialized");
     }
     
@@ -219,6 +227,26 @@ public:
     }
     
     void processSendQueue(bool bulkMode = false) override {
+        // Check WiFi for client mode
+        extern Config config;
+        if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && !wifi_manager_is_connected()) {
+            // Clear queue silently (not counted as drops)
+            while (!packetQueue.empty()) {
+                currentQueueBytes -= packetQueue.front().packet.size;
+                packetQueue.front().packet.free();
+                packetQueue.pop_front();
+            }
+            
+            // Reset batch buffers to avoid stale data
+            mavlinkBatchSize = 0;
+            mavlinkBatchPackets = 0;
+            mavlinkBatchStartMs = 0;
+            rawBatchSize = 0;
+            
+            return;
+        }
+        
+        // Existing processing code continues here...
         uint32_t now = millis();
         
         // === DIAGNOSTIC START === (Remove after batching validation)
@@ -295,52 +323,51 @@ public:
         // === DIAGNOSTIC END ===
     }
     
-    // Static initialization (called before tasks start)
-    static void initQueue() {
-        if (!txQueue) {
-            txQueue = new UdpTxQueue();
-            __sync_synchronize();  // Publish to other cores
-            log_msg(LOG_INFO, "[UDP] TX queue initialized");
-        }
+    
+    // Static UDP statistics
+    static unsigned long udpTxBytes;
+    static unsigned long udpTxPackets;
+    static unsigned long udpRxBytes;
+    static unsigned long udpRxPackets;
+    static unsigned long device1TxBytesFromDevice4;
+    
+    // Update RX stats from callback
+    static void updateRxStats(size_t bytes) {
+        udpRxBytes += bytes;
+        udpRxPackets++;
+        device1TxBytesFromDevice4 += bytes;
     }
     
-    // Get queue for device4Task
-    static UdpTxQueue* getTxQueue() {
-        return txQueue;
-    }
-    
-private:
-    // Replace sendUdpDatagram with enqueueDatagram
-    void enqueueDatagram(uint8_t* data, size_t size) {
-        if (!txQueue) {
-            log_msg(LOG_ERROR, "[UDP] TX queue not initialized!");
-            return;
+    void sendUdpDatagram(uint8_t* data, size_t size) {
+        // Early exit checks
+        if (!udpTransport || size == 0) return;
+        
+        extern Config config;
+        size_t sent = 0;
+        
+        if (isBroadcast) {
+            sent = udpTransport->broadcastTo(data, size, config.device4_config.port);
+        } else {
+            sent = udpTransport->writeTo(data, size, targetIP, config.device4_config.port);
         }
         
-        if (txQueue->enqueue(data, size)) {
-            queueStats.datagramsSent++;
-            
-            // Update global TX counter (atomic)
-            if (globalTxBytesCounter) {
-                __sync_fetch_and_add(globalTxBytesCounter, size);
+        if (sent == 0) {
+            // Rate-limited warning for UDP failures
+            static uint32_t lastFailLog = 0;
+            if (millis() - lastFailLog > 5000) {
+                log_msg(LOG_WARNING, "[UDP] Send failed");
+                lastFailLog = millis();
             }
         } else {
-            // Queue full
-            queueStats.bufferOverflows++;
-            totalDropped++;
-            
-            // Rate-limited logging
-            uint32_t now = millis();
-            if (now - queueStats.lastOverflowLog > 1000) {
-                log_msg(LOG_WARNING, "[UDP] TX queue overflow #%u", queueStats.bufferOverflows);
-                queueStats.lastOverflowLog = now;
-            }
+            // Update static counters
+            udpTxBytes += sent;
+            udpTxPackets++;
         }
-    }
-    
-    // Legacy function for compatibility - now enqueues to SPSC queue
-    void sendUdpDatagram(uint8_t* data, size_t size) {
-        enqueueDatagram(data, size);
+        
+        if (globalTxBytesCounter) {
+            // Update global TX counter (no protection needed - same core)
+            *globalTxBytesCounter += sent;
+        }
     }
 };
 
