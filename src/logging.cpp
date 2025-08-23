@@ -12,12 +12,11 @@ extern SemaphoreHandle_t logMutex;
 extern Config config;
 extern SystemState systemState;
 
-// Device 4 logging support
-extern SemaphoreHandle_t device4LogMutex;
-extern uint8_t device4LogBuffer[];
-extern int device4LogHead;
-extern int device4LogTail;
-#define DEVICE4_LOG_BUFFER_SIZE 2048
+// UDP log buffer definitions
+uint8_t udpLogBuffer[UDP_LOG_BUFFER_SIZE];
+int udpLogHead = 0;
+int udpLogTail = 0;
+SemaphoreHandle_t udpLogMutex = nullptr;
 
 // Logging system internal data
 static String logBuffer[LOG_BUFFER_SIZE];
@@ -59,6 +58,16 @@ void logging_init() {
   }
   logIndex = 0;
   logCount = 0;
+  
+  // Create UDP log mutex
+  if (!udpLogMutex) {
+    udpLogMutex = xSemaphoreCreateMutex();
+  }
+
+  // Initialize UDP log buffer to prevent garbage
+  memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
+  udpLogHead = 0;
+  udpLogTail = 0;
 }
 
 // Initialize UART logging on Device 3
@@ -171,7 +180,7 @@ if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
         config.device4.role == D4_LOG_NETWORK &&
         config.log_level_network != LOG_OFF && 
         level <= config.log_level_network &&
-        device4LogMutex) {
+        udpLogMutex) {
         
         // Format for network
         char netBuf[320];
@@ -185,20 +194,20 @@ if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
         
         // Add to ring buffer (non-blocking)
         if (netLen > 0 && netLen < sizeof(netBuf) && 
-            xSemaphoreTake(device4LogMutex, 0) == pdTRUE) {
+            xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
             
             // Copy to ring buffer
             for (int i = 0; i < netLen; i++) {
-                int nextHead = (device4LogHead + 1) % DEVICE4_LOG_BUFFER_SIZE;
-                if (nextHead != device4LogTail) {
-                    device4LogBuffer[device4LogHead] = netBuf[i];
-                    device4LogHead = nextHead;
+                int nextHead = (udpLogHead + 1) % UDP_LOG_BUFFER_SIZE;
+                if (nextHead != udpLogTail) {
+                    udpLogBuffer[udpLogHead] = netBuf[i];
+                    udpLogHead = nextHead;
                 } else {
                     break;  // Buffer full
                 }
             }
             
-            xSemaphoreGive(device4LogMutex);
+            xSemaphoreGive(udpLogMutex);
         }
     }
 }
