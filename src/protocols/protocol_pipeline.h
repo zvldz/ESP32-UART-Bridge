@@ -6,6 +6,7 @@
 #include "packet_sender.h"
 #include "raw_parser.h"
 #include "mavlink_parser.h"
+#include "line_based_parser.h"
 #include "usb_sender.h"
 #include "uart_sender.h"
 #include "udp_sender.h"
@@ -37,18 +38,23 @@ public:
     }
     
     void init(Config* config) {
-        // Create parser based on protocol type
-        // Map old PROTOCOL_NONE to new PROTOCOL_RAW
-        switch (config->protocolOptimization) {
-            case PROTOCOL_NONE:  // OLD enum value
-                parser = new RawParser();
-                break;
-            case PROTOCOL_MAVLINK:
-                parser = new MavlinkParser();
-                break;
-            default:
-                parser = new RawParser();  // Fallback to RAW
-                break;
+        // Create parser based on protocol type or Device 4 Logger mode
+        if (config->device4.role == D4_LOG_NETWORK) {
+            parser = new LineBasedParser();
+        } else {
+            // Create parser based on protocol type
+            // Map old PROTOCOL_NONE to new PROTOCOL_RAW
+            switch (config->protocolOptimization) {
+                case PROTOCOL_NONE:  // OLD enum value
+                    parser = new RawParser();
+                    break;
+                case PROTOCOL_MAVLINK:
+                    parser = new MavlinkParser();
+                    break;
+                default:
+                    parser = new RawParser();  // Fallback to RAW
+                    break;
+            }
         }
         
         // Link statistics
@@ -189,6 +195,11 @@ public:
     // Get parser instance for external access (e.g., adaptive timeouts)
     ProtocolParser* getParser() const {
         return parser;
+    }
+    
+    // Get input buffer for external access (e.g., UDP Logger task)
+    CircularBuffer* getInputBuffer() const {
+        return inputBuffer;
     }
     
     // Get sender access methods for statistics
@@ -346,10 +357,15 @@ private:
         }
         
         // Device4 (UDP) - optional, pass TX counter
-        if (config->device4.role == D4_NETWORK_BRIDGE) {
-            senders[senderCount++] = new UdpSender(
-                ctx->stats.device4TxBytes  // Pass TX counter pointer
-            );
+        if (config->device4.role == D4_NETWORK_BRIDGE || 
+            config->device4.role == D4_LOG_NETWORK) {
+            extern AsyncUDP* udpTransport;
+            if (udpTransport) {
+                senders[senderCount++] = new UdpSender(
+                    udpTransport,
+                    ctx->stats.device4TxBytes  // Pass TX counter pointer
+                );
+            }
         }
     }
     

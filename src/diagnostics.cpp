@@ -4,6 +4,7 @@
 #include "esp_system.h"
 #include "uart/uart_dma.h"
 #include "types.h"
+#include "protocols/udp_sender.h"
 #include <Arduino.h>
 
 // External object from main.cpp
@@ -13,10 +14,6 @@ extern BridgeMode bridgeMode;
 // External statistics from device tasks
 extern unsigned long globalDevice3RxBytes;   // From device3_task.cpp
 extern unsigned long globalDevice3TxBytes;
-extern unsigned long globalDevice4RxBytes;   // From device4_task.cpp
-extern unsigned long globalDevice4TxBytes;
-extern unsigned long globalDevice4RxPackets;
-extern unsigned long globalDevice4TxPackets;
 
 // Global access to context (for TaskScheduler callbacks)
 static BridgeContext* g_bridgeContext = nullptr;
@@ -327,13 +324,12 @@ void updateDevice3Stats() {
 // Update statistics for Device 4 (Core 1 device)
 void updateDevice4Stats() {
     enterStatsCritical();
-    uartStats.device4TxBytes = globalDevice4TxBytes;
-    uartStats.device4TxPackets = globalDevice4TxPackets;
-    uartStats.device4RxBytes = globalDevice4RxBytes;
-    uartStats.device4RxPackets = globalDevice4RxPackets;
+    uartStats.device4TxBytes = UdpSender::udpTxBytes;
+    uartStats.device4TxPackets = UdpSender::udpTxPackets;
+    uartStats.device4RxBytes = UdpSender::udpRxBytes;
+    uartStats.device4RxPackets = UdpSender::udpRxPackets;
     // Add Device4→Device1 forwarded bytes (UDP→UART)
-    extern unsigned long device1TxBytesFromDevice4;
-    uartStats.device1TxBytes += device1TxBytesFromDevice4;
+    uartStats.device1TxBytes += UdpSender::device1TxBytesFromDevice4;
     exitStatsCritical();
 }
 

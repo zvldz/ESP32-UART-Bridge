@@ -10,6 +10,8 @@
 #include "types.h"
 #include "web/web_interface.h"
 #include "wifi/wifi_manager.h"
+#include "protocols/protocol_pipeline.h"
+#include "circular_buffer.h"
 
 // External objects
 extern Config config;
@@ -30,6 +32,7 @@ static Task tUpdateStatsDevice3(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER,
 static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
+static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
 
 
 void initializeScheduler() {
@@ -82,6 +85,85 @@ void initializeScheduler() {
         ESP.restart();
     });
     
+    // UDP Logger task - copies log lines to Pipeline
+    tUdpLoggerTask.set(100, TASK_FOREVER, []{
+        if (config.device4.role != D4_LOG_NETWORK) return;
+        
+        extern uint8_t udpLogBuffer[];
+        extern int udpLogHead;
+        extern int udpLogTail;
+        extern SemaphoreHandle_t udpLogMutex;
+        extern ProtocolPipeline* g_pipeline;
+        
+        // Static variables to preserve state between calls
+        static uint8_t lineBuffer[256];
+        static size_t lineLen = 0;
+        static uint32_t lastFlushMs = 0;
+        
+        if (!g_pipeline || !udpLogMutex) return;
+        
+        // Check WiFi connection
+        if (!wifi_manager_is_connected()) {
+            // Clear buffers when WiFi is down
+            if (xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
+                udpLogHead = 0;
+                udpLogTail = 0;
+                xSemaphoreGive(udpLogMutex);
+            }
+            lineLen = 0;  // Reset line buffer
+            return;
+        }
+        
+        // Count available lines
+        uint32_t lineCount = 0;
+        if (xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
+            int tempTail = udpLogTail;
+            while (tempTail != udpLogHead) {
+                if (udpLogBuffer[tempTail] == '\n') lineCount++;
+                tempTail = (tempTail + 1) % UDP_LOG_BUFFER_SIZE;
+            }
+            xSemaphoreGive(udpLogMutex);
+        }
+        
+        uint32_t now = millis();
+        bool shouldFlush = false;
+        
+        // Flush conditions
+        if (lineCount >= 10) {
+            shouldFlush = true;
+        } else if (lineCount > 0 && (now - lastFlushMs) > 1000) {
+            shouldFlush = true;
+        }
+        
+        if (shouldFlush && xSemaphoreTake(udpLogMutex, 10) == pdTRUE) {
+            // Copy to pipeline input buffer
+            CircularBuffer* inputBuffer = g_pipeline->getInputBuffer();
+            
+            while (udpLogTail != udpLogHead && lineLen < sizeof(lineBuffer)) {
+                uint8_t byte = udpLogBuffer[udpLogTail];
+                lineBuffer[lineLen++] = byte;
+                udpLogTail = (udpLogTail + 1) % UDP_LOG_BUFFER_SIZE;
+                
+                if (byte == '\n') {
+                    // Write complete line
+                    inputBuffer->write(lineBuffer, lineLen);
+                    lineLen = 0;
+                    if (--lineCount == 0) break;
+                }
+            }
+            
+            // Handle incomplete line that filled the buffer
+            if (lineLen >= sizeof(lineBuffer)) {
+                // Force flush as incomplete/broken line
+                inputBuffer->write(lineBuffer, lineLen);
+                lineLen = 0;
+            }
+            
+            xSemaphoreGive(udpLogMutex);
+            lastFlushMs = now;
+        }
+    });
+    
     // Initialize scheduler
     taskScheduler.init();
     
@@ -97,6 +179,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tUpdateStatsDevice4);
     taskScheduler.addTask(tDnsProcess);
     taskScheduler.addTask(tRebootDevice);
+    taskScheduler.addTask(tUdpLoggerTask);
     
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
@@ -156,6 +239,11 @@ void enableNetworkTasks(bool temporaryNetwork) {
     // Enable Device4 stats if active
     if (config.device4.role != D4_NONE) {
         tUpdateStatsDevice4.enable();
+    }
+    
+    // Enable UDP Logger task if Device 4 is in Logger mode
+    if (config.device4.role == D4_LOG_NETWORK) {
+        tUdpLoggerTask.enable();
     }
     
 }

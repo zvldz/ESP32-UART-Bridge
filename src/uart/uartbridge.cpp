@@ -11,7 +11,6 @@
 #include "../config.h"
 #include "../scheduler_tasks.h"
 #include "../devices/device3_task.h"
-#include "../devices/device4_task.h"
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <AsyncUDP.h>

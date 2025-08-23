@@ -18,6 +18,7 @@
 #include "uart/uart_interface.h"
 #include "uart/uart_dma.h"
 #include "protocols/udp_sender.h"
+#include <AsyncUDP.h>
 
 // Global objects
 Config config;
@@ -37,10 +38,12 @@ UsbMode usbMode = USB_MODE_DEVICE;
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
 TaskHandle_t device3TaskHandle = NULL;
-TaskHandle_t device4TaskHandle = NULL;
 
 // USB interface
 UsbInterface* usbInterface = NULL;
+
+// UDP transport for Device4
+AsyncUDP* udpTransport = nullptr;
 
 // Mutexes for thread safety
 SemaphoreHandle_t logMutex = NULL;
@@ -383,6 +386,44 @@ void initNetworkMode() {
   // Initialize UART bridge even in network mode (for statistics)
   initMainUART(uartBridgeSerial, &config, &uartStats, usbInterface);
 
+  // Initialize UDP transport for Device4
+  if (config.device4.role == D4_NETWORK_BRIDGE || 
+      config.device4.role == D4_LOG_NETWORK) {  // For both modes!
+    
+    udpTransport = new AsyncUDP();
+    
+    if (udpTransport) {
+      // Listener only for Bridge mode
+      if (config.device4.role == D4_NETWORK_BRIDGE) {
+        // Setup UDP listener
+        if (!udpTransport->listen(config.device4_config.port)) {
+          log_msg(LOG_ERROR, "Failed to listen on UDP port %d", config.device4_config.port);
+        } else {
+          log_msg(LOG_INFO, "UDP listening on port %d", config.device4_config.port);
+          
+          // Setup callback for UDP RX → UART
+          udpTransport->onPacket([](AsyncUDPPacket packet) {
+            if (uartBridgeSerial) {
+              size_t len = packet.length();
+              uartBridgeSerial->write(packet.data(), len);
+              
+              // Update Device1 TX statistics (FIX for missing stats)
+              uartStats.device1TxBytes += len;
+              
+              // Update UDP RX statistics
+              UdpSender::updateRxStats(len);
+            }
+          });
+        }
+      } else {
+        // Logger mode - TX only
+        log_msg(LOG_INFO, "UDP transport created for Logger mode (TX only)");
+      }
+    } else {
+      log_msg(LOG_ERROR, "Failed to create UDP transport");
+    }
+  }
+
   // Initialize web server
   webserver_init(&config, &uartStats, &systemState);
 }
@@ -531,9 +572,7 @@ void createMutexes() {
     return;
   }
 
-  // Always create Device 4 mutex (needed for logging)
-  extern SemaphoreHandle_t device4LogMutex;
-  device4LogMutex = xSemaphoreCreateMutex();
+  // UDP log mutex is now created in logging_init()
 }
 
 void createTasks() {
@@ -550,15 +589,6 @@ void createTasks() {
 
   log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
 
-  // Initialize UDP TX queue before Device 4 task starts
-  if (config.device4.role == D4_NETWORK_BRIDGE) {
-    UdpSender::initQueue();
-    log_msg(LOG_INFO, "UDP TX queue initialized for Device 4");
-    
-    // Small delay to ensure UART Bridge task has time to initialize Pipeline
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-
   // Create Device 3 task only if needed
   if (config.device3.role != D3_NONE && config.device3.role != D3_UART3_LOG) {
     xTaskCreatePinnedToCore(
@@ -572,20 +602,6 @@ void createTasks() {
     );
     
     log_msg(LOG_INFO, "Device 3 task created on core %d for %s mode", DEVICE3_TASK_CORE, config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge");
-  }
-
-  // Create Device 4 task only if configured
-  if (config.device4.role != D4_NONE) {
-    xTaskCreatePinnedToCore(
-      device4Task,
-      "Device4_Task",
-      8192,
-      NULL,
-      UART_TASK_PRIORITY-2,
-      &device4TaskHandle,
-      DEVICE4_TASK_CORE      // Core 1 for network operations
-    );
-    log_msg(LOG_INFO, "Device 4 task created on core %d for %s", DEVICE4_TASK_CORE, getDevice4RoleName(config.device4.role));
   }
 }
 

@@ -8,7 +8,6 @@
 #include "uart/uart_interface.h"
 #include "usb/usb_interface.h"
 #include "devices/device3_task.h"
-#include "devices/device4_task.h"
 // Protocol detection hooks (forward declarations to avoid circular includes)
 #include <Arduino.h>
 
