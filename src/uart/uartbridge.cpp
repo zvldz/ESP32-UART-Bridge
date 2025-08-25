@@ -2,6 +2,7 @@
 #include "../bridge_processing.h"
 #include "../adaptive_buffer.h"
 #include "../protocols/protocol_pipeline.h"
+#include "../protocols/buffer_manager.h"
 #include "flow_control.h"
 #include "../devices/device_init.h"
 #include "../diagnostics.h"
@@ -125,7 +126,10 @@ void uartBridgeTask(void* parameter) {
   ctx.protocol.stats = new ProtocolStats();
   log_msg(LOG_INFO, "Protocol statistics created");
 
-  // Initialize CircularBuffer for new architecture
+  // Initialize protocol buffers based on configuration
+  initProtocolBuffers(&ctx, &config);
+  
+  // Initialize adaptive buffer timing (buffer allocation moved to buffer_manager)
   initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
   // NEW: Initialize protocol pipeline instead of old detection
@@ -208,7 +212,10 @@ void uartBridgeTask(void* parameter) {
     ctx.protocolPipeline = nullptr;
   }
   
-  // Cleanup adaptive buffer
+  // Cleanup protocol buffers
+  freeProtocolBuffers(&ctx);
+  
+  // Cleanup adaptive buffer timing
   cleanupAdaptiveBuffer(&ctx);
 }
 

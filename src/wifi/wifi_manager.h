@@ -13,7 +13,9 @@ void wifi_manager_stop();
 void wifi_manager_process();  // Called from main loop
 
 // Status functions
+// Legacy - only works for Client mode, use wifi_manager_is_ready_for_data() instead
 bool wifi_manager_is_connected();
+bool wifi_manager_is_ready_for_data();  // Universal check for data transmission
 int wifi_manager_get_rssi();
 String wifi_manager_get_ip();
 WiFiClientState wifi_manager_get_state();

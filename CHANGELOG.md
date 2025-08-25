@@ -1,43 +1,96 @@
 # CHANGELOG
 
-## v2.15.3 (Device 4 Pipeline Integration Experiment) 🧪 EXPERIMENTAL
+## v2.15.3 (Device 4 Pipeline Integration + UDP Logger Buffer Separation) 🔥 MAJOR REFACTORING
 
-### Device 4 Pipeline Architecture Integration ✅ COMPLETED
-- **SPSC Queue Implementation**: Lock-free Single Producer Single Consumer queue for inter-core communication
-  - **Core 0 → Core 1**: UdpTxQueue with 4-slot circular buffer (1500 bytes per slot)
-  - **Memory Barriers**: __sync_synchronize() for ESP32 dual-core data consistency
-  - **Producer**: UdpSender on Core 0 (Pipeline processing)
-  - **Consumer**: Device4Task on Core 1 (AsyncUDP transmission)
-  
-### Cross-Core Data Flow Optimization ✅ COMPLETED  
-- **UART1 → UDP Path**: processDevice1Input() → CircularBuffer → Pipeline → UdpSender → UdpTxQueue → Device4Task → AsyncUDP
-- **UDP → UART1 Path**: AsyncUDP onPacket → g_pipeline->injectFromDevice4() → CircularBuffer (SOURCE_DEVICE4) → Pipeline → UartSender
-- **Pipeline Export**: Global g_pipeline pointer for cross-core Device4 access with memory barriers
-- **Source Identification**: CircularBuffer extended with DataSource markers (UART1, DEVICE4, LOGGER)
+### Major Architecture Simplification ✅ COMPLETED
+- **SPSC Queue Removal**: Eliminated complex inter-core Single Producer Single Consumer queue system
+  - **Removed Components**: device4Task completely deleted, UdpTxQueue removed from UdpSender
+  - **Memory Reduction**: ~6KB saved (4×1500 byte queue slots + task overhead)
+  - **Latency Improvement**: Direct UDP transmission without inter-core queuing delays
+  - **Code Simplification**: 300+ lines of complex synchronization code removed
 
-### Protocol Pipeline Integration ✅ COMPLETED
-- **MAVLink Processing**: Device 4 now processes MAVLink packets through Pipeline instead of raw UDP bypass
-- **UDP Batching**: MAVLink packets properly batched before UDP transmission via Device 4
-- **Statistics Fix**: UDP statistics now show actual packet counts instead of Sent=0
-- **Legacy Code Removal**: Replaced addToDevice4BridgeTx() calls with Pipeline data flow
+### Direct UDP Integration ✅ COMPLETED  
+- **Direct AsyncUDP**: UdpSender now uses AsyncUDP transport directly (no task intermediary)
+- **UART→UDP Path**: processDevice1Input() → CircularBuffer → Pipeline → UdpSender → AsyncUDP (direct)
+- **UDP→UART Path**: AsyncUDP onPacket → uartBridgeSerial->write() (direct bypass of Pipeline)
+- **Statistics Integration**: UDP TX/RX stats moved to static UdpSender members for thread-safe access
+- **Transport Creation**: UDP transport created in main.cpp for both Bridge and Logger modes
 
-### Synchronization & Initialization ✅ COMPLETED
-- **Proper Init Order**: UdpSender::initQueue() called before Device4Task creation in main.cpp
-- **Cross-Core Waiting**: Device4Task waits for both UdpTxQueue and g_pipeline availability
-- **Adaptive Delays**: Device4Task uses 1ms (active) / 5ms (idle) delays for efficient queue processing
-- **Atomic Statistics**: Cross-core counters using __sync_fetch_and_add() for thread safety
+### Buffer Architecture Separation ✅ COMPLETED
+- **Dual Buffer System**: Separate circular buffers for different operational modes
+  - **Telemetry Buffer**: For UART→USB/UDP telemetry processing (Bridge mode)
+  - **Log Buffer**: For line-based log processing (Logger mode, 1024 bytes)
+- **Memory Optimization**: Only allocate needed buffer per mode (Logger saves ~1KB+ adaptive buffer)
+- **Buffer Manager**: New buffer_manager.h/cpp for centralized buffer allocation/deallocation
+- **Context Separation**: BridgeContext.buffers struct replaces old adaptive.circBuf reference
 
-### Experimental Status & Future Decisions ⚠️
-- **Purpose**: Test inter-core SPSC queue performance and Pipeline integration effectiveness
-- **Evaluation Criteria**: 
-  - Packet loss under high load vs old architecture
-  - Latency improvements for MAVLink vs raw UDP bypass
-  - System stability during extended operation
-  - Memory usage and CPU overhead on both cores
-- **Next Steps**: Based on testing results, either:
-  - **Success**: Simplify architecture by removing bridge buffer layer
-  - **Issues**: Revert to direct UDP transmission with architectural lessons learned
-- **Benefits if Successful**: Unified protocol processing, improved batching, better statistics, cleaner code
+### UDP Logger Mode Enhancements ✅ COMPLETED
+- **Buffer Initialization**: UDP log buffer properly zeroed to prevent garbage data transmission
+- **WiFi Connection Checks**: Logger task clears buffers when WiFi disconnected
+- **Line Parser Improvements**: Enhanced LineBasedParser supports \\r\\n, \\r, \\n line endings
+- **Long Line Handling**: Graceful handling of lines without endings (skip with warning)
+- **Logger-Bridge Separation**: UART telemetry ignored in Logger-only mode (prevents buffer conflicts)
+
+### Protocol Pipeline Architecture ✅ COMPLETED
+- **Mode-Specific Initialization**: Pipeline uses correct buffer based on Device4 role
+  - **Logger Mode**: Uses logBuffer + LineBasedParser
+  - **Bridge Mode**: Uses telemetryBuffer + RawParser/MavlinkParser
+- **Buffer Validation**: Proper null-pointer checks for buffer availability
+- **Error Handling**: Clear error messages for buffer allocation failures
+
+### Compilation & Integration Fixes ✅ COMPLETED
+- **Static Variable Definitions**: UDP statistics properly defined in udp_sender.cpp
+- **Include Dependencies**: Added buffer_manager.h includes to uart/uartbridge.cpp
+- **Context Access**: scheduler_tasks.cpp uses getBridgeContext() for buffer access
+- **Bridge Processing**: Added Logger mode checks to prevent telemetry buffer usage
+
+### Architecture Benefits 🚀
+- **Simplified Design**: Removed 3 complex architectural layers (SPSC, Device4Task, injection)
+- **Better Performance**: Direct UDP transmission reduces latency and CPU overhead
+- **Memory Efficient**: Mode-specific buffer allocation saves memory
+- **Maintainable Code**: Cleaner separation between Logger and Bridge functionality
+- **Robust Logging**: UDP Logger mode with proper WiFi handling and line parsing
+
+### Final Architecture Stabilization ✅ COMPLETED
+- **Fixed Sender Indices**: Implemented stable IDX_USB=0, IDX_UART3=1, IDX_UDP=2 sender routing
+  - **Eliminated Array Shifting**: Fixed sender indices prevent routing instability 
+  - **PacketSource Integration**: Added SOURCE_TELEMETRY, SOURCE_LOGS, SOURCE_DEVICE4 packet tagging
+  - **DataFlow Architecture**: Multi-stream processing with separate Telemetry and Logger flows
+  - **Sender Mask Routing**: Precise packet routing with SENDER_USB, SENDER_UART3, SENDER_UDP masks
+
+- **Bridge Processing Fix**: Resolved USB telemetry blocking in Logger mode
+  - **Logger Mode Issue**: USB received no data when Logger was active (bridge_processing.h)
+  - **Root Cause**: processDevice1Input() blocked UART→telemetryBuffer in D4_LOG_NETWORK mode
+  - **Solution**: Removed blocking condition, USB always processes data through telemetryBuffer
+  - **Result**: Logger mode with simultaneous USB telemetry and UDP log transmission
+
+- **UDP Sender Universal Naming**: Renamed MAVLink-specific naming to universal atomic packet handling
+  - **Renamed**: mavlink* → atomic* (atomicBatchBuffer, processAtomicPacket, etc.)
+  - **Scope**: Universal batching for MAVLink telemetry, line-based logs, and future atomic packets
+  - **Maintained**: All existing batching functionality and performance optimizations
+  - **Prepared**: Framework for packet-type-specific batching strategies via PacketSource
+
+- **WiFi Connectivity Universalization**: Created unified WiFi readiness checking
+  - **New Function**: wifi_manager_is_ready_for_data() works for both AP and Client modes
+  - **AP Mode**: Checks for connected clients before allowing data transmission
+  - **Client Mode**: Checks connection status to target network
+  - **Integration**: Used across UDP Logger, UDP Sender, and other network components
+  - **Legacy**: Maintained wifi_manager_is_connected() for compatibility
+
+- **UDP Batching Configuration Control**: Added configurable UDP packet batching for legacy GCS compatibility
+  - **Configuration Field**: New udpBatchingEnabled setting (default: enabled) in config version 8
+  - **Web Interface**: Added checkbox in Device 4 Network Configuration panel
+  - **Backend Integration**: UdpSender.setBatchingEnabled() method for runtime configuration
+  - **Automatic Migration**: Existing configurations upgraded to version 8 with batching enabled
+  - **Performance Control**: Users can disable batching if GCS doesn't support batched UDP packets
+  - **Logging**: Clear indication when UDP batching is enabled/disabled in system logs
+
+### Architecture Evolution Within v2.15.3 📈
+- **Phase 1**: Initial SPSC queue implementation for Device 4 Pipeline integration
+- **Phase 2**: Real-world testing revealed complexity vs benefit imbalance  
+- **Phase 3**: Architecture simplified - removed SPSC queue, implemented direct UDP + buffer separation
+- **Phase 4**: Final stabilization - fixed routing, universal naming, WiFi handling improvements
+- **Result**: Production-ready, maintainable, and performance-optimized architecture
 
 ## v2.15.2 (UDP Sender Refactoring & Protocol-Aware Batching) 🚀
 

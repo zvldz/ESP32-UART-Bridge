@@ -524,8 +524,27 @@ void wifi_manager_process() {
     }
 }
 
+// Legacy function - only returns true in Client mode when connected to AP
+// For AP mode always returns false
+// Use wifi_manager_is_ready_for_data() for universal check
 bool wifi_manager_is_connected() {
     return systemState.wifiClientConnected;
+}
+
+bool wifi_manager_is_ready_for_data() {
+    extern Config config;
+    
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+        // Client mode - check if connected to AP
+        return systemState.wifiClientConnected;
+    } else {
+        // AP mode - check if any clients connected
+        wifi_sta_list_t sta_list;
+        if (esp_wifi_ap_get_sta_list(&sta_list) == ESP_OK) {
+            return sta_list.num > 0;
+        }
+        return false;
+    }
 }
 
 String wifi_manager_get_ip() {

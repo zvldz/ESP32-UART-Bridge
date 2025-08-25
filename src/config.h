@@ -4,7 +4,7 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 7  // Increased from 6 to 7 for Protocol Optimization
+#define CURRENT_CONFIG_VERSION 8  // Increased from 7 to 8 for UDP batching control
 
 // Configuration management interface
 void config_init(Config* config);

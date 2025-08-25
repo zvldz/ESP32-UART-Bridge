@@ -93,17 +93,18 @@ void initializeScheduler() {
         extern int udpLogHead;
         extern int udpLogTail;
         extern SemaphoreHandle_t udpLogMutex;
-        extern ProtocolPipeline* g_pipeline;
+        // Get bridge context via diagnostics
+        BridgeContext* g_bridgeContext = getBridgeContext();
         
         // Static variables to preserve state between calls
         static uint8_t lineBuffer[256];
         static size_t lineLen = 0;
         static uint32_t lastFlushMs = 0;
         
-        if (!g_pipeline || !udpLogMutex) return;
+        if (!g_bridgeContext || !udpLogMutex) return;
         
-        // Check WiFi connection
-        if (!wifi_manager_is_connected()) {
+        // Check WiFi readiness for data transmission
+        if (!wifi_manager_is_ready_for_data()) {
             // Clear buffers when WiFi is down
             if (xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
                 udpLogHead = 0;
@@ -128,16 +129,23 @@ void initializeScheduler() {
         uint32_t now = millis();
         bool shouldFlush = false;
         
-        // Flush conditions
-        if (lineCount >= 10) {
-            shouldFlush = true;
-        } else if (lineCount > 0 && (now - lastFlushMs) > 1000) {
+        // Flush if:
+        // - 10 complete lines OR  
+        // - any data (lines or partial line) AND 100ms passed
+        if (lineCount >= 10 || 
+            ((lineCount > 0 || lineLen > 0) && (now - lastFlushMs) >= 100)) {
             shouldFlush = true;
         }
         
         if (shouldFlush && xSemaphoreTake(udpLogMutex, 10) == pdTRUE) {
-            // Copy to pipeline input buffer
-            CircularBuffer* inputBuffer = g_pipeline->getInputBuffer();
+            // Get log buffer from context
+            CircularBuffer* inputBuffer = g_bridgeContext->buffers.logBuffer;
+            
+            if (!inputBuffer) {
+                log_msg(LOG_ERROR, "Log buffer not available!");
+                xSemaphoreGive(udpLogMutex);
+                return;
+            }
             
             while (udpLogTail != udpLogHead && lineLen < sizeof(lineBuffer)) {
                 uint8_t byte = udpLogBuffer[udpLogTail];
@@ -155,6 +163,12 @@ void initializeScheduler() {
             // Handle incomplete line that filled the buffer
             if (lineLen >= sizeof(lineBuffer)) {
                 // Force flush as incomplete/broken line
+                inputBuffer->write(lineBuffer, lineLen);
+                lineLen = 0;
+            }
+            
+            // IMPORTANT: send partial line if exists
+            if (lineLen > 0) {
                 inputBuffer->write(lineBuffer, lineLen);
                 lineLen = 0;
             }

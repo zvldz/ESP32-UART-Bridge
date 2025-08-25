@@ -32,6 +32,13 @@ struct TransmitHints {
 // Forward declaration
 class PacketMemoryPool;
 
+// Packet source identification for routing
+enum PacketSource {
+    SOURCE_TELEMETRY = 0,  // Default: UART telemetry data
+    SOURCE_LOGS = 1,       // Log data from logging system
+    SOURCE_DEVICE4 = 2     // UDP incoming data (legacy)
+};
+
 // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
 // Global sequence counter for packet tracking
 static uint32_t globalSeqNum = 0;
@@ -45,6 +52,7 @@ struct ParsedPacket {
     uint32_t timestamp;      // When packet was received (micros)
     TransmitHints hints;     // Transmission optimization hints
     PacketMemoryPool* pool;  // Pool to return memory to
+    PacketSource source;     // Source of packet data for routing
     
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
     uint32_t parseTimeMicros;     // When packet was parsed
@@ -54,7 +62,7 @@ struct ParsedPacket {
     // === DIAGNOSTIC END ===
     
     ParsedPacket() : data(nullptr), size(0), allocSize(0), 
-                    timestamp(0), pool(nullptr)
+                    timestamp(0), pool(nullptr), source(SOURCE_TELEMETRY)
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
                     , parseTimeMicros(0), enqueueTimeMicros(0), 
                     seqNum(0), mavlinkMsgId(0)

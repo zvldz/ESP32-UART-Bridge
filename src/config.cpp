@@ -94,6 +94,9 @@ void config_init(Config* config) {
   
   // Protocol optimization default
   config->protocolOptimization = PROTOCOL_NONE;
+  
+  // UDP batching default
+  config->udpBatchingEnabled = true;
 }
 
 // Migrate configuration from old versions
@@ -166,6 +169,15 @@ void config_migrate(Config* config) {
     config->protocolOptimization = 0;  // PROTOCOL_NONE by default
     
     config->config_version = 7;
+  }
+  
+  if (config->config_version < 8) {
+    log_msg(LOG_INFO, "Migrating config from version 7 to 8");
+    
+    // Add UDP batching control (default enabled)
+    config->udpBatchingEnabled = true;
+    
+    config->config_version = 8;
   }
 }
 
@@ -276,6 +288,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
   // Load protocol optimization (new in v7)
   if (doc["protocol"].is<JsonObject>()) {
     config->protocolOptimization = doc["protocol"]["optimization"] | 0;  // PROTOCOL_NONE by default
+    config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;  // NEW
   }
 
   // System settings like device_version and device_name are NOT loaded from file
@@ -342,6 +355,7 @@ String config_to_json(Config* config) {
 
   // Protocol optimization
   doc["protocol"]["optimization"] = config->protocolOptimization;
+  doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;  // NEW
 
   // Note: device_version and device_name are NOT saved - always use compiled values
 

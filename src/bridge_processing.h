@@ -82,17 +82,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             }
         }
         
-        // NEW: Copy to Device 4 via Pipeline (UART->UDP)
-        if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
-            // No need to inject back into Pipeline - data already in input buffer
-            // Pipeline will automatically process and route to UdpSender
-        }
 
         // Route to Device 2 based on its role
         if (ctx->devices.device2IsUSB) {
-            // Pipeline reads from buffer automatically - no need for hooks
-            
-            // Device 2 is USB - use adaptive buffering from adaptive_buffer.h
             (*ctx->stats.totalUartPackets)++;
             processAdaptiveBufferByte(ctx, data, currentTime);
         } else if (ctx->devices.device2IsUART2) {
@@ -119,10 +111,6 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                         }
                     }
                     
-                    // NEW: Copy to Device 4 via Pipeline (UART->UDP)
-                    if (ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
-                        // Data already goes through Pipeline via input buffer processing
-                    }
                 }
             }
             
@@ -132,10 +120,6 @@ static inline void processDevice1Input(BridgeContext* ctx) {
                 *ctx->stats.device2TxBytes += batchSize;
             }
             
-            // NEW: Send batch to Device 4 via Pipeline (UART->UDP)
-            if (batchSize > 0 && ctx->system.config->device4.role == D4_NETWORK_BRIDGE && g_pipeline) {
-                // Data is already in Pipeline input buffer, will be processed automatically
-            }
         }
 
         *ctx->stats.lastActivity = millis();
