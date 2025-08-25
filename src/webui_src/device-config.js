@@ -74,7 +74,7 @@ const DeviceConfig = {
             
             <div id="device4Config" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
                 <h4 style="margin-top: 0;">Device 4 Network Configuration</h4>
-                <div style="display: flex; gap: 20px; align-items: flex-end;">
+                <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
                     <div>
                         <label for="device4_target_ip">Target IP:</label>
                         <input type="text" name="device4_target_ip" id="device4_target_ip" 
@@ -85,9 +85,14 @@ const DeviceConfig = {
                         <input type="number" name="device4_port" id="device4_port" 
                                style="width: 80px;" min="1" max="65535">
                     </div>
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
+                        <label for="udp_batching" style="margin-left: 5px; cursor: pointer;">Batching</label>
+                    </div>
                 </div>
                 <small style="display: block; margin-top: 10px; color: #666;">
-                    ℹ️ Bridge: use x.x.x.255 for broadcast | Logger: use specific IP
+                    ℹ️ Use x.x.x.255 for broadcast<br>
+                    📦 Disable UDP Batching only if your GCS doesn't support it (reduces performance)
                 </small>
             </div>
             
@@ -153,6 +158,12 @@ const DeviceConfig = {
         const device4Port = document.getElementById('device4_port');
         if (device4TargetIp) device4TargetIp.value = this.config.device4TargetIp || '';
         if (device4Port) device4Port.value = this.config.device4Port || '';
+        
+        // Set UDP batching checkbox
+        const udpBatching = document.getElementById('udp_batching');
+        if (udpBatching) {
+            udpBatching.checked = this.config.udpBatchingEnabled !== false;  // Default true
+        }
         
         // Update device displays
         this.updateDevice2Pins();

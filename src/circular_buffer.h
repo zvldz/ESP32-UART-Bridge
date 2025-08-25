@@ -37,7 +37,8 @@ struct ContiguousView {
 
 class CircularBuffer {
 public:
-    // Data source identification for multi-source routing
+    // LEGACY: Data source identification - no longer used after architecture simplification
+    // Previously used for multi-source routing with SPSC queues
     enum DataSource {
         SOURCE_UART1 = 0,
         SOURCE_DEVICE4 = 1,
@@ -361,7 +362,8 @@ public:
         portEXIT_CRITICAL(&bufferMux);
     }
     
-    // Write with source marker (for Pipeline to distinguish origins)
+    // LEGACY: Write with source marker - no longer used after SPSC queue removal
+    // Previously used for Pipeline to distinguish data origins in inter-core routing
     bool writeWithSource(const uint8_t* data, size_t size, DataSource source) {
         if (size > 512 || getFreeSpace() < size + 3) return false;
         
@@ -381,7 +383,8 @@ public:
         return true;
     }
     
-    // Read with source extraction
+    // LEGACY: Read with source extraction - no longer used after SPSC queue removal
+    // Previously used to identify data source for multi-core routing
     size_t readWithSource(uint8_t* data, size_t maxSize, DataSource& source) {
         portENTER_CRITICAL(&bufferMux);
         
@@ -422,6 +425,7 @@ public:
         return size;
     }
     
+    // LEGACY: Write internal helper - used by deprecated writeWithSource()
     // Helper: Write internal without lock (must be called with lock held)
     void writeInternal(const uint8_t* data, size_t size) {
         for (size_t i = 0; i < size; i++) {
