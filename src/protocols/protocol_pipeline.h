@@ -15,385 +15,84 @@
 #include "../logging.h"
 #include <ArduinoJson.h>
 
+// Forward declaration
+class CircularBuffer;
+
+// Data flow structure for multi-stream processing
+struct DataFlow {
+    const char* name;           // Flow name for diagnostics
+    ProtocolParser* parser;     // Parser for this flow
+    CircularBuffer* inputBuffer;// Input buffer for this flow
+    PacketSource source;        // Source type for packet tagging
+    uint8_t senderMask;         // Which senders should receive packets from this flow
+    
+    DataFlow() : name(nullptr), parser(nullptr), inputBuffer(nullptr), 
+                 source(SOURCE_TELEMETRY), senderMask(0xFF) {}
+};
+
 class ProtocolPipeline {
 private:
-    ProtocolParser* parser;
-    PacketSender* senders[3];  // Max 3 output devices
-    size_t senderCount;
-    CircularBuffer* inputBuffer;
+    // Fixed sender indices (no more shifting arrays!)
+    enum SenderIndex {
+        IDX_USB = 0,
+        IDX_UART3 = 1, 
+        IDX_UDP = 2,
+        MAX_SENDERS = 3
+    };
+    
+    // Sender masks for routing
+    enum SenderMask {
+        SENDER_USB = (1 << IDX_USB),
+        SENDER_UART3 = (1 << IDX_UART3),
+        SENDER_UDP = (1 << IDX_UDP),
+        SENDER_ALL = 0xFF
+    };
+    
+    // Maximum flows supported
+    static constexpr size_t MAX_FLOWS = 2;  // Telemetry + Logs
+    
+    // Data flows array
+    DataFlow flows[MAX_FLOWS];
+    size_t activeFlows;
+    
+    // Fixed sender slots (can be nullptr)
+    PacketSender* senders[MAX_SENDERS];
+    
+    // Bridge context
     BridgeContext* ctx;
     
+    // Private methods
+    void setupFlows(Config* config);
+    void createSenders(Config* config);
+    void processFlow(DataFlow& flow);
+    void distributePackets(ParsedPacket* packets, size_t count, PacketSource source, uint8_t senderMask);
+    void cleanup();
+    
 public:
-    ProtocolPipeline(BridgeContext* context) : 
-        parser(nullptr),
-        senderCount(0),
-        inputBuffer(nullptr),
-        ctx(context) {  // CRITICAL: Save context pointer
-
-        memset(senders, 0, sizeof(senders));
-    }
+    ProtocolPipeline(BridgeContext* context);
+    ~ProtocolPipeline();
     
-    ~ProtocolPipeline() {
-        cleanup();
-    }
+    // Main interface
+    void init(Config* config);
+    void process();
+    void handleBackpressure();
     
-    void init(Config* config) {
-        // Create parser based on protocol type or Device 4 Logger mode
-        if (config->device4.role == D4_LOG_NETWORK) {
-            parser = new LineBasedParser();
-        } else {
-            // Create parser based on protocol type
-            // Map old PROTOCOL_NONE to new PROTOCOL_RAW
-            switch (config->protocolOptimization) {
-                case PROTOCOL_NONE:  // OLD enum value
-                    parser = new RawParser();
-                    break;
-                case PROTOCOL_MAVLINK:
-                    parser = new MavlinkParser();
-                    break;
-                default:
-                    parser = new RawParser();  // Fallback to RAW
-                    break;
-            }
-        }
-        
-        // Link statistics
-        if (ctx->protocol.stats) {
-            parser->setStats(ctx->protocol.stats);
-        }
-        
-        // Create senders based on configuration
-        createSenders(config);
-        
-        // Set input buffer
-        inputBuffer = ctx->adaptive.circBuf;
-        
-        log_msg(LOG_INFO, "Protocol pipeline initialized: %s parser, %d senders",
-                parser->getName(), senderCount);
-    }
+    // Statistics and diagnostics
+    void getStats(char* buffer, size_t bufSize);
+    void getStatsString(char* buffer, size_t bufSize);
+    void appendStatsToJson(JsonDocument& doc);
     
-    void process() {
-        if (!parser || !inputBuffer) return;
-        
-        uint32_t now = micros();
-        
-        // Parse packets from input buffer
-        ParseResult result = parser->parse(inputBuffer, now);
-        
-        // ALWAYS consume bytes if parser processed them
-        if (result.bytesConsumed > 0) {
-            inputBuffer->consume(result.bytesConsumed);
-        }
-        
-        // THEN distribute packets if parser found them
-        if (result.count > 0) {
-            broadcastPackets(result.packets, result.count);
-        }
-        
-        // Clean up parse result
-        result.free();
-        
-        // Get bulk mode state from parser (once per cycle)
-        bool bulkMode = parser ? parser->isBurstActive() : false;
-
-        // Process send queues for all senders with bulk mode state
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {
-                senders[i]->processSendQueue(bulkMode);
-            }
-        }
-
-        /*
-        // Give time to other tasks
-        if (bulkMode) {
-            static uint32_t lastYieldTime = 0;
-            if ((millis() - lastYieldTime) >= 10) {
-                vTaskDelay(1);
-                lastYieldTime = millis();
-            }
-        }
-        */
-    }
+    // Access methods for compatibility
+    ProtocolParser* getParser() const;  // Returns first parser or nullptr
+    CircularBuffer* getInputBuffer() const;  // Returns first buffer or nullptr
     
-    void handleBackpressure() {
-        // Check if any sender is overwhelmed
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i] && senders[i]->getQueueDepth() > 15) {
-                log_msg(LOG_WARNING, "%s sender queue depth: %d",
-                        senders[i]->getName(),
-                        senders[i]->getQueueDepth());
-                
-            }
-        }
-    }
+    // Sender access for statistics
+    PacketSender* getSender(size_t index) const;
+    size_t getSenderCount() const { return MAX_SENDERS; }  // Fixed count
     
-    void getStats(char* buffer, size_t bufSize) {
-        size_t offset = 0;
-        offset += snprintf(buffer + offset, bufSize - offset,
-                          "Parser: %s\n", parser ? parser->getName() : "None");
-        
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {
-                offset += snprintf(buffer + offset, bufSize - offset,
-                                  "%s: Sent=%u Dropped=%u Queue=%zu\n",
-                                  senders[i]->getName(),
-                                  senders[i]->getSentCount(),
-                                  senders[i]->getDroppedCount(),
-                                  senders[i]->getQueueDepth());
-            }
-        }
-    }
-    
-    // Get detailed pipeline statistics as string 
-    void getStatsString(char* buffer, size_t bufSize) {
-        size_t offset = 0;
-        
-        // Parser info
-        offset += snprintf(buffer + offset, bufSize - offset,
-                          "[%s] ", parser ? parser->getName() : "None");
-        
-        // Buffer status
-        if (inputBuffer) {
-            offset += snprintf(buffer + offset, bufSize - offset,
-                              "Buf: %zu/%zu ", 
-                              inputBuffer->available(), inputBuffer->getCapacity());
-        }
-        
-        // Sender statistics
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {
-                offset += snprintf(buffer + offset, bufSize - offset,
-                                  "%s: Sent=%u Dropped=%u Queue=%zu Max=%zu ",
-                                  senders[i]->getName(),
-                                  senders[i]->getSentCount(),
-                                  senders[i]->getDroppedCount(),
-                                  senders[i]->getQueueDepth(),
-                                  senders[i]->getMaxQueueDepth());
-            }
-        }
-    }
-    
-    // Method for distributing parsed packets (used by pipeline task)
-    void distributeParsedPackets(ParseResult* result) {
-        if (result && result->count > 0) {
-            broadcastPackets(result->packets, result->count);
-        }
-    }
-    
-    // Method for processing senders (used by pipeline task)
-    void processSenders() {
-        // Get bulk mode state from parser (once per cycle)
-        bool bulkMode = parser ? parser->isBurstActive() : false;
-        
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {
-                senders[i]->processSendQueue(bulkMode);
-            }
-        }
-    }
-    
-    // Get parser instance for external access (e.g., adaptive timeouts)
-    ProtocolParser* getParser() const {
-        return parser;
-    }
-    
-    // Get input buffer for external access (e.g., UDP Logger task)
-    CircularBuffer* getInputBuffer() const {
-        return inputBuffer;
-    }
-    
-    // Get sender access methods for statistics
-    size_t getSenderCount() const { return senderCount; }
-    PacketSender* getSender(size_t index) const {
-        return (index < senderCount) ? senders[index] : nullptr;
-    }
-    
-    // Protocol statistics for web interface
-    void appendStatsToJson(JsonDocument& doc) {
-        JsonObject stats = doc["protocolStats"].to<JsonObject>();
-        
-        // CRITICAL FIX: Check all pointers before access
-        if (!ctx) {
-            stats["error"] = "Pipeline context not initialized";
-            log_msg(LOG_WARNING, "Pipeline: appendStatsToJson called with null context");
-            return;
-        }
-
-        if (!ctx->system.config) {
-            stats["error"] = "Configuration not available";
-            log_msg(LOG_WARNING, "Pipeline: Config pointer is null in appendStatsToJson");
-            return;
-        }
-
-        // Basic protocol information - now safe to access
-        stats["protocolType"] = ctx->system.config->protocolOptimization;  // 0=RAW, 1=MAVLink, 2=SBUS
-        stats["parserName"] = parser ? parser->getName() : "None";
-        
-        // Parser statistics (universal for all protocols)
-        if (ctx->protocol.stats) {
-            JsonObject parserStats = stats["parser"].to<JsonObject>();
-            parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
-            parserStats["packetsTransmitted"] = ctx->protocol.stats->packetsTransmitted;
-            
-            // Protocol-specific metrics
-            switch(ctx->system.config->protocolOptimization) {
-                case PROTOCOL_NONE:  // RAW (0)
-                    parserStats["chunksCreated"] = ctx->protocol.stats->packetsTransmitted;
-                    parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
-                    break;
-                    
-                case PROTOCOL_MAVLINK:  // MAVLink (1)
-                    // Rename "packetsDetected" to "packetsParsed" for clarity
-                    parserStats["packetsParsed"] = ctx->protocol.stats->packetsDetected;
-                    
-                    // Get sent/dropped from USB sender (Device 2)
-                    uint32_t packetsSent = 0;
-                    uint32_t packetsDropped = 0;
-                    for (size_t i = 0; i < getSenderCount(); i++) {
-                        PacketSender* sender = getSender(i);
-                        if (sender && strcmp(sender->getName(), "USB") == 0) {
-                            packetsSent = sender->getSentCount();
-                            packetsDropped = sender->getDroppedCount();
-                            break;
-                        }
-                    }
-                    parserStats["packetsSent"] = packetsSent;
-                    parserStats["packetsDropped"] = packetsDropped;
-                    
-                    // Detection errors from parser
-                    parserStats["detectionErrors"] = ctx->protocol.stats->detectionErrors;
-                    
-                    // Remove deprecated fields - DO NOT send to frontend
-                    // parserStats["resyncEvents"] - removed
-                    // parserStats["packetsTransmitted"] - removed  
-                    // parserStats["bytesProcessed"] - removed for MAVLink
-                    break;
-
-                // Future: PROTOCOL_SBUS (2)
-                // parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
-                // parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
-            }
-            
-            // Common metrics for all protocols
-            parserStats["avgPacketSize"] = ctx->protocol.stats->avgPacketSize;
-            parserStats["minPacketSize"] = (ctx->protocol.stats->minPacketSize == UINT32_MAX) ? 
-                                           0 : ctx->protocol.stats->minPacketSize;
-            parserStats["maxPacketSize"] = ctx->protocol.stats->maxPacketSize;
-            
-            // Calculate time since last activity
-            unsigned long currentMillis = millis();
-            unsigned long lastActivityMs = 0;
-            if (ctx->protocol.stats->lastPacketTime > 0 && 
-                currentMillis >= ctx->protocol.stats->lastPacketTime) {
-                lastActivityMs = currentMillis - ctx->protocol.stats->lastPacketTime;
-            }
-            parserStats["lastActivityMs"] = lastActivityMs;
-        } else {
-            // Stats not available yet
-            JsonObject parserStats = stats["parser"].to<JsonObject>();
-            parserStats["info"] = "Statistics not yet initialized";
-        }
-        
-        // Sender statistics - with null checks
-        JsonArray sendersArray = stats["senders"].to<JsonArray>();
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i]) {  // Check sender pointer
-                JsonObject sender = sendersArray.createNestedObject();
-                sender["name"] = senders[i]->getName();
-                sender["sent"] = senders[i]->getSentCount();
-                sender["dropped"] = senders[i]->getDroppedCount();
-                
-                
-                sender["queueDepth"] = senders[i]->getQueueDepth();
-                sender["maxQueueDepth"] = senders[i]->getMaxQueueDepth();
-            }
-        }
-        
-        // Add UDP batching stats for UDP sender
-        for (size_t i = 0; i < senderCount; i++) {
-            if (senders[i] && strcmp(senders[i]->getName(), "UDP") == 0) {
-                JsonObject udpStats = stats["udpBatching"].to<JsonObject>();
-                ((UdpSender*)senders[i])->getBatchingStats(udpStats);
-                break;
-            }
-        }
-        
-        // Buffer statistics - with null check
-        if (inputBuffer) {
-            JsonObject buffer = stats["buffer"].to<JsonObject>();
-            buffer["used"] = inputBuffer->available();
-            buffer["capacity"] = inputBuffer->getCapacity();
-
-            // Avoid division by zero
-            size_t capacity = inputBuffer->getCapacity();
-            if (capacity > 0) {
-                buffer["utilizationPercent"] = (inputBuffer->available() * 100) / capacity;
-            } else {
-                buffer["utilizationPercent"] = 0;
-            }
-        }
-    }
-    
-private:
-    void createSenders(Config* config) {
-        senderCount = 0;
-        
-        // Device2 (USB) - always present, pass TX counter
-        if (ctx->interfaces.usbInterface) {
-            senders[senderCount++] = new UsbSender(
-                ctx->interfaces.usbInterface,
-                ctx->stats.device2TxBytes  // Pass TX counter pointer
-            );
-        }
-        
-        // Device3 (UART2) - optional, pass TX counter
-        if (config->device3.role != D3_NONE && 
-            config->device3.role != D3_UART3_LOG &&
-            ctx->interfaces.device3Serial) {
-            senders[senderCount++] = new UartSender(
-                ctx->interfaces.device3Serial,
-                ctx->stats.device3TxBytes  // Pass TX counter pointer
-            );
-        }
-        
-        // Device4 (UDP) - optional, pass TX counter
-        if (config->device4.role == D4_NETWORK_BRIDGE || 
-            config->device4.role == D4_LOG_NETWORK) {
-            extern AsyncUDP* udpTransport;
-            if (udpTransport) {
-                senders[senderCount++] = new UdpSender(
-                    udpTransport,
-                    ctx->stats.device4TxBytes  // Pass TX counter pointer
-                );
-            }
-        }
-    }
-    
-    void broadcastPackets(ParsedPacket* packets, size_t count) {
-        // Send copies to all active senders
-        for (size_t i = 0; i < count; i++) {
-            for (size_t j = 0; j < senderCount; j++) {
-                if (senders[j]) {
-                    senders[j]->enqueue(packets[i]);
-                }
-            }
-        }
-    }
-    
-    void cleanup() {
-        if (parser) {
-            delete parser;
-            parser = nullptr;
-        }
-        
-        for (size_t i = 0; i < 3; i++) {
-            if (senders[i]) {
-                delete senders[i];
-                senders[i] = nullptr;
-            }
-        }
-        senderCount = 0;
-    }
+    // Packet distribution (used by external components)
+    void distributeParsedPackets(ParseResult* result);
+    void processSenders();
 };
 
 #endif // PROTOCOL_PIPELINE_H

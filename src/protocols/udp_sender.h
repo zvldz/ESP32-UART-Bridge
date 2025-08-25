@@ -18,11 +18,12 @@ private:
     static constexpr size_t MTU_SIZE = 1400;
     static constexpr size_t MAX_BATCH_PACKETS = 10;
 
-    // MAVLink batch state
-    uint8_t mavlinkBatchBuffer[MTU_SIZE];
-    size_t mavlinkBatchSize = 0;
-    size_t mavlinkBatchPackets = 0;
-    uint32_t mavlinkBatchStartMs = 0;
+    // Atomic packet batch state (for packets with keepWhole=true)
+    // Used for: MAVLink telemetry, line-based logs, other atomic packets
+    uint8_t atomicBatchBuffer[MTU_SIZE];
+    size_t atomicBatchSize = 0;
+    size_t atomicBatchPackets = 0;
+    uint32_t atomicBatchStartMs = 0;
 
     // RAW batch state (renamed from existing)
     uint8_t rawBatchBuffer[MTU_SIZE];  // Renamed from batchBuffer
@@ -33,13 +34,13 @@ private:
     // Bulk mode tracking
     bool lastBulkMode = false;
 
-    // Future compatibility flag (hardcoded for now)
-    bool enableMavlinkBatching = true;  // TODO: Get from config later
+    // Batching control from config (for legacy GCS compatibility)
+    bool enableAtomicBatching = true;  // Set via setBatchingEnabled()
     
     // === DIAGNOSTIC START === (Remove after batching validation)
     struct {
         uint32_t totalBatches = 0;
-        uint32_t mavlinkPacketsInBatches = 0;
+        uint32_t atomicPacketsInBatches = 0;
         uint32_t maxPacketsInBatch = 0;
         uint32_t bulkModeBatches = 0;
         uint32_t normalModeBatches = 0;
@@ -48,21 +49,21 @@ private:
     // === DIAGNOSTIC END ===
 
     // Batching thresholds
-    static constexpr size_t MAVLINK_BATCH_PACKETS_NORMAL = 2;
-    static constexpr size_t MAVLINK_BATCH_PACKETS_BULK = 5;
-    static constexpr size_t MAVLINK_BATCH_BYTES_NORMAL = 600;
-    static constexpr size_t MAVLINK_BATCH_BYTES_BULK = 1200;
-    static constexpr uint32_t MAVLINK_BATCH_TIMEOUT_MS_NORMAL = 5;
-    static constexpr uint32_t MAVLINK_BATCH_TIMEOUT_MS_BULK = 20;
+    static constexpr size_t ATOMIC_BATCH_PACKETS_NORMAL = 2;
+    static constexpr size_t ATOMIC_BATCH_PACKETS_BULK = 5;
+    static constexpr size_t ATOMIC_BATCH_BYTES_NORMAL = 600;
+    static constexpr size_t ATOMIC_BATCH_BYTES_BULK = 1200;
+    static constexpr uint32_t ATOMIC_BATCH_TIMEOUT_MS_NORMAL = 5;
+    static constexpr uint32_t ATOMIC_BATCH_TIMEOUT_MS_BULK = 20;
     static constexpr uint32_t RAW_BATCH_TIMEOUT_MS = 5;
     
-    void flushMavlinkBatch() {
-        if (mavlinkBatchSize > 0) {
+    void flushAtomicBatch() {
+        if (atomicBatchSize > 0) {
             // === DIAGNOSTIC START === (Remove after batching validation)
             batchDiag.totalBatches++;
-            batchDiag.mavlinkPacketsInBatches += mavlinkBatchPackets;
-            if (mavlinkBatchPackets > batchDiag.maxPacketsInBatch) {
-                batchDiag.maxPacketsInBatch = mavlinkBatchPackets;
+            batchDiag.atomicPacketsInBatches += atomicBatchPackets;
+            if (atomicBatchPackets > batchDiag.maxPacketsInBatch) {
+                batchDiag.maxPacketsInBatch = atomicBatchPackets;
             }
             if (lastBulkMode) {
                 batchDiag.bulkModeBatches++;
@@ -74,8 +75,8 @@ private:
             if (batchDiag.totalBatches % 20 == 0) {
                 uint32_t now = millis();
                 if (now - batchDiag.lastLogMs > 5000) {  // Max once per 5 sec
-                    float avg = batchDiag.mavlinkPacketsInBatches / (float)batchDiag.totalBatches;
-                    float efficiency = (batchDiag.mavlinkPacketsInBatches * 100.0f) / 
+                    float avg = batchDiag.atomicPacketsInBatches / (float)batchDiag.totalBatches;
+                    float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) / 
                                       (totalSent > 0 ? totalSent : 1);
                     
                     log_msg(LOG_DEBUG, "[UDP-BATCH] #%u: avg=%.1f max=%u eff=%.0f%% bulk=%u%%",
@@ -88,13 +89,13 @@ private:
             }
             // === DIAGNOSTIC END ===
             
-            sendUdpDatagram(mavlinkBatchBuffer, mavlinkBatchSize);
-            totalSent += mavlinkBatchPackets;  // Count packets sent
+            sendUdpDatagram(atomicBatchBuffer, atomicBatchSize);
+            totalSent += atomicBatchPackets;  // Count packets sent
             
             // Reset batch
-            mavlinkBatchSize = 0;
-            mavlinkBatchPackets = 0;
-            mavlinkBatchStartMs = 0;
+            atomicBatchSize = 0;
+            atomicBatchPackets = 0;
+            atomicBatchStartMs = 0;
         }
     }
     
@@ -111,34 +112,34 @@ private:
     }
     
     void flushAllBatches() {
-        flushMavlinkBatch();
+        flushAtomicBatch();
         flushRawBatch();
     }
     
-    void processMavlinkPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
+    void processAtomicPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
         // Check if batching is enabled (hardcoded true for now)
-        if (!enableMavlinkBatching) {
+        if (!enableAtomicBatching) {
             // Legacy mode - one packet per datagram
-            flushMavlinkBatch();
+            flushAtomicBatch();
             sendUdpDatagram(item->packet.data, item->packet.size);
             totalSent++;
             return;
         }
         
         // Check if packet fits in current batch
-        if (mavlinkBatchSize + item->packet.size > MTU_SIZE) {
-            flushMavlinkBatch();
+        if (atomicBatchSize + item->packet.size > MTU_SIZE) {
+            flushAtomicBatch();
         }
         
         // Add to batch
-        memcpy(mavlinkBatchBuffer + mavlinkBatchSize, 
+        memcpy(atomicBatchBuffer + atomicBatchSize, 
                item->packet.data, item->packet.size);
-        mavlinkBatchSize += item->packet.size;
-        mavlinkBatchPackets++;
+        atomicBatchSize += item->packet.size;
+        atomicBatchPackets++;
         
         // Initialize batch window
-        if (mavlinkBatchStartMs == 0) {
-            mavlinkBatchStartMs = now;
+        if (atomicBatchStartMs == 0) {
+            atomicBatchStartMs = now;
         }
         
         // Decide if should flush
@@ -146,22 +147,22 @@ private:
         
         if (bulkMode) {
             // Bulk mode - optimize for throughput
-            if (mavlinkBatchPackets >= MAVLINK_BATCH_PACKETS_BULK ||
-                mavlinkBatchSize >= MAVLINK_BATCH_BYTES_BULK ||
-                (now - mavlinkBatchStartMs) >= MAVLINK_BATCH_TIMEOUT_MS_BULK) {
+            if (atomicBatchPackets >= ATOMIC_BATCH_PACKETS_BULK ||
+                atomicBatchSize >= ATOMIC_BATCH_BYTES_BULK ||
+                (now - atomicBatchStartMs) >= ATOMIC_BATCH_TIMEOUT_MS_BULK) {
                 shouldFlush = true;
             }
         } else {
             // Normal mode - optimize for latency
-            if (mavlinkBatchPackets >= MAVLINK_BATCH_PACKETS_NORMAL ||
-                mavlinkBatchSize >= MAVLINK_BATCH_BYTES_NORMAL ||
-                (now - mavlinkBatchStartMs) >= MAVLINK_BATCH_TIMEOUT_MS_NORMAL) {
+            if (atomicBatchPackets >= ATOMIC_BATCH_PACKETS_NORMAL ||
+                atomicBatchSize >= ATOMIC_BATCH_BYTES_NORMAL ||
+                (now - atomicBatchStartMs) >= ATOMIC_BATCH_TIMEOUT_MS_NORMAL) {
                 shouldFlush = true;
             }
         }
         
         if (shouldFlush) {
-            flushMavlinkBatch();
+            flushAtomicBatch();
         }
     }
     
@@ -185,11 +186,11 @@ private:
     }
     
     void checkBatchTimeouts(bool bulkMode, uint32_t now) {
-        // Check MAVLink batch timeout
-        if (mavlinkBatchSize > 0) {
-            uint32_t timeout = bulkMode ? MAVLINK_BATCH_TIMEOUT_MS_BULK : MAVLINK_BATCH_TIMEOUT_MS_NORMAL;
-            if ((now - mavlinkBatchStartMs) >= timeout) {
-                flushMavlinkBatch();
+        // Check atomic packet batch timeout
+        if (atomicBatchSize > 0) {
+            uint32_t timeout = bulkMode ? ATOMIC_BATCH_TIMEOUT_MS_BULK : ATOMIC_BATCH_TIMEOUT_MS_NORMAL;
+            if ((now - atomicBatchStartMs) >= timeout) {
+                flushAtomicBatch();
             }
         }
         
@@ -202,6 +203,19 @@ private:
     }
     
 public:
+    // Static UDP statistics
+    inline static unsigned long udpTxBytes = 0;
+    inline static unsigned long udpTxPackets = 0;
+    inline static unsigned long udpRxBytes = 0;
+    inline static unsigned long udpRxPackets = 0;
+    inline static unsigned long device1TxBytesFromDevice4 = 0;
+
+    // Configuration method
+    void setBatchingEnabled(bool enabled) { 
+        enableAtomicBatching = enabled; 
+        log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
+    }
+    
     UdpSender(AsyncUDP* udp, unsigned long* txCounter = nullptr) : 
         PacketSender(20, 8192, txCounter),
         udpTransport(udp),
@@ -227,9 +241,9 @@ public:
     }
     
     void processSendQueue(bool bulkMode = false) override {
-        // Check WiFi for client mode
+        // Check WiFi readiness for data transmission (works for both Client and AP modes)
         extern Config config;
-        if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && !wifi_manager_is_connected()) {
+        if (!wifi_manager_is_ready_for_data()) {
             // Clear queue silently (not counted as drops)
             while (!packetQueue.empty()) {
                 currentQueueBytes -= packetQueue.front().packet.size;
@@ -238,9 +252,9 @@ public:
             }
             
             // Reset batch buffers to avoid stale data
-            mavlinkBatchSize = 0;
-            mavlinkBatchPackets = 0;
-            mavlinkBatchStartMs = 0;
+            atomicBatchSize = 0;
+            atomicBatchPackets = 0;
+            atomicBatchStartMs = 0;
             rawBatchSize = 0;
             
             return;
@@ -274,10 +288,10 @@ public:
             
             // Route packet based on protocol type (using keepWhole flag)
             if (item->packet.hints.keepWhole) {
-                // MAVLink packet
-                processMavlinkPacket(item, bulkMode, now);
+                // Atomic packet (MAVLink, logs, etc)
+                processAtomicPacket(item, bulkMode, now);
             } else {
-                // RAW data packet
+                // RAW data packet (can be fragmented)
                 processRawPacket(item, bulkMode, now);
             }
             
@@ -302,15 +316,15 @@ public:
     // Get batching statistics for display
     void getBatchingStats(JsonObject& stats) {
         // === DIAGNOSTIC START === (Remove after batching validation)
-        stats["batching"] = enableMavlinkBatching;  // Always show batching status
+        stats["batching"] = enableAtomicBatching;  // Always show batching status
         
         if (batchDiag.totalBatches > 0) {
             stats["totalBatches"] = batchDiag.totalBatches;
-            float avg = batchDiag.mavlinkPacketsInBatches / (float)batchDiag.totalBatches;
+            float avg = batchDiag.atomicPacketsInBatches / (float)batchDiag.totalBatches;
             stats["avgPacketsPerBatch"] = serialized(String(avg, 1));
             stats["maxPacketsInBatch"] = batchDiag.maxPacketsInBatch;
             
-            float efficiency = (batchDiag.mavlinkPacketsInBatches * 100.0f) / 
+            float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) / 
                               (totalSent > 0 ? totalSent : 1);
             stats["batchEfficiency"] = String(efficiency, 0) + "%";
         } else {
@@ -322,14 +336,6 @@ public:
         }
         // === DIAGNOSTIC END ===
     }
-    
-    
-    // Static UDP statistics
-    static unsigned long udpTxBytes;
-    static unsigned long udpTxPackets;
-    static unsigned long udpRxBytes;
-    static unsigned long udpRxPackets;
-    static unsigned long device1TxBytesFromDevice4;
     
     // Update RX stats from callback
     static void updateRxStats(size_t bytes) {

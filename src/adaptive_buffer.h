@@ -19,12 +19,8 @@ static inline size_t calculateAdaptiveBufferSize(uint32_t baudrate) {
     return 256;
 }
 
-// Initialize adaptive buffer with CircularBuffer
+// Initialize adaptive buffer timing (buffer allocation moved to buffer_manager)
 static inline void initAdaptiveBuffer(BridgeContext* ctx, size_t size) {
-    // Create CircularBuffer
-    ctx->adaptive.circBuf = new CircularBuffer();
-    ctx->adaptive.circBuf->init(size);
-    
     // Set buffer size
     ctx->adaptive.bufferSize = size;
     
@@ -39,14 +35,18 @@ static inline void initAdaptiveBuffer(BridgeContext* ctx, size_t size) {
     *ctx->adaptive.bufferStartTime = micros();
     *ctx->adaptive.lastByteTime = micros();
     
-    log_msg(LOG_INFO, "Adaptive buffer initialized: %zu bytes", size);
+    log_msg(LOG_INFO, "Adaptive buffer timing initialized for %zu bytes", size);
 }
 
-// Process single byte - just write to buffer
+// Process single byte - write to telemetry buffer
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, 
                                             unsigned long currentMicros) {
-    CircularBuffer* circBuf = ctx->adaptive.circBuf;
-    if (!circBuf) return;
+    // Protection against nullptr in Logger mode
+    if (!ctx->buffers.telemetryBuffer) {
+        return;  // No buffer - nothing to do
+    }
+    
+    CircularBuffer* circBuf = ctx->buffers.telemetryBuffer;
     
     // Write byte to buffer
     size_t written = circBuf->write(&data, 1);
@@ -66,13 +66,8 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data,
     // That's all! Pipeline will read from CircularBuffer independently
 }
 
-// Cleanup adaptive buffer
+// Cleanup adaptive buffer timing (buffer cleanup moved to buffer_manager)
 static inline void cleanupAdaptiveBuffer(BridgeContext* ctx) {
-    if (ctx->adaptive.circBuf) {
-        delete ctx->adaptive.circBuf;
-        ctx->adaptive.circBuf = nullptr;
-    }
-    
     if (ctx->adaptive.bufferStartTime) {
         delete ctx->adaptive.bufferStartTime;
         ctx->adaptive.bufferStartTime = nullptr;

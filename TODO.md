@@ -1,51 +1,33 @@
 # TODO / Roadmap
 
-## PENDING TASKS 🔄
+## ACTIVE TASKS 🔄
 
-### Circular Buffer Optimizations (v2.6.x)
-- [x] Basic circular buffer implementation
-- [x] Gap-based traffic detector  
+### Priority 1 - Protocol Transport Optimization
 
+#### 1.1 - UDP Batching Enhancement ✅ COMPLETED (v2.15.3)
+- [x] **Protocol-driven UDP Batching** ✅ COMPLETED
+  - ✅ Implemented MAVFtp-aware batching (20ms vs 5ms for normal telemetry)
+  - ✅ Collect multiple atomic packets into single UDP datagram (up to MTU)
+  - ✅ Use hints.keepWhole from parser for packet integrity
+  - ✅ Added UDP batching disable config option for legacy GCS compatibility
+  - ✅ Universal naming: mavlink* → atomic* for all packet types
 
-### Protocol-aware Optimizations (v2.7.0)
-- [x] MAVLink packet priorities (commands > telemetry > bulk) ✅ IMPLEMENTED in parser architecture
-- [x] UDP: 1 MAVLink packet = 1 datagram ✅ IMPLEMENTED via UdpSender batching
-- [x] Separate critical/normal queues ✅ IMPLEMENTED via PacketSender priority handling
+#### 1.2 - Device 4 Pipeline Integration ✅ COMPLETED (v2.15.3)
+- [x] **Pipeline Architecture Stabilization** ✅ COMPLETED
+  - ✅ Fixed sender indices (IDX_USB=0, IDX_UART3=1, IDX_UDP=2)
+  - ✅ PacketSource routing (SOURCE_TELEMETRY, SOURCE_LOGS, SOURCE_DEVICE4)
+  - ✅ Buffer separation (telemetry vs log buffers)
+  - ✅ Bridge processing fix for Logger mode
+  - ✅ WiFi connectivity universalization
 
-### Priority 1 - PyMAVLink Migration ⚠️ PARTIALLY COMPLETED
+#### 1.3 - Protocol-driven Optimizations 🔄 PARTIALLY IMPLEMENTED
+- [x] MAVFtp: Extended timeouts (20ms) - COMPLETED
+- [ ] SBUS/CRSF (future): Minimal latency requirements
+- [ ] Modbus RTU (future): Inter-frame timing preservation
+- [ ] Device 3 (Mirror) can utilize same optimizations
+- Architecture ready - just add new protocol implementations
 
-#### 1.1 - PyMAVLink Library Migration ✅ COMPLETED
-- [x] **FastMAVLink → PyMAVLink Migration** ✅ COMPLETED
-  - Complete removal of FastMAVLink library and dependencies
-  - Full PyMAVLink integration with proper compilation flags
-  - Architecture simplification with removal of protocol detection system
-  - MAVLink-specific logic moved from pipeline to MavlinkParser
-  - Enhanced error handling for non-MAVLink streams
-
-#### 1.2 - CircularBuffer Optimization ✅ COMPLETED
-- [x] **Fixed tail=511 deadlock** ✅ COMPLETED - Linearization via tempLinearBuffer
-- [x] **Removed shadow buffer system** ✅ COMPLETED - Saved 296 bytes heap per buffer  
-- [x] **Simplified consume logic** ✅ COMPLETED - No more boundary jump heuristics
-  - Data wrapping now handled transparently with memcpy to temp buffer
-  - Parser always gets contiguous view up to 296 bytes
-  - Clean consume: always bytesProcessed amount
-
-#### 1.3 - Protocol-Aware Transport Optimization 🔄 PENDING  
-- [ ] **Protocol-driven UDP Batching** 🔄 PENDING
-  - Replace hardcoded BATCH_TIMEOUT_US with getBatchTimeoutMs() from parser
-  - Implement MAVFtp-aware batching (20ms vs 5ms for normal telemetry)
-  - Collect multiple MAVLink packets into single UDP datagram (up to MTU)
-  - Use hints.keepWhole from parser for packet integrity
-  - Add UDP_BATCH_DISABLE config option for legacy GCS compatibility
-  - **NEW**: Consider removing partial write support (similar to USB optimization)
-- [ ] **Protocol-driven Optimizations** 🔄 PENDING (partially implemented)
-  - ✅ MAVFtp: Extended timeouts (20ms) - COMPLETED
-  - 🔄 SBUS/CRSF (future): Minimal latency requirements
-  - 🔄 Modbus RTU (future): Inter-frame timing preservation
-  - Device 3 (Mirror) can utilize same optimizations
-  - Architecture ready - just add new protocol implementations
-
-#### 1.3.1 - UART Sender Analysis 🔄 NEW
+#### 1.4 - UART Sender Analysis 🔄 PENDING
 - [ ] **UART Sender Optimization Review** 🔄 PENDING
   - Analyze if Device 3 (UART mirror) needs MAVLink parsing
   - Consider removing partial write support for consistency
@@ -53,46 +35,7 @@
   - Question: Does protocol parsing make sense for simple UART mirroring?
   - Potential simplification: Raw byte stream for Device 3
 
-#### 1.4 - USB Batching Implementation ✅ COMPLETED
-- [x] **USB Batch Transmission** ✅ COMPLETED
-  - Collect multiple packets and send with single write() call
-  - Reduce system call overhead for high-throughput scenarios  
-  - Implement adaptive batching based on queue depth and timing
-  - Added pending buffer for partial write protection
-  - Implemented N/X/T thresholds (4 packets/448 bytes/5ms timeout)
-  - Complete architecture rewrite with helper methods
-
-#### 1.5 - USB Block Detection ✅ COMPLETED
-- [x] **USB Block Detection & Memory Pool Protection** ✅ COMPLETED
-  - Detect when USB is blocked (COM port closed on host)
-  - Prevent memory pool exhaustion during startup
-  - Auto-clear queues when USB unresponsive for 500ms
-  - Keep 1 test packet for recovery detection
-  - Diagnostic messages for debugging blocked/unblocked states
-  - Memory-safe queue clearing with proper packet.free() calls
-
-#### 1.6 - Task Priority Optimization ✅ COMPLETED
-- [x] **DMA Task Priority Elevation** ✅ COMPLETED
-  - Elevated DMA task priority above UartBridge task priority
-  - Solved UART FIFO overflow issues during high-throughput operations
-  - Achieved stable data loading without packet loss
-  - Improved real-time performance for DMA operations
-  - Enhanced reliability for MAVFtp and bulk transfer operations
-
-#### 1.7 - USB Timeout & Partial Write Optimization ✅ COMPLETED  
-- [x] **Adaptive USB Batch Timeouts** ✅ COMPLETED
-  - Normal mode: 5ms timeout for low latency telemetry
-  - Bulk mode: 20ms timeout for optimal MAVFtp batching
-  - Smart fallback: partial batch transmission on timeout
-- [x] **Complete Partial Write Elimination** ✅ COMPLETED
-  - Removed pending buffer structure and flushPending() method
-  - Simplified transmission logic without partial writes
-  - Enhanced timeout-based partial batch transmission for edge cases
-- [x] **System Stability Improvements** ✅ COMPLETED
-  - USB block detection timeout increased to 1000ms
-  - Pool exhausted logging rate limiting and severity reduction
-
-#### 1.8 - Temporary Diagnostic Cleanup 🔄 PENDING
+#### 1.5 - Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
   - Find and remove temporary diagnostic prints
   - Clean up experimental code blocks
@@ -319,10 +262,10 @@
 ```ini
 lib_deps =
     bblanchon/ArduinoJson@^7.4.2      # JSON parsing and generation
-    fastled/FastLED@^3.10.1            # WS2812 LED control
+    fastled/FastLED@^3.10.2            # WS2812 LED control
     arkhipenko/TaskScheduler@^3.7.0   # Task scheduling
-    ESP32Async/ESPAsyncWebServer@^3.7.10  # Async web server
-    ESP32Async/AsyncTCP@^3.4.5        # TCP support for async server
+    ESP32Async/ESPAsyncWebServer@^3.8.0  # Async web server
+    ESP32Async/AsyncTCP@^3.4.7        # TCP support for async server
 ```
 
 

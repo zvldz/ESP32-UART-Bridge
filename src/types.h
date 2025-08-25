@@ -150,6 +150,9 @@ typedef struct {
   
   // Protocol optimization
   uint8_t protocolOptimization;  // Protocol detection mode (ProtocolType enum)
+  
+  // UDP batching control (NEW)
+  bool udpBatchingEnabled = true;  // Default: batching ON
 } Config;
 
 // Traffic statistics
@@ -248,10 +251,13 @@ struct BridgeContext {
         size_t bufferSize;
         unsigned long* lastByteTime;
         unsigned long* bufferStartTime;
-        
-        // New circular buffer
-        CircularBuffer* circBuf;   // Main buffer implementation
     } adaptive;
+    
+    // Protocol buffers - separated by purpose
+    struct {
+        CircularBuffer* telemetryBuffer;  // For UART->USB/UDP telemetry
+        CircularBuffer* logBuffer;         // For Logger mode
+    } buffers;
     
     // Cached device flags (for performance)
     struct {
@@ -378,7 +384,10 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->adaptive.bufferSize = bufferSize;
     ctx->adaptive.lastByteTime = lastByteTime;
     ctx->adaptive.bufferStartTime = bufferStartTime;
-    ctx->adaptive.circBuf = nullptr;         // Will be allocated later
+    
+    // Initialize buffers - will be allocated by buffer manager
+    ctx->buffers.telemetryBuffer = nullptr;
+    ctx->buffers.logBuffer = nullptr;
     
     // Device flags
     ctx->devices.device2IsUSB = device2IsUSB;

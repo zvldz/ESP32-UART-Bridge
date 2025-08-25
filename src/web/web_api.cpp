@@ -139,6 +139,7 @@ String getConfigJson() {
     
     // Protocol optimization configuration
     doc["protocolOptimization"] = config.protocolOptimization;
+    doc["udpBatchingEnabled"] = config.udpBatchingEnabled;
     
     // Protocol statistics via Pipeline
     BridgeContext* ctx = getBridgeContext();
@@ -376,6 +377,25 @@ void handleSave(AsyncWebServerRequest *request) {
       } else {
         log_msg(LOG_WARNING, "Warning: BridgeContext not available for protocol reinit");
       }
+    }
+  }
+
+  // UDP batching control
+  if (request->hasParam("udp_batching", true)) {
+    // Checkbox present = true, absent = false
+    bool newBatching = true;
+    if (config.udpBatchingEnabled != newBatching) {
+      config.udpBatchingEnabled = newBatching;
+      configChanged = true;
+      log_msg(LOG_INFO, "UDP batching enabled");
+    }
+  } else {
+    // Checkbox not present = false
+    bool newBatching = false;
+    if (config.udpBatchingEnabled != newBatching) {
+      config.udpBatchingEnabled = newBatching;
+      configChanged = true;
+      log_msg(LOG_INFO, "UDP batching disabled");
     }
   }
 
