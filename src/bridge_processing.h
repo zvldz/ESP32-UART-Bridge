@@ -14,7 +14,6 @@
 
 // Forward declaration for Pipeline
 class ProtocolPipeline;
-extern ProtocolPipeline* g_pipeline;
 
 // NOW include adaptive_buffer.h - function is already defined!
 #include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
