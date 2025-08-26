@@ -117,6 +117,21 @@
   - **Diagnostics Cleanup**: Removed `updateMainStats()`, `updateDevice3Stats()`, `updateDevice4Stats()`
   - **Scheduler Tasks**: Removed unused statistics update tasks from TaskScheduler
   - **Task References**: Cleaned up all enable/disable/addTask calls for removed tasks
+
+### Configuration Management Refactoring ✅ COMPLETED
+- **Code Quality Improvements**: Enhanced maintainability and reduced duplication in config.cpp
+- **Constants Extraction**: Replaced magic numbers with named constants
+  - **Network**: `DEFAULT_BAUDRATE` (115200), `DEFAULT_UDP_PORT` (14560)
+  - **Processing**: `JSON_PREVIEW_SIZE` (200), `IP_BUFFER_SIZE` (15)
+- **Helper Functions**: Created utility functions to eliminate code duplication
+  - **Migration Helper**: `finalizeMigration()` replaced 7 duplicate log+version blocks (-14 lines)
+  - **Device Defaults**: `setDeviceDefaults()` replaced 2 duplicate device role assignments (-6 lines)
+- **Code Cleanup**: Removed historical comments and improved consistency
+  - **Removed**: "NEW" markers from UDP batching implementation
+  - **Enhanced**: Protocol constant usage (`0` → `PROTOCOL_NONE` for better readability)
+- **Scheduler Task Cleanup**: Removed empty if-blocks and historical comments from scheduler_tasks.cpp
+  - **Eliminated**: 4 empty Device3/Device4 if-blocks (legacy after refactoring)
+  - **Cleaned**: 10+ historical comments about removed statistics functions
 - **Project Structure**: Moved device_init files to src root
   - **Simplified Paths**: `devices/device_init.h` → `device_init.h` 
   - **Include Updates**: Fixed all include paths throughout codebase
