@@ -80,7 +80,7 @@ void logging_init_uart() {
     return;
   }
   
-  // Use existing device3Serial interface (already created in device_init.cpp for D3_UART3_LOG)
+  // Use existing device3Serial interface
   logSerial = device3Serial;
   
   if (logSerial) {
