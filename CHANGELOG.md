@@ -27,6 +27,34 @@
 - **Safety**: Proper volatile variable handling and thread-safe operations
 - **Efficiency**: Optimized update loop with early returns and reduced function calls
 
+### WiFi Manager Code Refactoring & Style Improvements ✅ COMPLETED
+- **Code Size Reduction**: wifi_manager.cpp reduced from 586 to 538 lines (-48 lines, 8.2% reduction)
+- **Function Naming**: Renamed all functions from snake_case to camelCase for consistency
+  - **Old**: `wifi_manager_init()`, `wifi_manager_process()`, `wifi_manager_is_ready_for_data()`
+  - **New**: `wifiInit()`, `wifiProcess()`, `wifiIsReady()`
+  - **Updated**: 8 function declarations + implementations + 8 external call sites
+- **Constants Extraction**: Replaced magic numbers with named constants
+  - **WiFi Constants**: `WIFI_RECONNECT_DELAY_MS`, `WIFI_TX_POWER_LEVEL`, `WIFI_MIN_HEAP_BYTES`
+  - **Buffer Sizes**: `WIFI_SSID_MAX_LEN`, `WIFI_PASSWORD_MAX_LEN`, `WIFI_CONNECT_TIMEOUT_MS`
+  - **Utility**: `WIFI_MDNS_SERVICE_PORT`, `WIFI_MAC_SUFFIX_BUFFER_SIZE`
+
+### Code Quality & Maintainability Improvements ✅ COMPLETED
+- **Error Handling Unification**: Created helper functions for consistent error reporting
+  - **ESP-IDF Errors**: `handleEspError()` function replaced 6 duplicate error handling blocks
+  - **mDNS Errors**: `logMdnsError()` function unified mDNS error reporting
+  - **Credentials Helper**: `setWifiCredentials()` function replaced 4 duplicate strncpy operations
+- **Legacy Code Cleanup**: Removed unused and historical code elements
+  - **Removed**: `wifiIsConnected()` legacy function (unused, 5 lines saved)
+  - **Cleaned**: Historical comments about code migration and architecture changes
+  - **Fixed**: Misleading constant name `WIFI_TX_POWER_DBM` → `WIFI_TX_POWER_LEVEL`
+- **Variable Naming**: Improved variable names for better code readability
+  - **Network Detection**: `foundNow` → `networkFoundNow`
+  - **IP Address**: `ip_str` → `ipAddressStr` 
+  - **WiFi Config**: `cfg` → `wifiConfig`
+- **Micro-optimizations**: Small performance improvements
+  - **Removed**: Duplicate extern declarations
+  - **Optimized**: Cached hostname length in validation loop
+
 ## v2.15.6 (Types System Refactoring & Code Organization) ✅ COMPLETED
 
 ### Major Code Architecture Refactoring ✅ COMPLETED

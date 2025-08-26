@@ -186,7 +186,7 @@ void loop() {
 
   // Process WiFi Manager in network mode
   if (bridgeMode == BRIDGE_NET) {
-    wifi_manager_process();
+    wifiProcess();
   }
 
   // Handle all button interactions
@@ -321,7 +321,7 @@ void initStandaloneMode() {
 
 void initNetworkMode() {
   // Initialize WiFi Manager
-  esp_err_t ret = wifi_manager_init();
+  esp_err_t ret = wifiInit();
   
   if (ret != ESP_OK && config.device4.role != D4_NONE) {
     // Critical error only if Device 4 is enabled
@@ -337,15 +337,15 @@ void initNetworkMode() {
   // Start WiFi in appropriate mode
   if (systemState.tempForceApMode) {
     log_msg(LOG_INFO, "Starting temporary WiFi AP mode (forced by triple click)");
-    wifi_manager_start_ap(config.ssid, config.password);
+    wifiStartAP(config.ssid, config.password);
     led_set_mode(LED_MODE_WIFI_ON);
     systemState.tempForceApMode = false;
   } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
     log_msg(LOG_INFO, "Starting WiFi Client mode");
-    wifi_manager_start_client(config.wifi_client_ssid, config.wifi_client_password);
+    wifiStartClient(config.wifi_client_ssid, config.wifi_client_password);
   } else {
     log_msg(LOG_INFO, "Starting WiFi AP mode");
-    wifi_manager_start_ap(config.ssid, config.password);
+    wifiStartAP(config.ssid, config.password);
     led_set_mode(LED_MODE_WIFI_ON);
   }
   
