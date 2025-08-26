@@ -4,6 +4,31 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+// Crashlog constants
+#define CRASHLOG_MAX_FILE_SIZE  4096
+
+// Helper function to create empty JSON structure
+static void createEmptyLog(JsonDocument& doc) {
+    doc["total"] = 0;
+    doc["entries"].to<JsonArray>();
+}
+
+// Helper function to get fallback JSON string
+static const char* getFallbackJson() {
+    return "{\"total\":0,\"entries\":[]}";
+}
+
+// Helper function to write JSON document to crashlog file
+static bool writeJsonToFile(JsonDocument& doc) {
+    File file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
+    if (file) {
+        serializeJson(doc, file);
+        file.close();
+        return true;
+    }
+    return false;
+}
+
 // RTC variables for crash logging (survive reset but not power loss)
 RTC_NOINIT_ATTR uint32_t g_last_heap;
 RTC_NOINIT_ATTR uint32_t g_last_uptime;
@@ -23,14 +48,9 @@ void crashlog_check_and_save() {
         if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
             // Create empty structure
             JsonDocument doc;
-            doc["total"] = 0;
-            doc["entries"].to<JsonArray>();
+            createEmptyLog(doc);
 
-            File file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
-            if (file) {
-                serializeJson(doc, file);
-                file.close();
-            }
+            writeJsonToFile(doc);
         }
 
         // Read existing crash log
@@ -39,14 +59,13 @@ void crashlog_check_and_save() {
 
         if (file) {
             // Check file size protection
-            if (file.size() > 4096) {
+            if (file.size() > CRASHLOG_MAX_FILE_SIZE) {
                 log_msg(LOG_WARNING, "Crashlog too large, truncating");
                 file.close();
                 LittleFS.remove(CRASHLOG_FILE_PATH);
 
                 // Create new empty file
-                doc["total"] = 0;
-                doc["entries"].to<JsonArray>();
+                createEmptyLog(doc);
             } else {
                 DeserializationError error = deserializeJson(doc, file);
                 file.close();
@@ -56,14 +75,12 @@ void crashlog_check_and_save() {
                     LittleFS.remove(CRASHLOG_FILE_PATH);
 
                     // Create new structure
-                    doc["total"] = 0;
-                    doc["entries"].to<JsonArray>();
+                    createEmptyLog(doc);
                 }
             }
         } else {
             // File doesn't exist, create structure
-            doc["total"] = 0;
-            doc["entries"].to<JsonArray>();
+            createEmptyLog(doc);
         }
 
         // Update crash count
@@ -91,10 +108,7 @@ void crashlog_check_and_save() {
         }
 
         // Save updated log
-        file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
-        if (file) {
-            serializeJson(doc, file);
-            file.close();
+        if (writeJsonToFile(doc)) {
             log_msg(LOG_INFO, "Crash #%d logged successfully", totalCrashes);
         } else {
             log_msg(LOG_ERROR, "Cannot write crashlog file");
@@ -111,12 +125,12 @@ void crashlog_check_and_save() {
 // Get crash log as JSON string
 String crashlog_get_json() {
     if (!LittleFS.exists(CRASHLOG_FILE_PATH)) {
-        return "{\"total\":0,\"entries\":[]}";
+        return getFallbackJson();
     }
 
     File file = LittleFS.open(CRASHLOG_FILE_PATH, "r");
     if (!file) {
-        return "{\"total\":0,\"entries\":[]}";
+        return getFallbackJson();
     }
 
     String json = file.readString();
@@ -126,7 +140,7 @@ String crashlog_get_json() {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
-        return "{\"total\":0,\"entries\":[]}";
+        return getFallbackJson();
     }
 
     return json;
@@ -141,14 +155,9 @@ void crashlog_clear() {
 
     // Create empty file
     JsonDocument doc;
-    doc["total"] = 0;
-    doc["entries"].to<JsonArray>();
+    createEmptyLog(doc);
 
-    File file = LittleFS.open(CRASHLOG_FILE_PATH, "w");
-    if (file) {
-        serializeJson(doc, file);
-        file.close();
-    }
+    writeJsonToFile(doc);
 }
 
 // Convert reset reason to string

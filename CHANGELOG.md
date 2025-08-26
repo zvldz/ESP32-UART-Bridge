@@ -132,6 +132,15 @@
 - **Scheduler Task Cleanup**: Removed empty if-blocks and historical comments from scheduler_tasks.cpp
   - **Eliminated**: 4 empty Device3/Device4 if-blocks (legacy after refactoring)
   - **Cleaned**: 10+ historical comments about removed statistics functions
+
+### Crash Logging System Refactoring ✅ COMPLETED
+- **Code Quality Improvements**: Enhanced maintainability and reduced duplication in crashlog.cpp
+- **Helper Functions**: Created utility functions to eliminate code duplication
+  - **Empty JSON Structure**: `createEmptyLog()` helper replaced 5 duplicate initialization blocks
+  - **Fallback JSON**: `getFallbackJson()` helper replaced 3 duplicate error return strings
+  - **File Writing**: `writeJsonToFile()` helper replaced 3 duplicate file write operations
+- **Constants**: Added `CRASHLOG_MAX_FILE_SIZE` constant for better code readability
+- **Code Cleanup**: Improved consistency and maintainability throughout crash logging system
 - **Project Structure**: Moved device_init files to src root
   - **Simplified Paths**: `devices/device_init.h` → `device_init.h` 
   - **Include Updates**: Fixed all include paths throughout codebase
