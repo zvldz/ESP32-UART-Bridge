@@ -12,6 +12,9 @@ extern SemaphoreHandle_t logMutex;
 extern Config config;
 extern SystemState systemState;
 
+// Device 3 UART interface (for D3_UART3_LOG mode)
+extern UartInterface* device3Serial;
+
 // UDP log buffer definitions
 uint8_t udpLogBuffer[UDP_LOG_BUFFER_SIZE];
 int udpLogHead = 0;
@@ -77,33 +80,13 @@ void logging_init_uart() {
     return;
   }
   
-  // Create UartDMA for logging output with minimal buffers
-  UartDMA::DmaConfig dmaCfg = {
-    .useEventTask = false,     // Polling mode for logging
-    .dmaRxBufSize = 1024,     // Small RX buffer (not used for TX-only)
-    .dmaTxBufSize = DEVICE3_LOG_BUFFER_SIZE * 2,  // Adequate TX buffer for logging
-    .ringBufSize = 1024,      // Small ring buffer (not used for TX-only)
-    .eventTaskPriority = 10,  // Low priority
-    .eventQueueSize = 10      // Small queue
-  };
-  
-  logSerial = new UartDMA(UART_NUM_0, dmaCfg);
+  // Use existing device3Serial interface (already created in device_init.cpp for D3_UART3_LOG)
+  logSerial = device3Serial;
   
   if (logSerial) {
-    // Create UART configuration for logging (fixed at 115200 8N1)
-    UartConfig uartCfg = {
-      .baudrate = 115200,
-      .databits = UART_DATA_8_BITS,
-      .parity = UART_PARITY_DISABLE,
-      .stopbits = UART_STOP_BITS_1,
-      .flowcontrol = false
-    };
-    
-    // Initialize UART on Device 3 pins (TX only for logging)
-    logSerial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
-    log_msg(LOG_INFO, "UART logging initialized on GPIO%d at 115200 baud (UART0, DMA)", DEVICE3_UART_TX_PIN);
+    log_msg(LOG_INFO, "UART logging using existing Device 3 interface (D3_UART3_LOG mode)");
   } else {
-    log_msg(LOG_ERROR, "Failed to create UART logger interface");
+    log_msg(LOG_ERROR, "Device 3 UART interface not available for logging");
   }
 }
 

@@ -17,8 +17,6 @@ extern FlowControlStatus flowControlStatus;
 // External objects from uartbridge.cpp
 extern UartInterface* device2Serial;
 
-// External objects from device3_task.cpp
-extern SemaphoreHandle_t device3Mutex;
 
 // Device 3 UART interface (defined here, used via extern in device3_task.h)
 UartInterface* device3Serial = nullptr;
@@ -69,14 +67,10 @@ void initMainUART(UartInterface* serial, Config* config, UartStats* stats, UsbIn
   }
   
   // Initialize Device 3 if configured
-  if (config->device3.role != D3_NONE && config->device3.role != D3_UART3_LOG) {
+  if (config->device3.role != D3_NONE) {
     initDevice3(config->device3.role);
   }
   
-  // Create mutex for Device 3 operations
-  if (device3Mutex == nullptr) {
-    device3Mutex = xSemaphoreCreateMutex();
-  }
 }
 
 // Initialize Device 2 as Secondary UART
@@ -143,6 +137,19 @@ void initDevice3(uint8_t role) {
       device3Serial->begin(uartCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
       log_msg(LOG_INFO, "Device 3 Bridge mode initialized on GPIO%d/%d at %u baud (UART0, DMA polling)", 
               DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, config.baudrate);
+    } else if (role == D3_UART3_LOG) {
+      // Log mode - TX only with fixed 115200 baud
+      UartConfig logCfg = {
+        .baudrate = 115200,
+        .databits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stopbits = UART_STOP_BITS_1,
+        .flowcontrol = false
+      };
+      device3Serial->begin(logCfg, -1, DEVICE3_UART_TX_PIN);
+      log_msg(LOG_INFO, "Device 3 Log mode initialized on GPIO%d (TX only) at 115200 baud (UART0, DMA polling)", 
+              DEVICE3_UART_TX_PIN);
+      logging_init_uart();
     }
   } else {
     log_msg(LOG_ERROR, "Failed to create Device 3 UART");
@@ -169,9 +176,11 @@ void initDevices() {
   log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Future feature");
   
   // Initialize UART logger if Device 3 is configured for logging
+  /*
   if (config.device3.role == D3_UART3_LOG) {
     logging_init_uart();
   }
+  */
   
   // Log logging configuration
   log_msg(LOG_INFO, "Logging configuration:");

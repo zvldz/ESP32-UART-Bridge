@@ -6,6 +6,7 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // Telemetry buffer - needed ALWAYS when there's USB (independent of Logger)
     bool needTelemetryBuffer = 
         (config->device2.role == D2_USB) ||  // USB always needs buffer
+        (config->device2.role == D2_UART2) ||
         (config->device3.role == D3_UART3_MIRROR) ||
         (config->device3.role == D3_UART3_BRIDGE) ||
         (config->device4.role == D4_NETWORK_BRIDGE);

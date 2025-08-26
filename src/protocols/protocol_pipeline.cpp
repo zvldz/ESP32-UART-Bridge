@@ -26,35 +26,40 @@ void ProtocolPipeline::init(Config* config) {
     // Create senders based on configuration
     createSenders(config);
     
-    log_msg(LOG_INFO, "Protocol pipeline initialized: %zu flows, senders fixed slots=3", activeFlows);
+    log_msg(LOG_INFO, "Protocol pipeline initialized: %zu flows, senders fixed slots=4", activeFlows);
 }
 
 void ProtocolPipeline::setupFlows(Config* config) {
     activeFlows = 0;
     
-    // Flow 1: Telemetry - needed if there's ANY output for telemetry
-    bool needTelemetryFlow = false;
+    // Flow 1: Telemetry
     uint8_t telemetryMask = 0;
     
-    // Check all possible telemetry destinations
+    // Device2 routing
     if (config->device2.role == D2_USB) {
-        needTelemetryFlow = true;
         telemetryMask |= SENDER_USB;
+    } else if (config->device2.role == D2_UART2) {
+        telemetryMask |= SENDER_UART2;  // NEW!
     }
     
+    // Device3 routing
     if (config->device3.role == D3_UART3_MIRROR || 
         config->device3.role == D3_UART3_BRIDGE) {
-        needTelemetryFlow = true;
         telemetryMask |= SENDER_UART3;
     }
     
+    // Device4 routing - ONLY for BRIDGE mode, not for LOGGER
     if (config->device4.role == D4_NETWORK_BRIDGE) {
-        needTelemetryFlow = true;
         telemetryMask |= SENDER_UDP;
     }
     
-    // Create Telemetry flow if there's at least one destination
-    if (needTelemetryFlow && ctx->buffers.telemetryBuffer) {
+    // Check for no destinations configured
+    if (telemetryMask == 0) {
+        log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
+    }
+    
+    // Create flow with updated mask
+    if (telemetryMask && ctx->buffers.telemetryBuffer) {
         DataFlow f;
         f.name = "Telemetry";
         f.inputBuffer = ctx->buffers.telemetryBuffer;
@@ -80,9 +85,15 @@ void ProtocolPipeline::setupFlows(Config* config) {
         }
         
         flows[activeFlows++] = f;
-        log_msg(LOG_INFO, "Telemetry flow created with %s parser, mask=0x%02X", 
-                f.parser->getName(), f.senderMask);
-    } else if (needTelemetryFlow) {
+        
+        // Log the final telemetry routing mask for debugging
+        log_msg(LOG_INFO, "Telemetry routing mask: 0x%02X (USB:%d UART2:%d UART3:%d UDP:%d)",
+                telemetryMask,
+                (telemetryMask & SENDER_USB) ? 1 : 0,
+                (telemetryMask & SENDER_UART2) ? 1 : 0,
+                (telemetryMask & SENDER_UART3) ? 1 : 0,
+                (telemetryMask & SENDER_UDP) ? 1 : 0);
+    } else if (telemetryMask) {
         log_msg(LOG_ERROR, "Telemetry buffer not allocated but telemetry senders configured!");
     }
     
@@ -108,40 +119,50 @@ void ProtocolPipeline::setupFlows(Config* config) {
 }
 
 void ProtocolPipeline::createSenders(Config* config) {
-    // Fixed indices - no more shifting!
+    // Initialize all slots to nullptr first
+    for (size_t i = 0; i < MAX_SENDERS; i++) {
+        senders[i] = nullptr;
+    }
     
-    // IDX_USB (0) - Device2 USB
-    if (ctx->interfaces.usbInterface) {
-        senders[IDX_USB] = new UsbSender(
+    // Device2 - USB or UART2 (mutually exclusive)
+    if (config->device2.role == D2_USB && ctx->interfaces.usbInterface) {
+        senders[IDX_DEVICE2_USB] = new UsbSender(
             ctx->interfaces.usbInterface,
-            ctx->stats.device2TxBytes  // Pass TX counter pointer
+            ctx->stats.device2TxBytes
         );
-        log_msg(LOG_INFO, "USB sender created at index %d", IDX_USB);
+        log_msg(LOG_INFO, "Created USB sender at index %d", IDX_DEVICE2_USB);
+    } 
+    else if (config->device2.role == D2_UART2 && ctx->interfaces.device2Serial) {
+        senders[IDX_DEVICE2_UART2] = new Uart2Sender(
+            ctx->interfaces.device2Serial,
+            ctx->stats.device2TxBytes
+        );
+        log_msg(LOG_INFO, "Created UART2 sender at index %d", IDX_DEVICE2_UART2);
     }
     
-    // IDX_UART3 (1) - Device3 UART
-    if (config->device3.role != D3_NONE && 
-        config->device3.role != D3_UART3_LOG &&
+    // Device3 - UART3 (for MIRROR and BRIDGE modes only)
+    if ((config->device3.role == D3_UART3_MIRROR || 
+         config->device3.role == D3_UART3_BRIDGE) &&
         ctx->interfaces.device3Serial) {
-        senders[IDX_UART3] = new UartSender(
+        senders[IDX_DEVICE3] = new Uart3Sender(
             ctx->interfaces.device3Serial,
-            ctx->stats.device3TxBytes  // Pass TX counter pointer
+            ctx->stats.device3TxBytes
         );
-        log_msg(LOG_INFO, "UART3 sender created at index %d", IDX_UART3);
+        log_msg(LOG_INFO, "Created UART3 sender at index %d", IDX_DEVICE3);
     }
     
-    // IDX_UDP (2) - Device4 UDP
-    if (config->device4.role == D4_NETWORK_BRIDGE || 
-        config->device4.role == D4_LOG_NETWORK) {
+    // Device4 - UDP (unchanged)
+    if ((config->device4.role == D4_NETWORK_BRIDGE || 
+         config->device4.role == D4_LOG_NETWORK)) {
         extern AsyncUDP* udpTransport;
         if (udpTransport) {
             UdpSender* udpSender = new UdpSender(
                 udpTransport,
-                ctx->stats.device4TxBytes  // Pass TX counter pointer
+                ctx->stats.device4TxBytes
             );
             udpSender->setBatchingEnabled(config->udpBatchingEnabled);
-            senders[IDX_UDP] = udpSender;
-            log_msg(LOG_INFO, "UDP sender created at index %d", IDX_UDP);
+            senders[IDX_DEVICE4] = udpSender;
+            log_msg(LOG_INFO, "Created UDP sender at index %d", IDX_DEVICE4);
         }
     }
 }
@@ -314,9 +335,9 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 // Get sent/dropped from USB sender (Device 2)
                 uint32_t packetsSent = 0;
                 uint32_t packetsDropped = 0;
-                if (senders[IDX_USB]) {
-                    packetsSent = senders[IDX_USB]->getSentCount();
-                    packetsDropped = senders[IDX_USB]->getDroppedCount();
+                if (senders[IDX_DEVICE2_USB]) {
+                    packetsSent = senders[IDX_DEVICE2_USB]->getSentCount();
+                    packetsDropped = senders[IDX_DEVICE2_USB]->getDroppedCount();
                 }
                 parserStats["packetsSent"] = packetsSent;
                 parserStats["packetsDropped"] = packetsDropped;
@@ -365,9 +386,9 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
     }
     
     // Add UDP batching stats for UDP sender
-    if (senders[IDX_UDP]) {
+    if (senders[IDX_DEVICE4]) {
         JsonObject udpStats = stats["udpBatching"].to<JsonObject>();
-        ((UdpSender*)senders[IDX_UDP])->getBatchingStats(udpStats);
+        ((UdpSender*)senders[IDX_DEVICE4])->getBatchingStats(udpStats);
     }
     
     // Buffer statistics - from first active flow

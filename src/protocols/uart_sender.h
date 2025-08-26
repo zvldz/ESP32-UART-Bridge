@@ -4,8 +4,9 @@
 #include "packet_sender.h"
 #include "../uart/uart_interface.h"  // Correct include
 
+// Base UART sender class
 class UartSender : public PacketSender {
-private:
+protected:
     UartInterface* uartInterface;  // Using UartInterface
     uint32_t lastSendTime;
     
@@ -82,8 +83,48 @@ public:
         return space > 0;
     }
     
-    const char* getName() const override {
-        return "UART";
+    // getName() is pure virtual - implemented in derived classes
+    const char* getName() const override = 0;
+};
+
+// Device2 UART2 sender
+class Uart2Sender : public UartSender {
+public:
+    inline static unsigned long txBytes = 0;
+    inline static unsigned long rxBytes = 0;
+    
+    using UartSender::UartSender;
+    const char* getName() const override { return "UART2"; }
+    
+    void processSendQueue(bool bulkMode = false) override {
+        UartSender::processSendQueue(bulkMode);
+        // Update static counter after sending
+        if (globalTxBytesCounter) {
+            txBytes = *globalTxBytesCounter;
+        }
+    }
+};
+
+// Device3 UART3 sender  
+class Uart3Sender : public UartSender {
+public:
+    inline static unsigned long txBytes = 0;
+    inline static unsigned long rxBytes = 0;  // For Bridge mode RX
+    
+    using UartSender::UartSender;
+    const char* getName() const override { return "UART3"; }
+    
+    void processSendQueue(bool bulkMode = false) override {
+        UartSender::processSendQueue(bulkMode);
+        // Update static counter after sending
+        if (globalTxBytesCounter) {
+            txBytes = *globalTxBytesCounter;
+        }
+    }
+    
+    // Static method for updating RX stats (called from Bridge polling)
+    static void updateRxStats(size_t bytes) {
+        rxBytes += bytes;
     }
 };
 

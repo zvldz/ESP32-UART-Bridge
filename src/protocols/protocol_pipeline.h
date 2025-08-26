@@ -32,19 +32,21 @@ struct DataFlow {
 
 class ProtocolPipeline {
 private:
-    // Fixed sender indices (no more shifting arrays!)
+    // Fixed sender indices (expanded for Device2 USB/UART2 + Device3)
     enum SenderIndex {
-        IDX_USB = 0,
-        IDX_UART3 = 1, 
-        IDX_UDP = 2,
-        MAX_SENDERS = 3
+        IDX_DEVICE2_USB = 0,    // Device2 when USB
+        IDX_DEVICE2_UART2 = 1,  // Device2 when UART2 (NEW!)
+        IDX_DEVICE3 = 2,        // Device3 (any UART3 role)
+        IDX_DEVICE4 = 3,        // Device4 (UDP)
+        MAX_SENDERS = 4         // Increased from 3
     };
     
     // Sender masks for routing
     enum SenderMask {
-        SENDER_USB = (1 << IDX_USB),
-        SENDER_UART3 = (1 << IDX_UART3),
-        SENDER_UDP = (1 << IDX_UDP),
+        SENDER_USB = (1 << IDX_DEVICE2_USB),     // 0x01
+        SENDER_UART2 = (1 << IDX_DEVICE2_UART2), // 0x02 (NEW!)
+        SENDER_UART3 = (1 << IDX_DEVICE3),       // 0x04
+        SENDER_UDP = (1 << IDX_DEVICE4),         // 0x08
         SENDER_ALL = 0xFF
     };
     
