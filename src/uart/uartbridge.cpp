@@ -4,7 +4,7 @@
 #include "../protocols/protocol_pipeline.h"
 #include "../protocols/buffer_manager.h"
 #include "flow_control.h"
-#include "../devices/device_init.h"
+#include "../device_init.h"
 #include "../diagnostics.h"
 #include "../logging.h"
 #include "../leds.h"
@@ -95,8 +95,7 @@ void uartBridgeTask(void* parameter) {
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
   
-  // Initialize system start time
-  g_deviceStats.systemStartTime.store(millis(), std::memory_order_relaxed);
+  // System start time already initialized in initDeviceStatistics()
 
   // Create protocol statistics BEFORE pipeline initialization
   ctx.protocol.stats = new ProtocolStats();

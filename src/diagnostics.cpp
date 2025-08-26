@@ -253,20 +253,5 @@ void forceSerialLog(const char* format, ...) {
 }
 #endif
 
-// Statistics update functions (called by scheduler)
-
-// Update statistics for Device 1 and 2 (Core 0 devices)
-void updateMainStats() {
-    // Nothing to do - stats are updated directly via g_deviceStats
-}
-
-// Update statistics for Device 3 (Core 1 device)
-void updateDevice3Stats() {
-    // Empty - stats updated directly via g_deviceStats
-}
-
-// Update statistics for Device 4 (Core 1 device)
-void updateDevice4Stats() {
-    // Empty - stats updated directly via g_deviceStats
-}
+// Statistics update functions removed - using atomic operations in g_deviceStats
 
