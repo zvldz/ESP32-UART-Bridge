@@ -4,6 +4,12 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
+// Configuration constants
+#define DEFAULT_BAUDRATE        115200
+#define DEFAULT_UDP_PORT        14560
+#define JSON_PREVIEW_SIZE       200
+#define IP_BUFFER_SIZE          15
+
 // Helper functions for string conversion
 const char* parity_to_string(uart_parity_t parity) {
   switch(parity) {
@@ -53,13 +59,27 @@ uart_stop_bits_t string_to_stop_bits(uint8_t bits) {
   }
 }
 
+// Helper function to finalize migration
+static void finalizeMigration(Config* config, int version) {
+  log_msg(LOG_INFO, "Migrating config from version %d to %d", config->config_version, version);
+  config->config_version = version;
+}
+
+// Helper function to set device role defaults
+static void setDeviceDefaults(Config* config) {
+  config->device1.role = D1_UART1;
+  config->device2.role = D2_USB;
+  config->device3.role = D3_NONE;
+  config->device4.role = D4_NONE;
+}
+
 // Initialize configuration with defaults
 void config_init(Config* config) {
   // Set configuration version
   config->config_version = CURRENT_CONFIG_VERSION;
   
   // Set default values with ESP-IDF types
-  config->baudrate = 115200;
+  config->baudrate = DEFAULT_BAUDRATE;
   config->databits = UART_DATA_8_BITS;
   config->parity = UART_PARITY_DISABLE;
   config->stopbits = UART_STOP_BITS_1;
@@ -77,14 +97,11 @@ void config_init(Config* config) {
   config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
   
   // Device roles defaults
-  config->device1.role = D1_UART1;    // Main bridge always
-  config->device2.role = D2_USB;      // USB by default
-  config->device3.role = D3_NONE;     // Disabled
-  config->device4.role = D4_NONE;     // Disabled
+  setDeviceDefaults(config);
   
   // Device 4 defaults
   strcpy(config->device4_config.target_ip, "");
-  config->device4_config.port = 14560;
+  config->device4_config.port = DEFAULT_UDP_PORT;
   config->device4_config.role = D4_NONE;
   
   // Log levels defaults
@@ -102,13 +119,10 @@ void config_init(Config* config) {
 // Migrate configuration from old versions
 void config_migrate(Config* config) {
   if (config->config_version < 2) {
-    log_msg(LOG_INFO, "Migrating config from version %d to 2", config->config_version);
+    finalizeMigration(config, 2);
     
     // Set defaults for new fields
-    config->device1.role = D1_UART1;
-    config->device2.role = D2_USB;
-    config->device3.role = D3_NONE;
-    config->device4.role = D4_NONE;
+    setDeviceDefaults(config);
     
     // Keep existing usb_mode or default
     if (config->usb_mode != USB_MODE_DEVICE && 
@@ -120,64 +134,52 @@ void config_migrate(Config* config) {
     config->log_level_web = LOG_WARNING;
     config->log_level_uart = LOG_WARNING;
     config->log_level_network = LOG_OFF;
-    
-    config->config_version = 2;
   }
   
   if (config->config_version < 3) {
-    log_msg(LOG_INFO, "Migrating config from version %d to 3", config->config_version);
+    finalizeMigration(config, 3);
     
     // Version 2 had string/uint8_t types, convert to ESP-IDF enums
     // These will be set from loaded values in config_load
     // Just update version here
-    config->config_version = 3;
   }
   
   if (config->config_version < 4) {
-    log_msg(LOG_INFO, "Migrating config from version %d to 4", config->config_version);
+    finalizeMigration(config, 4);
     config->permanent_network_mode = false;
-    config->config_version = 4;
   }
   
   if (config->config_version < 5) {
-    log_msg(LOG_INFO, "Migrating config from version %d to 5", config->config_version);
+    finalizeMigration(config, 5);
     
     // Set Device 4 defaults
     config->device4.role = D4_NONE;
     strcpy(config->device4_config.target_ip, "");
-    config->device4_config.port = 14560;
+    config->device4_config.port = DEFAULT_UDP_PORT;
     config->device4_config.role = D4_NONE;
-    
-    config->config_version = 5;
   }
   
   if (config->config_version < 6) {
-    log_msg(LOG_INFO, "Migrating config from version 5 to 6");
+    finalizeMigration(config, 6);
     
     // Add WiFi Client mode fields
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
     config->wifi_client_ssid = "";      // Empty by default
     config->wifi_client_password = "";  // Empty by default
-    
-    config->config_version = 6;
   }
   
   if (config->config_version < 7) {
-    log_msg(LOG_INFO, "Migrating config from version 6 to 7");
+    finalizeMigration(config, 7);
     
     // Add Protocol Optimization field
-    config->protocolOptimization = 0;  // PROTOCOL_NONE by default
-    
-    config->config_version = 7;
+    config->protocolOptimization = PROTOCOL_NONE;
   }
   
   if (config->config_version < 8) {
-    log_msg(LOG_INFO, "Migrating config from version 7 to 8");
+    finalizeMigration(config, 8);
     
     // Add UDP batching control (default enabled)
     config->udpBatchingEnabled = true;
-    
-    config->config_version = 8;
   }
 }
 
@@ -208,7 +210,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
   if (error) {
     log_msg(LOG_ERROR, "Failed to parse configuration JSON: %s", error.c_str());
-    String jsonPreview = jsonString.substring(0, 200);
+    String jsonPreview = jsonString.substring(0, JSON_PREVIEW_SIZE);
     log_msg(LOG_ERROR, "JSON content: %s", jsonPreview.c_str());  // First 200 chars
     return false;
   }
@@ -224,7 +226,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
   // Load UART settings
   if (doc["uart"].is<JsonObject>()) {
-    config->baudrate = doc["uart"]["baudrate"] | 115200;
+    config->baudrate = doc["uart"]["baudrate"] | DEFAULT_BAUDRATE;
     
     // Load string values (current format)
     String databits = doc["uart"]["databits"] | "8";
@@ -272,9 +274,9 @@ bool config_load_from_json(Config* config, const String& jsonString) {
   // Load Device 4 configuration (new in v5)
   if (doc["device4"].is<JsonObject>()) {
     const char* ip = doc["device4"]["target_ip"] | "";
-    strncpy(config->device4_config.target_ip, ip, 15);
-    config->device4_config.target_ip[15] = '\0';
-    config->device4_config.port = doc["device4"]["port"] | 14560;
+    strncpy(config->device4_config.target_ip, ip, IP_BUFFER_SIZE);
+    config->device4_config.target_ip[IP_BUFFER_SIZE] = '\0';
+    config->device4_config.port = doc["device4"]["port"] | DEFAULT_UDP_PORT;
     config->device4_config.role = doc["device4"]["role"] | D4_NONE;
   }
 
@@ -287,8 +289,8 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
   // Load protocol optimization (new in v7)
   if (doc["protocol"].is<JsonObject>()) {
-    config->protocolOptimization = doc["protocol"]["optimization"] | 0;  // PROTOCOL_NONE by default
-    config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;  // NEW
+    config->protocolOptimization = doc["protocol"]["optimization"] | PROTOCOL_NONE;
+    config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;
   }
 
   // System settings like device_version and device_name are NOT loaded from file
@@ -355,7 +357,7 @@ String config_to_json(Config* config) {
 
   // Protocol optimization
   doc["protocol"]["optimization"] = config->protocolOptimization;
-  doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;  // NEW
+  doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;
 
   // Note: device_version and device_name are NOT saved - always use compiled values
 
