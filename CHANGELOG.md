@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## v2.15.7 (LED System Refactoring & Optimization) ✅ COMPLETED
+
+### LED System Complete Refactoring ✅ COMPLETED
+- **Code Size Reduction**: leds.cpp reduced from 600 to 462 lines (-138 lines, 23% reduction)
+- **Architecture Unification**: Replaced 6 separate blinking systems with 1 universal system
+  - **Old System**: Individual functions for WiFi, Ethernet, UART1-4 LED blinking
+  - **New System**: Single `BlinkState` structure array with `BlinkType` enum
+  - **State Management**: Centralized blinking logic in unified `updateLED()` function
+- **Data Structure Optimization**: Reduced from 40+ individual variables to 5 structured elements
+  - **BlinkState Structure**: `active`, `isOn`, `count`, `onTime`, `offTime`, `colorValue`, `nextTime`
+  - **BlinkType Enum**: `BLINK_WIFI`, `BLINK_ETH`, `BLINK_UART1-4` for type identification
+  - **State Array**: `blinkStates[6]` for all LED types with proper initialization
+
+### Performance & Safety Improvements ✅ COMPLETED
+- **Mutex Optimization**: Single mutex capture per update cycle instead of multiple captures
+- **Time Handling**: Proper `millis()` overflow handling with safe time arithmetic
+- **Code Cleanup**: Removed unused functions and duplicate logic
+  - **Removed**: `setLED()` function (-9 lines)
+  - **Eliminated**: Counter update duplication (-6 lines)
+- **Volatile Warning Fix**: Replaced deprecated `volatile--` with explicit assignment
+
+### Code Quality Enhancements ✅ COMPLETED
+- **Maintainability**: Easy addition of new blink patterns through enum extension
+- **Readability**: Clear separation of state management and LED control logic
+- **Safety**: Proper volatile variable handling and thread-safe operations
+- **Efficiency**: Optimized update loop with early returns and reduced function calls
+
 ## v2.15.6 (Types System Refactoring & Code Organization) ✅ COMPLETED
 
 ### Major Code Architecture Refactoring ✅ COMPLETED
