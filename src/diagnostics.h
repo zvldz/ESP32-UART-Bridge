@@ -14,11 +14,6 @@ const char* getDevice2RoleName(uint8_t role);
 const char* getDevice3RoleName(uint8_t role);
 const char* getDevice4RoleName(uint8_t role);
 
-// Statistics management functions removed - using atomic g_deviceStats
-// updateSharedStats and resetStatistics removed - using direct atomic operations
-
-// Statistics update functions removed - using atomic operations in g_deviceStats
-
 // Separate diagnostic functions for TaskScheduler
 void runBridgeActivityLog();
 void runStackDiagnostics();
