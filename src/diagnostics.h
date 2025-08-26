@@ -17,10 +17,7 @@ const char* getDevice4RoleName(uint8_t role);
 // Statistics management functions removed - using atomic g_deviceStats
 // updateSharedStats and resetStatistics removed - using direct atomic operations
 
-// Statistics update functions (called by scheduler)
-void updateMainStats();      // Updates Device 1/2 from Core 0
-void updateDevice3Stats();   // Updates Device 3 from Core 1
-void updateDevice4Stats();   // Updates Device 4 from Core 1
+// Statistics update functions removed - using atomic operations in g_deviceStats
 
 // Separate diagnostic functions for TaskScheduler
 void runBridgeActivityLog();

@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 #include "defines.h"
 #include "types.h"
+#include "device_stats.h"
 #include "logging.h"
 #include "config.h"
 #include "leds.h"
@@ -13,7 +14,7 @@
 #include "diagnostics.h"
 #include "system_utils.h"
 #include "scheduler_tasks.h"
-#include "devices/device_init.h"
+#include "device_init.h"
 #include "wifi/wifi_manager.h"
 #include "uart/uart_interface.h"
 #include "uart/uart_dma.h"
@@ -22,7 +23,7 @@
 
 // Global objects
 Config config;
-DeviceStatistics g_deviceStats = {0};  // Zero-init OK at global scope  
+// Global statistics instance moved to device_stats.cpp  
 SystemState systemState = {0};  // All fields initialized to 0/false
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
@@ -84,6 +85,9 @@ void setup() {
 
   // Initialize configuration
   config_init(&config);
+
+  // Initialize device statistics
+  initDeviceStatistics();
 
   // Clear bootloader messages
   clearBootloaderSerialBuffer();

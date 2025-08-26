@@ -1,5 +1,85 @@
 # CHANGELOG
 
+## v2.15.6 (Types System Refactoring & Code Organization) ✅ COMPLETED
+
+### Major Code Architecture Refactoring ✅ COMPLETED
+- **Types.h Modularization**: Split large types.h file into logical modules
+  - **File Reduction**: types.h reduced from ~400 to ~264 lines for faster compilation
+  - **Logical Separation**: Device types, statistics, and core types properly separated
+  - **Better Organization**: Clear modular structure by functionality
+  - **Compilation Speed**: Changes to device statistics no longer recompile entire project
+
+### New Modular Header Structure ✅ COMPLETED
+- **device_stats.h**: Device statistics structure and management functions
+  - **DeviceStatistics Structure**: Atomic counters for all 4 devices (Device1-4)
+  - **Global Instance**: `extern DeviceStatistics g_deviceStats` declaration
+  - **Management Functions**: `initDeviceStatistics()` and `resetDeviceStatistics()` 
+- **device_stats.cpp**: Implementation of statistics functions and global instance
+- **device_types.h**: Device roles, enums, and configuration structures
+  - **Device Role Enums**: Device1Role, Device2Role, Device3Role, Device4Role
+  - **Core Enums**: BridgeWiFiMode, UsbMode, LogLevel (moved from types.h)
+  - **Config Structure**: Complete configuration structure with proper enum types
+- **types.h Simplified**: Core system types only
+  - **Essential Types**: BridgeMode, WiFiClientState, LedMode, SystemState
+  - **BridgeContext**: Protocol pipeline context (maintained for compatibility)
+  - **Include Integration**: Automatically includes new modular headers
+
+### Cross-Core Communication Cleanup ✅ COMPLETED  
+- **Removed Inter-Core Hacks**: Eliminated unnecessary cross-core synchronization
+  - **Global Pipeline Pointer**: Removed `g_pipeline` global variable
+  - **Memory Barriers**: Removed `__sync_synchronize()` calls
+  - **External Declarations**: Cleaned up bridge_processing.h
+- **Legacy Buffer Methods**: Removed unused cross-core communication methods
+  - **writeWithSource()**: Removed from circular_buffer.h
+  - **readWithSource()**: Removed from circular_buffer.h  
+  - **writeInternal()**: Removed helper method
+- **Architecture Simplification**: All components now run on Core 0, no sync needed
+
+### Dead Code Elimination ✅ COMPLETED
+- **Statistics Update Functions**: Removed empty update functions
+  - **Diagnostics Cleanup**: Removed `updateMainStats()`, `updateDevice3Stats()`, `updateDevice4Stats()`
+  - **Scheduler Tasks**: Removed unused statistics update tasks from TaskScheduler
+  - **Task References**: Cleaned up all enable/disable/addTask calls for removed tasks
+- **Project Structure**: Moved device_init files to src root
+  - **Simplified Paths**: `devices/device_init.h` → `device_init.h` 
+  - **Include Updates**: Fixed all include paths throughout codebase
+  - **Directory Cleanup**: Removed empty devices/ directory
+
+### Forward Declaration Conflicts Resolution ✅ COMPLETED
+- **Enum Type Conflicts**: Fixed forward declaration vs full definition mismatches
+  - **BridgeWiFiMode, UsbMode, LogLevel**: Moved complete definitions to device_types.h
+  - **Removed Conflicts**: Eliminated forward declarations with base types
+  - **Proper Dependencies**: Maintained correct include order through types.h
+- **Include Path Optimization**: Updated all files requiring new headers
+  - **main.cpp**: Added device_stats.h include, updated initialization
+  - **web_api.cpp**: Added device_stats.h include for statistics access
+  - **uartbridge.cpp**: Removed duplicate statistics initialization
+
+### USB Host Code Style Refactoring ✅ COMPLETED
+- **Class Structure**: Created proper usb_host.h header file with class declarations
+- **Method Decomposition**: Split large `handleDeviceConnection()` into focused methods
+  - **openDevice()**: Device opening and validation (8 lines)
+  - **getDeviceInfo()**: Device information retrieval (17 lines)
+  - **claimInterface()**: Interface claiming with error handling (12 lines)
+  - **setupTransfers()**: USB transfer setup and initialization (23 lines)
+- **CDC Interface Refactoring**: Improved `findCDCInterface()` method structure
+  - **findBulkEndpoints()**: Separated endpoint discovery logic (44 lines)
+  - **Better Error Handling**: Early returns instead of deep nesting
+  - **Enhanced Logging**: Detailed debug information for USB operations
+- **Naming Consistency**: Updated all methods to match project camelCase style
+  - **Task Methods**: `usb_host_task` → `usbHostTask`
+  - **Callbacks**: `client_event_callback` → `clientEventCallback`
+  - **Variables**: `bulk_in_ep` → `bulk_in_endpoint`
+- **Documentation**: Added comprehensive method comments and parameter descriptions
+
+### Technical Benefits 🚀
+- **Faster Compilation**: Modular headers reduce interdependencies
+- **Cleaner Architecture**: Clear separation of concerns across modules  
+- **Better Maintainability**: Smaller focused files easier to understand and modify
+- **Reduced Memory Usage**: Eliminated unused tasks, variables, and functions
+- **Improved Code Quality**: Consistent style and better error handling throughout
+- **Lock-free Performance**: Removed unnecessary synchronization primitives
+
 ## v2.15.5 (Statistics & LED System Refactoring) ✅ COMPLETED
 
 ### Major Architecture Refactoring ✅ COMPLETED
