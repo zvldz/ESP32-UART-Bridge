@@ -9,14 +9,12 @@
 #include "uart/uart_dma.h"
 #include "protocols/uart_sender.h"
 #include "usb/usb_interface.h"
-// Protocol detection hooks (forward declarations to avoid circular includes)
 #include <Arduino.h>
 
 // Forward declaration for Pipeline
 class ProtocolPipeline;
 
-// NOW include adaptive_buffer.h - function is already defined!
-#include "adaptive_buffer.h"  // Include for processAdaptiveBufferByte
+#include "adaptive_buffer.h"
 
 // Check if we should yield to WiFi task
 static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
@@ -79,7 +77,6 @@ static inline void processDevice1Input(BridgeContext* ctx) {
 static inline void processDevice3BridgeRx(BridgeContext* ctx) {
     if (ctx->devices.device3IsBridge && ctx->interfaces.device3Serial) {
         // Poll Device3 DMA events
-        // Note: All UARTs use UartDMA implementation (see main.cpp)
         static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
         
         // Process available data
@@ -90,7 +87,6 @@ static inline void processDevice3BridgeRx(BridgeContext* ctx) {
             // Update RX statistics
             g_deviceStats.device3.rxBytes.fetch_add(1, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
-            // lastActivity updated directly in g_deviceStats
         }
     }
 }
@@ -108,14 +104,12 @@ static inline void processDevice2USB(BridgeContext* ctx) {
             g_deviceStats.device1.txBytes.fetch_add(1, std::memory_order_relaxed);
             g_deviceStats.device2.rxBytes.fetch_add(1, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
-            // lastActivity updated directly in g_deviceStats
             bytesRead++;
             
             // Also send to Device 3 if in Bridge mode
             if (ctx->devices.device3IsBridge) {
                 if (ctx->interfaces.device3Serial && ctx->interfaces.device3Serial->availableForWrite() > 0) {
                     ctx->interfaces.device3Serial->write((uint8_t)data);
-                    // Note: Device3 TX bytes counted in device3Task
                 }
             }
         }
