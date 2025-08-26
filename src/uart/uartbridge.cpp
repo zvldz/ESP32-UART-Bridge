@@ -33,9 +33,6 @@ extern UsbInterface* g_usbInterface;
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
 
-// Global pointer for Device4 access (cross-core communication)
-ProtocolPipeline* g_pipeline = nullptr;
-
 // UART Bridge Task - runs with high priority on Core 0
 void uartBridgeTask(void* parameter) {
   // Wait for system initialization
@@ -115,10 +112,6 @@ void uartBridgeTask(void* parameter) {
   ctx.protocolPipeline = new ProtocolPipeline(&ctx);
   ctx.protocolPipeline->init(&config);
   
-  // Export for Device4 (cross-core access)
-  g_pipeline = ctx.protocolPipeline;
-  __sync_synchronize();  // Ensure visibility to other cores
-  log_msg(LOG_INFO, "[Pipeline] Exported for Device4 access");
   log_msg(LOG_INFO, "UART Bridge Task started");
   log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
           device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
