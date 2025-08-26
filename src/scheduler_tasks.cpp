@@ -150,7 +150,7 @@ void initializeScheduler() {
         if (!g_bridgeContext || !udpLogMutex) return;
         
         // Check WiFi readiness for data transmission
-        if (!wifi_manager_is_ready_for_data()) {
+        if (!wifiIsReady()) {
             // Clear buffers when WiFi is down
             if (xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
                 udpLogHead = 0;
