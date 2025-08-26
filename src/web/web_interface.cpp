@@ -21,6 +21,11 @@
 #include "freertos/semphr.h"
 #include "esp_wifi.h"
 
+// Web interface constants
+#define HTTP_PORT                   80
+#define UPLOAD_BUFFER_RESERVE       4096
+#define ASCII_PRINTABLE_THRESHOLD   32
+
 // External objects from main.cpp
 extern Config config;
 extern SystemState systemState;
@@ -34,7 +39,14 @@ AsyncWebServer* server = nullptr;
 // Indicates whether the web server was successfully started
 static bool webServerInitialized = false;
 
-// Template processor no longer needed - config loaded via AJAX
+// Helper function for gzipped responses
+static void sendGzippedResponse(AsyncWebServerRequest* request, const char* contentType, 
+                               const uint8_t* data, size_t len) {
+    AsyncWebServerResponse *response = request->beginResponse_P(200, contentType, data, len);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+}
+
 
 // Initialize web server in NETWORK mode
 void webserver_init(Config* config, SystemState* state) {
@@ -44,11 +56,8 @@ void webserver_init(Config* config, SystemState* state) {
   state->networkStartTime = millis();
   state->isTemporaryNetwork = true;  // Setup AP is temporary
 
-  // IMPORTANT: WiFi and DNS are now managed through wifi_manager
-  // This function only creates the web server
-
   // Create async web server
-  server = new AsyncWebServer(80);
+  server = new AsyncWebServer(HTTP_PORT);
 
   // Setup main page with gzip compression
   server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -79,13 +88,13 @@ void webserver_init(Config* config, SystemState* state) {
       
       if (index == 0) {
         uploadedData = "";  // Reset for new upload
-        uploadedData.reserve(4096);  // Reserve space to avoid frequent reallocations
+        uploadedData.reserve(UPLOAD_BUFFER_RESERVE);  // Reserve space to avoid frequent reallocations
       }
       
       // Only append printable characters and whitespace, skip null bytes
       for (size_t i = 0; i < len; i++) {
         char c = (char)data[i];
-        if (c >= 32 || c == '\n' || c == '\r' || c == '\t') {
+        if (c >= ASCII_PRINTABLE_THRESHOLD || c == '\n' || c == '\r' || c == '\t') {
           uploadedData += c;
         }
       }
@@ -100,39 +109,25 @@ void webserver_init(Config* config, SystemState* state) {
   
   // Serve static files with gzip compression
   server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
   });
   server->on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
   });
   server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
   });
   server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
   });
   server->on("/device-config.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
   });
   server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
   });
   server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
+    sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
   });
   
   // Setup OTA update with async handlers
