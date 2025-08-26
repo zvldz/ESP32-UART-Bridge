@@ -6,7 +6,7 @@
 #include <functional>
 
 // Web server interface
-void webserver_init(Config* config, UartStats* stats, SystemState* state);
+void webserver_init(Config* config, SystemState* state);
 void webserver_cleanup();  // Resource cleanup
 bool checkWiFiTimeout();
 

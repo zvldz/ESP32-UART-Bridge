@@ -22,7 +22,7 @@
 
 // Global objects
 Config config;
-UartStats uartStats = {0};
+DeviceStatistics g_deviceStats = {0};  // Zero-init OK at global scope  
 SystemState systemState = {0};  // All fields initialized to 0/false
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
@@ -48,7 +48,7 @@ AsyncUDP* udpTransport = nullptr;
 SemaphoreHandle_t logMutex = NULL;
 
 // Spinlock for statistics critical sections
-portMUX_TYPE statsMux = portMUX_INITIALIZER_UNLOCKED;
+// statsMux removed - using atomic operations instead
 
 // Function declarations
 void initPins();
@@ -310,7 +310,7 @@ void initStandaloneMode() {
   }
 
   // Initialize UART bridge
-  initMainUART(uartBridgeSerial, &config, &uartStats, usbInterface);
+  initMainUART(uartBridgeSerial, &config, usbInterface);
 
   log_msg(LOG_INFO, "UART Bridge ready - transparent forwarding active");
 }
@@ -383,7 +383,7 @@ void initNetworkMode() {
   }
 
   // Initialize UART bridge even in network mode (for statistics)
-  initMainUART(uartBridgeSerial, &config, &uartStats, usbInterface);
+  initMainUART(uartBridgeSerial, &config, usbInterface);
 
   // Initialize UDP transport for Device4
   if (config.device4.role == D4_NETWORK_BRIDGE || 
@@ -406,11 +406,11 @@ void initNetworkMode() {
               size_t len = packet.length();
               uartBridgeSerial->write(packet.data(), len);
               
-              // Update Device1 TX statistics (FIX for missing stats)
-              uartStats.device1TxBytes += len;
-              
-              // Update UDP RX statistics
-              UdpSender::updateRxStats(len);
+              // Update statistics using new g_deviceStats
+              g_deviceStats.device1.txBytes.fetch_add(len, std::memory_order_relaxed);
+              g_deviceStats.device4.rxBytes.fetch_add(len, std::memory_order_relaxed);
+              g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
+              g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             }
           });
         }
@@ -424,7 +424,7 @@ void initNetworkMode() {
   }
 
   // Initialize web server
-  webserver_init(&config, &uartStats, &systemState);
+  webserver_init(&config, &systemState);
 }
 
 //================================================================

@@ -5,11 +5,9 @@
 #include "uart/uart_dma.h"
 #include "types.h"
 #include "protocols/udp_sender.h"
-#include "protocols/uart_sender.h"
 #include <Arduino.h>
 
-// External object from main.cpp
-extern UartStats uartStats;
+// External object from main.cpp  
 extern BridgeMode bridgeMode;
 
 // External statistics from device tasks - removed, now using Uart3Sender static vars
@@ -94,42 +92,9 @@ const char* getDevice4RoleName(uint8_t role) {
   }
 }
 
-// Thread-safe function to update shared statistics using critical sections
-void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
-                      unsigned long device2Rx, unsigned long device2Tx,
-                      unsigned long device3Rx, unsigned long device3Tx,
-                      unsigned long device4Rx, unsigned long device4Tx,
-                      unsigned long lastActivity) {
-  enterStatsCritical();
-  uartStats.device1RxBytes = device1Rx;
-  uartStats.device1TxBytes = device1Tx;
-  uartStats.device2RxBytes = device2Rx;
-  uartStats.device2TxBytes = device2Tx;
-  uartStats.device3RxBytes = device3Rx;
-  uartStats.device3TxBytes = device3Tx;
-  uartStats.device4RxBytes = device4Rx;
-  uartStats.device4TxBytes = device4Tx;
-  // Note: device4RxPackets/TxPackets handled separately in updateDevice4Stats
-  if (lastActivity > 0) {
-    uartStats.lastActivityTime = lastActivity;
-  }
-  exitStatsCritical();
-}
+// updateSharedStats removed - using atomic g_deviceStats
 
-// Reset all statistics using critical sections
-void resetStatistics(UartStats* stats) {
-  enterStatsCritical();
-  stats->device1RxBytes = 0;
-  stats->device1TxBytes = 0;
-  stats->device2RxBytes = 0;
-  stats->device2TxBytes = 0;
-  stats->device3RxBytes = 0;
-  stats->device3TxBytes = 0;
-  stats->lastActivityTime = 0;
-  stats->deviceStartTime = millis();
-  stats->totalUartPackets = 0;
-  exitStatsCritical();
-}
+// resetStatistics removed - using resetDeviceStatistics helper
 
 // Separate functions for TaskScheduler
 
@@ -138,7 +103,8 @@ void runBridgeActivityLog() {
     
     String mode = (*g_bridgeContext->system.bridgeMode == BRIDGE_NET) ? "Network" : "Standalone";
     log_msg(LOG_DEBUG, "UART bridge alive [%s mode]: D1 RX=%lu TX=%lu bytes%s", mode.c_str(),
-            *g_bridgeContext->stats.device1RxBytes, *g_bridgeContext->stats.device1TxBytes,
+            g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed), 
+            g_deviceStats.device1.txBytes.load(std::memory_order_relaxed),
             (*g_bridgeContext->diagnostics.totalDroppedBytes > 0 ? 
              String(", dropped=" + String(*g_bridgeContext->diagnostics.totalDroppedBytes)).c_str() : ""));
 }
@@ -291,39 +257,16 @@ void forceSerialLog(const char* format, ...) {
 
 // Update statistics for Device 1 and 2 (Core 0 devices)
 void updateMainStats() {
-    // Get pointers from bridge context
-    BridgeContext* ctx = getBridgeContext();
-    if (!ctx) return;
-    
-    // Update only Device 1 and 2 (they work in uartBridgeTask)
-    updateSharedStats(
-        ctx->stats.device1RxBytes ? *ctx->stats.device1RxBytes : 0,
-        ctx->stats.device1TxBytes ? *ctx->stats.device1TxBytes : 0,
-        ctx->stats.device2RxBytes ? *ctx->stats.device2RxBytes : 0,
-        ctx->stats.device2TxBytes ? *ctx->stats.device2TxBytes : 0,
-        0, 0,  // Device 3 - updates separately
-        0, 0,  // Device 4 - updates separately
-        ctx->stats.lastActivity ? *ctx->stats.lastActivity : 0
-    );
+    // Nothing to do - stats are updated directly via g_deviceStats
 }
 
 // Update statistics for Device 3 (Core 1 device)
 void updateDevice3Stats() {
-    enterStatsCritical();
-    uartStats.device3RxBytes = Uart3Sender::rxBytes;
-    uartStats.device3TxBytes = Uart3Sender::txBytes;
-    exitStatsCritical();
+    // Empty - stats updated directly via g_deviceStats
 }
 
 // Update statistics for Device 4 (Core 1 device)
 void updateDevice4Stats() {
-    enterStatsCritical();
-    uartStats.device4TxBytes = UdpSender::udpTxBytes;
-    uartStats.device4TxPackets = UdpSender::udpTxPackets;
-    uartStats.device4RxBytes = UdpSender::udpRxBytes;
-    uartStats.device4RxPackets = UdpSender::udpRxPackets;
-    // Add Device4→Device1 forwarded bytes (UDP→UART)
-    uartStats.device1TxBytes += UdpSender::device1TxBytesFromDevice4;
-    exitStatsCritical();
+    // Empty - stats updated directly via g_deviceStats
 }
 

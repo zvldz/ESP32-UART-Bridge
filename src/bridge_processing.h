@@ -30,7 +30,6 @@ static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
 
 // Process data from Device 1 UART input
 static inline void processDevice1Input(BridgeContext* ctx) {
-    const unsigned long LED_NOTIFY_INTERVAL = 10; // Minimum 10ms between LED notifications
     const int UART_BLOCK_SIZE = 64;
     
     unsigned long currentTime = micros();
@@ -55,13 +54,6 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     int bytesProcessed = 0;
     
     while (ctx->interfaces.uartBridgeSerial->available()) {
-        // Notify LED with rate limiting
-        if (*ctx->system.bridgeMode == BRIDGE_STANDALONE && 
-            millis() - *ctx->timing.lastUartLedNotify > LED_NOTIFY_INTERVAL) {
-            led_notify_uart_rx();
-            *ctx->timing.lastUartLedNotify = millis();
-        }
-
         uint8_t data = ctx->interfaces.uartBridgeSerial->read();
         
         // Update timestamp periodically based on baudrate
@@ -69,7 +61,8 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             currentTime = micros();
         }
         
-        (*ctx->stats.device1RxBytes)++;
+        g_deviceStats.device1.rxBytes.fetch_add(1, std::memory_order_relaxed);
+        g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         
         
 
@@ -79,7 +72,7 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             processAdaptiveBufferByte(ctx, data, currentTime);
         }
 
-        *ctx->stats.lastActivity = millis();
+        // lastActivity updated directly in g_deviceStats
     }
 }
 
@@ -96,34 +89,27 @@ static inline void processDevice3BridgeRx(BridgeContext* ctx) {
             ctx->interfaces.uartBridgeSerial->write(byte);
             
             // Update RX statistics
-            Uart3Sender::updateRxStats(1);
-            (*ctx->stats.device3RxBytes)++;
-            *ctx->stats.lastActivity = millis();
+            g_deviceStats.device3.rxBytes.fetch_add(1, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+            // lastActivity updated directly in g_deviceStats
         }
     }
 }
 
 // Process Device 2 USB input
 static inline void processDevice2USB(BridgeContext* ctx) {
-    const unsigned long LED_NOTIFY_INTERVAL = 10;
     int bytesRead = 0;
     const int maxBytesPerLoop = 256;
     
     while (ctx->interfaces.usbInterface->available() && bytesRead < maxBytesPerLoop) {
-        // Notify LED with rate limiting
-        if (*ctx->system.bridgeMode == BRIDGE_STANDALONE && 
-            millis() - *ctx->timing.lastUsbLedNotify > LED_NOTIFY_INTERVAL) {
-            led_notify_usb_rx();
-            *ctx->timing.lastUsbLedNotify = millis();
-        }
-
         // Commands from GCS are critical - immediate byte-by-byte transfer
         int data = ctx->interfaces.usbInterface->read();
         if (data >= 0) {
             ctx->interfaces.uartBridgeSerial->write((uint8_t)data);
-            (*ctx->stats.device1TxBytes)++;
-            (*ctx->stats.device2RxBytes)++;
-            *ctx->stats.lastActivity = millis();
+            g_deviceStats.device1.txBytes.fetch_add(1, std::memory_order_relaxed);
+            g_deviceStats.device2.rxBytes.fetch_add(1, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+            // lastActivity updated directly in g_deviceStats
             bytesRead++;
             
             // Also send to Device 3 if in Bridge mode
@@ -161,13 +147,13 @@ static inline void processDevice2UART(BridgeContext* ctx) {
         }
         
         if (actuallyRead > 0) {
-            *ctx->stats.device2RxBytes += actuallyRead;
+            g_deviceStats.device2.rxBytes.fetch_add(actuallyRead, std::memory_order_relaxed);
             
             // Write to Device 1
             if (ctx->interfaces.uartBridgeSerial->availableForWrite() >= actuallyRead) {
                 ctx->interfaces.uartBridgeSerial->write(uartReadBuffer, actuallyRead);
-                *ctx->stats.device1TxBytes += actuallyRead;
-                *ctx->stats.lastActivity = millis();
+                g_deviceStats.device1.txBytes.fetch_add(actuallyRead, std::memory_order_relaxed);
+                g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             }
         }
     }

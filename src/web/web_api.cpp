@@ -17,21 +17,13 @@
 
 // External objects from main.cpp
 extern Config config;
-extern UartStats uartStats;
+// extern UartStats removed - using g_deviceStats
 extern SystemState systemState;
 extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
 
 
-// Helper function to safely read protected unsigned long value using critical sections
-unsigned long getProtectedULongValue(unsigned long* valuePtr) {
-    if (!valuePtr) return 0;
-    unsigned long result;
-    enterStatsCritical();
-    result = *valuePtr;
-    exitStatsCritical();
-    return result;
-}
+// getProtectedULongValue removed - using atomic g_deviceStats operations
 
 // Generate complete configuration JSON for initial page load
 String getConfigJson() {
@@ -42,9 +34,8 @@ String getConfigJson() {
     doc["version"] = config.device_version;
     doc["freeRam"] = ESP.getFreeHeap();
     
-    // Calculate uptime
-    unsigned long startTime = getProtectedULongValue(&uartStats.deviceStartTime);
-    doc["uptime"] = (millis() - startTime) / 1000;
+    // Calculate uptime using new g_deviceStats
+    doc["uptime"] = (millis() - g_deviceStats.systemStartTime.load(std::memory_order_relaxed)) / 1000;
     
     // Current configuration - convert ESP-IDF enums to web-compatible values
     doc["baudrate"] = config.baudrate;
@@ -104,33 +95,34 @@ String getConfigJson() {
     // Flow control status
     doc["flowControl"] = getFlowControlStatus();
     
-    // Statistics
-    doc["device1Rx"] = getProtectedULongValue(&uartStats.device1RxBytes);
-    doc["device1Tx"] = getProtectedULongValue(&uartStats.device1TxBytes);
-    doc["device2Rx"] = getProtectedULongValue(&uartStats.device2RxBytes);
-    doc["device2Tx"] = getProtectedULongValue(&uartStats.device2TxBytes);
-    doc["device3Rx"] = getProtectedULongValue(&uartStats.device3RxBytes);
-    doc["device3Tx"] = getProtectedULongValue(&uartStats.device3TxBytes);
+    // Statistics using new g_deviceStats with atomic loads
+    doc["device1Rx"] = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
+    doc["device1Tx"] = g_deviceStats.device1.txBytes.load(std::memory_order_relaxed);
+    doc["device2Rx"] = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
+    doc["device2Tx"] = g_deviceStats.device2.txBytes.load(std::memory_order_relaxed);
+    doc["device3Rx"] = g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed);
+    doc["device3Tx"] = g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
     
-    // Add Device 4 statistics if active
+    // Device4 statistics - KEEP EXACT FIELD NAMES for backward compatibility
     if (config.device4.role != D4_NONE && systemState.networkActive) {
-        doc["device4TxBytes"] = getProtectedULongValue(&uartStats.device4TxBytes);
-        doc["device4TxPackets"] = getProtectedULongValue(&uartStats.device4TxPackets);
-        doc["device4RxBytes"] = getProtectedULongValue(&uartStats.device4RxBytes);
-        doc["device4RxPackets"] = getProtectedULongValue(&uartStats.device4RxPackets);
+        doc["device4TxBytes"] = g_deviceStats.device4.txBytes.load(std::memory_order_relaxed);
+        doc["device4TxPackets"] = g_deviceStats.device4.txPackets.load(std::memory_order_relaxed);
+        doc["device4RxBytes"] = g_deviceStats.device4.rxBytes.load(std::memory_order_relaxed);
+        doc["device4RxPackets"] = g_deviceStats.device4.rxPackets.load(std::memory_order_relaxed);
     }
     
-    // Total traffic
-    unsigned long totalTraffic = 0;
-    enterStatsCritical();
-    totalTraffic = uartStats.device1RxBytes + uartStats.device1TxBytes +
-                   uartStats.device2RxBytes + uartStats.device2TxBytes +
-                   uartStats.device3RxBytes + uartStats.device3TxBytes;
-    exitStatsCritical();
+    // Calculate total traffic (local UART/USB only, not network)
+    unsigned long totalTraffic = 
+        g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed) + 
+        g_deviceStats.device1.txBytes.load(std::memory_order_relaxed) +
+        g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed) + 
+        g_deviceStats.device2.txBytes.load(std::memory_order_relaxed) +
+        g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed) + 
+        g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
     doc["totalTraffic"] = totalTraffic;
     
-    // Last activity
-    unsigned long lastActivity = getProtectedULongValue(&uartStats.lastActivityTime);
+    // Last activity using new g_deviceStats
+    unsigned long lastActivity = g_deviceStats.lastGlobalActivity.load(std::memory_order_relaxed);
     if (lastActivity == 0) {
         doc["lastActivity"] = "Never";
     } else {
@@ -503,7 +495,8 @@ void handleSave(AsyncWebServerRequest *request) {
 // Handle reset statistics
 void handleResetStats(AsyncWebServerRequest *request) {
   log_msg(LOG_INFO, "Resetting statistics and logs...");
-  resetStatistics(&uartStats);
+  // Use helper function with current time for g_deviceStats reset
+  resetDeviceStatistics(g_deviceStats, millis());
   
   // Reset protocol statistics via bridge context accessor
   BridgeContext* ctx = getBridgeContext();

@@ -40,19 +40,22 @@
   - ✅ **Statistics Refactoring**: Migrated Device3 statistics to Uart3Sender static members (rxBytes, txBytes)
   - ✅ **Diagnostics Update**: Updated diagnostics.cpp to use new Uart3Sender statistics interface
 
-#### 1.5 - LED Centralization 🔄 PENDING
-- [ ] **Remove LED calls from protocols/senders**
-  - Remove all LED calls from protocols/senders
-  - Create unified LED monitoring task in Scheduler (100ms)
-  - LED task reads global statistics from all devices
-  - Support for different LED patterns (single/double blink, colors)
+#### 1.5 - LED Centralization ✅ COMPLETED (v2.15.5)
+- [x] **Remove LED calls from protocols/senders** ✅ COMPLETED
+  - ✅ Removed all LED calls from protocols/senders throughout codebase
+  - ✅ Created unified LED monitoring task in TaskScheduler (50ms interval)
+  - ✅ LED task reads global statistics from all devices using snapshot comparison
+  - ✅ Implemented LedSnapshot structure for efficient state tracking
+  - ✅ Bridge mode awareness - task enabled/disabled based on bridge mode
 
-#### 1.6 - Statistics Refactoring 🔄 PENDING
-- [ ] **Create unified DeviceStatistics structure**
-  - Migrate all devices to new statistics
-  - Remove scattered global variables
-  - Unify web interface statistics
-  - Single source of truth for all device counters
+#### 1.6 - Statistics Refactoring ✅ COMPLETED (v2.15.5)
+- [x] **Create unified DeviceStatistics structure** ✅ COMPLETED
+  - ✅ Migrated all devices to atomic-based DeviceStatistics with DeviceCounter structure
+  - ✅ Removed scattered global variables and UartStats structure
+  - ✅ Unified web interface statistics using atomic loads (memory_order_relaxed)
+  - ✅ Created single source of truth: global DeviceStatistics g_deviceStats
+  - ✅ Eliminated critical sections and spinlocks for lock-free performance
+  - ✅ Updated all protocol senders to use global statistics directly
 
 #### 1.7 - Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
@@ -60,6 +63,22 @@
   - Clean up experimental code blocks
   - Remove "TEMPORARY DEBUG" sections
   - Finalize production-ready code
+
+### Priority 1.8 - Architecture Simplification (after UART refactoring) 🔄 PENDING
+
+- [ ] **Evaluate bridge_processing.h removal**
+  - After UART refactoring - assess remaining code
+  - After LED centralization - even less code  
+  - After full Protocol Pipeline integration
+  - Consider creating BridgeProcessor class
+  - Or remove file completely
+- [ ] **Simplify uartBridgeTask**
+  - Minimize to Pipeline + USB only
+  - Consider renaming to pipelineTask
+  - Or move to main.cpp if small enough
+- [ ] **Consolidate initialization**
+  - Merge device_init.cpp logic where appropriate
+  - Simplify context initialization
 
 ### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
 
@@ -190,22 +209,6 @@
     - Device 1: MAVLink, Device 2: SBUS conversion
     - Device 1: Modbus RTU, Device 3: JSON over network
     - Device 1: NMEA GPS, Device 2: Binary protocol conversion
-
-### Priority 7.1 - Architecture Simplification (after UART refactoring) 🔄 PENDING
-
-- [ ] **Evaluate bridge_processing.h removal**
-  - After UART refactoring - assess remaining code
-  - After LED centralization - even less code  
-  - After full Protocol Pipeline integration
-  - Consider creating BridgeProcessor class
-  - Or remove file completely
-- [ ] **Simplify uartBridgeTask**
-  - Minimize to Pipeline + USB only
-  - Consider renaming to pipelineTask
-  - Or move to main.cpp if small enough
-- [ ] **Consolidate initialization**
-  - Merge device_init.cpp logic where appropriate
-  - Simplify context initialization
 
 ### Priority 8 - Multi-Board Support
 
