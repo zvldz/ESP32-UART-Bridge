@@ -5,6 +5,7 @@
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include <atomic>
 
 // Forward declarations
 class ProtocolPipeline;
@@ -155,27 +156,58 @@ typedef struct {
   bool udpBatchingEnabled = true;  // Default: batching ON
 } Config;
 
-// Traffic statistics
-typedef struct {
-  // Per-device byte counters
-  unsigned long device1RxBytes;  // Device 1 RX (from external device)
-  unsigned long device1TxBytes;  // Device 1 TX (to external device)
-  unsigned long device2RxBytes;  // Device 2 RX
-  unsigned long device2TxBytes;  // Device 2 TX
-  unsigned long device3RxBytes;  // Device 3 RX (Bridge mode only)
-  unsigned long device3TxBytes;  // Device 3 TX (Mirror/Bridge/Log)
-  
-  // Device 4 statistics
-  unsigned long device4TxBytes;    // Device 4 TX (Network Logger/Bridge)
-  unsigned long device4TxPackets;  // Device 4 TX packet count
-  unsigned long device4RxBytes;    // Device 4 RX (Bridge mode only)
-  unsigned long device4RxPackets;  // Device 4 RX packet count
-  
-  // General statistics
-  unsigned long lastActivityTime;
-  unsigned long deviceStartTime;
-  unsigned long totalUartPackets;
-} UartStats;
+// Old UartStats removed - replaced by DeviceStatistics with atomic operations
+
+// New unified device statistics structure
+struct DeviceStatistics {
+    // Per-device counters with atomic operations for thread safety
+    struct DeviceCounter {
+        std::atomic<unsigned long> rxBytes{0};
+        std::atomic<unsigned long> txBytes{0};
+        std::atomic<unsigned long> rxPackets{0};  // Only used by Device4
+        std::atomic<unsigned long> txPackets{0};  // Only used by Device4
+    };
+    
+    DeviceCounter device1;
+    DeviceCounter device2;
+    DeviceCounter device3;
+    DeviceCounter device4;
+    
+    // System-wide counters
+    std::atomic<unsigned long> systemStartTime{0};
+    std::atomic<unsigned long> lastGlobalActivity{0};
+};
+
+// Single global instance
+extern DeviceStatistics g_deviceStats;
+
+// Helper function to reset statistics (time passed from outside to avoid header dependencies)
+inline void resetDeviceStatistics(DeviceStatistics& stats, unsigned long currentTimeMs) {
+    // Reset all device counters
+    stats.device1.rxBytes.store(0, std::memory_order_relaxed);
+    stats.device1.txBytes.store(0, std::memory_order_relaxed);
+    stats.device1.rxPackets.store(0, std::memory_order_relaxed);
+    stats.device1.txPackets.store(0, std::memory_order_relaxed);
+    
+    stats.device2.rxBytes.store(0, std::memory_order_relaxed);
+    stats.device2.txBytes.store(0, std::memory_order_relaxed);
+    stats.device2.rxPackets.store(0, std::memory_order_relaxed);
+    stats.device2.txPackets.store(0, std::memory_order_relaxed);
+    
+    stats.device3.rxBytes.store(0, std::memory_order_relaxed);
+    stats.device3.txBytes.store(0, std::memory_order_relaxed);
+    stats.device3.rxPackets.store(0, std::memory_order_relaxed);
+    stats.device3.txPackets.store(0, std::memory_order_relaxed);
+    
+    stats.device4.rxBytes.store(0, std::memory_order_relaxed);
+    stats.device4.txBytes.store(0, std::memory_order_relaxed);
+    stats.device4.rxPackets.store(0, std::memory_order_relaxed);
+    stats.device4.txPackets.store(0, std::memory_order_relaxed);
+    
+    // Reset global counters
+    stats.lastGlobalActivity.store(0, std::memory_order_relaxed);
+    stats.systemStartTime.store(currentTimeMs, std::memory_order_relaxed);
+}
 
 // System state
 typedef struct {
@@ -206,17 +238,7 @@ typedef struct {
   bool flowControlActive;
 } FlowControlStatus;
 
-// Spinlock for statistics critical sections
-extern portMUX_TYPE statsMux;
-
-// Inline functions for convenient critical section handling
-inline void enterStatsCritical() {
-    taskENTER_CRITICAL(&statsMux);
-}
-
-inline void exitStatsCritical() {
-    taskEXIT_CRITICAL(&statsMux);
-}
+// Statistics critical sections removed - using atomic operations instead
 
 // Forward declarations for interface types
 class UartInterface;
@@ -227,23 +249,9 @@ class CircularBuffer;
 // Forward declaration for protocol statistics (will be defined in future phases)
 struct ProtocolStats;
 
-// Bridge operation context - contains pointers to local variables
+// Bridge operation context - simplified after statistics refactoring
 struct BridgeContext {
-    // Statistics (pointers to task-local variables)
-    struct {
-        unsigned long* device1RxBytes;
-        unsigned long* device1TxBytes;
-        unsigned long* device2RxBytes;
-        unsigned long* device2TxBytes;
-        unsigned long* device3RxBytes;
-        unsigned long* device3TxBytes;
-        unsigned long* device4RxBytes;      // Device 4 RX bytes
-        unsigned long* device4TxBytes;      // Device 4 TX bytes
-        unsigned long* device4RxPackets;    // Device 4 RX packet count
-        unsigned long* device4TxPackets;    // Device 4 TX packet count
-        unsigned long* lastActivity;
-        unsigned long* totalUartPackets;
-    } stats;
+    // Statistics removed - using global g_deviceStats with atomic operations
     
     // Adaptive buffering state
     struct {
@@ -285,10 +293,8 @@ struct BridgeContext {
         UartInterface* device3Serial;
     } interfaces;
     
-    // Timing controls
+    // Timing controls - LED timing removed (handled by LED monitor task)
     struct {
-        unsigned long* lastUartLedNotify;
-        unsigned long* lastUsbLedNotify;
         unsigned long* lastWifiYield;
         unsigned long* lastDropLog;
     } timing;
@@ -299,7 +305,7 @@ struct BridgeContext {
     struct {
         BridgeMode* bridgeMode;  // Current bridge operation mode
         Config* config;
-        UartStats* globalStats;
+        // globalStats removed - using g_deviceStats
     } system;
     
     // Protocol state (simplified)
@@ -334,15 +340,8 @@ struct BridgeContext {
     class ProtocolPipeline* protocolPipeline;
 };
 
-// Initialize BridgeContext with all necessary pointers
+// Initialize BridgeContext - simplified after statistics refactoring
 inline void initBridgeContext(BridgeContext* ctx,
-    // Statistics
-    unsigned long* device1RxBytes, unsigned long* device1TxBytes,
-    unsigned long* device2RxBytes, unsigned long* device2TxBytes,
-    unsigned long* device3RxBytes, unsigned long* device3TxBytes,
-    unsigned long* device4RxBytes, unsigned long* device4TxBytes,
-    unsigned long* device4RxPackets, unsigned long* device4TxPackets,
-    unsigned long* lastActivity, unsigned long* totalUartPackets,
     // Adaptive buffer
     size_t bufferSize,
     unsigned long* lastByteTime, unsigned long* bufferStartTime,
@@ -356,24 +355,11 @@ inline void initBridgeContext(BridgeContext* ctx,
     UartInterface* uartBridgeSerial, UsbInterface* usbInterface,
     UartInterface* device2Serial, UartInterface* device3Serial,
     // Timing
-    unsigned long* lastUartLedNotify, unsigned long* lastUsbLedNotify,
     unsigned long* lastWifiYield, unsigned long* lastDropLog,
     // System
-    BridgeMode* bridgeMode, Config* config, UartStats* globalStats)
+    BridgeMode* bridgeMode, Config* config)
 {
-    // Statistics
-    ctx->stats.device1RxBytes = device1RxBytes;
-    ctx->stats.device1TxBytes = device1TxBytes;
-    ctx->stats.device2RxBytes = device2RxBytes;
-    ctx->stats.device2TxBytes = device2TxBytes;
-    ctx->stats.device3RxBytes = device3RxBytes;
-    ctx->stats.device3TxBytes = device3TxBytes;
-    ctx->stats.device4RxBytes = device4RxBytes;
-    ctx->stats.device4TxBytes = device4TxBytes;
-    ctx->stats.device4RxPackets = device4RxPackets;
-    ctx->stats.device4TxPackets = device4TxPackets;
-    ctx->stats.lastActivity = lastActivity;
-    ctx->stats.totalUartPackets = totalUartPackets;
+    // Statistics removed - using global g_deviceStats
     
     // Adaptive buffer
     ctx->adaptive.bufferSize = bufferSize;
@@ -405,16 +391,13 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->interfaces.device3Serial = device3Serial;
     
     // Timing
-    ctx->timing.lastUartLedNotify = lastUartLedNotify;
-    ctx->timing.lastUsbLedNotify = lastUsbLedNotify;
     ctx->timing.lastWifiYield = lastWifiYield;
     ctx->timing.lastDropLog = lastDropLog;
-    
     
     // System
     ctx->system.bridgeMode = bridgeMode;
     ctx->system.config = config;
-    ctx->system.globalStats = globalStats;
+    // globalStats removed - using g_deviceStats
     
     // CRITICAL FIX: Initialize protocol structure to prevent crashes
     ctx->protocol.enabled = false;

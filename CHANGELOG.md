@@ -1,6 +1,65 @@
 # CHANGELOG
 
-## v2.15.3 (Device 4 Pipeline Integration + UDP Logger Buffer Separation) 🔥 MAJOR REFACTORING
+## v2.15.5 (Statistics & LED System Refactoring) ✅ COMPLETED
+
+### Major Architecture Refactoring ✅ COMPLETED
+- **Unified Device Statistics**: Complete migration to atomic-based statistics system
+  - **Atomic Operations**: Replaced critical sections with `std::atomic<unsigned long>` and `memory_order_relaxed`
+  - **Global Statistics**: Centralized `DeviceStatistics g_deviceStats` for all 4 devices (Device1-4)
+  - **Thread Safety**: Eliminated spinlocks and critical sections for lock-free statistics
+  - **Memory Reduction**: Removed task-local counters and UartStats structure
+  - **Simplified Architecture**: Direct atomic increments throughout the codebase
+
+### Device Statistics Centralization ✅ COMPLETED
+- **DeviceCounter Structure**: Standardized RX/TX byte counters for all devices
+  - **Device1**: UART1 primary interface statistics
+  - **Device2**: USB/UART2 secondary interface statistics  
+  - **Device3**: UART3 mirror/bridge interface statistics
+  - **Device4**: UDP network interface statistics
+- **System-wide Counters**: Added global activity tracking and system start time
+- **Web Interface Integration**: All statistics accessible via atomic loads
+- **Reset Functionality**: Unified statistics reset across all devices
+
+### LED Monitor Task Implementation ✅ COMPLETED
+- **Centralized LED Management**: Replaced scattered LED calls with unified monitor task
+  - **TaskScheduler Integration**: 50ms interval LED monitoring task
+  - **Snapshot Comparison**: Efficient LED state updates using LedSnapshot structure
+  - **Activity Detection**: Smart LED updates only when device activity changes
+  - **Bridge Mode Awareness**: LED task enabled/disabled based on bridge mode
+- **Performance Optimization**: Eliminated redundant LED calls throughout codebase
+- **Code Simplification**: Removed LED timing variables from bridge processing
+
+### Protocol Pipeline Integration ✅ COMPLETED
+- **Sender Statistics Cleanup**: Removed static counters from UartSender and UdpSender
+  - **Direct Statistics**: Senders now update global g_deviceStats directly
+  - **Memory Optimization**: Eliminated duplicate statistics tracking
+  - **Unified Interface**: All statistics accessible through single global structure
+- **Pipeline Statistics**: Protocol processing statistics integrated with global system
+
+### Web Interface Statistics Overhaul ✅ COMPLETED
+- **Atomic Statistics Access**: All web API endpoints use atomic loads
+  - **Lock-free Operations**: Replaced critical sections with `load(std::memory_order_relaxed)`
+  - **Real-time Updates**: Direct access to current statistics without blocking
+  - **JSON Field Compatibility**: Maintained existing field names for frontend compatibility
+- **Statistics Reset**: Simplified reset functionality using atomic stores
+- **Diagnostic Integration**: Enhanced statistics reporting in web interface
+
+### Code Architecture Cleanup ✅ COMPLETED
+- **Legacy Statistics Removal**: Eliminated UartStats structure and related functions
+  - **Types.h Cleanup**: Removed UartStats, statsMux, and old statistics functions
+  - **Bridge Context**: Simplified BridgeContext initialization signature
+  - **Function Signatures**: Updated all initialization functions to remove UartStats parameters
+- **Critical Section Elimination**: Removed all portMUX-based statistics protection
+- **Memory Efficiency**: Reduced memory footprint through unified statistics approach
+
+### Technical Benefits 🚀
+- **Lock-free Performance**: Atomic operations eliminate contention and improve throughput
+- **Simplified Maintenance**: Single statistics system across entire codebase
+- **Better Reliability**: No deadlocks or race conditions in statistics collection
+- **Reduced Memory Usage**: Eliminated duplicate counters and synchronization primitives
+- **Cleaner Architecture**: Clear separation between statistics collection and LED management
+
+## v2.15.4 (UDP Sender Refactoring & Protocol-Aware Batching) 🚀
 
 ### Major Architecture Simplification ✅ COMPLETED
 - **SPSC Queue Removal**: Eliminated complex inter-core Single Producer Single Consumer queue system

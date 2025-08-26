@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
 #include "../wifi/wifi_manager.h"
+#include "../types.h"  // For g_deviceStats
 
 class UdpSender : public PacketSender {
 private:
@@ -203,12 +204,7 @@ private:
     }
     
 public:
-    // Static UDP statistics
-    inline static unsigned long udpTxBytes = 0;
-    inline static unsigned long udpTxPackets = 0;
-    inline static unsigned long udpRxBytes = 0;
-    inline static unsigned long udpRxPackets = 0;
-    inline static unsigned long device1TxBytesFromDevice4 = 0;
+    // Static UDP statistics removed - using g_deviceStats
 
     // Configuration method
     void setBatchingEnabled(bool enabled) { 
@@ -337,12 +333,7 @@ public:
         // === DIAGNOSTIC END ===
     }
     
-    // Update RX stats from callback
-    static void updateRxStats(size_t bytes) {
-        udpRxBytes += bytes;
-        udpRxPackets++;
-        device1TxBytesFromDevice4 += bytes;
-    }
+    // Update RX stats method removed - stats updated directly in callback
     
     void sendUdpDatagram(uint8_t* data, size_t size) {
         // Early exit checks
@@ -365,9 +356,10 @@ public:
                 lastFailLog = millis();
             }
         } else {
-            // Update static counters
-            udpTxBytes += sent;
-            udpTxPackets++;
+            // Update Device4 TX statistics
+            g_deviceStats.device4.txBytes.fetch_add(sent, std::memory_order_relaxed);
+            g_deviceStats.device4.txPackets.fetch_add(1, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         }
         
         if (globalTxBytesCounter) {

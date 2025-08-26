@@ -3,6 +3,7 @@
 
 #include "packet_sender.h"
 #include "../uart/uart_interface.h"  // Correct include
+#include "../types.h"  // For g_deviceStats
 
 // Base UART sender class
 class UartSender : public PacketSender {
@@ -63,6 +64,9 @@ public:
                     *globalTxBytesCounter += sent;
                 }
                 
+                // Update activity time
+                g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+                
                 // Check if packet fully sent
                 if (item->sendOffset >= item->packet.size) {
                     totalSent++;
@@ -90,17 +94,17 @@ public:
 // Device2 UART2 sender
 class Uart2Sender : public UartSender {
 public:
-    inline static unsigned long txBytes = 0;
-    inline static unsigned long rxBytes = 0;
-    
     using UartSender::UartSender;
     const char* getName() const override { return "UART2"; }
     
     void processSendQueue(bool bulkMode = false) override {
+        size_t bytesBefore = currentQueueBytes;
         UartSender::processSendQueue(bulkMode);
-        // Update static counter after sending
-        if (globalTxBytesCounter) {
-            txBytes = *globalTxBytesCounter;
+        
+        // Update Device2 TX statistics if bytes were sent
+        size_t bytesSent = bytesBefore - currentQueueBytes;
+        if (bytesSent > 0) {
+            g_deviceStats.device2.txBytes.fetch_add(bytesSent, std::memory_order_relaxed);
         }
     }
 };
@@ -108,23 +112,18 @@ public:
 // Device3 UART3 sender  
 class Uart3Sender : public UartSender {
 public:
-    inline static unsigned long txBytes = 0;
-    inline static unsigned long rxBytes = 0;  // For Bridge mode RX
-    
     using UartSender::UartSender;
     const char* getName() const override { return "UART3"; }
     
     void processSendQueue(bool bulkMode = false) override {
+        size_t bytesBefore = currentQueueBytes;
         UartSender::processSendQueue(bulkMode);
-        // Update static counter after sending
-        if (globalTxBytesCounter) {
-            txBytes = *globalTxBytesCounter;
+        
+        // Update Device3 TX statistics if bytes were sent
+        size_t bytesSent = bytesBefore - currentQueueBytes;
+        if (bytesSent > 0) {
+            g_deviceStats.device3.txBytes.fetch_add(bytesSent, std::memory_order_relaxed);
         }
-    }
-    
-    // Static method for updating RX stats (called from Bridge polling)
-    static void updateRxStats(size_t bytes) {
-        rxBytes += bytes;
     }
 };
 

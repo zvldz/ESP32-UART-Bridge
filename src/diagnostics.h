@@ -14,13 +14,8 @@ const char* getDevice2RoleName(uint8_t role);
 const char* getDevice3RoleName(uint8_t role);
 const char* getDevice4RoleName(uint8_t role);
 
-// Statistics management
-void updateSharedStats(unsigned long device1Rx, unsigned long device1Tx,
-                      unsigned long device2Rx, unsigned long device2Tx,
-                      unsigned long device3Rx, unsigned long device3Tx,
-                      unsigned long device4Rx, unsigned long device4Tx,
-                      unsigned long lastActivity);
-void resetStatistics(UartStats* stats);
+// Statistics management functions removed - using atomic g_deviceStats
+// updateSharedStats and resetStatistics removed - using direct atomic operations
 
 // Statistics update functions (called by scheduler)
 void updateMainStats();      // Updates Device 1/2 from Core 0
