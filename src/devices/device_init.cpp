@@ -25,7 +25,7 @@ UartInterface* device3Serial = nullptr;
 UsbInterface* g_usbInterface = nullptr;
 
 // Initialize main UART bridge (Device 1)
-void initMainUART(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb) {
+void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
   // Store USB interface pointer
   g_usbInterface = usb;
   

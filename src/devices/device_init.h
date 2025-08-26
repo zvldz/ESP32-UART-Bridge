@@ -9,7 +9,7 @@ class UartInterface;
 class UsbInterface;
 
 // Initialize main UART bridge (Device 1)
-void initMainUART(UartInterface* serial, Config* config, UartStats* stats, UsbInterface* usb);
+void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb);
 
 // Device initialization functions
 void initDevice2UART();

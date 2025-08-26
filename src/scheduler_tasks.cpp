@@ -12,6 +12,7 @@
 #include "wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
 #include "circular_buffer.h"
+#include "leds.h"  // For LED notifications
 
 // External objects
 extern Config config;
@@ -33,6 +34,16 @@ static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER,
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
+static Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring
+
+// Simple snapshot for LED comparison (not atomic)
+struct LedSnapshot {
+    unsigned long d1_rx = 0;
+    unsigned long d2_rx = 0;
+    unsigned long d3_tx = 0;
+    unsigned long d3_rx = 0;
+};
+static LedSnapshot ledPrevSnapshot;
 
 
 void initializeScheduler() {
@@ -63,15 +74,15 @@ void initializeScheduler() {
     });
     
     tUpdateStats.set(UART_STATS_UPDATE_INTERVAL_MS, TASK_FOREVER, []{ 
-        updateMainStats(); 
+        updateMainStats();  // Empty - stats updated directly 
     });
     
     tUpdateStatsDevice3.set(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, []{ 
-        updateDevice3Stats(); 
+        updateDevice3Stats();  // Empty - stats updated directly
     });
     
     tUpdateStatsDevice4.set(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, []{ 
-        updateDevice4Stats(); 
+        updateDevice4Stats();  // Empty - stats updated directly
     });
     
     tDnsProcess.set(150, TASK_FOREVER, []{ 
@@ -86,6 +97,53 @@ void initializeScheduler() {
     });
     
     // UDP Logger task - copies log lines to Pipeline
+    tLedMonitor.set(50, TASK_FOREVER, []{ 
+        // Only show data activity LEDs in standalone mode
+        if (bridgeMode != BRIDGE_STANDALONE) {
+            return;  // Network mode uses WiFi state LEDs
+        }
+        
+        // Device 1 UART RX activity
+        const auto d1_rx = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
+        if (d1_rx > ledPrevSnapshot.d1_rx) {
+            led_notify_uart_rx();  // Blue LED
+        }
+        ledPrevSnapshot.d1_rx = d1_rx;
+        
+        // Device 2 activity (USB or UART2)
+        if (config.device2.role == D2_USB) {
+            const auto d2_rx = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
+            if (d2_rx > ledPrevSnapshot.d2_rx) {
+                led_notify_usb_rx();  // Green LED
+            }
+            ledPrevSnapshot.d2_rx = d2_rx;
+        } else if (config.device2.role == D2_UART2) {
+            const auto d2_rx = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
+            if (d2_rx > ledPrevSnapshot.d2_rx) {
+                led_notify_uart_rx();  // Blue LED (same as Device1)
+            }
+            ledPrevSnapshot.d2_rx = d2_rx;
+        }
+        
+        // Device 3 TX activity
+        if (config.device3.role != D3_NONE) {
+            const auto d3_tx = g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
+            if (d3_tx > ledPrevSnapshot.d3_tx) {
+                led_notify_device3_tx();  // Magenta LED
+            }
+            ledPrevSnapshot.d3_tx = d3_tx;
+            
+            // Device 3 RX activity (Bridge mode only)
+            if (config.device3.role == D3_UART3_BRIDGE) {
+                const auto d3_rx = g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed);
+                if (d3_rx > ledPrevSnapshot.d3_rx) {
+                    led_notify_device3_rx();  // Yellow LED
+                }
+                ledPrevSnapshot.d3_rx = d3_rx;
+            }
+        }
+    });
+    
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
         
@@ -194,6 +252,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tDnsProcess);
     taskScheduler.addTask(tRebootDevice);
     taskScheduler.addTask(tUdpLoggerTask);
+    taskScheduler.addTask(tLedMonitor);
     
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
@@ -214,6 +273,7 @@ void enableStandaloneTasks() {
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
     tUpdateStats.enable();
+    tLedMonitor.enable();  // Enable LED monitoring in standalone mode
     
     // Enable Device3 stats only if device is active
     if (config.device3.role != D3_NONE) {
@@ -242,6 +302,7 @@ void enableNetworkTasks(bool temporaryNetwork) {
     
     // Bridge tasks continue to work in network mode
     tBridgeActivity.enable();
+    tLedMonitor.disable();  // Disable LED monitoring in network mode
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
     tUpdateStats.enable();

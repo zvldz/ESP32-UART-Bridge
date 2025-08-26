@@ -23,7 +23,6 @@
 
 // External objects from main.cpp
 extern Config config;
-extern UartStats uartStats;
 extern SystemState systemState;
 extern BridgeMode bridgeMode;
 extern Preferences preferences;
@@ -38,7 +37,7 @@ static bool webServerInitialized = false;
 // Template processor no longer needed - config loaded via AJAX
 
 // Initialize web server in NETWORK mode
-void webserver_init(Config* config, UartStats* stats, SystemState* state) {
+void webserver_init(Config* config, SystemState* state) {
   log_msg(LOG_INFO, "Starting Network Mode");
 
   state->networkActive = true;

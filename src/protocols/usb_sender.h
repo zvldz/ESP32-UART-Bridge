@@ -3,6 +3,7 @@
 
 #include "packet_sender.h"
 #include "../usb/usb_interface.h"
+#include "../types.h"  // For g_deviceStats
 #include <cstring>   // for memcpy
 #include <algorithm> // for min
 
@@ -106,6 +107,8 @@ private:
         if (sent > 0) {
             resetBackoff();
             updateTxCounter(sent);
+            g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             commitPackets(1);  // Remove packet from queue
             return true;
         } else {
@@ -281,6 +284,8 @@ public:
                         if (sent > 0) {
                             resetBackoff();
                             updateTxCounter(sent);
+                            g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
+                            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                             commitPackets(partialPackets);
                         }
                     }
@@ -295,6 +300,8 @@ public:
             if (sent > 0) {
                 resetBackoff();
                 updateTxCounter(sent);
+                g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
+                g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                 commitPackets(batchPackets);  // Commit all packets
                 
                 // Log batch success (keep existing logging)

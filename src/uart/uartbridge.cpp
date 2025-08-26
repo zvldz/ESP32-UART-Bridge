@@ -22,7 +22,7 @@
 // External objects from main.cpp
 extern BridgeMode bridgeMode;
 extern Config config;
-extern UartStats uartStats;
+// extern UartStats removed - using g_deviceStats
 extern SystemState systemState;
 extern FlowControlStatus flowControlStatus;
 extern UartInterface* uartBridgeSerial;
@@ -49,19 +49,7 @@ void uartBridgeTask(void* parameter) {
   log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
           adaptiveBufferSize, config.baudrate);
 
-  // Local counters for all devices
-  unsigned long localDevice1RxBytes = 0;
-  unsigned long localDevice1TxBytes = 0;
-  unsigned long localDevice2RxBytes = 0;
-  unsigned long localDevice2TxBytes = 0;
-  unsigned long localDevice3RxBytes = 0;
-  unsigned long localDevice3TxBytes = 0;
-  unsigned long localDevice4RxBytes = 0;      // Device 4 RX bytes
-  unsigned long localDevice4TxBytes = 0;      // Device 4 TX bytes
-  unsigned long localDevice4RxPackets = 0;    // Device 4 RX packets
-  unsigned long localDevice4TxPackets = 0;    // Device 4 TX packets
-  unsigned long localLastActivity = 0;
-  unsigned long localTotalUartPackets = 0;
+  // Local counters removed - using global g_deviceStats
 
   // Adaptive buffering variables
   unsigned long lastByteTime = 0;
@@ -69,8 +57,7 @@ void uartBridgeTask(void* parameter) {
 
   // Timing variables
   unsigned long lastWifiYield = 0;
-  unsigned long lastUartLedNotify = 0;
-  unsigned long lastUsbLedNotify = 0;
+  // LED timing removed - handled by LED monitor task
 
   // Diagnostic counters
   unsigned long droppedBytes = 0;
@@ -90,13 +77,6 @@ void uartBridgeTask(void* parameter) {
   // Initialize BridgeContext
   BridgeContext ctx;
   initBridgeContext(&ctx,
-    // Statistics
-    &localDevice1RxBytes, &localDevice1TxBytes,
-    &localDevice2RxBytes, &localDevice2TxBytes,
-    &localDevice3RxBytes, &localDevice3TxBytes,
-    &localDevice4RxBytes, &localDevice4TxBytes,
-    &localDevice4RxPackets, &localDevice4TxPackets,
-    &localLastActivity, &localTotalUartPackets,
     // Adaptive buffer
     adaptiveBufferSize,
     &lastByteTime, &bufferStartTime,
@@ -110,14 +90,16 @@ void uartBridgeTask(void* parameter) {
     uartBridgeSerial, g_usbInterface,
     device2Serial, device3Serial,
     // Timing
-    &lastUartLedNotify, &lastUsbLedNotify,
     &lastWifiYield, &lastDropLog,
     // System
-    &bridgeMode, &config, &uartStats
+    &bridgeMode, &config
   );
 
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
+  
+  // Initialize system start time
+  g_deviceStats.systemStartTime.store(millis(), std::memory_order_relaxed);
 
   // Create protocol statistics BEFORE pipeline initialization
   ctx.protocol.stats = new ProtocolStats();
