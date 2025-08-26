@@ -28,9 +28,7 @@ static Task tBridgeActivity(30000, TASK_FOREVER, nullptr);
 static Task tAllStacksDiagnostics(5000, TASK_FOREVER, nullptr);  // Renamed - shows all stacks
 static Task tDroppedDataStats(5000, TASK_FOREVER, nullptr);
 static Task tWiFiTimeout(WIFI_TIMEOUT, TASK_ONCE, nullptr);
-static Task tUpdateStats(UART_STATS_UPDATE_INTERVAL_MS, TASK_FOREVER, nullptr);
-static Task tUpdateStatsDevice3(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, nullptr);
-static Task tUpdateStatsDevice4(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, nullptr);
+// Statistics update tasks removed - using atomic operations in g_deviceStats
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
@@ -73,17 +71,7 @@ void initializeScheduler() {
         ESP.restart();
     });
     
-    tUpdateStats.set(UART_STATS_UPDATE_INTERVAL_MS, TASK_FOREVER, []{ 
-        updateMainStats();  // Empty - stats updated directly 
-    });
-    
-    tUpdateStatsDevice3.set(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, []{ 
-        updateDevice3Stats();  // Empty - stats updated directly
-    });
-    
-    tUpdateStatsDevice4.set(UART_STATS_UPDATE_INTERVAL_MS * 2, TASK_FOREVER, []{ 
-        updateDevice4Stats();  // Empty - stats updated directly
-    });
+    // Statistics update task initialization removed - using atomic operations
     
     tDnsProcess.set(150, TASK_FOREVER, []{ 
         if (dnsServer) {
@@ -246,9 +234,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tAllStacksDiagnostics);
     taskScheduler.addTask(tDroppedDataStats);
     taskScheduler.addTask(tWiFiTimeout);
-    taskScheduler.addTask(tUpdateStats);
-    taskScheduler.addTask(tUpdateStatsDevice3);
-    taskScheduler.addTask(tUpdateStatsDevice4);
+    // Statistics update tasks removed from scheduler
     taskScheduler.addTask(tDnsProcess);
     taskScheduler.addTask(tRebootDevice);
     taskScheduler.addTask(tUdpLoggerTask);
@@ -263,8 +249,7 @@ void initializeScheduler() {
     tBridgeActivity.delay(5000);      // Start after 5 seconds
     tAllStacksDiagnostics.delay(1000); // Start after 1 second
     tDroppedDataStats.delay(2500);     // Start after 2.5 seconds
-    tUpdateStatsDevice3.delay(250);    // Start after 0.25 seconds
-    tUpdateStatsDevice4.delay(500);    // Start after 0.5 seconds
+    // Statistics tasks delay removed
 }
 
 void enableStandaloneTasks() {
@@ -272,17 +257,17 @@ void enableStandaloneTasks() {
     tBridgeActivity.enable();
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
-    tUpdateStats.enable();
+    // Statistics update task enable removed
     tLedMonitor.enable();  // Enable LED monitoring in standalone mode
     
     // Enable Device3 stats only if device is active
     if (config.device3.role != D3_NONE) {
-        tUpdateStatsDevice3.enable();
+        // Statistics Device3 task enable removed
     }
     
     // Enable Device4 stats only if device is active
     if (config.device4.role != D4_NONE) {
-        tUpdateStatsDevice4.enable();
+        // Statistics Device4 task enable removed
     }
     
     
@@ -305,15 +290,15 @@ void enableNetworkTasks(bool temporaryNetwork) {
     tLedMonitor.disable();  // Disable LED monitoring in network mode
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
-    tUpdateStats.enable();
+    // Statistics update task enable removed
     
     if (config.device3.role != D3_NONE) {
-        tUpdateStatsDevice3.enable();
+        // Statistics Device3 task enable removed
     }
     
     // Enable Device4 stats if active
     if (config.device4.role != D4_NONE) {
-        tUpdateStatsDevice4.enable();
+        // Statistics Device4 task enable removed
     }
     
     // Enable UDP Logger task if Device 4 is in Logger mode
@@ -328,9 +313,7 @@ void disableAllTasks() {
     tBridgeActivity.disable();
     tAllStacksDiagnostics.disable();
     tDroppedDataStats.disable();
-    tUpdateStats.disable();
-    tUpdateStatsDevice3.disable();
-    tUpdateStatsDevice4.disable();
+    // Statistics update tasks disable removed
     tDnsProcess.disable();
     tWiFiTimeout.disable();
 }

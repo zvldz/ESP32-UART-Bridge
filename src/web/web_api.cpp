@@ -3,6 +3,7 @@
 #include "web_interface.h"
 #include "logging.h"
 #include "config.h"
+#include "../device_stats.h"
 #include "../uart/uartbridge.h"
 #include "../uart/flow_control.h"
 #include "defines.h"
