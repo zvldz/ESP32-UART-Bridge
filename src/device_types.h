@@ -3,8 +3,6 @@
 #include <Arduino.h>  // for String
 #include "driver/uart.h"
 
-// Core enums used by Config (moved from types.h to avoid circular dependencies)
-
 // WiFi modes
 enum BridgeWiFiMode {
     BRIDGE_WIFI_MODE_AP = 0,

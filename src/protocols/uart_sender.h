@@ -12,8 +12,8 @@ protected:
     uint32_t lastSendTime;
     
 public:
-    UartSender(UartInterface* uart, unsigned long* txCounter = nullptr) :
-        PacketSender(20, 8192, txCounter),  // Return to original sizes  
+    UartSender(UartInterface* uart) :
+        PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),  
         uartInterface(uart),
         lastSendTime(0) {
         log_msg(LOG_DEBUG, "UartSender initialized");

@@ -7,6 +7,12 @@
 #include <deque>
 #include <Arduino.h>
 
+// PacketSender buffer size constants
+static constexpr size_t DEFAULT_MAX_PACKETS = 20;
+static constexpr size_t DEFAULT_MAX_BYTES = 8192;
+static constexpr size_t USB_MAX_PACKETS = 128; 
+static constexpr size_t USB_MAX_BYTES = 24576;
+
 // Queued packet with send progress tracking
 struct QueuedPacket {
     ParsedPacket packet;
@@ -33,18 +39,15 @@ protected:
     uint32_t totalSent;
     uint32_t totalDropped;
     uint32_t maxQueueDepth;    // Max queue depth seen
-    unsigned long* globalTxBytesCounter;  // Pointer to global TX counter
     
 public:
-    PacketSender(size_t maxPackets = 20, size_t maxBytes = 8192, 
-                 unsigned long* txCounter = nullptr) : 
+    PacketSender(size_t maxPackets = DEFAULT_MAX_PACKETS, size_t maxBytes = DEFAULT_MAX_BYTES) : 
         maxQueuePackets(maxPackets),
         maxQueueBytes(maxBytes),
         currentQueueBytes(0),
         totalSent(0), 
         totalDropped(0),
-        maxQueueDepth(0),
-        globalTxBytesCounter(txCounter) {}
+        maxQueueDepth(0) {}
     
     virtual ~PacketSender() {
         // Clean queue - CRITICAL: free all packets

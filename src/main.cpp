@@ -23,7 +23,6 @@
 
 // Global objects
 Config config;
-// Global statistics instance moved to device_stats.cpp  
 SystemState systemState = {0};  // All fields initialized to 0/false
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
@@ -47,9 +46,6 @@ AsyncUDP* udpTransport = nullptr;
 
 // Mutexes for thread safety
 SemaphoreHandle_t logMutex = NULL;
-
-// Spinlock for statistics critical sections
-// statsMux removed - using atomic operations instead
 
 // Function declarations
 void initPins();

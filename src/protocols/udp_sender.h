@@ -204,16 +204,14 @@ private:
     }
     
 public:
-    // Static UDP statistics removed - using g_deviceStats
-
     // Configuration method
     void setBatchingEnabled(bool enabled) { 
         enableAtomicBatching = enabled; 
         log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
     }
     
-    UdpSender(AsyncUDP* udp, unsigned long* txCounter = nullptr) : 
-        PacketSender(20, 8192, txCounter),
+    UdpSender(AsyncUDP* udp) : 
+        PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),
         udpTransport(udp),
         rawBatchSize(0),
         lastBatchTime(0),
@@ -332,8 +330,6 @@ public:
         }
         // === DIAGNOSTIC END ===
     }
-    
-    // Update RX stats method removed - stats updated directly in callback
     
     void sendUdpDatagram(uint8_t* data, size_t size) {
         // Early exit checks
