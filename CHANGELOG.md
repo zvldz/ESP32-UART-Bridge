@@ -141,6 +141,12 @@
   - **File Writing**: `writeJsonToFile()` helper replaced 3 duplicate file write operations
 - **Constants**: Added `CRASHLOG_MAX_FILE_SIZE` constant for better code readability
 - **Code Cleanup**: Improved consistency and maintainability throughout crash logging system
+
+### Legacy Code and Comment Cleanup ✅ COMPLETED
+- **Historical Comments Removal**: Cleaned up outdated comments throughout codebase
+- **Files Updated**: adaptive_buffer.h, bridge_processing.h, circular_buffer.h, uartbridge.cpp/h
+- **Legacy Code Removal**: Removed unused enum DataSource from circular_buffer.h
+- **Comment Consistency**: Simplified technical comments while preserving TODO markers and diagnostics
 - **Project Structure**: Moved device_init files to src root
   - **Simplified Paths**: `devices/device_init.h` → `device_init.h` 
   - **Include Updates**: Fixed all include paths throughout codebase

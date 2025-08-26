@@ -19,12 +19,12 @@ static inline size_t calculateAdaptiveBufferSize(uint32_t baudrate) {
     return 256;
 }
 
-// Initialize adaptive buffer timing (buffer allocation moved to buffer_manager)
+// Initialize adaptive buffer timing
 static inline void initAdaptiveBuffer(BridgeContext* ctx, size_t size) {
     // Set buffer size
     ctx->adaptive.bufferSize = size;
     
-    // Initialize timing (if still needed elsewhere)
+    // Initialize timing
     if (!ctx->adaptive.bufferStartTime) {
         ctx->adaptive.bufferStartTime = new unsigned long(0);
     }
@@ -66,7 +66,7 @@ static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data,
     // That's all! Pipeline will read from CircularBuffer independently
 }
 
-// Cleanup adaptive buffer timing (buffer cleanup moved to buffer_manager)
+// Cleanup adaptive buffer timing
 static inline void cleanupAdaptiveBuffer(BridgeContext* ctx) {
     if (ctx->adaptive.bufferStartTime) {
         delete ctx->adaptive.bufferStartTime;

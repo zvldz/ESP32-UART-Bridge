@@ -22,7 +22,6 @@
 // External objects from main.cpp
 extern BridgeMode bridgeMode;
 extern Config config;
-// extern UartStats removed - using g_deviceStats
 extern SystemState systemState;
 extern FlowControlStatus flowControlStatus;
 extern UartInterface* uartBridgeSerial;
@@ -46,7 +45,6 @@ void uartBridgeTask(void* parameter) {
   log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
           adaptiveBufferSize, config.baudrate);
 
-  // Local counters removed - using global g_deviceStats
 
   // Adaptive buffering variables
   unsigned long lastByteTime = 0;
@@ -54,7 +52,6 @@ void uartBridgeTask(void* parameter) {
 
   // Timing variables
   unsigned long lastWifiYield = 0;
-  // LED timing removed - handled by LED monitor task
 
   // Diagnostic counters
   unsigned long droppedBytes = 0;
@@ -104,10 +101,10 @@ void uartBridgeTask(void* parameter) {
   // Initialize protocol buffers based on configuration
   initProtocolBuffers(&ctx, &config);
   
-  // Initialize adaptive buffer timing (buffer allocation moved to buffer_manager)
+  // Initialize adaptive buffer timing
   initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
-  // NEW: Initialize protocol pipeline instead of old detection
+  // Initialize protocol pipeline
   ctx.protocolPipeline = new ProtocolPipeline(&ctx);
   ctx.protocolPipeline->init(&config);
   
@@ -140,7 +137,7 @@ void uartBridgeTask(void* parameter) {
       processDevice2UART(&ctx);
     }
     
-    // NEW: Process Device3 Bridge RX (UART3 → UART1)
+    // Process Device3 Bridge RX
     processDevice3BridgeRx(&ctx);
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
