@@ -55,6 +55,28 @@
   - **Removed**: Duplicate extern declarations
   - **Optimized**: Cached hostname length in validation loop
 
+### Web Interface Code Optimization & Cleanup ✅ COMPLETED
+- **Code Size Reduction**: Combined optimization of web API and interface modules
+  - **web_api.cpp**: Minor cleanup with constants for magic numbers and historical comment removal
+  - **web_interface.cpp**: Reduced from 211 to 192 lines (-19 lines, 9% reduction)
+- **HTTP Response Optimization**: Created helper function for gzipped static file serving
+  - **Before**: 7 identical 3-line blocks for CSS/JS files (21 lines total)
+  - **After**: Single `sendGzippedResponse()` helper + 7 one-line calls (13 lines total)
+  - **Eliminated Duplication**: Response creation, gzip header, and sending logic unified
+- **Magic Numbers → Named Constants**: Improved code readability
+  - **HTTP_PORT (80)**: Web server port configuration
+  - **UPLOAD_BUFFER_RESERVE (4096)**: File upload buffer pre-allocation size  
+  - **ASCII_PRINTABLE_THRESHOLD (32)**: Character filtering threshold for uploads
+- **Code Quality Improvements**: Removed historical references and unnecessary comments
+  - **Cleaned**: Architecture change comments and implementation history notes
+  - **Simplified**: Function documentation to focus on current behavior rather than past changes
+
+### Task Scheduler Code Cleanup ✅ COMPLETED
+- **Historical Comments Removal**: Cleaned up scheduler_tasks.cpp from legacy references
+  - **Removed 10+ comments**: All "Statistics update tasks removed" and similar historical notes
+  - **Focused Documentation**: Code comments now describe current functionality rather than past architecture changes
+  - **Cleaner Codebase**: Eliminated references to removed statistics update tasks and deprecated functionality
+
 ## v2.15.6 (Types System Refactoring & Code Organization) ✅ COMPLETED
 
 ### Major Code Architecture Refactoring ✅ COMPLETED

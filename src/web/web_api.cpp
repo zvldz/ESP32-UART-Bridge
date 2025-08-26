@@ -16,15 +16,16 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 
+// Web API constants
+#define MS_TO_SECONDS           1000
+#define IP_ADDRESS_BUFFER_SIZE  15
+
 // External objects from main.cpp
 extern Config config;
-// extern UartStats removed - using g_deviceStats
 extern SystemState systemState;
 extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
 
-
-// getProtectedULongValue removed - using atomic g_deviceStats operations
 
 // Generate complete configuration JSON for initial page load
 String getConfigJson() {
@@ -35,14 +36,14 @@ String getConfigJson() {
     doc["version"] = config.device_version;
     doc["freeRam"] = ESP.getFreeHeap();
     
-    // Calculate uptime using new g_deviceStats
-    doc["uptime"] = (millis() - g_deviceStats.systemStartTime.load(std::memory_order_relaxed)) / 1000;
+    // Calculate uptime
+    doc["uptime"] = (millis() - g_deviceStats.systemStartTime.load(std::memory_order_relaxed)) / MS_TO_SECONDS;
     
-    // Current configuration - convert ESP-IDF enums to web-compatible values
+    // Current configuration
     doc["baudrate"] = config.baudrate;
-    doc["databits"] = atoi(word_length_to_string(config.databits));  // Convert to number
-    doc["parity"] = parity_to_string(config.parity);                 // Convert to string
-    doc["stopbits"] = atoi(stop_bits_to_string(config.stopbits));    // Convert to number
+    doc["databits"] = atoi(word_length_to_string(config.databits));
+    doc["parity"] = parity_to_string(config.parity);
+    doc["stopbits"] = atoi(stop_bits_to_string(config.stopbits));
     doc["flowcontrol"] = config.flowcontrol;
     
     // WiFi
@@ -86,7 +87,7 @@ String getConfigJson() {
     doc["logLevelUart"] = (int)config.log_level_uart;
     doc["logLevelNetwork"] = (int)config.log_level_network;
     
-    // UART configuration string - build from ESP-IDF enums
+    // UART configuration string
     String uartConfig = String(config.baudrate) + " baud, " +
                        word_length_to_string(config.databits) + 
                        parity_to_string(config.parity)[0] +  // First char only (N/E/O)
@@ -96,7 +97,7 @@ String getConfigJson() {
     // Flow control status
     doc["flowControl"] = getFlowControlStatus();
     
-    // Statistics using new g_deviceStats with atomic loads
+    // Statistics
     doc["device1Rx"] = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
     doc["device1Tx"] = g_deviceStats.device1.txBytes.load(std::memory_order_relaxed);
     doc["device2Rx"] = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
@@ -122,12 +123,12 @@ String getConfigJson() {
         g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
     doc["totalTraffic"] = totalTraffic;
     
-    // Last activity using new g_deviceStats
+    // Last activity
     unsigned long lastActivity = g_deviceStats.lastGlobalActivity.load(std::memory_order_relaxed);
     if (lastActivity == 0) {
         doc["lastActivity"] = "Never";
     } else {
-        doc["lastActivity"] = String((millis() - lastActivity) / 1000) + " seconds ago";
+        doc["lastActivity"] = String((millis() - lastActivity) / MS_TO_SECONDS) + " seconds ago";
     }
     
     // Protocol optimization configuration
@@ -180,7 +181,7 @@ void handleSave(AsyncWebServerRequest *request) {
   // Parse form data
   bool configChanged = false;
 
-  // UART settings - convert from web format to ESP-IDF enums
+  // UART settings
   if (request->hasParam("baudrate", true)) {
     const AsyncWebParameter* p = request->getParam("baudrate", true);
     uint32_t newBaudrate = p->value().toInt();
@@ -289,8 +290,8 @@ void handleSave(AsyncWebServerRequest *request) {
   // Device 4 configuration
   if (request->hasParam("device4_target_ip", true)) {
     String ip = request->getParam("device4_target_ip", true)->value();
-    strncpy(config.device4_config.target_ip, ip.c_str(), 15);
-    config.device4_config.target_ip[15] = '\0';
+    strncpy(config.device4_config.target_ip, ip.c_str(), IP_ADDRESS_BUFFER_SIZE);
+    config.device4_config.target_ip[IP_ADDRESS_BUFFER_SIZE] = '\0';
     configChanged = true;
     log_msg(LOG_INFO, "Device 4 target IP changed to %s", ip.c_str());
   }
