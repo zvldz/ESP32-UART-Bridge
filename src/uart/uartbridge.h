@@ -11,7 +11,7 @@ void uartBridgeTask(void* parameter);  // FreeRTOS task function
 // Device 3 task
 void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations
 
-// UDP log buffer and mutex (was device4)
+// UDP log buffer and mutex
 extern SemaphoreHandle_t udpLogMutex;
 
 // External device serial interfaces (defined in uartbridge.cpp)

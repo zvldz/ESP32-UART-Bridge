@@ -37,13 +37,6 @@ struct ContiguousView {
 
 class CircularBuffer {
 public:
-    // LEGACY: Data source identification - no longer used after architecture simplification
-    // Previously used for multi-source routing with SPSC queues
-    enum DataSource {
-        SOURCE_UART1 = 0,
-        SOURCE_DEVICE4 = 1,
-        SOURCE_LOGGER = 2
-    };
     
 private:
     uint8_t* mainBuffer;      // Main circular buffer
@@ -232,7 +225,6 @@ public:
             stats.wrapCount++;
         }
         
-        // Note: stats.wrapLinearizations tracks when data is copied to tempLinearBuffer
         
         // Update max depth
         size_t currentDepth = available();
@@ -335,7 +327,7 @@ public:
         
         portEXIT_CRITICAL(&bufferMux);
         
-        // Optional: Log wrap events (reduce frequency)
+        // Log wrap events
         static uint32_t wrapLogCount = 0;
         if (++wrapLogCount % 100 == 0) {
             log_msg(LOG_DEBUG, "CircBuf: Wrapped read #%u at tail=%zu, linearized %zu bytes", 
