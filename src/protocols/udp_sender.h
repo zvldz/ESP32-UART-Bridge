@@ -239,7 +239,7 @@ public:
     void processSendQueue(bool bulkMode = false) override {
         // Check WiFi readiness for data transmission (works for both Client and AP modes)
         extern Config config;
-        if (!wifi_manager_is_ready_for_data()) {
+        if (!wifiIsReady()) {
             // Clear queue silently (not counted as drops)
             while (!packetQueue.empty()) {
                 currentQueueBytes -= packetQueue.front().packet.size;

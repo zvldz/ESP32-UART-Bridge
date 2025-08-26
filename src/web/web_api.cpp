@@ -59,8 +59,8 @@ String getConfigJson() {
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         doc["wifiClientConnected"] = systemState.wifiClientConnected;
         if (systemState.wifiClientConnected) {
-            doc["ipAddress"] = wifi_manager_get_ip();
-            doc["rssiPercent"] = rssi_to_percent(wifi_manager_get_rssi());
+            doc["ipAddress"] = wifiGetIP();
+            doc["rssiPercent"] = rssiToPercent(wifiGetRSSI());
         }
     }
     
