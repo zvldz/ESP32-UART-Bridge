@@ -10,8 +10,6 @@
 // External object from main.cpp  
 extern BridgeMode bridgeMode;
 
-// External statistics from device tasks - removed, now using Uart3Sender static vars
-
 // Global access to context (for TaskScheduler callbacks)
 static BridgeContext* g_bridgeContext = nullptr;
 
@@ -92,11 +90,7 @@ const char* getDevice4RoleName(uint8_t role) {
   }
 }
 
-// updateSharedStats removed - using atomic g_deviceStats
-
-// resetStatistics removed - using resetDeviceStatistics helper
-
-// Separate functions for TaskScheduler
+// Separate diagnostic functions for TaskScheduler
 
 void runBridgeActivityLog() {
     if (!g_bridgeContext) return;
@@ -208,8 +202,6 @@ void runAllStacksDiagnostics() {
         msg += " Web=Off";
     }
     
-    // Device3 task removed - no longer exists
-    
     // Add heap info
     msg += ", Heap=" + String(ESP.getFreeHeap()) + "B";
     msg += ", MaxBlock=" + String(ESP.getMaxAllocHeap()) + "B";
@@ -253,5 +245,4 @@ void forceSerialLog(const char* format, ...) {
 }
 #endif
 
-// Statistics update functions removed - using atomic operations in g_deviceStats
 

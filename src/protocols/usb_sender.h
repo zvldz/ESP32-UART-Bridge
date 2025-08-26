@@ -19,8 +19,6 @@ private:
     static constexpr size_t MAX_BATCH_PACKETS = 8;
     uint8_t batchBuffer[BATCH_BUFFER_SIZE];
     
-    // REMOVED: Pending batch structure - no more partial writes
-    
     // NEW: Batch window timing
     uint32_t batchWindowStart = 0;
     
@@ -55,12 +53,6 @@ private:
         return backoffDelay > 0 && (micros() - lastSendAttempt) < backoffDelay;
     }
     
-    // Helper: Update TX counter
-    void updateTxCounter(size_t bytes) {
-        if (globalTxBytesCounter) {
-            *globalTxBytesCounter += bytes;
-        }
-    }
     
     // Helper: Commit packets from queue (after successful send)
     void commitPackets(size_t count) {
@@ -86,8 +78,6 @@ private:
         batchWindowStart = 0;
     }
     
-    // REMOVED: flushPending() - no more partial writes
-    
     // Helper: Send single packet - NO PARTIAL WRITE
     bool sendSinglePacket() {
         if (packetQueue.empty() || !isReady()) return false;
@@ -106,7 +96,6 @@ private:
         
         if (sent > 0) {
             resetBackoff();
-            updateTxCounter(sent);
             g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             commitPackets(1);  // Remove packet from queue
@@ -118,8 +107,8 @@ private:
     }
     
 public:
-    UsbSender(UsbInterface* usb, unsigned long* txCounter = nullptr) : 
-        PacketSender(128, 24576, txCounter),  // Return to original sizes
+    UsbSender(UsbInterface* usb) : 
+        PacketSender(USB_MAX_PACKETS, USB_MAX_BYTES),
         usbInterface(usb),
         lastSendAttempt(0),
         backoffDelay(0),
@@ -186,15 +175,13 @@ public:
             lastBulkMode = bulkMode;
         }
         
-        // REMOVED: STEP 1 & 2 - no more pending/partial logic
-        
-        // STEP 3: Non-bulk mode - single packet
+        // Non-bulk mode - single packet
         if (!bulkMode) {
             sendSinglePacket();
             return;
         }
         
-        // STEP 4: Bulk mode batching
+        // Bulk mode batching
         if (packetQueue.empty() || !isReady()) {
             batchWindowStart = 0;
             return;
@@ -283,7 +270,6 @@ public:
                         size_t sent = usbInterface->write(batchBuffer, partialOffset);
                         if (sent > 0) {
                             resetBackoff();
-                            updateTxCounter(sent);
                             g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
                             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                             commitPackets(partialPackets);
@@ -299,7 +285,6 @@ public:
             
             if (sent > 0) {
                 resetBackoff();
-                updateTxCounter(sent);
                 g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
                 g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                 commitPackets(batchPackets);  // Commit all packets

@@ -5,12 +5,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Function declarations for network operations
-// These are implemented in bridge_processing.h but declared here to avoid circular dependencies
-
-// REMOVED: addToDevice4BridgeTx - replaced by Pipeline architecture
-// NEW: Data flows through ProtocolPipeline -> UdpSender (direct UDP transport) automatically
-
 // Check if Device4 is active
 extern bool isDevice4Active();
 

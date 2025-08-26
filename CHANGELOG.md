@@ -147,6 +147,15 @@
 - **Files Updated**: adaptive_buffer.h, bridge_processing.h, circular_buffer.h, uartbridge.cpp/h
 - **Legacy Code Removal**: Removed unused enum DataSource from circular_buffer.h
 - **Comment Consistency**: Simplified technical comments while preserving TODO markers and diagnostics
+
+### Protocol Pipeline API Cleanup ✅ COMPLETED
+- **Legacy Parameter Removal**: Eliminated unused txCounter parameter from all PacketSender constructors
+- **Dead Code Elimination**: Removed updateTxCounter() helper functions and globalTxBytesCounter field
+- **API Simplification**: Simplified constructor calls by removing nullptr parameters across pipeline
+- **Constants Extraction**: Replaced magic numbers with named constants for buffer sizes
+  - **DEFAULT_MAX_PACKETS** (20), **DEFAULT_MAX_BYTES** (8192) for UART/UDP senders
+  - **USB_MAX_PACKETS** (128), **USB_MAX_BYTES** (24576) for USB sender optimized buffers
+- **Code Quality**: Improved maintainability and self-documenting code through consistent naming
 - **Project Structure**: Moved device_init files to src root
   - **Simplified Paths**: `devices/device_init.h` → `device_init.h` 
   - **Include Updates**: Fixed all include paths throughout codebase

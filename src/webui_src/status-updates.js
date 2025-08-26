@@ -544,7 +544,7 @@ const StatusUpdates = {
             // Build dropped string with percentage
             let droppedStr = `${s.dropped}`;
             if (s.dropped > 0) {
-                // Show percentage for all protocols (priority breakdown removed)
+                // Show percentage for all protocols
                 droppedStr += ` (${dropRate}%)`;
             }
             

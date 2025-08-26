@@ -127,15 +127,13 @@ void ProtocolPipeline::createSenders(Config* config) {
     // Device2 - USB or UART2 (mutually exclusive)
     if (config->device2.role == D2_USB && ctx->interfaces.usbInterface) {
         senders[IDX_DEVICE2_USB] = new UsbSender(
-            ctx->interfaces.usbInterface,
-            nullptr  // TX counter removed - using g_deviceStats
+            ctx->interfaces.usbInterface
         );
         log_msg(LOG_INFO, "Created USB sender at index %d", IDX_DEVICE2_USB);
     } 
     else if (config->device2.role == D2_UART2 && ctx->interfaces.device2Serial) {
         senders[IDX_DEVICE2_UART2] = new Uart2Sender(
-            ctx->interfaces.device2Serial,
-            nullptr  // TX counter removed - using g_deviceStats
+            ctx->interfaces.device2Serial
         );
         log_msg(LOG_INFO, "Created UART2 sender at index %d", IDX_DEVICE2_UART2);
     }
@@ -145,8 +143,7 @@ void ProtocolPipeline::createSenders(Config* config) {
          config->device3.role == D3_UART3_BRIDGE) &&
         ctx->interfaces.device3Serial) {
         senders[IDX_DEVICE3] = new Uart3Sender(
-            ctx->interfaces.device3Serial,
-            nullptr  // TX counter removed - using g_deviceStats
+            ctx->interfaces.device3Serial
         );
         log_msg(LOG_INFO, "Created UART3 sender at index %d", IDX_DEVICE3);
     }
@@ -157,8 +154,7 @@ void ProtocolPipeline::createSenders(Config* config) {
         extern AsyncUDP* udpTransport;
         if (udpTransport) {
             UdpSender* udpSender = new UdpSender(
-                udpTransport,
-                nullptr  // TX counter removed - using g_deviceStats
+                udpTransport
             );
             udpSender->setBatchingEnabled(config->udpBatchingEnabled);
             senders[IDX_DEVICE4] = udpSender;
