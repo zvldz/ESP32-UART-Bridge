@@ -6,8 +6,9 @@
 #include "logging.h"
 #include "defines.h"
 #include "uart/uart_interface.h"
+#include "uart/uart_dma.h"
+#include "protocols/uart_sender.h"
 #include "usb/usb_interface.h"
-#include "devices/device3_task.h"
 // Protocol detection hooks (forward declarations to avoid circular includes)
 #include <Arduino.h>
 
@@ -70,59 +71,35 @@ static inline void processDevice1Input(BridgeContext* ctx) {
         
         (*ctx->stats.device1RxBytes)++;
         
-        // Copy to Device 3 if in Mirror or Bridge mode
-        if (ctx->devices.device3Active) {
-            if (xSemaphoreTake(*ctx->sync.device3Mutex, 0) == pdTRUE) {
-                int nextHead = (device3TxHead + 1) % DEVICE3_UART_BUFFER_SIZE;
-                if (nextHead != device3TxTail) {
-                    device3TxBuffer[device3TxHead] = data;
-                    device3TxHead = nextHead;
-                }
-                xSemaphoreGive(*ctx->sync.device3Mutex);
-            }
-        }
         
 
-        // Route to Device 2 based on its role
-        if (ctx->devices.device2IsUSB) {
-            (*ctx->stats.totalUartPackets)++;
+        // All data goes to telemetryBuffer for Pipeline routing
+        if (ctx->buffers.telemetryBuffer) {
+            // Process through adaptive buffer (for all Device2 types)
             processAdaptiveBufferByte(ctx, data, currentTime);
-        } else if (ctx->devices.device2IsUART2) {
-            // Device 2 is UART2 - batch transfer
-            uint8_t batchBuffer[UART_BLOCK_SIZE];
-            int batchSize = 0;
-            
-            batchBuffer[batchSize++] = data;
-            while (ctx->interfaces.uartBridgeSerial->available() && batchSize < UART_BLOCK_SIZE) {
-                int nextByte = ctx->interfaces.uartBridgeSerial->read();
-                if (nextByte >= 0) {
-                    batchBuffer[batchSize++] = (uint8_t)nextByte;
-                    (*ctx->stats.device1RxBytes)++;
-                    
-                    // Also copy to Device 3 if needed
-                    if (ctx->devices.device3Active) {
-                        if (xSemaphoreTake(*ctx->sync.device3Mutex, 0) == pdTRUE) {
-                            int nextHead = (device3TxHead + 1) % DEVICE3_UART_BUFFER_SIZE;
-                            if (nextHead != device3TxTail) {
-                                device3TxBuffer[device3TxHead] = (uint8_t)nextByte;
-                                device3TxHead = nextHead;
-                            }
-                            xSemaphoreGive(*ctx->sync.device3Mutex);
-                        }
-                    }
-                    
-                }
-            }
-            
-            // Write batch to Device 2
-            if (batchSize > 0 && ctx->interfaces.device2Serial->availableForWrite() >= batchSize) {
-                ctx->interfaces.device2Serial->write(batchBuffer, batchSize);
-                *ctx->stats.device2TxBytes += batchSize;
-            }
-            
         }
 
         *ctx->stats.lastActivity = millis();
+    }
+}
+
+// Add new function for Device3 Bridge RX
+static inline void processDevice3BridgeRx(BridgeContext* ctx) {
+    if (ctx->devices.device3IsBridge && ctx->interfaces.device3Serial) {
+        // Poll Device3 DMA events
+        // Note: All UARTs use UartDMA implementation (see main.cpp)
+        static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
+        
+        // Process available data
+        while (ctx->interfaces.device3Serial->available()) {
+            uint8_t byte = ctx->interfaces.device3Serial->read();
+            ctx->interfaces.uartBridgeSerial->write(byte);
+            
+            // Update RX statistics
+            Uart3Sender::updateRxStats(1);
+            (*ctx->stats.device3RxBytes)++;
+            *ctx->stats.lastActivity = millis();
+        }
     }
 }
 
@@ -162,6 +139,11 @@ static inline void processDevice2USB(BridgeContext* ctx) {
 
 // Process Device 2 UART input
 static inline void processDevice2UART(BridgeContext* ctx) {
+    // Poll UART2 DMA events
+    if (ctx->interfaces.device2Serial) {
+        static_cast<UartDMA*>(ctx->interfaces.device2Serial)->pollEvents();
+    }
+
     const int UART_BLOCK_SIZE = 64;
     uint8_t uartReadBuffer[UART_BLOCK_SIZE];
     
@@ -191,28 +173,5 @@ static inline void processDevice2UART(BridgeContext* ctx) {
     }
 }
 
-// Process Device 3 Bridge mode input
-static inline void processDevice3BridgeInput(BridgeContext* ctx) {
-    const int UART_BLOCK_SIZE = 64;
-    
-    if (xSemaphoreTake(*ctx->sync.device3Mutex, 0) == pdTRUE) {
-        // Process in blocks for efficiency
-        int bytesToWrite = 0;
-        uint8_t writeBuffer[UART_BLOCK_SIZE];
-        
-        while (device3RxHead != device3RxTail && bytesToWrite < UART_BLOCK_SIZE) {
-            writeBuffer[bytesToWrite++] = device3RxBuffer[device3RxTail];
-            device3RxTail = (device3RxTail + 1) % DEVICE3_UART_BUFFER_SIZE;
-        }
-        
-        xSemaphoreGive(*ctx->sync.device3Mutex);
-        
-        // Write collected data to Device 1
-        if (bytesToWrite > 0 && ctx->interfaces.uartBridgeSerial->availableForWrite() >= bytesToWrite) {
-            ctx->interfaces.uartBridgeSerial->write(writeBuffer, bytesToWrite);
-            *ctx->stats.device1TxBytes += bytesToWrite;
-        }
-    }
-}
 
 #endif // BRIDGE_PROCESSING_H

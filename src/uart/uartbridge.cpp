@@ -11,7 +11,6 @@
 #include "../defines.h"
 #include "../config.h"
 #include "../scheduler_tasks.h"
-#include "../devices/device3_task.h"
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <AsyncUDP.h>
@@ -113,8 +112,6 @@ void uartBridgeTask(void* parameter) {
     // Timing
     &lastUartLedNotify, &lastUsbLedNotify,
     &lastWifiYield, &lastDropLog,
-    // Sync
-    &device3Mutex,
     // System
     &bridgeMode, &config, &uartStats
   );
@@ -140,21 +137,11 @@ void uartBridgeTask(void* parameter) {
   g_pipeline = ctx.protocolPipeline;
   __sync_synchronize();  // Ensure visibility to other cores
   log_msg(LOG_INFO, "[Pipeline] Exported for Device4 access");
-  
-  // OLD: Keep old protocol detection as fallback (will be removed later)
-  // initProtocolDetection(&ctx, &config);  // Removed - Pipeline does this
-
-  // Configure hardware for selected protocol
-  // configureHardwareForProtocol(&ctx, config.protocolOptimization);  // Removed - Pipeline does this
-
   log_msg(LOG_INFO, "UART Bridge Task started");
   log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
           device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
 
   while (1) {
-    // HOOK: Update protocol state
-    // updateProtocolState(&ctx);  // Removed - Pipeline handles this
-    
     // Poll Device 2 UART if configured
     if (device2IsUART2 && device2Serial) {
       static_cast<UartDMA*>(device2Serial)->pollEvents();
@@ -179,13 +166,9 @@ void uartBridgeTask(void* parameter) {
       processDevice2UART(&ctx);
     }
     
-    // Process Device 3 Bridge mode input
-    if (device3IsBridge) {
-      processDevice3BridgeInput(&ctx);
-    }
+    // NEW: Process Device3 Bridge RX (UART3 → UART1)
+    processDevice3BridgeRx(&ctx);
     
-    // Device 4 Bridge mode (UDP->UART) now handled directly in device4_task.cpp
-
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Pipeline statistics output (every 10 seconds)
     static uint32_t lastPipelineStats = 0;
