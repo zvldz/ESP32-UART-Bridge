@@ -27,15 +27,34 @@
 - [ ] Device 3 (Mirror) can utilize same optimizations
 - Architecture ready - just add new protocol implementations
 
-#### 1.4 - UART Sender Analysis 🔄 PENDING
-- [ ] **UART Sender Optimization Review** 🔄 PENDING
-  - Analyze if Device 3 (UART mirror) needs MAVLink parsing
-  - Consider removing partial write support for consistency
-  - Evaluate if MAVLink-aware buffering provides benefits for UART
-  - Question: Does protocol parsing make sense for simple UART mirroring?
-  - Potential simplification: Raw byte stream for Device 3
+#### 1.4 - UART Refactoring ✅ COMPLETED (v2.15.4)
+- [x] **Device3 UART Pipeline Integration** ✅ COMPLETED
+  - ✅ Extended Pipeline from 3 to 4 sender slots (IDX_DEVICE2_USB, IDX_DEVICE2_UART2, IDX_DEVICE3, IDX_DEVICE4)
+  - ✅ Created Uart2Sender and Uart3Sender classes with specialized functionality
+  - ✅ Updated Pipeline routing to support Device2 USB/UART2 mutual exclusivity
+  - ✅ Unified Device1 input processing through telemetryBuffer for all Device2 types
+  - ✅ Added Device3 Bridge RX polling in main UART task loop
+  - ✅ Completely removed Device3 task architecture (device3_task.cpp/h, mutexes, buffers)
+  - ✅ Preserved D3_UART3_LOG mode for direct logging system writes
+  - ✅ Supports all valid UART combinations: Device2 (USB OR UART2), Device3 (UART3), Device4 (UDP)
+  - ✅ **Statistics Refactoring**: Migrated Device3 statistics to Uart3Sender static members (rxBytes, txBytes)
+  - ✅ **Diagnostics Update**: Updated diagnostics.cpp to use new Uart3Sender statistics interface
 
-#### 1.5 - Diagnostic Cleanup 🔄 PENDING
+#### 1.5 - LED Centralization 🔄 PENDING
+- [ ] **Remove LED calls from protocols/senders**
+  - Remove all LED calls from protocols/senders
+  - Create unified LED monitoring task in Scheduler (100ms)
+  - LED task reads global statistics from all devices
+  - Support for different LED patterns (single/double blink, colors)
+
+#### 1.6 - Statistics Refactoring 🔄 PENDING
+- [ ] **Create unified DeviceStatistics structure**
+  - Migrate all devices to new statistics
+  - Remove scattered global variables
+  - Unify web interface statistics
+  - Single source of truth for all device counters
+
+#### 1.7 - Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
   - Find and remove temporary diagnostic prints
   - Clean up experimental code blocks
@@ -171,6 +190,22 @@
     - Device 1: MAVLink, Device 2: SBUS conversion
     - Device 1: Modbus RTU, Device 3: JSON over network
     - Device 1: NMEA GPS, Device 2: Binary protocol conversion
+
+### Priority 7.1 - Architecture Simplification (after UART refactoring) 🔄 PENDING
+
+- [ ] **Evaluate bridge_processing.h removal**
+  - After UART refactoring - assess remaining code
+  - After LED centralization - even less code  
+  - After full Protocol Pipeline integration
+  - Consider creating BridgeProcessor class
+  - Or remove file completely
+- [ ] **Simplify uartBridgeTask**
+  - Minimize to Pipeline + USB only
+  - Consider renaming to pipelineTask
+  - Or move to main.cpp if small enough
+- [ ] **Consolidate initialization**
+  - Merge device_init.cpp logic where appropriate
+  - Simplify context initialization
 
 ### Priority 8 - Multi-Board Support
 

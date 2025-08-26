@@ -37,7 +37,6 @@ UsbMode usbMode = USB_MODE_DEVICE;
 
 // Task handles
 TaskHandle_t uartBridgeTaskHandle = NULL;
-TaskHandle_t device3TaskHandle = NULL;
 
 // USB interface
 UsbInterface* usbInterface = NULL;
@@ -589,20 +588,6 @@ void createTasks() {
 
   log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
 
-  // Create Device 3 task only if needed
-  if (config.device3.role != D3_NONE && config.device3.role != D3_UART3_LOG) {
-    xTaskCreatePinnedToCore(
-      device3Task,           // Task function
-      "Device3_Task",        // Task name
-      4096,                  // Stack size
-      NULL,                  // Parameters
-      UART_TASK_PRIORITY-1,  // Slightly lower priority than main UART
-      &device3TaskHandle,    // Task handle
-      DEVICE3_TASK_CORE      // Same core as UART (core 0)
-    );
-    
-    log_msg(LOG_INFO, "Device 3 task created on core %d for %s mode", DEVICE3_TASK_CORE, config.device3.role == D3_UART3_MIRROR ? "Mirror" : "Bridge");
-  }
 }
 
 //================================================================

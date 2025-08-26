@@ -5,15 +5,14 @@
 #include "uart/uart_dma.h"
 #include "types.h"
 #include "protocols/udp_sender.h"
+#include "protocols/uart_sender.h"
 #include <Arduino.h>
 
 // External object from main.cpp
 extern UartStats uartStats;
 extern BridgeMode bridgeMode;
 
-// External statistics from device tasks
-extern unsigned long globalDevice3RxBytes;   // From device3_task.cpp
-extern unsigned long globalDevice3TxBytes;
+// External statistics from device tasks - removed, now using Uart3Sender static vars
 
 // Global access to context (for TaskScheduler callbacks)
 static BridgeContext* g_bridgeContext = nullptr;
@@ -243,12 +242,7 @@ void runAllStacksDiagnostics() {
         msg += " Web=Off";
     }
     
-    // Device3 task (if exists)
-    extern TaskHandle_t device3TaskHandle;
-    if (device3TaskHandle) {
-        UBaseType_t device3Stack = uxTaskGetStackHighWaterMark(device3TaskHandle);
-        msg += " Dev3=" + String(device3Stack * 4) + "B";
-    }
+    // Device3 task removed - no longer exists
     
     // Add heap info
     msg += ", Heap=" + String(ESP.getFreeHeap()) + "B";
@@ -316,8 +310,8 @@ void updateMainStats() {
 // Update statistics for Device 3 (Core 1 device)
 void updateDevice3Stats() {
     enterStatsCritical();
-    uartStats.device3RxBytes = globalDevice3RxBytes;
-    uartStats.device3TxBytes = globalDevice3TxBytes;
+    uartStats.device3RxBytes = Uart3Sender::rxBytes;
+    uartStats.device3TxBytes = Uart3Sender::txBytes;
     exitStatsCritical();
 }
 

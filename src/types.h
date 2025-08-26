@@ -293,10 +293,7 @@ struct BridgeContext {
         unsigned long* lastDropLog;
     } timing;
     
-    // Mutexes and synchronization
-    struct {
-        SemaphoreHandle_t* device3Mutex;
-    } sync;
+    // Mutexes and synchronization (removed device3Mutex)
     
     // Current mode and configuration
     struct {
@@ -361,8 +358,6 @@ inline void initBridgeContext(BridgeContext* ctx,
     // Timing
     unsigned long* lastUartLedNotify, unsigned long* lastUsbLedNotify,
     unsigned long* lastWifiYield, unsigned long* lastDropLog,
-    // Sync
-    SemaphoreHandle_t* device3Mutex,
     // System
     BridgeMode* bridgeMode, Config* config, UartStats* globalStats)
 {
@@ -415,8 +410,6 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->timing.lastWifiYield = lastWifiYield;
     ctx->timing.lastDropLog = lastDropLog;
     
-    // Sync
-    ctx->sync.device3Mutex = device3Mutex;
     
     // System
     ctx->system.bridgeMode = bridgeMode;
