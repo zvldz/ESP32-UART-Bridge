@@ -103,11 +103,15 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
         .source_clk = UART_SCLK_DEFAULT,
     };
     
-    // Configure flow control if enabled for Device 1 only
-    // Device 2/3 don't use flow control pins
-    if (config.flowcontrol && uart_num == UART_NUM_1) {
+    // Enable flow control ONLY for UART1 when requested
+    if (uart_num == UART_NUM_1 && config.flowcontrol) {
         uart_config.flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS;
-        uart_config.rx_flow_ctrl_thresh = 122;  // 3/4 of 128 byte FIFO
+        uart_config.rx_flow_ctrl_thresh = 100;  // ~78% of 128-byte FIFO
+        flowControlEnabled = true;  // IMPORTANT: Set flag for status reporting
+        log_msg(LOG_INFO, "UART1: Hardware flow control ENABLED (RTS=%d, CTS=%d)", 
+                RTS_PIN, CTS_PIN);
+    } else {
+        flowControlEnabled = false;  // IMPORTANT: Clear flag when disabled
     }
     
     // Install UART driver with DMA using configured buffer sizes
@@ -126,9 +130,8 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
         return;
     }
     
-    // Set pins (including RTS/CTS if flow control enabled and Device 1)
-    if (config.flowcontrol && uart_num == UART_NUM_1) {
-        // For flow control, need to set RTS/CTS pins
+    // Set pins - include RTS/CTS only for UART1 with flow control
+    if (uart_num == UART_NUM_1 && flowControlEnabled) {  // Use the flag we just set
         err = uart_set_pin(uart_num, tx_pin, rx_pin, RTS_PIN, CTS_PIN);
     } else {
         err = uart_set_pin(uart_num, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
@@ -482,4 +485,19 @@ bool UartDMA::hasPacketTimeout() {
 // Check if overrun occurred
 bool UartDMA::hasOverrun() {
     return overrun_flag.exchange(false);
+}
+
+// Get flow control status string
+String UartDMA::getFlowControlStatus() const {
+    if (uart_num != UART_NUM_1) {
+        return "Not supported";
+    }
+    
+    if (!flowControlEnabled) {
+        return "Disabled";
+    }
+    
+    // ESP-IDF handles flow control transparently
+    // If enabled, it's active
+    return "Enabled (Active)";
 }

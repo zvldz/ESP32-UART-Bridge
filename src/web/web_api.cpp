@@ -5,7 +5,6 @@
 #include "config.h"
 #include "../device_stats.h"
 #include "../uart/uartbridge.h"
-#include "../uart/flow_control.h"
 #include "defines.h"
 #include "crashlog.h"
 #include "diagnostics.h"
@@ -25,6 +24,7 @@ extern Config config;
 extern SystemState systemState;
 extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
+extern UartInterface* uartBridgeSerial;
 
 
 // Generate complete configuration JSON for initial page load
@@ -95,7 +95,11 @@ String getConfigJson() {
     doc["uartConfig"] = uartConfig;
     
     // Flow control status
-    doc["flowControl"] = getFlowControlStatus();
+    if (uartBridgeSerial) {
+        doc["flowControl"] = uartBridgeSerial->getFlowControlStatus();
+    } else {
+        doc["flowControl"] = "Not initialized";
+    }
     
     // Statistics
     doc["device1Rx"] = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);

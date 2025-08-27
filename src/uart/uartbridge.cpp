@@ -3,7 +3,6 @@
 #include "../adaptive_buffer.h"
 #include "../protocols/protocol_pipeline.h"
 #include "../protocols/buffer_manager.h"
-#include "flow_control.h"
 #include "../device_init.h"
 #include "../diagnostics.h"
 #include "../logging.h"
@@ -23,7 +22,6 @@
 extern BridgeMode bridgeMode;
 extern Config config;
 extern SystemState systemState;
-extern FlowControlStatus flowControlStatus;
 extern UartInterface* uartBridgeSerial;
 
 // External USB interface pointer from device_init.cpp

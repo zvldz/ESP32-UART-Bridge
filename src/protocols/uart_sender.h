@@ -59,11 +59,6 @@ public:
             if (sent > 0) {
                 item->sendOffset += sent;
                 
-                // Update global TX counter
-                if (globalTxBytesCounter) {
-                    *globalTxBytesCounter += sent;
-                }
-                
                 // Update activity time
                 g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                 

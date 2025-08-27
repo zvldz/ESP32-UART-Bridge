@@ -255,16 +255,14 @@
 
 ### Code Refactoring and Cleanup
 
-- [ ] **Flow Control System Improvements** - v2.6.x
-  - Current implementation only detects RTS/CTS wiring connectivity  
-  - Missing runtime flow control status monitoring
-  - No integration with actual UART transmission flow control
-  - Consider adding:
-    - Real-time CTS status checking before transmission
-    - RTS buffer level monitoring and automatic control
-    - Flow control effectiveness metrics (pauses, overruns)
-    - Integration with UART DMA transmission queues
-  - **Priority**: Low (current basic detection works for wire verification)
+- [x] **Flow Control System Improvements** ✅ COMPLETED (v2.15.7)
+  - ✅ Replaced complex auto-detection system with simple ESP-IDF implementation
+  - ✅ Integrated flow control status into UART interface with `getFlowControlStatus()` method
+  - ✅ Hardware flow control enabled only for UART1 with proper GPIO configuration (RTS=GPIO6, CTS=GPIO7)
+  - ✅ User-controlled activation via web interface instead of automatic detection
+  - ✅ Direct ESP-IDF `UART_HW_FLOWCTRL_CTS_RTS` usage with optimized FIFO threshold (100 bytes)
+  - ✅ Object-oriented architecture eliminates global variables and complex detection logic
+  - **Status**: COMPLETED - Simple, reliable implementation using ESP-IDF built-in support
 
 - [ ] **Final Code Cleanup** - After all features are implemented
   - Remove unnecessary diagnostic code and debug prints
