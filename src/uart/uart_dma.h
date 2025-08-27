@@ -55,6 +55,7 @@ private:
     
     // Initialization status
     bool initialized;
+    bool flowControlEnabled = false;  // Track if flow control is enabled
     
     // Statistics
     volatile uint32_t rx_bytes_total;
@@ -90,6 +91,9 @@ public:
     bool hasPacketTimeout() override;
     bool hasOverrun() override;
     size_t getRxBufferSize() override { return RING_BUF_SIZE; }
+    
+    // Override flow control status
+    String getFlowControlStatus() const override;
     
     // Status check
     bool isInitialized() const override { return initialized; }

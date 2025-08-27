@@ -2,7 +2,6 @@
 #include "uart/uart_dma.h"
 #include "uart/uart_interface.h"
 #include "usb/usb_interface.h"
-#include "uart/flow_control.h"
 #include "diagnostics.h"
 #include "defines.h"
 #include "logging.h"
@@ -12,7 +11,6 @@
 
 // External objects from main.cpp
 extern Config config;
-extern FlowControlStatus flowControlStatus;
 
 // External objects from uartbridge.cpp
 extern UartInterface* device2Serial;
@@ -45,21 +43,14 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
   serial->begin(uartCfg, UART_RX_PIN, UART_TX_PIN);
 
   // Log configuration
-  log_msg(LOG_INFO, "UART configured: %u baud, %s%c%s", config->baudrate,
+  log_msg(LOG_INFO, "UART configured: %u baud, %s%c%s%s", 
+          config->baudrate,
           word_length_to_string(config->databits),
-          parity_to_string(config->parity)[0],  // First char only
-          stop_bits_to_string(config->stopbits));
+          parity_to_string(config->parity)[0],
+          stop_bits_to_string(config->stopbits),
+          config->flowcontrol ? ", HW Flow Control" : "");
 
   log_msg(LOG_INFO, "Using DMA-accelerated UART");
-
-  // Detect flow control if enabled
-  if (config->flowcontrol) {
-    pinMode(CTS_PIN, INPUT_PULLUP);
-    detectFlowControl();
-  } else {
-    pinMode(CTS_PIN, INPUT_PULLUP);
-    pinMode(RTS_PIN, INPUT_PULLUP);
-  }
   
   // Initialize Device 2 if configured
   if (config->device2.role == D2_UART2) {

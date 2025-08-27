@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <Arduino.h>
 #include "driver/uart.h"
 
 // UART configuration structure for all implementations
@@ -47,6 +48,11 @@ public:
     virtual bool hasPacketTimeout() { return false; }  // For adaptive buffering
     virtual bool hasOverrun() { return false; }        // For error detection
     virtual size_t getRxBufferSize() { return 0; }     // For diagnostics
+    
+    // Get flow control status string for web interface
+    virtual String getFlowControlStatus() const {
+        return "Not supported";
+    }
     
     // Status checks
     virtual bool isInitialized() const { return true; }      // For error handling
