@@ -65,11 +65,6 @@ typedef struct {
     bool wifiSafeMode;               // WiFi safe mode after initialization failures
 } SystemState;
 
-// Flow control detection results
-typedef struct {
-    bool flowControlDetected;
-    bool flowControlActive;
-} FlowControlStatus;
 
 // Forward declarations for interface types
 class UartInterface;

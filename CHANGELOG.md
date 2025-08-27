@@ -48,6 +48,24 @@
   - **Cleaned**: Historical comments about code migration and architecture changes
   - **Fixed**: Misleading constant name `WIFI_TX_POWER_DBM` → `WIFI_TX_POWER_LEVEL`
 - **Variable Naming**: Improved variable names for better code readability
+
+### Flow Control System Complete Refactoring ✅ COMPLETED
+- **Architecture Simplification**: Replaced complex auto-detection system with simple ESP-IDF implementation
+  - **Removed Files**: `flow_control.cpp` and `flow_control.h` (complex detection logic eliminated)
+  - **Removed Globals**: `FlowControlStatus` structure and global variable from `main.cpp`
+  - **Simplified Logic**: Direct ESP-IDF `UART_HW_FLOWCTRL_CTS_RTS` usage instead of custom detection
+- **Object-Oriented Flow Control**: Integrated flow control status into UART interface
+  - **New Method**: `getFlowControlStatus()` virtual method in `UartInterface` base class
+  - **UART Implementation**: Flow control status reporting through `UartDMA` class
+  - **Web Integration**: Updated `web_api.cpp` to use UART interface method instead of global function
+- **Hardware Configuration**: Flow control enabled only for UART1 with proper GPIO configuration
+  - **GPIO Pins**: RTS=GPIO6, CTS=GPIO7 as defined in hardware specification
+  - **Threshold**: RX flow control threshold set to 100 bytes (~78% of 128-byte FIFO)
+  - **User Control**: Flow control activated only when explicitly enabled via web interface
+- **Build System Fixes**: Resolved compilation issues from previous refactoring
+  - **Header Dependencies**: Added `#include <Arduino.h>` to `uart_interface.h` for `String` type
+  - **Dead Code Removal**: Cleaned up remaining references to `globalTxBytesCounter` in protocol headers
+  - **Incremental Build**: Fixed issues where header-only changes weren't properly recompiled
   - **Network Detection**: `foundNow` → `networkFoundNow`
   - **IP Address**: `ip_str` → `ipAddressStr` 
   - **WiFi Config**: `cfg` → `wifiConfig`

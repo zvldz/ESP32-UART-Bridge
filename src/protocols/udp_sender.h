@@ -357,11 +357,6 @@ public:
             g_deviceStats.device4.txPackets.fetch_add(1, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         }
-        
-        if (globalTxBytesCounter) {
-            // Update global TX counter (no protection needed - same core)
-            *globalTxBytesCounter += sent;
-        }
     }
 };
 

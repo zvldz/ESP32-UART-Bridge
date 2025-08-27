@@ -26,7 +26,6 @@ Config config;
 SystemState systemState = {0};  // All fields initialized to 0/false
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
-FlowControlStatus flowControlStatus = {false, false};
 
 // UART serial objects - always DMA
 static UartDMA* uartBridgeSerialDMA = nullptr;
