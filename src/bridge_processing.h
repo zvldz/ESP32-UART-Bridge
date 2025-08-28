@@ -76,8 +76,8 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     }
 }
 
-// Process Device3 Bridge RX - renamed from processDevice3BridgeRx
-static inline void processDevice3Input(BridgeContext* ctx) {
+// Process Device3 UART Bridge RX
+static inline void processDevice3UART(BridgeContext* ctx) {
     // Poll Device3 DMA events
     static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
     
@@ -172,7 +172,9 @@ static inline void processDevice2UART(BridgeContext* ctx) {
     size_t totalProcessed = 0;
     
     while (ctx->interfaces.device2Serial->available() > 0 && totalProcessed < 512) {
-        size_t toRead = min((size_t)ctx->interfaces.device2Serial->available(), sizeof(buffer));
+        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+        size_t toRead = min(min((size_t)ctx->interfaces.device2Serial->available(), 
+                                sizeof(buffer)), canWrite);
         size_t actualRead = 0;
         for (int i = 0; i < toRead; i++) {
             int byte = ctx->interfaces.device2Serial->read();
@@ -197,7 +199,7 @@ static inline void processDevice2UART(BridgeContext* ctx) {
     }
 }
 
-static inline void processDevice4Input(BridgeContext* ctx) {
+static inline void processDevice4UDP(BridgeContext* ctx) {
     // Role check is done outside - process UDP data if available
     if (!ctx->buffers.udpRxBuffer || !ctx->buffers.udpRxBuffer->available()) 
         return;
@@ -215,6 +217,19 @@ static inline void processDevice4Input(BridgeContext* ctx) {
         g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
         g_deviceStats.device1.txBytes.fetch_add(toWrite, std::memory_order_relaxed);
         g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+    }
+    
+    // Process second segment if available
+    if (segments.second.size > 0) {
+        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+        size_t toWrite = min(segments.second.size, canWrite);
+        if (toWrite > 0) {
+            ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
+            ctx->buffers.udpRxBuffer->consume(toWrite);
+            // Update statistics
+            g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
+            g_deviceStats.device1.txBytes.fetch_add(toWrite, std::memory_order_relaxed);
+        }
     }
 }
 

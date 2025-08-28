@@ -143,12 +143,12 @@ void uartBridgeTask(void* parameter) {
 
     // Process Device 3 input (Bridge mode only)
     if (device3IsBridge && device3Serial) {
-        processDevice3Input(&ctx);
+        processDevice3UART(&ctx);
     }
 
     // Process Device 4 input (UDP Bridge mode only)
     if (ctx.buffers.udpRxBuffer) {
-        processDevice4Input(&ctx);
+        processDevice4UDP(&ctx);
     }
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
