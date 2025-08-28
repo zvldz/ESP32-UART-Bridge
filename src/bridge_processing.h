@@ -9,12 +9,15 @@
 #include "uart/uart_dma.h"
 #include "protocols/uart_sender.h"
 #include "usb/usb_interface.h"
+#include "circular_buffer.h"
 #include <Arduino.h>
 
 // Forward declaration for Pipeline
 class ProtocolPipeline;
 
 #include "adaptive_buffer.h"
+
+// TEMPORARY: Keep existing functions for stability - unification can be done later
 
 // Check if we should yield to WiFi task
 static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
@@ -73,82 +76,145 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     }
 }
 
-// Add new function for Device3 Bridge RX
-static inline void processDevice3BridgeRx(BridgeContext* ctx) {
-    if (ctx->devices.device3IsBridge && ctx->interfaces.device3Serial) {
-        // Poll Device3 DMA events
-        static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
-        
-        // Process available data
-        while (ctx->interfaces.device3Serial->available()) {
-            uint8_t byte = ctx->interfaces.device3Serial->read();
-            ctx->interfaces.uartBridgeSerial->write(byte);
-            
-            // Update RX statistics
-            g_deviceStats.device3.rxBytes.fetch_add(1, std::memory_order_relaxed);
-            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
-        }
-    }
-}
-
-// Process Device 2 USB input
-static inline void processDevice2USB(BridgeContext* ctx) {
-    int bytesRead = 0;
-    const int maxBytesPerLoop = 256;
+// Process Device3 Bridge RX - renamed from processDevice3BridgeRx
+static inline void processDevice3Input(BridgeContext* ctx) {
+    // Poll Device3 DMA events
+    static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
     
-    while (ctx->interfaces.usbInterface->available() && bytesRead < maxBytesPerLoop) {
-        // Commands from GCS are critical - immediate byte-by-byte transfer
-        int data = ctx->interfaces.usbInterface->read();
-        if (data >= 0) {
-            ctx->interfaces.uartBridgeSerial->write((uint8_t)data);
-            g_deviceStats.device1.txBytes.fetch_add(1, std::memory_order_relaxed);
-            g_deviceStats.device2.rxBytes.fetch_add(1, std::memory_order_relaxed);
-            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
-            bytesRead++;
-            
-            // Also send to Device 3 if in Bridge mode
-            if (ctx->devices.device3IsBridge) {
-                if (ctx->interfaces.device3Serial && ctx->interfaces.device3Serial->availableForWrite() > 0) {
-                    ctx->interfaces.device3Serial->write((uint8_t)data);
-                }
+    // Transfer data from Device3 to Device1 (UART bridge)
+    uint8_t buffer[256];
+    size_t totalTransferred = 0;
+    
+    while (ctx->interfaces.device3Serial->available() > 0 && totalTransferred < 256) {
+        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+        if (canWrite == 0) break;
+        
+        size_t toRead = min((size_t)ctx->interfaces.device3Serial->available(), 
+                           min(canWrite, sizeof(buffer)));
+        
+        size_t actual = 0;
+        for (int i = 0; i < toRead; i++) {
+            int byte = ctx->interfaces.device3Serial->read();
+            if (byte >= 0) {
+                buffer[actual++] = (uint8_t)byte;
+            } else {
+                break;
             }
         }
+        if (actual > 0) {
+            ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            totalTransferred += actual;
+        } else {
+            break;
+        }
+    }
+    
+    if (totalTransferred > 0) {
+        g_deviceStats.device3.rxBytes.fetch_add(totalTransferred, std::memory_order_relaxed);
+        g_deviceStats.device1.txBytes.fetch_add(totalTransferred, std::memory_order_relaxed);
+        g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
 }
 
-// Process Device 2 UART input
-static inline void processDevice2UART(BridgeContext* ctx) {
-    // Poll UART2 DMA events
-    if (ctx->interfaces.device2Serial) {
-        static_cast<UartDMA*>(ctx->interfaces.device2Serial)->pollEvents();
-    }
-
-    const int UART_BLOCK_SIZE = 64;
-    uint8_t uartReadBuffer[UART_BLOCK_SIZE];
+static inline void processDevice2USB(BridgeContext* ctx) {
+    uint8_t buffer[64];
+    const int maxBytesPerLoop = 256;
+    int totalProcessed = 0;
     
-    int available = ctx->interfaces.device2Serial->available();
-    if (available > 0) {
-        // Read in blocks
-        int toRead = min(available, UART_BLOCK_SIZE);
-        int actuallyRead = 0;
+    while (totalProcessed < maxBytesPerLoop) {
+        int available = ctx->interfaces.usbInterface->available();
+        if (available <= 0) break;
         
+        int canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+        if (canWrite <= 0) break;  // Critical! Without this we can block
+        
+        // Read up to 64 bytes at a time
+        int toRead = min(min(available, canWrite), 64);
+        int actual = 0;
+        
+        // Read into buffer
+        for (int i = 0; i < toRead; i++) {
+            int byte = ctx->interfaces.usbInterface->read();
+            if (byte >= 0) {
+                buffer[actual++] = (uint8_t)byte;
+            } else {
+                break;
+            }
+        }
+        
+        // Write in one call
+        if (actual > 0) {
+            ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            
+            // Statistics
+            g_deviceStats.device2.rxBytes.fetch_add(actual, std::memory_order_relaxed);
+            g_deviceStats.device1.txBytes.fetch_add(actual, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+            
+            totalProcessed += actual;
+            
+            // Device3 mirror (commented for review)
+            // if (ctx->devices.device3IsBridge && ctx->interfaces.device3Serial) {
+            //     size_t d3written = ctx->interfaces.device3Serial->write(buffer, actual);
+            // }
+        } else {
+            break;
+        }
+    }
+}
+
+static inline void processDevice2UART(BridgeContext* ctx) {
+    // Poll Device2 DMA events first
+    static_cast<UartDMA*>(ctx->interfaces.device2Serial)->pollEvents();
+    
+    // Process data in blocks for efficiency
+    uint8_t buffer[256];
+    size_t totalProcessed = 0;
+    
+    while (ctx->interfaces.device2Serial->available() > 0 && totalProcessed < 512) {
+        size_t toRead = min((size_t)ctx->interfaces.device2Serial->available(), sizeof(buffer));
+        size_t actualRead = 0;
         for (int i = 0; i < toRead; i++) {
             int byte = ctx->interfaces.device2Serial->read();
             if (byte >= 0) {
-                uartReadBuffer[actuallyRead++] = (uint8_t)byte;
+                buffer[actualRead++] = (uint8_t)byte;
+            } else {
+                break;
             }
         }
         
-        if (actuallyRead > 0) {
-            g_deviceStats.device2.rxBytes.fetch_add(actuallyRead, std::memory_order_relaxed);
+        if (actualRead > 0) {
+            ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
+            totalProcessed += actualRead;
             
-            // Write to Device 1
-            if (ctx->interfaces.uartBridgeSerial->availableForWrite() >= actuallyRead) {
-                ctx->interfaces.uartBridgeSerial->write(uartReadBuffer, actuallyRead);
-                g_deviceStats.device1.txBytes.fetch_add(actuallyRead, std::memory_order_relaxed);
-                g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
-            }
+            // Update statistics
+            g_deviceStats.device2.rxBytes.fetch_add(actualRead, std::memory_order_relaxed);
+            g_deviceStats.device1.txBytes.fetch_add(actualRead, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        } else {
+            break;
         }
+    }
+}
+
+static inline void processDevice4Input(BridgeContext* ctx) {
+    // Role check is done outside - process UDP data if available
+    if (!ctx->buffers.udpRxBuffer || !ctx->buffers.udpRxBuffer->available()) 
+        return;
+    
+    auto segments = ctx->buffers.udpRxBuffer->getReadSegments();
+    if (segments.first.size == 0) return;
+    
+    size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+    size_t toWrite = min(segments.first.size, canWrite);
+    
+    if (toWrite > 0) {
+        ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
+        ctx->buffers.udpRxBuffer->consume(toWrite);
+        
+        g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
+        g_deviceStats.device1.txBytes.fetch_add(toWrite, std::memory_order_relaxed);
+        g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
 }
 

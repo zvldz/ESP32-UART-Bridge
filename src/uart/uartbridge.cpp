@@ -27,6 +27,9 @@ extern UartInterface* uartBridgeSerial;
 // External USB interface pointer from device_init.cpp
 extern UsbInterface* g_usbInterface;
 
+// External UDP RX buffer from main.cpp  
+extern CircularBuffer* udpRxBuffer;
+
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
 
@@ -90,6 +93,9 @@ void uartBridgeTask(void* parameter) {
   // Set bridge context for diagnostics
   setBridgeContext(&ctx);
   
+  // Add UDP RX buffer to context
+  ctx.buffers.udpRxBuffer = udpRxBuffer;
+  
   // System start time already initialized in initDeviceStatistics()
 
   // Create protocol statistics BEFORE pipeline initialization
@@ -128,15 +134,22 @@ void uartBridgeTask(void* parameter) {
         ctx.protocolPipeline->process();
     }
     
-    // Process Device 2 based on type
+    // Process Device 2 input (USB or UART2)  
     if (device2IsUSB) {
-      processDevice2USB(&ctx);
+        processDevice2USB(&ctx);
     } else if (device2IsUART2) {
-      processDevice2UART(&ctx);
+        processDevice2UART(&ctx);
     }
-    
-    // Process Device3 Bridge RX
-    processDevice3BridgeRx(&ctx);
+
+    // Process Device 3 input (Bridge mode only)
+    if (device3IsBridge && device3Serial) {
+        processDevice3Input(&ctx);
+    }
+
+    // Process Device 4 input (UDP Bridge mode only)
+    if (ctx.buffers.udpRxBuffer) {
+        processDevice4Input(&ctx);
+    }
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Pipeline statistics output (every 10 seconds)

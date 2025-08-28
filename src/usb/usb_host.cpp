@@ -4,6 +4,9 @@
 #include "soc/usb_wrap_reg.h"
 #include "soc/usb_wrap_struct.h"
 
+// USB Host task runs on Core 0 (same as UART Bridge for minimal latency)
+#define USB_HOST_TASK_CORE 0
+
 // Global USB mode variable
 extern UsbMode usbMode;
 
@@ -11,9 +14,15 @@ extern UsbMode usbMode;
 UsbHost* UsbHost::instance = nullptr;
 
 // Constructor
-UsbHost::UsbHost(uint32_t baudrate) : UsbBase(baudrate), device_handle(NULL), interface_num(0),
-                         client_handle(NULL), bulk_in_endpoint(0), bulk_out_endpoint(0),
-                         in_transfer(NULL), out_transfer(NULL) {
+UsbHost::UsbHost(uint32_t baudrate) 
+    : UsbBase(baudrate)
+    , device_handle(nullptr)
+    , interface_num(0)
+    , client_handle(nullptr)
+    , bulk_in_endpoint(0)
+    , bulk_out_endpoint(0)
+    , in_transfer(nullptr)
+    , out_transfer(nullptr) {
     instance = this;
 }
     
@@ -66,11 +75,18 @@ void UsbHost::init() {
             return;
         }
         
-        // Create USB Host task
-        BaseType_t task_created = xTaskCreate(usbHostTask, USB_HOST_TASK_NAME, USB_HOST_STACK_SIZE, this, 
-                                             USB_HOST_PRIORITY, &task_handle);
+        // Create USB Host task on Core 0 (same as UART Bridge)
+        BaseType_t task_created = xTaskCreatePinnedToCore(
+            usbHostTask,
+            USB_HOST_TASK_NAME,
+            USB_HOST_STACK_SIZE,
+            this,
+            USB_HOST_PRIORITY,
+            &task_handle,
+            USB_HOST_TASK_CORE
+        );
         
-        if (task_created != pdPASS || task_handle == NULL) {
+        if (task_created != pdPASS || task_handle == nullptr) {
             log_msg(LOG_ERROR, "USB Host: Failed to create task");
             usb_host_client_deregister(this->client_handle);
             usb_host_uninstall();
@@ -104,18 +120,18 @@ void UsbHost::end() {
         
         if (task_handle) {
             vTaskDelete(task_handle);
-            task_handle = NULL;
+            task_handle = nullptr;
         }
         
         if (device_handle) {
-            usb_host_device_close(NULL, device_handle);
-            device_handle = NULL;
+            usb_host_device_close(nullptr, device_handle);
+            device_handle = nullptr;
         }
         
         if (initialized) {
             if (client_handle) {
                 usb_host_client_deregister(client_handle);
-                client_handle = NULL;
+                client_handle = nullptr;
             }
             usb_host_uninstall();
         }
@@ -302,7 +318,7 @@ bool UsbHost::submitInTransfer() {
 void UsbHost::closeDevice() {
     if (device_handle) {
         usb_host_device_close(client_handle, device_handle);
-        device_handle = NULL;
+        device_handle = nullptr;
     }
 }
 
@@ -462,19 +478,19 @@ void UsbHost::cleanup() {
     // Free transfer structures
     if (in_transfer) {
         usb_host_transfer_free(in_transfer);
-        in_transfer = NULL;
+        in_transfer = nullptr;
     }
     
     if (out_transfer) {
         usb_host_transfer_free(out_transfer);
-        out_transfer = NULL;
+        out_transfer = nullptr;
     }
     
     // Release interface and close device
     if (device_handle) {
         usb_host_interface_release(client_handle, device_handle, interface_num);
         usb_host_device_close(client_handle, device_handle);
-        device_handle = NULL;
+        device_handle = nullptr;
     }
     
     // Reset endpoint addresses
