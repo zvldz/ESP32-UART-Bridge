@@ -4,6 +4,9 @@
 #include "config.h"   // For conversion functions
 #include <cstring>
 
+// UART DMA event task runs on Core 0 (same as UART Bridge for data consistency)
+#define UART_DMA_TASK_CORE 0
+
 // Constructor with DMA configuration
 UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg) 
     : uart_num(uart)
@@ -166,7 +169,7 @@ void UartDMA::begin(const UartConfig& config, int8_t rxPin, int8_t txPin) {
             this,
             dmaConfig.eventTaskPriority,
             &event_task_handle,
-            0            // Core 0
+            UART_DMA_TASK_CORE
         ) != pdPASS) {
             log_msg(LOG_ERROR, "Failed to create UART event task");
             uart_driver_delete(uart_num);

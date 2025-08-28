@@ -19,6 +19,7 @@
 #include "uart/uart_interface.h"
 #include "uart/uart_dma.h"
 #include "protocols/udp_sender.h"
+#include "circular_buffer.h"
 #include <AsyncUDP.h>
 
 // Global objects
@@ -42,6 +43,7 @@ UsbInterface* usbInterface = NULL;
 
 // UDP transport for Device4
 AsyncUDP* udpTransport = nullptr;
+CircularBuffer* udpRxBuffer = nullptr;
 
 // Mutexes for thread safety
 SemaphoreHandle_t logMutex = NULL;
@@ -386,30 +388,31 @@ void initNetworkMode() {
 
   // Initialize UDP transport for Device4
   if (config.device4.role == D4_NETWORK_BRIDGE || 
-      config.device4.role == D4_LOG_NETWORK) {  // For both modes!
+      config.device4.role == D4_LOG_NETWORK) {
     
     udpTransport = new AsyncUDP();
     
     if (udpTransport) {
-      // Listener only for Bridge mode
+      // Create UDP RX buffer for Bridge mode
       if (config.device4.role == D4_NETWORK_BRIDGE) {
+        udpRxBuffer = new CircularBuffer();
+        udpRxBuffer->init(4096);
+        
         // Setup UDP listener
         if (!udpTransport->listen(config.device4_config.port)) {
           log_msg(LOG_ERROR, "Failed to listen on UDP port %d", config.device4_config.port);
         } else {
-          log_msg(LOG_INFO, "UDP listening on port %d", config.device4_config.port);
+          log_msg(LOG_INFO, "UDP listening on port %d with 4KB buffer", config.device4_config.port);
           
-          // Setup callback for UDP RX → UART
+          // Setup callback - only writes to buffer
           udpTransport->onPacket([](AsyncUDPPacket packet) {
-            if (uartBridgeSerial) {
-              size_t len = packet.length();
-              uartBridgeSerial->write(packet.data(), len);
-              
-              // Update statistics using new g_deviceStats
-              g_deviceStats.device1.txBytes.fetch_add(len, std::memory_order_relaxed);
-              g_deviceStats.device4.rxBytes.fetch_add(len, std::memory_order_relaxed);
+            if (udpRxBuffer) {
+              size_t written = udpRxBuffer->write(packet.data(), packet.length());
+              if (written < packet.length()) {
+                log_msg(LOG_WARNING, "UDP RX buffer overflow: %zu/%zu bytes dropped",
+                       packet.length() - written, packet.length());
+              }
               g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
-              g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             }
           });
         }

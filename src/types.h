@@ -88,6 +88,7 @@ struct BridgeContext {
     struct {
         CircularBuffer* telemetryBuffer;  // For UART->USB/UDP telemetry
         CircularBuffer* logBuffer;         // For Logger mode
+        CircularBuffer* udpRxBuffer;      // For UDP->UART bridge
     } buffers;
     
     // Cached device flags (for performance)
@@ -185,6 +186,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     // Initialize buffers - will be allocated by buffer manager
     ctx->buffers.telemetryBuffer = nullptr;
     ctx->buffers.logBuffer = nullptr;
+    ctx->buffers.udpRxBuffer = nullptr;
     
     // Device flags
     ctx->devices.device2IsUSB = device2IsUSB;
