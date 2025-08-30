@@ -3,9 +3,11 @@
 
 #include "protocol_types.h"
 #include "protocol_parser.h"
+#include "protocol_router.h"
 #include "packet_sender.h"
 #include "raw_parser.h"
 #include "mavlink_parser.h"
+#include "mavlink_router.h"
 #include "line_based_parser.h"
 #include "usb_sender.h"
 #include "uart_sender.h"
@@ -22,11 +24,12 @@ class CircularBuffer;
 struct DataFlow {
     const char* name;           // Flow name for diagnostics
     ProtocolParser* parser;     // Parser for this flow
+    ProtocolRouter* router;     // Router for this flow (optional)
     CircularBuffer* inputBuffer;// Input buffer for this flow
     PacketSource source;        // Source type for packet tagging
     uint8_t senderMask;         // Which senders should receive packets from this flow
     
-    DataFlow() : name(nullptr), parser(nullptr), inputBuffer(nullptr), 
+    DataFlow() : name(nullptr), parser(nullptr), router(nullptr), inputBuffer(nullptr), 
                  source(SOURCE_TELEMETRY), senderMask(0xFF) {}
 };
 
@@ -38,7 +41,8 @@ private:
         IDX_DEVICE2_UART2 = 1,  // Device2 when UART2 (NEW!)
         IDX_DEVICE3 = 2,        // Device3 (any UART3 role)
         IDX_DEVICE4 = 3,        // Device4 (UDP)
-        MAX_SENDERS = 4         // Increased from 3
+        IDX_UART1_FAKE = 4,     // TEMPORARY: Fake sender for FC address book
+        MAX_SENDERS = 4         // Keep real senders at 4
     };
     
     // Sender masks for routing
@@ -87,6 +91,10 @@ public:
     // Access methods for compatibility
     ProtocolParser* getParser() const;  // Returns first parser or nullptr
     CircularBuffer* getInputBuffer() const;  // Returns first buffer or nullptr
+    
+    // TEMPORARY: Get router for input gateway
+    // TODO: Remove when bidirectional pipeline implemented
+    MavlinkRouter* getMavlinkRouter() const;
     
     // Sender access for statistics
     PacketSender* getSender(size_t index) const;

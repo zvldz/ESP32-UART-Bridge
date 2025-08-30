@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## v2.16.0 (MAVLink Routing Implementation & Input Gateway) ✅ IN PROGRESS
+
+### MAVLink Routing Architecture Implementation ✅ COMPLETED
+- **Parser-Router Separation**: Moved target extraction from router to parser for clean architecture
+  - **MavlinkParser**: Added `extractTargetSystem()` and `extractTargetComponent()` methods using official pymavlink getters
+  - **MAVLink Getters**: Implemented proper target extraction using `mavlink_msg_*_get_target_system()` functions
+  - **Routing Flag**: Added `routingEnabled` flag to enable target extraction only when routing is active
+  - **Code Quality**: Replaced magic numbers (20, 21, 23...) with MAVLink constants (`MAVLINK_MSG_ID_PARAM_REQUEST_READ`, etc.)
+- **Router Simplification**: Removed duplicate target extraction logic from `MavlinkRouter`
+  - **Deleted Methods**: `extractTargetSystem()` and `isRoutableMessage()` - now handled by parser
+  - **Broadcast Fix**: Corrected invalid broadcast check - `sysid=255` is GCS, not broadcast target
+  - **ROUTABLE_MSG_IDS**: Removed unused message ID array after parser refactoring
+
+### Input Gateway Implementation for Device2-4 to UART1 ✅ COMPLETED  
+- **Device Input Routing**: Created `InputGateway` class for routing device2-4 data to UART1
+  - **Temporary Passthrough**: Direct data forwarding to `uartBridgeSerial` before full bidirectional pipeline
+  - **MAVLink Learning**: Extracts sysid from incoming MAVLink packets for address book population
+  - **Interface Mapping**: Maps device interfaces to router address book for future routing
+- **Protocol Integration**: Connected input gateway to protocol pipeline
+  - **Router Learning**: `learnAddress()` method for manual address book updates from input gateway
+  - **Statistics Tracking**: Counters for processed packets and learned sysids
+  - **Configuration**: Enabled only when MAVLink routing is active in config
+
+### Code Quality & Magic Numbers Elimination ✅ COMPLETED
+- **MAVLink Constants**: Replaced all magic numbers with proper MAVLink constants
+  - **Router Arrays**: `ALWAYS_BROADCAST_IDS` now uses `MAVLINK_MSG_ID_HEARTBEAT`, `MAVLINK_MSG_ID_SYS_STATUS`, etc.
+  - **Parser Methods**: Switch cases use `MAVLINK_MSG_ID_PARAM_REQUEST_READ` instead of `20`, etc.
+  - **Input Gateway**: Added TODO comments for future magic number replacement (`0xFD`, `0xFE`, offsets)
+- **Diagnostic Logging**: Added comprehensive debugging for routing development
+  - **Router Dumps**: Periodic address book dumps every 5 seconds with routing statistics
+  - **Parser Target Logs**: Extraction logging for routable messages with throttling
+  - **Pipeline Flags**: Routing enabled/disabled status logging during initialization
+
+### Bug Fixes & Critical Corrections ✅ COMPLETED
+- **Broadcast Target Fix**: Removed incorrect `targetSys == 255` broadcast check in router
+  - **Root Cause**: `sysid=255` is standard GCS identifier, not broadcast indicator  
+  - **Impact**: Fixed routing hits calculation - commands to/from GCS now route correctly
+  - **Address Book**: GCS entries (sysid=255) now properly used for unicast routing
+- **Architecture Consistency**: Fixed parser/router responsibility separation
+  - **File Structure**: Created `mavlink_parser.cpp` for method implementations (was inline in header)
+  - **Method Declarations**: Proper header/implementation separation to avoid compilation conflicts
+
 ## v2.15.7 (LED System Refactoring & Optimization) ✅ COMPLETED
 
 ### LED System Complete Refactoring ✅ COMPLETED

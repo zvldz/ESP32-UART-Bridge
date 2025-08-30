@@ -72,7 +72,20 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 f.parser = new RawParser();
                 break;
             case PROTOCOL_MAVLINK:
-                f.parser = new MavlinkParser();
+                {
+                    MavlinkParser* mavParser = new MavlinkParser();
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created with routing=%s", 
+                            config->mavlinkRouting ? "enabled" : "disabled");
+                }
+                // Create router if routing enabled
+                if (config->mavlinkRouting) {
+                    f.router = new MavlinkRouter();
+                    log_msg(LOG_INFO, "MAVLink routing enabled");
+                } else {
+                    f.router = nullptr;
+                }
                 break;
             default:
                 f.parser = new RawParser();
@@ -194,12 +207,22 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
     // Parse packets from input buffer
     ParseResult result = flow.parser->parse(flow.inputBuffer, now);
     
-    // ALWAYS consume bytes if parser processed them
+    // Consume bytes if parser processed them
     if (result.bytesConsumed > 0) {
         flow.inputBuffer->consume(result.bytesConsumed);
     }
     
-    // THEN distribute packets if parser found them
+    // Set physical interface for all packets
+    for (size_t i = 0; i < result.count; i++) {
+        result.packets[i].physicalInterface = flow.source;
+    }
+    
+    // Apply routing if configured
+    if (flow.router && result.count > 0) {
+        flow.router->process(result.packets, result.count);
+    }
+    
+    // Distribute packets
     if (result.count > 0) {
         distributePackets(result.packets, result.count, flow.source, flow.senderMask);
     }
@@ -209,16 +232,36 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
 }
 
 void ProtocolPipeline::distributePackets(ParsedPacket* packets, size_t count, PacketSource source, uint8_t senderMask) {
-    // Tag packets with source and distribute to matching senders
     for (size_t i = 0; i < count; i++) {
-        packets[i].source = source;  // Tag packet with source
+        packets[i].source = source;
         
-        // Send to senders based on mask
-        for (size_t j = 0; j < MAX_SENDERS; j++) {
-            if (senders[j] && (senderMask & (1 << j))) {
+        // Determine final destination mask
+        uint8_t finalMask;
+        if (packets[i].hints.hasExplicitTarget) {
+            // Use router decision
+            finalMask = packets[i].hints.targetDevices;
+        } else {
+            // Broadcast with anti-echo
+            //finalMask = senderMask & ~(1 << packets[i].physicalInterface);
+            // // Broadcast WITHOUT anti-echo (temporary)
+            finalMask = senderMask;
+        }
+        
+        // TEMPORARY: If only fake UART1 bit set, use broadcast
+        // TODO: Remove when bidirectional pipeline implemented
+        if (finalMask == (1 << 4)) {
+            finalMask = senderMask;  // Fallback to broadcast
+        }
+        
+        // Send to selected interfaces
+        for (size_t j = 0; j < MAX_SENDERS; j++) {  // Only real senders (0-3)
+            if (senders[j] && (finalMask & (1 << j))) {
                 senders[j]->enqueue(packets[i]);
             }
         }
+        // TEMPORARY: Ignore fake UART1 sender at index 4
+        // Bit 4 in mask means "send to FC" but we don't actually send
+        
     }
 }
 
@@ -387,6 +430,20 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
         ((UdpSender*)senders[IDX_DEVICE4])->getBatchingStats(udpStats);
     }
     
+    // Add router statistics if MAVLink routing active
+    // Find MAVLink flow (don't assume it's at index 0)
+    for (size_t i = 0; i < activeFlows; i++) {
+        if (flows[i].router) {
+            JsonObject routerStats = stats["router"].to<JsonObject>();
+            uint32_t hits = 0, broadcasts = 0;
+            flows[i].router->getStats(hits, broadcasts);
+            routerStats["unicast_hits"] = hits;
+            routerStats["broadcasts"] = broadcasts;
+            routerStats["enabled"] = true;
+            break;  // Only one router expected
+        }
+    }
+    
     // Buffer statistics - from first active flow
     if (activeFlows > 0 && flows[0].inputBuffer) {
         JsonObject buffer = stats["buffer"].to<JsonObject>();
@@ -442,11 +499,15 @@ void ProtocolPipeline::processSenders() {
 }
 
 void ProtocolPipeline::cleanup() {
-    // Delete all parsers
+    // Delete all parsers and routers
     for (size_t i = 0; i < activeFlows; i++) {
         if (flows[i].parser) {
             delete flows[i].parser;
             flows[i].parser = nullptr;
+        }
+        if (flows[i].router) {
+            delete flows[i].router;
+            flows[i].router = nullptr;
         }
     }
     activeFlows = 0;
@@ -458,4 +519,15 @@ void ProtocolPipeline::cleanup() {
             senders[i] = nullptr;
         }
     }
+}
+
+MavlinkRouter* ProtocolPipeline::getMavlinkRouter() const {
+    // TEMPORARY: Direct access for input gateway
+    // TODO: Remove when bidirectional pipeline implemented
+    for (size_t i = 0; i < activeFlows; i++) {
+        if (flows[i].router) {
+            return static_cast<MavlinkRouter*>(flows[i].router);
+        }
+    }
+    return nullptr;
 }

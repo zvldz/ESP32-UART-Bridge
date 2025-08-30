@@ -78,6 +78,15 @@ const FormUtils = {
         // Protocol optimization
         this.setSelectValue('protocol_optimization', this.config.protocolOptimization || 0);
         
+        // MAVLink routing
+        const mavlinkRouting = document.getElementById('mavlink-routing');
+        if (mavlinkRouting) {
+            mavlinkRouting.checked = this.config.mavlinkRouting || false;
+        }
+        
+        // Update MAVLink routing visibility
+        this.updateMavlinkRoutingVisibility();
+        
         // Set WiFi mode
         const wifiMode = document.getElementById('wifi_mode');
         if (wifiMode) wifiMode.value = this.config.wifiMode || 0;
@@ -118,6 +127,12 @@ const FormUtils = {
         const wifiMode = document.getElementById('wifi_mode');
         if (wifiMode) {
             wifiMode.addEventListener('change', () => this.updateWiFiModeDisplay());
+        }
+        
+        // Protocol optimization change listener
+        const protocolOpt = document.getElementById('protocol_optimization');
+        if (protocolOpt) {
+            protocolOpt.addEventListener('change', () => this.updateMavlinkRoutingVisibility());
         }
         
         // Password toggle - attach to global function
@@ -528,5 +543,19 @@ const FormUtils = {
         
         xhr.open('POST', '/update');
         xhr.send(formData);
+    },
+    
+    updateMavlinkRoutingVisibility() {
+        const protocolOpt = document.getElementById('protocol_optimization');
+        const routingSection = document.getElementById('mavlink-routing-section');
+        
+        if (protocolOpt && routingSection) {
+            // Show routing options only for MAVLink protocol (value = 1)
+            if (protocolOpt.value === '1') {
+                routingSection.style.display = 'block';
+            } else {
+                routingSection.style.display = 'none';
+            }
+        }
     }
 };

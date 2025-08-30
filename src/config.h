@@ -4,7 +4,7 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 8  // Increased from 7 to 8 for UDP batching control
+#define CURRENT_CONFIG_VERSION 9  // Increased from 8 to 9 for MAVLink routing
 
 // Configuration management interface
 void config_init(Config* config);

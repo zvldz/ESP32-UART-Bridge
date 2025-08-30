@@ -114,6 +114,9 @@ void config_init(Config* config) {
   
   // UDP batching default
   config->udpBatchingEnabled = true;
+  
+  // MAVLink routing default
+  config->mavlinkRouting = false;
 }
 
 // Migrate configuration from old versions
@@ -180,6 +183,11 @@ void config_migrate(Config* config) {
     
     // Add UDP batching control (default enabled)
     config->udpBatchingEnabled = true;
+  }
+  
+  if (config->config_version < 9) {
+    finalizeMigration(config, 9);
+    config->mavlinkRouting = false;  // Default disabled
   }
 }
 
@@ -291,6 +299,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
   if (doc["protocol"].is<JsonObject>()) {
     config->protocolOptimization = doc["protocol"]["optimization"] | PROTOCOL_NONE;
     config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;
+    config->mavlinkRouting = doc["protocol"]["mavlink_routing"] | false;
   }
 
   // System settings like device_version and device_name are NOT loaded from file
@@ -358,6 +367,7 @@ String config_to_json(Config* config) {
   // Protocol optimization
   doc["protocol"]["optimization"] = config->protocolOptimization;
   doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;
+  doc["protocol"]["mavlink_routing"] = config->mavlinkRouting;
 
   // Note: device_version and device_name are NOT saved - always use compiled values
 

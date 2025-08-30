@@ -20,17 +20,27 @@ struct TransmitHints {
     uint32_t interPacketGap; // Microseconds between packets (for UART)
     bool canFragment;        // OK to send partially if needed
     uint8_t targetDevices;   // Bitmask: which devices should receive
+    bool hasExplicitTarget;  // Router found unique destination
     
     // Default constructor
     TransmitHints() : 
         keepWhole(false), 
         interPacketGap(0),
         canFragment(true), 
-        targetDevices(0xFF) {}
+        targetDevices(0xFF),
+        hasExplicitTarget(false) {}
 };
 
 // Forward declaration
 class PacketMemoryPool;
+
+// Protocol identification
+enum class PacketProtocol : uint8_t {
+    UNKNOWN = 0,
+    MAVLINK = 1,
+    RAW = 2,
+    // Future protocols
+};
 
 // Packet source identification for routing
 enum PacketSource {
@@ -54,20 +64,46 @@ struct ParsedPacket {
     PacketMemoryPool* pool;  // Pool to return memory to
     PacketSource source;     // Source of packet data for routing
     
+    // Protocol identification
+    PacketProtocol protocol;        // Set by parser
+    
+    // Permanent protocol fields (outside diagnostic block)
+    uint16_t protocolMsgId;         // Message ID for routing (HEARTBEAT=0 is valid)
+    uint32_t seqNum;                // Packet sequence number
+    uint8_t physicalInterface;      // Source interface (UART1/USB/UDP index)
+    
+    // Protocol-specific routing data
+    union {
+        struct {
+            uint8_t sysId;
+            uint8_t compId;
+            uint8_t targetSys;       // Will be extracted by router, not parser
+            uint8_t targetComp;      // Will be extracted by router, not parser
+        } mavlink;
+        // Future protocols can add their structures here
+    } routing;
+    
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
     uint32_t parseTimeMicros;     // When packet was parsed
-    uint32_t enqueueTimeMicros;   // When packet was enqueued  
-    uint32_t seqNum;              // This packet's sequence number
-    uint16_t mavlinkMsgId;        // MAVLink message ID for tracking
+    uint32_t enqueueTimeMicros;   // When packet was enqueued
+    uint16_t mavlinkMsgId;        // DEPRECATED - use protocolMsgId instead
     // === DIAGNOSTIC END ===
     
     ParsedPacket() : data(nullptr), size(0), allocSize(0), 
-                    timestamp(0), pool(nullptr), source(SOURCE_TELEMETRY)
+                    timestamp(0), pool(nullptr), source(SOURCE_TELEMETRY),
+                    protocol(PacketProtocol::UNKNOWN), protocolMsgId(0), 
+                    seqNum(0), physicalInterface(0xFF)
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
                     , parseTimeMicros(0), enqueueTimeMicros(0), 
-                    seqNum(0), mavlinkMsgId(0)
+                    mavlinkMsgId(0)
     // === DIAGNOSTIC END ===
-    {}
+    {
+        // Initialize routing union
+        routing.mavlink.sysId = 0;
+        routing.mavlink.compId = 0;
+        routing.mavlink.targetSys = 0;
+        routing.mavlink.targetComp = 0;
+    }
     
     // Duplicate packet (allocates from pool if available)
     ParsedPacket duplicate() const;

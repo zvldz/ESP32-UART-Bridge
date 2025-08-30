@@ -19,11 +19,6 @@ Hardware: ESP32-S3-Zero
 
 ===============================================================================
 
-Note: Some features like Enhanced Flow Control diagnostics, UART error detection
-(overrun, framing, parity errors) cannot be implemented with Arduino framework
-due to limited access to hardware registers. Migration to ESP-IDF would enable
-these features but is not justified for current requirements.
-
 */
 
 // Ensure multi-core ESP32 only
@@ -33,7 +28,7 @@ these features but is not justified for current requirements.
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.15.7"
+#define DEVICE_VERSION "2.16.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
