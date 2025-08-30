@@ -10,6 +10,11 @@
 class MavlinkParser : public ProtocolParser {
 private:
     PacketMemoryPool* memPool;
+    bool routingEnabled = false;  // Cache routing flag
+    
+    // Target extraction methods
+    uint8_t extractTargetSystem(mavlink_message_t* msg);
+    uint8_t extractTargetComponent(mavlink_message_t* msg);
     
     // pymavlink structures
     mavlink_message_t rxMessage;        // Current message being parsed
@@ -241,6 +246,9 @@ public:
     bool isBurstActive() const override {
         return bulkDetector.isActive();
     }
+    
+    // Set routing mode
+    void setRoutingEnabled(bool enabled) { routingEnabled = enabled; }
 
 private:
     // Handle successfully parsed message
@@ -273,18 +281,75 @@ private:
         tempPackets[packetCount].pool = memPool;
         tempPackets[packetCount].timestamp = currentTime;
         
+        // Set protocol type
+        tempPackets[packetCount].protocol = PacketProtocol::MAVLINK;
+        
+        // Set permanent protocol fields
+        tempPackets[packetCount].protocolMsgId = msg->msgid;
+        tempPackets[packetCount].seqNum = ++globalSeqNum;
+        
+        // Set routing data
+        tempPackets[packetCount].routing.mavlink.sysId = msg->sysid;
+        tempPackets[packetCount].routing.mavlink.compId = msg->compid;
+        
+        // Extract targets only if routing is enabled
+        if (routingEnabled) {
+            tempPackets[packetCount].routing.mavlink.targetSys = extractTargetSystem(msg);
+            tempPackets[packetCount].routing.mavlink.targetComp = extractTargetComponent(msg);
+            
+            // === DIAGNOSTIC START === (Remove after routing stabilization)
+            static uint32_t lastRoutableLogMs = 0;
+            uint32_t now = millis();
+            
+            // Check if this is a routable message type
+            bool isRoutable = (msg->msgid == MAVLINK_MSG_ID_PARAM_REQUEST_READ || 
+                              msg->msgid == MAVLINK_MSG_ID_PARAM_REQUEST_LIST || 
+                              msg->msgid == MAVLINK_MSG_ID_PARAM_SET ||
+                              msg->msgid == MAVLINK_MSG_ID_MISSION_REQUEST_LIST || 
+                              msg->msgid == MAVLINK_MSG_ID_MISSION_COUNT || 
+                              msg->msgid == MAVLINK_MSG_ID_MISSION_ITEM_INT ||
+                              msg->msgid == MAVLINK_MSG_ID_COMMAND_INT || 
+                              msg->msgid == MAVLINK_MSG_ID_COMMAND_LONG || 
+                              msg->msgid == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL);
+            
+            if (isRoutable && (now - lastRoutableLogMs > 2000)) {  // Every 2 seconds max
+                log_msg(LOG_INFO, "[PARSER-TARGET] msgid=%u target=%u comp=%u from sysid=%u",
+                        msg->msgid, 
+                        tempPackets[packetCount].routing.mavlink.targetSys,
+                        tempPackets[packetCount].routing.mavlink.targetComp,
+                        msg->sysid);
+                lastRoutableLogMs = now;
+            }
+            
+            // Special logging for FILE_TRANSFER_PROTOCOL
+            if (msg->msgid == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL) {
+                static uint32_t ftpLogCount = 0;
+                if (ftpLogCount++ < 5) {  // Log first 5 FTP packets only
+                    log_msg(LOG_INFO, "[PARSER-FTP] FTP packet #%u: target=%u from sysid=%u",
+                            ftpLogCount, tempPackets[packetCount].routing.mavlink.targetSys, msg->sysid);
+                }
+            }
+            // === DIAGNOSTIC END ===
+        } else {
+            tempPackets[packetCount].routing.mavlink.targetSys = 0;
+            tempPackets[packetCount].routing.mavlink.targetComp = 0;
+        }
+        
+        // Physical interface will be set by pipeline
+        tempPackets[packetCount].physicalInterface = 0xFF;  // Invalid until set
+        
         // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
         tempPackets[packetCount].parseTimeMicros = micros();
-        tempPackets[packetCount].seqNum = ++globalSeqNum;
-        tempPackets[packetCount].mavlinkMsgId = msg->msgid;
+        tempPackets[packetCount].mavlinkMsgId = msg->msgid;  // DEPRECATED - use protocolMsgId
         
         diagCounters.totalParsed++;
         
-        // Log every 100th packet for sampling
+        // Log every 100th packet for sampling - updated to use new fields
         if (diagCounters.totalParsed % 100 == 0) {
-            log_msg(LOG_DEBUG, "[DIAG] Parse #%u: msgid=%u, seq=%u, bulk=%d counter=%u",
-                    diagCounters.totalParsed, msg->msgid, 
+            log_msg(LOG_DEBUG, "[DIAG] Parse #%u: msgid=%u, seq=%u, sysId=%u, bulk=%d counter=%u",
+                    diagCounters.totalParsed, tempPackets[packetCount].protocolMsgId, 
                     tempPackets[packetCount].seqNum, 
+                    tempPackets[packetCount].routing.mavlink.sysId,
                     bulkDetector.isActive() ? 1 : 0,
                     bulkDetector.getCounter());
         }
