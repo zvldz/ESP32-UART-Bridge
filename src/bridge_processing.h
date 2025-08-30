@@ -12,8 +12,13 @@
 #include "circular_buffer.h"
 #include <Arduino.h>
 
-// Forward declaration for Pipeline
+// Forward declaration
 class ProtocolPipeline;
+
+// TEMPORARY: Input gateway for MAVLink routing
+// TODO: Remove when bidirectional pipeline implemented
+#include "input_gateway.h"
+extern InputGateway* g_inputGateway;
 
 #include "adaptive_buffer.h"
 
@@ -102,7 +107,14 @@ static inline void processDevice3UART(BridgeContext* ctx) {
             }
         }
         if (actual > 0) {
-            ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            // TEMPORARY: Process through gateway for MAVLink learning
+            // TODO: Remove when bidirectional pipeline implemented
+                        if (g_inputGateway && g_inputGateway->isEnabled()) {
+                g_inputGateway->processInput(buffer, actual, 2);  // IDX_DEVICE3 = 2
+            } else {
+                ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            }
+            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actual);
             totalTransferred += actual;
         } else {
             break;
@@ -144,7 +156,14 @@ static inline void processDevice2USB(BridgeContext* ctx) {
         
         // Write in one call
         if (actual > 0) {
-            ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            // TEMPORARY: Process through gateway for MAVLink learning
+            // TODO: Remove when bidirectional pipeline implemented
+                        if (g_inputGateway && g_inputGateway->isEnabled()) {
+                g_inputGateway->processInput(buffer, actual, 0);  // IDX_DEVICE2_USB = 0
+            } else {
+                ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            }
+            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actual);
             
             // Statistics
             g_deviceStats.device2.rxBytes.fetch_add(actual, std::memory_order_relaxed);
@@ -186,7 +205,14 @@ static inline void processDevice2UART(BridgeContext* ctx) {
         }
         
         if (actualRead > 0) {
-            ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
+            // TEMPORARY: Process through gateway for MAVLink learning
+            // TODO: Remove when bidirectional pipeline implemented
+                        if (g_inputGateway && g_inputGateway->isEnabled()) {
+                g_inputGateway->processInput(buffer, actualRead, 1);  // IDX_DEVICE2_UART2 = 1
+            } else {
+                ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
+            }
+            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
             totalProcessed += actualRead;
             
             // Update statistics
@@ -211,7 +237,14 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
     size_t toWrite = min(segments.first.size, canWrite);
     
     if (toWrite > 0) {
-        ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
+        // TEMPORARY: Process through gateway for MAVLink learning
+        // TODO: Remove when bidirectional pipeline implemented
+                if (g_inputGateway && g_inputGateway->isEnabled()) {
+            g_inputGateway->processInput(segments.first.data, toWrite, 3);  // IDX_DEVICE4 = 3
+        } else {
+            ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
+        }
+        // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
         ctx->buffers.udpRxBuffer->consume(toWrite);
         
         g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
@@ -224,7 +257,14 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
         size_t toWrite = min(segments.second.size, canWrite);
         if (toWrite > 0) {
-            ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
+            // TEMPORARY: Process through gateway for MAVLink learning
+            // TODO: Remove when bidirectional pipeline implemented
+                        if (g_inputGateway && g_inputGateway->isEnabled()) {
+                g_inputGateway->processInput(segments.second.data, toWrite, 3);  // IDX_DEVICE4 = 3
+            } else {
+                ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
+            }
+            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
             ctx->buffers.udpRxBuffer->consume(toWrite);
             // Update statistics
             g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);

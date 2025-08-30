@@ -397,6 +397,25 @@ void handleSave(AsyncWebServerRequest *request) {
     }
   }
 
+  // MAVLink routing control
+  if (request->hasParam("mavlink_routing", true)) {
+    // Checkbox present = true, absent = false
+    bool newRouting = true;
+    if (config.mavlinkRouting != newRouting) {
+      config.mavlinkRouting = newRouting;
+      configChanged = true;
+      log_msg(LOG_INFO, "MAVLink routing enabled");
+    }
+  } else {
+    // Checkbox not present = false
+    bool newRouting = false;
+    if (config.mavlinkRouting != newRouting) {
+      config.mavlinkRouting = newRouting;
+      configChanged = true;
+      log_msg(LOG_INFO, "MAVLink routing disabled");
+    }
+  }
+
   // WiFi settings
   if (request->hasParam("ssid", true)) {
     const AsyncWebParameter* p = request->getParam("ssid", true);

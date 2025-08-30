@@ -10,6 +10,7 @@
 #include "../defines.h"
 #include "../config.h"
 #include "../scheduler_tasks.h"
+#include "../input_gateway.h"
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <AsyncUDP.h>
@@ -29,6 +30,10 @@ extern UsbInterface* g_usbInterface;
 
 // External UDP RX buffer from main.cpp  
 extern CircularBuffer* udpRxBuffer;
+
+// TEMPORARY: Input gateway for MAVLink routing
+// TODO: Remove when bidirectional pipeline implemented
+InputGateway* g_inputGateway = nullptr;
 
 // Device 2 UART (when configured as Secondary UART)
 UartInterface* device2Serial = nullptr;
@@ -112,6 +117,15 @@ void uartBridgeTask(void* parameter) {
   ctx.protocolPipeline = new ProtocolPipeline(&ctx);
   ctx.protocolPipeline->init(&config);
   
+  // TEMPORARY: Initialize input gateway if MAVLink routing enabled
+  // TODO: Remove when bidirectional pipeline implemented
+  if (config.protocolOptimization == PROTOCOL_MAVLINK && config.mavlinkRouting) {
+    g_inputGateway = new InputGateway();
+    MavlinkRouter* router = ctx.protocolPipeline->getMavlinkRouter();
+    g_inputGateway->init(router, config.mavlinkRouting);
+    log_msg(LOG_INFO, "[GATEWAY] Input gateway created for MAVLink routing");
+  }
+  
   log_msg(LOG_INFO, "UART Bridge Task started");
   log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
           device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
@@ -175,6 +189,13 @@ void uartBridgeTask(void* parameter) {
   if (ctx.protocolPipeline) {
     delete ctx.protocolPipeline;
     ctx.protocolPipeline = nullptr;
+  }
+  
+  // TEMPORARY: Cleanup input gateway
+  // TODO: Remove when bidirectional pipeline implemented
+  if (g_inputGateway) {
+    delete g_inputGateway;
+    g_inputGateway = nullptr;
   }
   
   // Cleanup protocol buffers

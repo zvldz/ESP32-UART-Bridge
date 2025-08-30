@@ -107,4 +107,5 @@ typedef struct {
     // Protocol optimization
     uint8_t protocolOptimization;
     bool udpBatchingEnabled;
+    bool mavlinkRouting;
 } Config;

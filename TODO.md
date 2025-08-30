@@ -82,35 +82,63 @@
 
 ### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
 
-- [ ] **Implement MAVLink Message Routing**
-  - **Problem**: When multiple GCS connected (USB + UDP), all messages are duplicated to all interfaces causing:
-    - Excessive bandwidth usage (especially during parameter/log downloads)
-    - Command conflicts from different GCS
-    - Response confusion between GCS instances
-  - **Solution**: Intelligent routing based on target_sysid/target_compid:
-    - Track request source (which interface)
-    - Route responses only to requesting GCS
-    - Broadcast messages (HEARTBEAT, STATUS) - to all interfaces
-    - Unicast responses (PARAM_VALUE, FILE_TRANSFER_PROTOCOL) - only to requester
-  - **Configuration Parameters**:
-    - `ROUTING_ENABLED` - enable/disable routing
-    - `ROUTING_MODE`:
-      - `BROADCAST_ALL` - all to all (current behavior)
-      - `SMART_ROUTING` - intelligent routing
-      - `FILTER_HEAVY` - filter heavy messages (MAVFtp, parameters)
-  - **Use Cases**:
-    - Simultaneous Mission Planner (USB) + QGroundControl (UDP)
-    - Control channel redundancy
-    - Bandwidth saving on slow channels
-    - Isolation of critical commands from diagnostics
-  - **Priority**: Medium (system works without it, but would be more efficient with routing)
-  - **Dependencies**: After protocol detection fixes (current task)
-  - **Implementation Approach**:
-    - Create routing table mapping sysid/compid to interface
-    - Intercept MAVLink headers for routing decisions
-    - Maintain session state for request/response pairs
-    - Add web interface for routing configuration
+- [ ] **MAVLink Message Routing** (Partially Implemented)
+  - **Completed**:
+    - ✅ Basic routing infrastructure (MavlinkRouter class)
+    - ✅ Address book for sysid tracking
+    - ✅ Target-based packet routing logic
+    - ✅ Web interface configuration option
+    - ✅ Always-broadcast list for telemetry messages
+  - **Pending Issues**:
+    - **Address Book Population**: Router cannot see incoming GCS packets (they bypass pipeline)
+    - **Target Extraction**: Need to implement pymavlink getters for correct field offsets
+      - `mavlink_msg_*_get_target_system()` functions available but not integrated
+      - Current implementation returns 0 (falls back to broadcast)
+  - **Temporary Solution - Input Gateway**:
+    - Quick fix to populate address book by inspecting incoming packets
+    - Extracts sysid from MAVLink headers before forwarding to UART1
+    - Will be replaced when bidirectional pipeline is implemented
+  - **Implementation Status**:
+    - Core routing logic complete but disabled by default
+    - Requires Input Gateway or Bidirectional Pipeline to function properly
+  - **Dependencies**: 
+    - Short-term: Input Gateway implementation
+    - Long-term: Bidirectional Pipeline architecture
 
+### Priority 5.1    
+- [ ] **Bidirectional Pipeline Architecture**
+  - **Problem**: Current unidirectional pipeline limits functionality
+    - Cannot process incoming packets from Device2/3/4
+    - Protocol conversion impossible (SBUS↔UART)
+    - MAVLink routing fails due to missing address information
+  - **Solution**: Symmetric input/output pipelines
+    - Input Pipeline: Device2/3/4 → Buffer → Parser → Router → UART1
+    - Output Pipeline: UART1 → Buffer → Parser → Router → Device2/3/4
+  - **Implementation Phases**:
+    - **Phase 1 - Input Gateway** (Temporary):
+      - Lightweight packet inspection for MAVLink sysid extraction
+      - Single entry point for all UART1-bound data
+      - Enables MAVLink routing without major changes
+      - ~100 lines of code, 2-3 days implementation
+    - **Phase 2 - Full Input Pipeline**:
+      - Complete protocol parsing for incoming data
+      - Protocol conversion support (SBUS↔UART, etc.)
+      - Buffering and flow control
+      - Reuses existing pipeline patterns
+      - 8-12 days implementation
+  - **Benefits**:
+    - Enables protocol conversion between any devices
+    - Complete MAVLink routing support
+    - Future protocol support (SBUS, CRSF, etc.)
+    - Symmetric architecture easier to maintain
+  - **Migration Strategy**:
+    - Implement Input Gateway first (quick fix)
+    - Develop Input Pipeline in parallel
+    - Migrate from Gateway to Pipeline when ready
+    - Remove Gateway after successful migration
+  - **Priority**: High (blocks multiple features)
+  - **Dependencies**: None (can start immediately)
+  
 ### Priority 6 - SBUS Protocol Support
 
 - [ ] **SBUS Mode** - UART to/from SBUS converter
