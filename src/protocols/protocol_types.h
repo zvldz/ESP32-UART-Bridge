@@ -85,7 +85,6 @@ struct ParsedPacket {
     
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
     uint32_t parseTimeMicros;     // When packet was parsed
-    uint32_t enqueueTimeMicros;   // When packet was enqueued
     uint16_t mavlinkMsgId;        // DEPRECATED - use protocolMsgId instead
     // === DIAGNOSTIC END ===
     
@@ -94,8 +93,7 @@ struct ParsedPacket {
                     protocol(PacketProtocol::UNKNOWN), protocolMsgId(0), 
                     seqNum(0), physicalInterface(0xFF)
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-                    , parseTimeMicros(0), enqueueTimeMicros(0), 
-                    mavlinkMsgId(0)
+                    , parseTimeMicros(0), mavlinkMsgId(0)
     // === DIAGNOSTIC END ===
     {
         // Initialize routing union
@@ -132,5 +130,48 @@ struct ParseResult {
         count = 0;
     }
 };
+
+// Physical interface identification (for routing and anti-echo)
+// CRITICAL: Must match sender indices exactly!
+enum PhysicalInterface : uint8_t {
+    PHYS_USB   = 0,  // MUST match IDX_DEVICE2_USB
+    PHYS_UART2 = 1,  // MUST match IDX_DEVICE2_UART2
+    PHYS_UART3 = 2,  // MUST match IDX_DEVICE3
+    PHYS_UDP   = 3,  // MUST match IDX_DEVICE4
+    PHYS_UART1 = 4,  // MUST match IDX_UART1
+    PHYS_NONE  = 0xFF // No physical interface (internal sources)
+};
+
+// Sender indices - MUST match PhysicalInterface values
+enum SenderIndex : uint8_t {
+    IDX_DEVICE2_USB   = 0,
+    IDX_DEVICE2_UART2 = 1,
+    IDX_DEVICE3       = 2,
+    IDX_DEVICE4       = 3,
+    IDX_UART1         = 4,
+    MAX_SENDERS       = 5
+};
+
+// Compile-time verification of mapping
+static_assert(static_cast<int>(PHYS_USB) == static_cast<int>(IDX_DEVICE2_USB), "PHYS_USB must match IDX_DEVICE2_USB");
+static_assert(static_cast<int>(PHYS_UART2) == static_cast<int>(IDX_DEVICE2_UART2), "PHYS_UART2 must match IDX_DEVICE2_UART2");
+static_assert(static_cast<int>(PHYS_UART3) == static_cast<int>(IDX_DEVICE3), "PHYS_UART3 must match IDX_DEVICE3");
+static_assert(static_cast<int>(PHYS_UDP) == static_cast<int>(IDX_DEVICE4), "PHYS_UDP must match IDX_DEVICE4");
+static_assert(static_cast<int>(PHYS_UART1) == static_cast<int>(IDX_UART1), "PHYS_UART1 must match IDX_UART1");
+
+// Helper functions to avoid casts throughout code
+inline uint8_t physicalInterfaceBit(PhysicalInterface iface) {
+    // PHYS_NONE returns 0 (no bit set)
+    return (static_cast<int>(iface) < static_cast<int>(MAX_SENDERS)) ? (1 << iface) : 0;
+}
+
+inline bool isValidPhysicalInterface(PhysicalInterface iface) {
+    return static_cast<int>(iface) < static_cast<int>(MAX_SENDERS);
+}
+
+inline SenderIndex physicalToSenderIndex(PhysicalInterface iface) {
+    // Safe conversion with validation
+    return (static_cast<int>(iface) < static_cast<int>(MAX_SENDERS)) ? static_cast<SenderIndex>(iface) : MAX_SENDERS;
+}
 
 #endif // PROTOCOL_TYPES_H

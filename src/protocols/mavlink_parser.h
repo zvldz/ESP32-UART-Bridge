@@ -142,6 +142,11 @@ public:
         std::unique_ptr<ParsedPacket[]> tempPackets(new ParsedPacket[maxPackets]);
         size_t packetCount = 0;
         
+        // === EXPERIMENTAL CONSUME FIX START ===
+        // CRITICAL CHANGE: Track last complete packet position
+        size_t lastCompletePos = 0;  // Position after last complete packet
+        // === EXPERIMENTAL CONSUME FIX END ===
+        
         // Feed each byte to pymavlink parser (STANDARD APPROACH)
         for (size_t i = 0; i < view.safeLen; i++) {
             uint8_t byte = view.ptr[i];
@@ -154,13 +159,55 @@ public:
                 &rxStatus
             );
             
-            // Count detection errors (CRC, signature failures)
-            if (parseResult == MAVLINK_FRAMING_BAD_CRC || 
-                parseResult == MAVLINK_FRAMING_BAD_SIGNATURE) {
-                if (stats) stats->onDetectionError();
+            // === EXPERIMENTAL CONSUME FIX START ===
+            // Handle different parsing results
+            if (parseResult == MAVLINK_FRAMING_OK) {
+                // Complete valid packet received
+                lastCompletePos = i + 1;  // Mark position AFTER this packet
+                if (stats) stats->onPacketDetected(0, currentTime);  // Will be updated with real size later
             }
+            else if (parseResult == MAVLINK_FRAMING_BAD_CRC || 
+                     parseResult == MAVLINK_FRAMING_BAD_SIGNATURE) {
+                // Bad CRC - packet is complete but invalid, still need to consume it
+                lastCompletePos = i + 1;  // Skip bad packet
+                if (stats) stats->onDetectionError();
+                
+                // Log for diagnostics during testing
+                static uint32_t badCrcCount = 0;
+                if (++badCrcCount <= 10) {  // Limit log spam
+                    log_msg(LOG_WARNING, "[MAVLink] Bad CRC #%u at pos %zu", 
+                            badCrcCount, i);
+                }
+            }
+            // MAVLINK_FRAMING_INCOMPLETE - continue parsing, don't update lastCompletePos
+            // === EXPERIMENTAL CONSUME FIX END ===
             
             if (parseResult == MAVLINK_FRAMING_OK) {
+                // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                // Log sequence gaps (rate limited)
+                static uint8_t lastSeq[256] = {0};  // Per sysid
+                static uint32_t gapCount = 0;
+                static uint32_t lastGapLog = 0;
+
+                uint8_t sysid = rxMessage.sysid;
+                uint8_t seq = rxMessage.seq;
+                uint8_t expected = lastSeq[sysid] + 1;
+
+                if (lastSeq[sysid] != 0 && seq != expected) {
+                    gapCount++;
+                    uint32_t now = millis();
+                    
+                    // Log first 10 gaps or every 5 seconds
+                    if (gapCount <= 10 || (now - lastGapLog > 5000)) {
+                        log_msg(LOG_WARNING, "[SEQ] Gap #%u: sysid=%d jumped %d->%d (lost=%d)", 
+                                gapCount, sysid, lastSeq[sysid], seq, 
+                                (seq > expected) ? (seq - expected) : (256 + seq - expected));
+                        lastGapLog = now;
+                    }
+                }
+                lastSeq[sysid] = seq;
+                // === TEMPORARY DIAGNOSTIC BLOCK END ===
+                
                 // Complete message received
                 bulkDetector.onPacket(rxMessage.msgid);
                 
@@ -173,8 +220,26 @@ public:
             // pymavlink handles all states internally
         }
         
-        // ALWAYS consume entire view - no partial consume
-        result.bytesConsumed = view.safeLen;
+        // === EXPERIMENTAL CONSUME FIX START ===
+        // CRITICAL: Consume only up to last complete packet
+        result.bytesConsumed = lastCompletePos;
+        
+        // Diagnostic during testing - log incomplete packets
+        if (lastCompletePos < view.safeLen) {
+            static uint32_t incompleteCount = 0;
+            static uint32_t lastLogMs = 0;
+            uint32_t now = millis();
+            
+            incompleteCount++;
+            // Log every second to avoid spam
+            if (now - lastLogMs > 1000) {
+                size_t leftover = view.safeLen - lastCompletePos;
+                log_msg(LOG_DEBUG, "[MAVLink] Incomplete packet: %zu bytes left in buffer (total: %u times)",
+                        leftover, incompleteCount);
+                lastLogMs = now;
+            }
+        }
+        // === EXPERIMENTAL CONSUME FIX END ===
         
         // Copy packets to result
         if (packetCount > 0) {
@@ -186,16 +251,6 @@ public:
         // Update bulk detector
         bulkDetector.update();
         
-        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-        // Report diagnostics every second
-        uint32_t nowMs = millis();
-        if (nowMs - diagCounters.lastReportTimeMs > 1000) {
-            log_msg(LOG_INFO, "[DIAG] Parser: parsed=%u bulk_counter=%u bulk=%d",
-                    diagCounters.totalParsed, bulkDetector.getCounter(),
-                    bulkDetector.isActive() ? 1 : 0);
-            diagCounters.lastReportTimeMs = nowMs;
-        }
-        // === DIAGNOSTIC END ===
         
         return result;
     }
@@ -338,22 +393,10 @@ private:
         // Physical interface will be set by pipeline
         tempPackets[packetCount].physicalInterface = 0xFF;  // Invalid until set
         
-        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
         tempPackets[packetCount].parseTimeMicros = micros();
         tempPackets[packetCount].mavlinkMsgId = msg->msgid;  // DEPRECATED - use protocolMsgId
         
         diagCounters.totalParsed++;
-        
-        // Log every 100th packet for sampling - updated to use new fields
-        if (diagCounters.totalParsed % 100 == 0) {
-            log_msg(LOG_DEBUG, "[DIAG] Parse #%u: msgid=%u, seq=%u, sysId=%u, bulk=%d counter=%u",
-                    diagCounters.totalParsed, tempPackets[packetCount].protocolMsgId, 
-                    tempPackets[packetCount].seqNum, 
-                    tempPackets[packetCount].routing.mavlink.sysId,
-                    bulkDetector.isActive() ? 1 : 0,
-                    bulkDetector.getCounter());
-        }
-        // === DIAGNOSTIC END ===
         
         // Hints for optimization
         tempPackets[packetCount].hints.keepWhole = true;

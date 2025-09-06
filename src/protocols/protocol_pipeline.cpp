@@ -1,9 +1,12 @@
 #include "protocol_pipeline.h"
 #include "../logging.h"
+#include "uart1_sender.h"
+#include "../uart/uart1_tx_service.h"
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) : 
     activeFlows(0),
-    ctx(context) {
+    ctx(context),
+    sharedRouter(nullptr) {
     // Initialize sender slots to nullptr
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         senders[i] = nullptr;
@@ -20,13 +23,20 @@ void ProtocolPipeline::init(Config* config) {
         senders[i] = nullptr;
     }
     
+    // Create shared router if MAVLink routing enabled
+    if (config->protocolOptimization == PROTOCOL_MAVLINK && 
+        config->mavlinkRouting) {
+        sharedRouter = new MavlinkRouter();
+        log_msg(LOG_INFO, "Shared MAVLink router created");
+    }
+    
     // Setup data flows based on configuration
     setupFlows(config);
     
     // Create senders based on configuration
     createSenders(config);
     
-    log_msg(LOG_INFO, "Protocol pipeline initialized: %zu flows, senders fixed slots=4", activeFlows);
+    log_msg(LOG_INFO, "Protocol pipeline initialized: %zu flows, senders fixed slots=%d", activeFlows, MAX_SENDERS);
 }
 
 void ProtocolPipeline::setupFlows(Config* config) {
@@ -58,18 +68,21 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
     }
     
-    // Create flow with updated mask
+    // EXISTING Telemetry flow - update to use shared router
     if (telemetryMask && ctx->buffers.telemetryBuffer) {
         DataFlow f;
         f.name = "Telemetry";
         f.inputBuffer = ctx->buffers.telemetryBuffer;
         f.source = SOURCE_TELEMETRY;
+        f.physInterface = PHYS_UART1;  // Telemetry comes from FC
         f.senderMask = telemetryMask;
+        f.isInputFlow = false;  // FC→devices flow
         
         // Create parser based on protocol type
         switch (config->protocolOptimization) {
             case PROTOCOL_NONE:
                 f.parser = new RawParser();
+                f.router = nullptr;
                 break;
             case PROTOCOL_MAVLINK:
                 {
@@ -79,16 +92,11 @@ void ProtocolPipeline::setupFlows(Config* config) {
                     log_msg(LOG_INFO, "MAVLink parser created with routing=%s", 
                             config->mavlinkRouting ? "enabled" : "disabled");
                 }
-                // Create router if routing enabled
-                if (config->mavlinkRouting) {
-                    f.router = new MavlinkRouter();
-                    log_msg(LOG_INFO, "MAVLink routing enabled");
-                } else {
-                    f.router = nullptr;
-                }
+                f.router = sharedRouter;  // CRITICAL: Use shared router, NOT new!
                 break;
             default:
                 f.parser = new RawParser();
+                f.router = nullptr;
                 break;
         }
         
@@ -128,6 +136,165 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_INFO, "Logger flow created with LineBasedParser");
     } else if (config->device4.role == D4_LOG_NETWORK) {
         log_msg(LOG_ERROR, "Log buffer not allocated for Logger mode!");
+    }
+    
+    // NEW: USB Input flow (USB → UART1)
+    if (config->device2.role == D2_USB && ctx->buffers.usbInputBuffer) {
+        DataFlow f;
+        f.name = "USB_Input";
+        f.inputBuffer = ctx->buffers.usbInputBuffer;
+        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
+        f.physInterface = PHYS_USB;   // Physical: from USB
+        f.senderMask = (1 << IDX_UART1);  // Only to UART1
+        f.isInputFlow = true;  // device→FC flow
+        
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser();
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+        
+        flows[activeFlows++] = f;
+    }
+    
+    // NEW: UDP Input flow (UDP → UART1)
+    if (config->device4.role == D4_NETWORK_BRIDGE && ctx->buffers.udpInputBuffer) {
+        DataFlow f;
+        f.name = "UDP_Input";
+        f.inputBuffer = ctx->buffers.udpInputBuffer;
+        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
+        f.physInterface = PHYS_UDP;   // Physical: from UDP
+        f.senderMask = (1 << IDX_UART1);  // Only to UART1
+        f.isInputFlow = true;  // device→FC flow
+        
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser();
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+        
+        flows[activeFlows++] = f;
+    }
+    
+    // NEW: UART2 Input flow (UART2 → UART1)
+    if (config->device2.role == D2_UART2 && ctx->buffers.uart2InputBuffer) {
+        DataFlow f;
+        f.name = "UART2_Input";
+        f.inputBuffer = ctx->buffers.uart2InputBuffer;
+        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
+        f.physInterface = PHYS_UART2;  // Physical: from UART2
+        f.senderMask = (1 << IDX_UART1);  // Only to UART1
+        f.isInputFlow = true;  // device→FC flow
+        
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser();
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+        
+        flows[activeFlows++] = f;
+    }
+    
+    // NEW: UART3 Input flow (UART3 → UART1)
+    if (config->device3.role == D3_UART3_BRIDGE && ctx->buffers.uart3InputBuffer) {
+        DataFlow f;
+        f.name = "UART3_Input";
+        f.inputBuffer = ctx->buffers.uart3InputBuffer;
+        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
+        f.physInterface = PHYS_UART3;  // Physical: from UART3
+        f.senderMask = (1 << IDX_UART1);  // Only to UART1
+        f.isInputFlow = true;  // device→FC flow
+        
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser();
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+        
+        flows[activeFlows++] = f;
+    }
+    
+    // RAW mode check - only one input allowed
+    if (config->protocolOptimization == PROTOCOL_NONE) {
+        int inputFlowCount = 0;
+        for (size_t i = 0; i < activeFlows; i++) {
+            if (flows[i].isInputFlow) {  // Use explicit flag instead of senderMask check
+                inputFlowCount++;
+            }
+        }
+        if (inputFlowCount > 1) {
+            log_msg(LOG_ERROR, "RAW mode supports only single input! Disabling extra flows.");
+            // Keep only first input flow
+            // TODO: Better strategy - disable all but primary input
+            size_t firstInputIdx = 0;
+            for (size_t i = 0; i < activeFlows; i++) {
+                if (flows[i].isInputFlow) {
+                    if (firstInputIdx == 0) {
+                        firstInputIdx = i;
+                    } else {
+                        // Disable this flow
+                        flows[i].isInputFlow = false;
+                        flows[i].senderMask = 0;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -174,6 +341,19 @@ void ProtocolPipeline::createSenders(Config* config) {
             log_msg(LOG_INFO, "Created UDP sender at index %d", IDX_DEVICE4);
         }
     }
+    
+    // UART1 sender (NEW)
+    extern UartInterface* uartBridgeSerial;
+    if (uartBridgeSerial) {
+        // Initialize TX service with correct buffer size
+        Uart1TxService::getInstance()->init(uartBridgeSerial, UART1_TX_RING_SIZE);
+        
+        // Create sender that uses TX service
+        senders[IDX_UART1] = new Uart1Sender();
+        log_msg(LOG_INFO, "Created UART1 sender at index %d", IDX_UART1);
+    } else {
+        log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
+    }
 }
 
 void ProtocolPipeline::process() {
@@ -199,22 +379,174 @@ void ProtocolPipeline::process() {
     }
 }
 
+void ProtocolPipeline::processInputFlows() {
+    // CRITICAL: Add time limit to prevent blocking main loop during heavy traffic
+    uint32_t startMs = millis();
+    const uint32_t MAX_PROCESSING_TIME_MS = 5;  // Max 5ms per call
+    bool timeExceeded = false;
+    
+    for (size_t i = 0; i < activeFlows; i++) {
+        if (flows[i].isInputFlow) {  // Use explicit flag
+            // Check time before processing each flow
+            if (millis() - startMs >= MAX_PROCESSING_TIME_MS) {
+                timeExceeded = true;
+                break;
+            }
+            
+            processFlow(flows[i]);
+        }
+    }
+    
+    // === TEMPORARY DIAGNOSTIC START ===
+    static uint32_t exceedCount = 0;
+    if (timeExceeded && ++exceedCount % 100 == 0) {
+        log_msg(LOG_DEBUG, "[INPUT] Processing time limit exceeded %u times", exceedCount);
+    }
+    // === TEMPORARY DIAGNOSTIC END ===
+}
+
+void ProtocolPipeline::processTelemetryFlow() {
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    static uint32_t packetCount = 0;
+    static uint32_t lastReport = 0;
+    static uint32_t exhaustiveIterations = 0;  // Track how many parse iterations
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // Count function call frequency
+    static uint32_t callCount = 0;
+    static uint32_t lastCallReport = 0;
+    callCount++;
+    
+    if (millis() - lastCallReport > 1000) {
+        log_msg(LOG_INFO, "[FLOW] processTelemetryFlow called %u times/sec", callCount);
+        callCount = 0;
+        lastCallReport = millis();
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    
+    // Process telemetry with exhaustive parsing for efficiency
+    const uint32_t MAX_TIME_MS = 10;  // Max 10ms for telemetry processing
+    const size_t MAX_ITERATIONS = 20; // Safety limit to prevent infinite loops
+    uint32_t startTime = millis();
+    
+    for (size_t i = 0; i < activeFlows; i++) {
+        if (!flows[i].isInputFlow) {  // Telemetry flow (FC→GCS)
+            
+            // Process this flow until empty or timeout
+            size_t iterations = 0;
+            while (flows[i].inputBuffer && 
+                   flows[i].inputBuffer->available() > 0 &&
+                   (millis() - startTime) < MAX_TIME_MS &&
+                   iterations < MAX_ITERATIONS) {
+                
+                // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                size_t beforePackets = packetCount;
+                // === TEMPORARY DIAGNOSTIC BLOCK END ===
+                
+                // Remember buffer state before processing
+                size_t availableBefore = flows[i].inputBuffer->available();
+                
+                // Process one chunk (up to 296 bytes for MAVLink)
+                processFlow(flows[i]);
+                
+                // Check if parser made progress
+                size_t availableAfter = flows[i].inputBuffer->available();
+                if (availableAfter >= availableBefore) {
+                    break;
+                }
+                
+                iterations++;
+                
+                // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                exhaustiveIterations++;
+                // Count packets processed (approximation)
+                if (availableAfter > 0) {
+                    packetCount++;
+                }
+                // === TEMPORARY DIAGNOSTIC BLOCK END ===
+            }
+            
+            // Log if we hit limits (for debugging)
+            if (iterations >= MAX_ITERATIONS) {
+                log_msg(LOG_WARNING, "Telemetry processing hit iteration limit (%zu)", iterations);
+            } else if ((millis() - startTime) >= MAX_TIME_MS) {
+                log_msg(LOG_DEBUG, "Telemetry processing hit time limit after %zu iterations", iterations);
+            }
+        }
+    }
+    
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    if (millis() - lastReport > 1000) {
+        log_msg(LOG_INFO, "Telemetry: %u packets/sec, %u parse iterations/sec", 
+                packetCount, exhaustiveIterations);
+        packetCount = 0;
+        exhaustiveIterations = 0;
+        lastReport = millis();
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+}
+
 void ProtocolPipeline::processFlow(DataFlow& flow) {
     if (!flow.parser || !flow.inputBuffer) return;
+    
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    static uint32_t telemetryBytesTotal = 0;
+    static uint32_t parsedPacketsTotal = 0;
+    static uint32_t lastFlowReport = 0;
+    
+    // Count bytes available in telemetry buffer before parsing
+    size_t available = flow.inputBuffer->available();
+    telemetryBytesTotal += available;
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     uint32_t now = micros();
     
     // Parse packets from input buffer
     ParseResult result = flow.parser->parse(flow.inputBuffer, now);
     
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // Count successfully parsed packets
+    parsedPacketsTotal += result.count;
+    
+    // Log flow statistics every second
+    if (millis() - lastFlowReport > 1000) {
+        log_msg(LOG_INFO, "Flow stats: Processed %u bytes/sec, Parsed %u packets/sec", 
+                telemetryBytesTotal, parsedPacketsTotal);
+        telemetryBytesTotal = 0;
+        parsedPacketsTotal = 0;
+        lastFlowReport = millis();
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // Detailed telemetry parser diagnostics
+    if (strcmp(flow.name, "Telemetry") == 0 && result.bytesConsumed > 0) {
+        static uint32_t totalConsumed = 0;
+        static uint32_t totalPackets = 0;
+        static uint32_t lastParseReport = 0;
+        
+        totalConsumed += result.bytesConsumed;
+        totalPackets += result.count;
+        
+        if (millis() - lastParseReport > 1000) {
+            log_msg(LOG_INFO, "[PARSE] Telemetry: consumed %u bytes, parsed %u packets/sec", 
+                    totalConsumed, totalPackets);
+            totalConsumed = 0;
+            totalPackets = 0;
+            lastParseReport = millis();
+        }
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    
     // Consume bytes if parser processed them
     if (result.bytesConsumed > 0) {
         flow.inputBuffer->consume(result.bytesConsumed);
     }
     
-    // Set physical interface for all packets
+    // Set physical interface for anti-echo
     for (size_t i = 0; i < result.count; i++) {
-        result.packets[i].physicalInterface = flow.source;
+        result.packets[i].physicalInterface = flow.physInterface;
     }
     
     // Apply routing if configured
@@ -235,32 +567,32 @@ void ProtocolPipeline::distributePackets(ParsedPacket* packets, size_t count, Pa
     for (size_t i = 0; i < count; i++) {
         packets[i].source = source;
         
+        // Get physical interface (with validation)
+        PhysicalInterface phys = static_cast<PhysicalInterface>(packets[i].physicalInterface);
+        
         // Determine final destination mask
         uint8_t finalMask;
         if (packets[i].hints.hasExplicitTarget) {
-            // Use router decision
+            // Router determined specific target
             finalMask = packets[i].hints.targetDevices;
+        } else if (phys == PHYS_NONE) {
+            // Internal source (no physical interface) - send to all
+            finalMask = senderMask;
+        } else if (isValidPhysicalInterface(phys)) {
+            // Apply anti-echo using physical interface
+            finalMask = senderMask & ~physicalInterfaceBit(phys);
         } else {
-            // Broadcast with anti-echo
-            //finalMask = senderMask & ~(1 << packets[i].physicalInterface);
-            // // Broadcast WITHOUT anti-echo (temporary)
+            // Invalid physical interface - log and broadcast
+            log_msg(LOG_WARNING, "Invalid physical interface %d, broadcasting", phys);
             finalMask = senderMask;
         }
         
-        // TEMPORARY: If only fake UART1 bit set, use broadcast
-        // TODO: Remove when bidirectional pipeline implemented
-        if (finalMask == (1 << 4)) {
-            finalMask = senderMask;  // Fallback to broadcast
-        }
-        
         // Send to selected interfaces
-        for (size_t j = 0; j < MAX_SENDERS; j++) {  // Only real senders (0-3)
+        for (size_t j = 0; j < MAX_SENDERS; j++) {
             if (senders[j] && (finalMask & (1 << j))) {
                 senders[j]->enqueue(packets[i]);
             }
         }
-        // TEMPORARY: Ignore fake UART1 sender at index 4
-        // Bit 4 in mask means "send to FC" but we don't actually send
         
     }
 }
@@ -521,13 +853,3 @@ void ProtocolPipeline::cleanup() {
     }
 }
 
-MavlinkRouter* ProtocolPipeline::getMavlinkRouter() const {
-    // TEMPORARY: Direct access for input gateway
-    // TODO: Remove when bidirectional pipeline implemented
-    for (size_t i = 0; i < activeFlows; i++) {
-        if (flows[i].router) {
-            return static_cast<MavlinkRouter*>(flows[i].router);
-        }
-    }
-    return nullptr;
-}

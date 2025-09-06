@@ -22,40 +22,38 @@ class CircularBuffer;
 
 // Data flow structure for multi-stream processing
 struct DataFlow {
-    const char* name;           // Flow name for diagnostics
-    ProtocolParser* parser;     // Parser for this flow
-    ProtocolRouter* router;     // Router for this flow (optional)
-    CircularBuffer* inputBuffer;// Input buffer for this flow
-    PacketSource source;        // Source type for packet tagging
-    uint8_t senderMask;         // Which senders should receive packets from this flow
+    const char* name;               // Flow name for diagnostics
+    ProtocolParser* parser;         // Parser for this flow
+    ProtocolRouter* router;         // Will point to sharedRouter for MAVLink
+    CircularBuffer* inputBuffer;    // Input buffer for this flow
+    PacketSource source;            // Semantic source
+    PhysicalInterface physInterface;// NEW: Physical source
+    uint8_t senderMask;            // Which senders should receive packets from this flow
+    bool isInputFlow;              // NEW: Explicit marker for device→FC flows
     
     DataFlow() : name(nullptr), parser(nullptr), router(nullptr), inputBuffer(nullptr), 
-                 source(SOURCE_TELEMETRY), senderMask(0xFF) {}
+                 source(SOURCE_TELEMETRY), physInterface(PHYS_NONE), senderMask(0xFF), isInputFlow(false) {}
 };
 
 class ProtocolPipeline {
 private:
-    // Fixed sender indices (expanded for Device2 USB/UART2 + Device3)
-    enum SenderIndex {
-        IDX_DEVICE2_USB = 0,    // Device2 when USB
-        IDX_DEVICE2_UART2 = 1,  // Device2 when UART2 (NEW!)
-        IDX_DEVICE3 = 2,        // Device3 (any UART3 role)
-        IDX_DEVICE4 = 3,        // Device4 (UDP)
-        IDX_UART1_FAKE = 4,     // TEMPORARY: Fake sender for FC address book
-        MAX_SENDERS = 4         // Keep real senders at 4
-    };
+    // Use SenderIndex from protocol_types.h
+    // MAX_SENDERS is now defined in protocol_types.h
     
-    // Sender masks for routing
+    // Sender mask constants (bit positions)
     enum SenderMask {
-        SENDER_USB = (1 << IDX_DEVICE2_USB),     // 0x01
-        SENDER_UART2 = (1 << IDX_DEVICE2_UART2), // 0x02 (NEW!)
-        SENDER_UART3 = (1 << IDX_DEVICE3),       // 0x04
-        SENDER_UDP = (1 << IDX_DEVICE4),         // 0x08
+        SENDER_USB = (1 << IDX_DEVICE2_USB),
+        SENDER_UART2 = (1 << IDX_DEVICE2_UART2),
+        SENDER_UART3 = (1 << IDX_DEVICE3),
+        SENDER_UDP = (1 << IDX_DEVICE4),
         SENDER_ALL = 0xFF
     };
     
     // Maximum flows supported
-    static constexpr size_t MAX_FLOWS = 2;  // Telemetry + Logs
+    static constexpr size_t MAX_FLOWS = 8;  // Support more flows
+    
+    // Add shared router
+    MavlinkRouter* sharedRouter;
     
     // Data flows array
     DataFlow flows[MAX_FLOWS];
@@ -83,6 +81,21 @@ public:
     void process();
     void handleBackpressure();
     
+    // Add methods for separate processing
+    void processInputFlows();   // Process GCS→FC flows
+    void processTelemetryFlow(); // Process FC→GCS flow
+    
+    // Check if any input flow has data (optimization for main loop)
+    bool hasInputData() const {
+        for (size_t i = 0; i < activeFlows; i++) {
+            if (flows[i].isInputFlow && flows[i].inputBuffer && 
+                flows[i].inputBuffer->available() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     // Statistics and diagnostics
     void getStats(char* buffer, size_t bufSize);
     void getStatsString(char* buffer, size_t bufSize);
@@ -92,9 +105,7 @@ public:
     ProtocolParser* getParser() const;  // Returns first parser or nullptr
     CircularBuffer* getInputBuffer() const;  // Returns first buffer or nullptr
     
-    // TEMPORARY: Get router for input gateway
-    // TODO: Remove when bidirectional pipeline implemented
-    MavlinkRouter* getMavlinkRouter() const;
+    MavlinkRouter* getSharedRouter() { return sharedRouter; }
     
     // Sender access for statistics
     PacketSender* getSender(size_t index) const;

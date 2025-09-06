@@ -5,8 +5,9 @@
 #include "../usb/usb_interface.h"
 #include "uart_interface.h"
 
-// UART bridge task function
+// Task functions
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
+void senderTask(void* parameter);      // ADD: Sender task function
 
 // Device 3 task
 void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations

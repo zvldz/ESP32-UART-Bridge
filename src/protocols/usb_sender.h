@@ -289,17 +289,14 @@ public:
                 g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
                 commitPackets(batchPackets);  // Commit all packets
                 
-                // Log batch success (keep existing logging)
-                static uint32_t batchCount = 0;
-                if (++batchCount % 20 == 0) {
-                    log_msg(LOG_DEBUG, "[USB] Batch #%u: %zu packets, %zu bytes",
-                            batchCount, batchPackets, offset);
-                }
                 
-                batchWindowStart = 0;
+                batchWindowStart = 0;  // Reset window after sending
             } else {
                 applyBackoff();
             }
+        } else {
+            // NON-BLOCKING: Just return, don't wait
+            return;
         }
     }
     
@@ -325,6 +322,26 @@ public:
                 return false;
             }
         }
+        
+        // === TEMPORARY DIAGNOSTIC BLOCK START ===
+        // MAVLink sequence diagnostics
+        if (packet.protocolMsgId == MAVLINK_MSG_ID_FILE_TRANSFER_PROTOCOL) {
+            // Check MAVLink sequence number (position 4 in MAVLink v2)
+            if (packet.size > 4) {
+                uint8_t seq = packet.data[4];
+                static uint8_t lastSeq = 0xFF;  // 0xFF = not initialized
+                
+                if (lastSeq != 0xFF) {
+                    uint8_t expected = (uint8_t)(lastSeq + 1);
+                    if (seq != expected) {
+                        log_msg(LOG_WARNING, "[USB-FTP] MAVLink seq jump: %u -> %u (expected %u)", 
+                                lastSeq, seq, expected);
+                    }
+                }
+                lastSeq = seq;
+            }
+        }
+        // === TEMPORARY DIAGNOSTIC BLOCK END ===
         
         // Call parent enqueue implementation
         return PacketSender::enqueue(packet);

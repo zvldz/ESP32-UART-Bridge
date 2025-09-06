@@ -4,9 +4,6 @@
 #include "soc/usb_wrap_reg.h"
 #include "soc/usb_wrap_struct.h"
 
-// USB Host task runs on Core 0 (same as UART Bridge for minimal latency)
-#define USB_HOST_TASK_CORE 0
-
 // Global USB mode variable
 extern UsbMode usbMode;
 

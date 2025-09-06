@@ -590,6 +590,37 @@ void createTasks() {
 
   log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
 
+  // ADD: Check if we need sender task
+  bool needSenderTask = false;
+
+  // Check all possible sender configurations
+  if (config.device2.role == D2_USB ||           // USB sender
+      config.device2.role == D2_UART2 ||         // UART2 sender  
+      config.device3.role == D3_UART3_MIRROR ||  // UART3 mirror
+      config.device3.role == D3_UART3_BRIDGE ||  // UART3 bridge
+      config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
+      config.device4.role == D4_LOG_NETWORK) {    // UDP logger
+      needSenderTask = true;
+  }
+
+  // Create sender task only if needed
+  if (needSenderTask) {
+      TaskHandle_t senderTaskHandle;
+      xTaskCreatePinnedToCore(
+          senderTask,                      // Function
+          "sender_task",                    // Name
+          4096,                            // Stack size
+          NULL,                            // Parameter
+          UART_TASK_PRIORITY - 2,          // Priority (lower than main UART task)
+          &senderTaskHandle,               // Handle
+          UART_TASK_CORE                  // Same core as UART task
+      );
+      
+      log_msg(LOG_INFO, "Sender task created on core %d (priority %d)", 
+              UART_TASK_CORE, UART_TASK_PRIORITY - 1);
+  } else {
+      log_msg(LOG_INFO, "No senders configured, sender task not created");
+  }
 }
 
 //================================================================

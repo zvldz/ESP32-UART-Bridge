@@ -2,7 +2,6 @@
 #define UDP_SENDER_H
 
 #include "packet_sender.h"
-#include "network_functions.h"
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
 #include "../wifi/wifi_manager.h"
@@ -72,22 +71,6 @@ private:
                 batchDiag.normalModeBatches++;
             }
             
-            // Log every 20 batches
-            if (batchDiag.totalBatches % 20 == 0) {
-                uint32_t now = millis();
-                if (now - batchDiag.lastLogMs > 5000) {  // Max once per 5 sec
-                    float avg = batchDiag.atomicPacketsInBatches / (float)batchDiag.totalBatches;
-                    float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) / 
-                                      (totalSent > 0 ? totalSent : 1);
-                    
-                    log_msg(LOG_DEBUG, "[UDP-BATCH] #%u: avg=%.1f max=%u eff=%.0f%% bulk=%u%%",
-                            batchDiag.totalBatches, avg, batchDiag.maxPacketsInBatch,
-                            efficiency,
-                            (batchDiag.bulkModeBatches * 100) / batchDiag.totalBatches);
-                    
-                    batchDiag.lastLogMs = now;
-                }
-            }
             // === DIAGNOSTIC END ===
             
             sendUdpDatagram(atomicBatchBuffer, atomicBatchSize);
@@ -165,6 +148,7 @@ private:
         if (shouldFlush) {
             flushAtomicBatch();
         }
+        // NON-BLOCKING: No else with waiting
     }
     
     void processRawPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
@@ -193,6 +177,7 @@ private:
             if ((now - atomicBatchStartMs) >= timeout) {
                 flushAtomicBatch();
             }
+            // NON-BLOCKING: No else with waiting
         }
         
         // Check RAW batch timeout
@@ -200,6 +185,7 @@ private:
             if ((now - lastBatchTime) >= RAW_BATCH_TIMEOUT_MS) {
                 flushRawBatch();
             }
+            // NON-BLOCKING: No else with waiting
         }
     }
     

@@ -86,9 +86,15 @@ struct BridgeContext {
     
     // Protocol buffers - separated by purpose
     struct {
-        CircularBuffer* telemetryBuffer;  // For UART->USB/UDP telemetry
-        CircularBuffer* logBuffer;         // For Logger mode
-        CircularBuffer* udpRxBuffer;      // For UDP->UART bridge
+        CircularBuffer* telemetryBuffer;   // Existing: FC→GCS
+        CircularBuffer* logBuffer;          // Existing: Logger mode
+        CircularBuffer* udpRxBuffer;       // Existing: UDP receive (keep for AsyncUDP)
+        
+        // NEW: Input buffers for each source
+        CircularBuffer* usbInputBuffer;    // USB→FC commands
+        CircularBuffer* udpInputBuffer;    // UDP→FC commands (after udpRxBuffer)
+        CircularBuffer* uart2InputBuffer;  // UART2→FC commands
+        CircularBuffer* uart3InputBuffer;  // UART3→FC commands
     } buffers;
     
     // Cached device flags (for performance)
@@ -187,6 +193,12 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->buffers.telemetryBuffer = nullptr;
     ctx->buffers.logBuffer = nullptr;
     ctx->buffers.udpRxBuffer = nullptr;
+    
+    // NEW: Initialize input buffers
+    ctx->buffers.usbInputBuffer = nullptr;
+    ctx->buffers.udpInputBuffer = nullptr;
+    ctx->buffers.uart2InputBuffer = nullptr;
+    ctx->buffers.uart3InputBuffer = nullptr;
     
     // Device flags
     ctx->devices.device2IsUSB = device2IsUSB;
