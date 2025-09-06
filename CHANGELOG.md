@@ -1,6 +1,44 @@
 # CHANGELOG
 
-## v2.16.0 (MAVLink Routing Implementation & Input Gateway) ✅ IN PROGRESS
+## v2.17.0 (MAVLink Consume Fix & Performance Optimizations) ✅ COMPLETED
+
+### Critical MAVLink Parser Fix ✅ COMPLETED
+- **Consume Logic Fix**: Fixed critical bug where MAVLink parser consumed entire buffer view even for incomplete packets
+  - **Root Cause**: `result.bytesConsumed = view.safeLen` always consumed full view, losing partial packets
+  - **Solution**: Track `lastCompletePos` to consume only up to last complete packet (`MAVLINK_FRAMING_OK` or `MAVLINK_FRAMING_BAD_CRC`)
+  - **Result**: Eliminated MAVLink sequence gaps and fixed MAVFtp packet loss during parameter download
+  - **Diagnostics**: Added logging for incomplete packets left in buffer for monitoring
+
+### Bidirectional Pipeline Implementation ✅ COMPLETED
+- **Architecture Implementation**: Partial implementation of bidirectional pipeline design (Aug 30 plan)
+  - **Input Buffers**: Added 4 separate input buffers for USB/UDP/UART2/UART3 sources
+  - **Anti-echo Protection**: Implemented packet source tracking to prevent loops
+  - **Physical Interface Tracking**: Added interface identification for routing decisions
+
+### Pipeline Performance Optimizations ✅ COMPLETED
+- **Non-blocking Senders**: Removed blocking timeouts from USB and UDP senders (Sep 1)
+  - **Issue**: Senders blocked main loop waiting for batch timeouts, reducing iterations from 1000 to 780-850/sec
+  - **Fix**: Exit immediately if conditions not met, check on next iteration instead of waiting
+- **Input Flow Time Limits**: Added temporal constraints for bidirectional processing (Sep 1)
+  - **Issue**: `processInputFlows()` had no time limits, blocking main loop during FTP transfers
+  - **Fix**: Added 5ms time limit and iteration caps to prevent main loop stalls
+- **Sender Task Implementation**: Moved heavy USB operations to dedicated task (Sep 1)
+  - **Architecture**: Separate task for USB bulk transfers to prevent main loop blocking
+  - **Queue Management**: Ring buffer for packet passing between main loop and sender task
+
+### UART Batch Processing Improvements ✅ COMPLETED
+- **Batch Read Implementation**: Optimized UART1 data reading for higher throughput (Sep 1)
+  - **Method**: Read up to 320 bytes per batch instead of single bytes
+  - **Buffer Management**: Improved circular buffer write patterns for batch operations
+  - **Statistics**: Enhanced throughput monitoring for batch vs single-byte performance
+
+### Telemetry Flow Architecture Refinements ✅ COMPLETED
+- **Flow Prioritization**: Separated telemetry and input flow processing (Sep 2)
+  - **Telemetry Priority**: Higher priority for FC→GCS direction with exhaustive parsing
+  - **Input Flow Limits**: Time-bounded processing for GCS→FC direction to prevent blocking
+  - **Buffer Balance**: Optimized buffer allocation between bidirectional flows
+
+## v2.16.0 (MAVLink Routing Implementation & Input Gateway) ✅ COMPLETED
 
 ### MAVLink Routing Architecture Implementation ✅ COMPLETED
 - **Parser-Router Separation**: Moved target extraction from router to parser for clean architecture
