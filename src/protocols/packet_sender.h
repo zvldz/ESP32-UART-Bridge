@@ -75,22 +75,7 @@ public:
             }
         }
         
-        // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-        // Track enqueue time
-        ParsedPacket copy = packet;
-        copy.enqueueTimeMicros = micros();
-        
-        // Check parsing latency
-        uint32_t parseLatency = copy.enqueueTimeMicros - copy.parseTimeMicros;
-        if (parseLatency > 5000) {  // > 5ms
-            log_msg(LOG_WARNING, "[DIAG] High parse->enq latency: %ums for seq=%u msgid=%u",
-                    parseLatency/1000, copy.seqNum, copy.mavlinkMsgId);
-        }
-        
-        // Make copy and enqueue (use modified copy with diagnostic data)
-        ParsedPacket finalCopy = copy.duplicate();
-        // === DIAGNOSTIC END ===
-        // === ORIGINAL: ParsedPacket copy = packet.duplicate();
+        ParsedPacket finalCopy = packet.duplicate();
         
         if (!finalCopy.data) {
             log_msg(LOG_ERROR, "%s: Failed to duplicate packet", getName());

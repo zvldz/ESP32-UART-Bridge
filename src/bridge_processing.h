@@ -15,14 +15,7 @@
 // Forward declaration
 class ProtocolPipeline;
 
-// TEMPORARY: Input gateway for MAVLink routing
-// TODO: Remove when bidirectional pipeline implemented
-#include "input_gateway.h"
-extern InputGateway* g_inputGateway;
-
 #include "adaptive_buffer.h"
-
-// TEMPORARY: Keep existing functions for stability - unification can be done later
 
 // Check if we should yield to WiFi task
 static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
@@ -35,50 +28,51 @@ static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
 
 // Process data from Device 1 UART input
 static inline void processDevice1Input(BridgeContext* ctx) {
-    const int UART_BLOCK_SIZE = 64;
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    static uint32_t d1BytesTotal = 0;
+    static uint32_t lastReport = 0;
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
-    unsigned long currentTime = micros();
-    int timestampUpdateInterval = 1;  // Default: update every byte
+    // Local buffer for batch reading (sized for MAVLink v2 max frame + margin)
+    uint8_t buffer[320];
     
-    // Calculate update interval based on baudrate for protocol mode
-    if (ctx->protocol.enabled && ctx->system.config) {
-        uint32_t baudrate = ctx->system.config->baudrate;
-        if (baudrate >= 921600) {
-            timestampUpdateInterval = 32;  // Update every 32 bytes
-        } else if (baudrate >= 460800) {
-            timestampUpdateInterval = 16;  // Update every 16 bytes
-        } else if (baudrate >= 230400) {
-            timestampUpdateInterval = 8;   // Update every 8 bytes
-        } else if (baudrate >= 115200) {
-            timestampUpdateInterval = 4;   // Update every 4 bytes
-        } else {
-            timestampUpdateInterval = 1;   // Update every byte for slow speeds
-        }
-    }
-    
-    int bytesProcessed = 0;
-    
-    while (ctx->interfaces.uartBridgeSerial->available()) {
-        uint8_t data = ctx->interfaces.uartBridgeSerial->read();
+    // Process all available data in batches
+    while (ctx->interfaces.uartBridgeSerial->available() > 0) {
+        // Batch read - reads all available bytes (up to buffer size)
+        // CRITICAL: Does NOT wait for buffer to fill - reads what's available
+        size_t bytesRead = ctx->interfaces.uartBridgeSerial->readBytes(buffer, sizeof(buffer));
         
-        // Update timestamp periodically based on baudrate
-        if (++bytesProcessed % timestampUpdateInterval == 0) {
-            currentTime = micros();
+        if (bytesRead == 0) {
+            // No data read (mutex was busy or no data)
+            break;
         }
         
-        g_deviceStats.device1.rxBytes.fetch_add(1, std::memory_order_relaxed);
-        g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        // === TEMPORARY DIAGNOSTIC BLOCK START ===
+        d1BytesTotal += bytesRead;
+        // === TEMPORARY DIAGNOSTIC BLOCK END ===
         
-        
-
-        // All data goes to telemetryBuffer for Pipeline routing
+        // Write entire batch to telemetry buffer at once
         if (ctx->buffers.telemetryBuffer) {
-            // Process through adaptive buffer (for all Device2 types)
-            processAdaptiveBufferByte(ctx, data, currentTime);
+            size_t written = ctx->buffers.telemetryBuffer->write(buffer, bytesRead);
+            // === TEMPORARY DIAGNOSTIC BLOCK START ===
+            if (written < bytesRead) {
+                log_msg(LOG_WARNING, "[D1] TelemetryBuffer overflow! Lost %u bytes", bytesRead - written);
+            }
+            // === TEMPORARY DIAGNOSTIC BLOCK END ===
         }
-
-        // lastActivity updated directly in g_deviceStats
+        
+        // Update statistics once per batch (not per byte)
+        g_deviceStats.device1.rxBytes.fetch_add(bytesRead, std::memory_order_relaxed);
+        g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
+    
+    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    if (millis() - lastReport > 1000) {
+        log_msg(LOG_INFO, "D1 Input: %u bytes/sec", d1BytesTotal);
+        d1BytesTotal = 0;
+        lastReport = millis();
+    }
+    // === TEMPORARY DIAGNOSTIC BLOCK END ===
 }
 
 // Process Device3 UART Bridge RX
@@ -106,15 +100,16 @@ static inline void processDevice3UART(BridgeContext* ctx) {
                 break;
             }
         }
-        if (actual > 0) {
-            // TEMPORARY: Process through gateway for MAVLink learning
-            // TODO: Remove when bidirectional pipeline implemented
-                        if (g_inputGateway && g_inputGateway->isEnabled()) {
-                g_inputGateway->processInput(buffer, actual, 2);  // IDX_DEVICE3 = 2
-            } else {
-                ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+        if (actual > 0 && ctx->buffers.uart3InputBuffer) {
+            // FIFO with eviction if buffer full
+            size_t free = ctx->buffers.uart3InputBuffer->freeSpace();
+            if (free < actual) {
+                // Drop oldest data to make room
+                ctx->buffers.uart3InputBuffer->consume(actual - free);
+                // TODO: Add dropped bytes counter
             }
-            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            
+            ctx->buffers.uart3InputBuffer->write(buffer, actual);
             totalTransferred += actual;
         } else {
             break;
@@ -123,7 +118,6 @@ static inline void processDevice3UART(BridgeContext* ctx) {
     
     if (totalTransferred > 0) {
         g_deviceStats.device3.rxBytes.fetch_add(totalTransferred, std::memory_order_relaxed);
-        g_deviceStats.device1.txBytes.fetch_add(totalTransferred, std::memory_order_relaxed);
         g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
 }
@@ -154,20 +148,20 @@ static inline void processDevice2USB(BridgeContext* ctx) {
             }
         }
         
-        // Write in one call
-        if (actual > 0) {
-            // TEMPORARY: Process through gateway for MAVLink learning
-            // TODO: Remove when bidirectional pipeline implemented
-                        if (g_inputGateway && g_inputGateway->isEnabled()) {
-                g_inputGateway->processInput(buffer, actual, 0);  // IDX_DEVICE2_USB = 0
-            } else {
-                ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+        // Write to input buffer with backpressure
+        if (actual > 0 && ctx->buffers.usbInputBuffer) {
+            // FIFO with eviction if buffer full
+            size_t free = ctx->buffers.usbInputBuffer->freeSpace();
+            if (free < (size_t)actual) {
+                // Drop oldest data to make room
+                ctx->buffers.usbInputBuffer->consume(actual - free);
+                // TODO: Add dropped bytes counter
             }
-            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actual);
+            
+            ctx->buffers.usbInputBuffer->write(buffer, actual);
             
             // Statistics
             g_deviceStats.device2.rxBytes.fetch_add(actual, std::memory_order_relaxed);
-            g_deviceStats.device1.txBytes.fetch_add(actual, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             
             totalProcessed += actual;
@@ -204,20 +198,20 @@ static inline void processDevice2UART(BridgeContext* ctx) {
             }
         }
         
-        if (actualRead > 0) {
-            // TEMPORARY: Process through gateway for MAVLink learning
-            // TODO: Remove when bidirectional pipeline implemented
-                        if (g_inputGateway && g_inputGateway->isEnabled()) {
-                g_inputGateway->processInput(buffer, actualRead, 1);  // IDX_DEVICE2_UART2 = 1
-            } else {
-                ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
+        if (actualRead > 0 && ctx->buffers.uart2InputBuffer) {
+            // FIFO with eviction if buffer full
+            size_t free = ctx->buffers.uart2InputBuffer->freeSpace();
+            if (free < actualRead) {
+                // Drop oldest data to make room
+                ctx->buffers.uart2InputBuffer->consume(actualRead - free);
+                // TODO: Add dropped bytes counter
             }
-            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(buffer, actualRead);
+            
+            ctx->buffers.uart2InputBuffer->write(buffer, actualRead);
             totalProcessed += actualRead;
             
             // Update statistics
             g_deviceStats.device2.rxBytes.fetch_add(actualRead, std::memory_order_relaxed);
-            g_deviceStats.device1.txBytes.fetch_add(actualRead, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         } else {
             break;
@@ -233,43 +227,39 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
     auto segments = ctx->buffers.udpRxBuffer->getReadSegments();
     if (segments.first.size == 0) return;
     
-    size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
-    size_t toWrite = min(segments.first.size, canWrite);
+    size_t toWrite = segments.first.size;
     
-    if (toWrite > 0) {
-        // TEMPORARY: Process through gateway for MAVLink learning
-        // TODO: Remove when bidirectional pipeline implemented
-                if (g_inputGateway && g_inputGateway->isEnabled()) {
-            g_inputGateway->processInput(segments.first.data, toWrite, 3);  // IDX_DEVICE4 = 3
-        } else {
-            ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
+    if (toWrite > 0 && ctx->buffers.udpInputBuffer) {
+        // FIFO with eviction if buffer full
+        size_t free = ctx->buffers.udpInputBuffer->freeSpace();
+        if (free < toWrite) {
+            // Drop oldest data to make room
+            ctx->buffers.udpInputBuffer->consume(toWrite - free);
+            // TODO: Add dropped bytes counter
         }
-        // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(segments.first.data, toWrite);
+        
+        ctx->buffers.udpInputBuffer->write(segments.first.data, toWrite);
         ctx->buffers.udpRxBuffer->consume(toWrite);
         
         g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
-        g_deviceStats.device1.txBytes.fetch_add(toWrite, std::memory_order_relaxed);
         g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
     
     // Process second segment if available
-    if (segments.second.size > 0) {
-        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
-        size_t toWrite = min(segments.second.size, canWrite);
-        if (toWrite > 0) {
-            // TEMPORARY: Process through gateway for MAVLink learning
-            // TODO: Remove when bidirectional pipeline implemented
-                        if (g_inputGateway && g_inputGateway->isEnabled()) {
-                g_inputGateway->processInput(segments.second.data, toWrite, 3);  // IDX_DEVICE4 = 3
-            } else {
-                ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
-            }
-            // OLD CODE (keep for reference): ctx->interfaces.uartBridgeSerial->write(segments.second.data, toWrite);
-            ctx->buffers.udpRxBuffer->consume(toWrite);
-            // Update statistics
-            g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
-            g_deviceStats.device1.txBytes.fetch_add(toWrite, std::memory_order_relaxed);
+    if (segments.second.size > 0 && ctx->buffers.udpInputBuffer) {
+        size_t toWrite = segments.second.size;
+        // FIFO with eviction if buffer full
+        size_t free = ctx->buffers.udpInputBuffer->freeSpace();
+        if (free < toWrite) {
+            // Drop oldest data to make room
+            ctx->buffers.udpInputBuffer->consume(toWrite - free);
+            // TODO: Add dropped bytes counter
         }
+        
+        ctx->buffers.udpInputBuffer->write(segments.second.data, toWrite);
+        ctx->buffers.udpRxBuffer->consume(toWrite);
+        // Update statistics
+        g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
     }
 }
 

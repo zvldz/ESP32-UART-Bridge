@@ -44,6 +44,21 @@ public:
     virtual void end() = 0;
     virtual void setRxBufferSize(size_t size) = 0;
     
+    // Batch read - returns actual bytes read (up to maxLen)
+    // Default implementation uses available()/read() for compatibility
+    virtual size_t readBytes(uint8_t* buffer, size_t maxLen) {
+        size_t count = 0;
+        while (count < maxLen && available() > 0) {
+            int byte = read();
+            if (byte >= 0) {
+                buffer[count++] = (uint8_t)byte;
+            } else {
+                break;
+            }
+        }
+        return count;
+    }
+    
     // Extended interface for DMA features
     virtual bool hasPacketTimeout() { return false; }  // For adaptive buffering
     virtual bool hasOverrun() { return false; }        // For error detection

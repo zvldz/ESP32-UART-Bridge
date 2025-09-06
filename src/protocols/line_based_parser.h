@@ -76,7 +76,6 @@ public:
         result.packets[0].mavlinkMsgId = 0;
         result.packets[0].seqNum = 0;
         result.packets[0].parseTimeMicros = micros();
-        result.packets[0].enqueueTimeMicros = 0;
         
         memcpy(result.packets[0].data, view.ptr, lineLen);
         

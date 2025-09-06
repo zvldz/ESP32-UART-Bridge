@@ -83,6 +83,10 @@ public:
     int read() override;
     size_t write(uint8_t data) override;
     size_t write(const uint8_t* buffer, size_t size) override;
+    
+    // Batch read implementation - optimized with single mutex operation
+    size_t readBytes(uint8_t* buffer, size_t maxLen) override;
+    
     void flush() override;
     void end() override;
     void setRxBufferSize(size_t size) override;

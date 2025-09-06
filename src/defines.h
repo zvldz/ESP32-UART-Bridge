@@ -28,7 +28,7 @@ Hardware: ESP32-S3-Zero
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.16.0"
+#define DEVICE_VERSION "2.17.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -109,5 +109,11 @@ Hardware: ESP32-S3-Zero
 #define WEB_TASK_CORE 1       // Web server task
 #define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
 #define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
+
+// Input buffer sizes
+#define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
+
+// TX ring buffer for UART1
+#define UART1_TX_RING_SIZE 8192  // 8KB for single-writer architecture
 
 #endif // DEFINES_H

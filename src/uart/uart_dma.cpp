@@ -424,6 +424,37 @@ int UartDMA::read() {
     return -1;
 }
 
+// Batch read - takes mutex once, reads all available bytes
+size_t UartDMA::readBytes(uint8_t* buffer, size_t maxLen) {
+    if (!initialized || maxLen == 0) return 0;
+    
+    // Non-blocking mutex - return 0 if busy
+    if (xSemaphoreTake(rx_mutex, 0) != pdTRUE) {
+        return 0;
+    }
+    
+    size_t avail = getRxBytesAvailable();
+    size_t toRead = min(avail, maxLen);
+    
+    if (toRead > 0) {
+        // Efficient copy with wrap handling
+        if (rx_tail + toRead <= RING_BUF_SIZE) {
+            // No wrap - single memcpy
+            memcpy(buffer, &rx_ring_buf[rx_tail], toRead);
+            rx_tail = (rx_tail + toRead) % RING_BUF_SIZE;
+        } else {
+            // Handle wrap - two memcpy operations
+            size_t firstPart = RING_BUF_SIZE - rx_tail;
+            memcpy(buffer, &rx_ring_buf[rx_tail], firstPart);
+            memcpy(buffer + firstPart, &rx_ring_buf[0], toRead - firstPart);
+            rx_tail = toRead - firstPart;
+        }
+    }
+    
+    xSemaphoreGive(rx_mutex);
+    return toRead;
+}
+
 // Write single byte
 size_t UartDMA::write(uint8_t data) {
     if (!initialized) return 0;

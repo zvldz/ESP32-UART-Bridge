@@ -24,15 +24,6 @@ MavlinkRouter::MavlinkRouter() {
         entry.lastSeenMs = 0;
         entry.active = false;
     }
-    
-    // TEMPORARY: Pre-populate FC in address book with fake UART1 index
-    // TODO: Remove when bidirectional pipeline implemented
-    addressBook[0].sysId = 1;  // FC always sysid=1
-    addressBook[0].interfaceMask = (1 << 4);  // IDX_UART1_FAKE = 4
-    addressBook[0].lastSeenMs = 0xFFFFFFFF;  // Never expires
-    addressBook[0].active = true;
-
-    log_msg(LOG_INFO, "[ROUTER] TEMPORARY: FC sysid=1 on fake UART1 index 4");
 }
 
 // Check if message should always broadcast
