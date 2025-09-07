@@ -9,7 +9,7 @@
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS 1
 #endif
 #ifndef MAVLINK_COMM_NUM_BUFFERS
-#define MAVLINK_COMM_NUM_BUFFERS 1
+#define MAVLINK_COMM_NUM_BUFFERS 4
 #endif
 
 // 2. Disable warnings
