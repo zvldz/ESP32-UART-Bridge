@@ -4,6 +4,8 @@ import re
 import gzip
 import subprocess
 import sys
+import hashlib
+import json
 from pathlib import Path
 
 # Try to import minification libraries
@@ -127,9 +129,78 @@ def write_compressed_constant(f, const_name, compressed_data):
     f.write('};\n')
     f.write(f'const size_t {const_name}_GZ_LEN = {len(compressed_data)};\n\n')
 
+def get_files_hash(web_src, js_files):
+    """Calculate combined hash of all source files"""
+    hasher = hashlib.sha256()
+    
+    # Hash HTML files
+    for html_file in sorted(web_src.glob("*.html")):
+        if html_file.exists():
+            hasher.update(html_file.read_bytes())
+    
+    # Hash CSS
+    css_file = web_src / "style.css"
+    if css_file.exists():
+        hasher.update(css_file.read_bytes())
+    
+    # Hash JS files
+    for js_name in js_files:
+        js_file = web_src / js_name
+        if js_file.exists():
+            hasher.update(js_file.read_bytes())
+    
+    return hasher.hexdigest()
+
+def should_regenerate(web_src, generated, js_files):
+    """Check if regeneration is needed"""
+    cache_file = generated / ".embed_cache.json"
+    target_file = generated / "web_content.h"
+    
+    # Always regenerate if target doesn't exist
+    if not target_file.exists():
+        print("  Target file missing, will generate")
+        return True
+    
+    # Calculate current hash
+    current_hash = get_files_hash(web_src, js_files)
+    
+    # Check cache
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                cache = json.load(f)
+                if cache.get('hash') == current_hash:
+                    print(f"  No changes detected (hash: {current_hash[:8]}...)")
+                    return False
+        except:
+            pass
+    
+    print(f"  Changes detected, regenerating (hash: {current_hash[:8]}...)")
+    return True
+
+def save_cache(generated, web_src, js_files):
+    """Save current files hash to cache"""
+    cache_file = generated / ".embed_cache.json"
+    current_hash = get_files_hash(web_src, js_files)
+    
+    cache = {
+        'hash': current_hash,
+        'timestamp': os.path.getmtime(generated / "web_content.h"),
+        'files': []
+    }
+    
+    # Save file list for debugging
+    for html_file in sorted(web_src.glob("*.html")):
+        cache['files'].append(html_file.name)
+    cache['files'].append("style.css")
+    cache['files'].extend(js_files)
+    
+    with open(cache_file, 'w') as f:
+        json.dump(cache, f, indent=2)
+
 def process_html_files(source, target, env):
     """Embed HTML/CSS/JS files into C++ header"""
-    print("Embedding web files...")
+    print("Checking web files...")
     
     web_src = Path("src/webui_src")
     generated = Path("src/webui_gen")
@@ -155,6 +226,13 @@ def process_html_files(source, target, env):
         "form-utils.js",
         "status-updates.js"
     ]
+    
+    # Check if regeneration needed
+    if not should_regenerate(web_src, generated, js_files):
+        print("Web content is up-to-date, skipping generation")
+        return
+    
+    print("Embedding web files...")
     
     # Read CSS file
     css_content = ""
@@ -211,6 +289,9 @@ def process_html_files(source, target, env):
                 print(f"  WARNING: {js_name} not found!")
         
         f.write("#endif // WEB_CONTENT_H\n")
+    
+    # Save cache after successful generation
+    save_cache(generated, web_src, js_files)
     
     print("Web files embedded successfully!")
     print("Generated: src/webui_gen/web_content.h")
