@@ -138,6 +138,7 @@ String getConfigJson() {
     // Protocol optimization configuration
     doc["protocolOptimization"] = config.protocolOptimization;
     doc["udpBatchingEnabled"] = config.udpBatchingEnabled;
+    doc["mavlinkRouting"] = config.mavlinkRouting;
     
     // Protocol statistics via Pipeline
     BridgeContext* ctx = getBridgeContext();
