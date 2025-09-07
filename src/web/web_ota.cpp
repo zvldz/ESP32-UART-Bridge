@@ -14,6 +14,15 @@ extern TaskHandle_t uartBridgeTaskHandle;
 void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
   static bool updateStarted = false;
   
+  // Block OTA in USB Host mode
+  extern Config config;
+  if (config.usb_mode == USB_MODE_HOST) {
+    if (!index) {  // First chunk - send error once
+      log_msg(LOG_ERROR, "OTA update blocked: Not supported in USB Host mode");
+    }
+    return;  // Silently ignore all chunks
+  }
+  
   if (!index) {
     // File start - this is the first chunk
     log_msg(LOG_INFO, "Firmware update started: %s", filename.c_str());
@@ -88,6 +97,15 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
 
 // Handle update end for async web server
 void handleUpdateEnd(AsyncWebServerRequest *request) {
+  extern Config config;
+  
+  // Check if OTA was blocked
+  if (config.usb_mode == USB_MODE_HOST) {
+    request->send(400, "application/json", 
+      "{\"status\":\"error\",\"message\":\"Firmware update not supported in USB Host mode. Please switch to USB Device mode first.\"}");
+    return;
+  }
+  
   if (Update.hasError()) {
     String errorMsg = "{\"status\":\"error\",\"message\":\"Update failed: " + String(Update.errorString()) + "\"}";
     request->send(400, "application/json", errorMsg);
