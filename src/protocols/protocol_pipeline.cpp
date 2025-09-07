@@ -86,10 +86,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 break;
             case PROTOCOL_MAVLINK:
                 {
-                    MavlinkParser* mavParser = new MavlinkParser();
+                    MavlinkParser* mavParser = new MavlinkParser(0);  // Telemetry channel
                     mavParser->setRoutingEnabled(config->mavlinkRouting);
                     f.parser = mavParser;
-                    log_msg(LOG_INFO, "MAVLink parser created with routing=%s", 
+                    log_msg(LOG_INFO, "MAVLink parser created for Telemetry flow (channel=0) with routing=%s", 
                             config->mavlinkRouting ? "enabled" : "disabled");
                 }
                 f.router = sharedRouter;  // CRITICAL: Use shared router, NOT new!
@@ -156,9 +156,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 break;
             case PROTOCOL_MAVLINK:
                 {
-                    MavlinkParser* mavParser = new MavlinkParser();
+                    MavlinkParser* mavParser = new MavlinkParser(1);  // USB Input channel
                     mavParser->setRoutingEnabled(config->mavlinkRouting);
                     f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for USB_Input flow (channel=1)");
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;
@@ -189,9 +190,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 break;
             case PROTOCOL_MAVLINK:
                 {
-                    MavlinkParser* mavParser = new MavlinkParser();
+                    MavlinkParser* mavParser = new MavlinkParser(2);  // UDP Input channel
                     mavParser->setRoutingEnabled(config->mavlinkRouting);
                     f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for UDP_Input flow (channel=2)");
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;
@@ -222,9 +224,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 break;
             case PROTOCOL_MAVLINK:
                 {
-                    MavlinkParser* mavParser = new MavlinkParser();
+                    MavlinkParser* mavParser = new MavlinkParser(3);  // UART2 Input channel
                     mavParser->setRoutingEnabled(config->mavlinkRouting);
                     f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for UART2_Input flow (channel=3)");
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;
@@ -255,9 +258,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 break;
             case PROTOCOL_MAVLINK:
                 {
-                    MavlinkParser* mavParser = new MavlinkParser();
+                    MavlinkParser* mavParser = new MavlinkParser(4);  // UART3 Input channel
                     mavParser->setRoutingEnabled(config->mavlinkRouting);
                     f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for UART3_Input flow (channel=4)");
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;

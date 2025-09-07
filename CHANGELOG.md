@@ -1,13 +1,13 @@
 # CHANGELOG
 
-## v2.17.0 (MAVLink Consume Fix & Performance Optimizations) ✅ COMPLETED
+## v2.17.0 (MAVLink Parser Channel Fix & Performance Optimizations) ✅ COMPLETED
 
-### Critical MAVLink Parser Fix ✅ COMPLETED
-- **Consume Logic Fix**: Fixed critical bug where MAVLink parser consumed entire buffer view even for incomplete packets
-  - **Root Cause**: `result.bytesConsumed = view.safeLen` always consumed full view, losing partial packets
-  - **Solution**: Track `lastCompletePos` to consume only up to last complete packet (`MAVLINK_FRAMING_OK` or `MAVLINK_FRAMING_BAD_CRC`)
+### Critical MAVLink Parser Channel Fix ✅ COMPLETED
+- **Channel Conflict Resolution**: Fixed critical bug where all MAVLink parsers shared the same channel causing state conflicts
+  - **Root Cause**: All 5 MAVLink parsers used `rxChannel=0`, causing shared `rxStatus` state corruption between flows
+  - **Solution**: Assign unique channels (0-4) to each parser: Telemetry(0), USB(1), UDP(2), UART2(3), UART3(4)
   - **Result**: Eliminated MAVLink sequence gaps and fixed MAVFtp packet loss during parameter download
-  - **Diagnostics**: Added logging for incomplete packets left in buffer for monitoring
+  - **Implementation**: Modified `MavlinkParser` constructor to accept channel parameter, updated all instantiations
 
 ### Bidirectional Pipeline Implementation ✅ COMPLETED
 - **Architecture Implementation**: Partial implementation of bidirectional pipeline design (Aug 30 plan)
