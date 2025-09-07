@@ -82,31 +82,23 @@
 
 ### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
 
-- [ ] **MAVLink Message Routing** (Partially Implemented)
-  - **Completed**:
+- [x] **MAVLink Message Routing** ✅ COMPLETED (v2.16.0-v2.17.0)
+  - **Implementation Completed**:
     - ✅ Basic routing infrastructure (MavlinkRouter class)
     - ✅ Address book for sysid tracking
     - ✅ Target-based packet routing logic
     - ✅ Web interface configuration option
     - ✅ Always-broadcast list for telemetry messages
-  - **Pending Issues**:
-    - **Address Book Population**: Router cannot see incoming GCS packets (they bypass pipeline)
-    - **Target Extraction**: Need to implement pymavlink getters for correct field offsets
-      - `mavlink_msg_*_get_target_system()` functions available but not integrated
-      - Current implementation returns 0 (falls back to broadcast)
-  - **Temporary Solution - Input Gateway**:
-    - Quick fix to populate address book by inspecting incoming packets
-    - Extracts sysid from MAVLink headers before forwarding to UART1
-    - Will be replaced when bidirectional pipeline is implemented
-  - **Implementation Status**:
-    - Core routing logic complete but disabled by default
-    - Requires Input Gateway or Bidirectional Pipeline to function properly
-  - **Dependencies**: 
-    - Short-term: Input Gateway implementation
-    - Long-term: Bidirectional Pipeline architecture
+    - ✅ **Address Book Population**: Resolved via bidirectional pipeline (v2.17.0)
+    - ✅ **Target Extraction**: Implemented pymavlink getters for correct field offsets (v2.16.0)
+    - ✅ **Input Pipeline**: Bidirectional architecture enables full routing functionality (v2.17.0)
+  - **Status**: FULLY OPERATIONAL - All MAVLink routing features implemented and tested
 
-### Priority 5.1    
-- [ ] **Bidirectional Pipeline Architecture**
+### Priority 5.1 ✅ COMPLETED (v2.17.0)   
+- [x] **Bidirectional Pipeline Architecture** ✅ COMPLETED
+  - **Implementation Completed**: 4 separate input flows (USB, UDP, UART2, UART3) with dedicated parsers and unique MAVLink channels (0-4)
+  - **Key Achievement**: Fixed MAVLink parser channel conflicts that caused packet loss and sequence gaps
+  - **Architecture**: Input Pipeline: Device2/3/4 → Buffer → Parser → Router → UART1
   - **Problem**: Current unidirectional pipeline limits functionality
     - Cannot process incoming packets from Device2/3/4
     - Protocol conversion impossible (SBUS↔UART)
