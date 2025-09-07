@@ -120,27 +120,24 @@
                 </div>
                 
                 <h4 style="margin-top: 20px;">Protocol Optimization</h4>
-                <div style="margin: 10px 0;">
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
                     <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;">
                         <option value="0">None</option>
                         <option value="1">MAVLink</option>
                     </select>
-                    <small style="display: block; margin-top: 5px; color: #666;">
-                        ℹ️ Reduces latency by detecting packet boundaries. Applies to Device 1↔2 data flow only.
-                    </small>
-                </div>
-                
-                <div id="mavlink-routing-section" style="margin: 10px 0; display: none;">
-                    <div>
-                        <label>
+                    <div id="mavlink-routing-section" style="display: none;">
+                        <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
                             <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
-                            Target-only Routing
+                            <span>Target-only Routing</span>
                         </label>
-                        <small style="display: block; margin-left: 20px; color: #666; margin-top: 2px;">
-                            Routes messages by target System ID. Fallback: broadcast.
-                        </small>
                     </div>
                 </div>
+                <small style="display: block; margin-top: 5px; color: #666;">
+                    ℹ️ Reduces latency by detecting packet boundaries.<br>
+                    <span id="mavlink-routing-desc" style="display: none;">
+                        Routes messages by target System ID. Fallback: broadcast.
+                    </span>
+                </small>
                 
                 <h4 style="margin-top: 20px;">USB Mode</h4>
                 <div style="margin: 10px 0;">

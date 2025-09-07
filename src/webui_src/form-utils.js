@@ -548,13 +548,16 @@ const FormUtils = {
     updateMavlinkRoutingVisibility() {
         const protocolOpt = document.getElementById('protocol_optimization');
         const routingSection = document.getElementById('mavlink-routing-section');
+        const routingDesc = document.getElementById('mavlink-routing-desc');
         
         if (protocolOpt && routingSection) {
             // Show routing options only for MAVLink protocol (value = 1)
             if (protocolOpt.value === '1') {
                 routingSection.style.display = 'block';
+                if (routingDesc) routingDesc.style.display = 'block';
             } else {
                 routingSection.style.display = 'none';
+                if (routingDesc) routingDesc.style.display = 'none';
             }
         }
     }
