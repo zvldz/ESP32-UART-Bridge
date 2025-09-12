@@ -65,6 +65,8 @@ const char* getDevice2RoleName(uint8_t role) {
     case D2_NONE: return "Disabled";
     case D2_UART2: return "UART2";
     case D2_USB: return "USB";
+    case D2_SBUS_IN: return "SBUS Input";    // NEW
+    case D2_SBUS_OUT: return "SBUS Output";  // NEW
     default: return "Unknown";
   }
 }
@@ -76,6 +78,8 @@ const char* getDevice3RoleName(uint8_t role) {
     case D3_UART3_MIRROR: return "UART3 Mirror";
     case D3_UART3_BRIDGE: return "UART3 Bridge";
     case D3_UART3_LOG: return "UART3 Logger";
+    case D3_SBUS_IN: return "SBUS Input";    // NEW
+    case D3_SBUS_OUT: return "SBUS Output";  // NEW
     default: return "Unknown";
   }
 }

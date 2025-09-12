@@ -42,6 +42,15 @@ enum class PacketProtocol : uint8_t {
     // Future protocols
 };
 
+// Data format for protocol-specific handling
+enum class DataFormat : uint8_t {
+    FORMAT_RAW = 0,        // Raw data, no specific format
+    FORMAT_MAVLINK = 1,    // MAVLink formatted data  
+    FORMAT_SBUS = 2,       // SBUS formatted data
+    FORMAT_CRSF = 3,       // Future: CRSF formatted data
+    FORMAT_UNKNOWN = 0xFF  // Unknown format
+};
+
 // Packet source identification for routing
 enum PacketSource {
     SOURCE_TELEMETRY = 0,  // Default: UART telemetry data
@@ -66,6 +75,7 @@ struct ParsedPacket {
     
     // Protocol identification
     PacketProtocol protocol;        // Set by parser
+    DataFormat format;              // Data format for protocol-specific handling
     
     // Permanent protocol fields (outside diagnostic block)
     uint16_t protocolMsgId;         // Message ID for routing (HEARTBEAT=0 is valid)
@@ -90,8 +100,8 @@ struct ParsedPacket {
     
     ParsedPacket() : data(nullptr), size(0), allocSize(0), 
                     timestamp(0), pool(nullptr), source(SOURCE_TELEMETRY),
-                    protocol(PacketProtocol::UNKNOWN), protocolMsgId(0), 
-                    seqNum(0), physicalInterface(0xFF)
+                    protocol(PacketProtocol::UNKNOWN), format(DataFormat::FORMAT_UNKNOWN), 
+                    protocolMsgId(0), seqNum(0), physicalInterface(0xFF)
     // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
                     , parseTimeMicros(0), mavlinkMsgId(0)
     // === DIAGNOSTIC END ===

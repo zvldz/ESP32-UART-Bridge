@@ -2,6 +2,9 @@
 #include "../logging.h"
 #include "uart1_sender.h"
 #include "../uart/uart1_tx_service.h"
+#include "sbus_parser.h"
+#include "sbus_packetizer.h"
+#include "sbus_hub.h"
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) : 
     activeFlows(0),
@@ -300,6 +303,81 @@ void ProtocolPipeline::setupFlows(Config* config) {
             }
         }
     }
+    
+    // SBUS Input flow (SBUS → UART1)
+    if ((config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) ||
+        (config->device3.role == D3_SBUS_IN && ctx->buffers.uart3InputBuffer)) {
+        
+        DataFlow f;
+        f.name = "SBUS_Input";
+        
+        // Select buffer based on which device is SBUS_IN
+        if (config->device2.role == D2_SBUS_IN) {
+            f.inputBuffer = ctx->buffers.uart2InputBuffer;
+            f.physInterface = PHYS_UART2;
+        } else {
+            f.inputBuffer = ctx->buffers.uart3InputBuffer;
+            f.physInterface = PHYS_UART3;
+        }
+        
+        f.source = SOURCE_TELEMETRY;
+        f.senderMask = calculateSbusInputRouting(config);  // Dynamic routing calculation
+        f.isInputFlow = true;
+        f.parser = new SbusParser();
+        f.router = nullptr;  // No routing for SBUS
+        
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "SBUS Input flow created with routing mask: 0x%02X", f.senderMask);
+    }
+
+    // SBUS Output flow (UART1 → SBUS)
+    if ((config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT) &&
+        ctx->buffers.telemetryBuffer) {
+        
+        DataFlow f;
+        f.name = "SBUS_Output";
+        f.inputBuffer = ctx->buffers.telemetryBuffer;  // From UART1
+        f.source = SOURCE_TELEMETRY;
+        f.physInterface = PHYS_UART1;
+        f.isInputFlow = false;
+        f.parser = new SbusPacketizer();
+        f.router = nullptr;
+        
+        // Select output device
+        if (config->device2.role == D2_SBUS_OUT) {
+            f.senderMask = (1 << IDX_DEVICE2_UART2);
+        } else {
+            f.senderMask = (1 << IDX_DEVICE3);
+        }
+        
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "SBUS Output flow created");
+    }
+}
+
+uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
+    uint8_t mask = 0;
+    
+    // Device1 always receives data (main UART to flight controller)
+    mask |= (1 << IDX_UART1);
+    
+    // Device3 if configured as SBUS_OUT (repeater/hub mode)
+    if (config->device3.role == D3_SBUS_OUT) {
+        mask |= (1 << IDX_DEVICE3);
+    }
+    
+    // Device2 SBUS_OUT (when D3 is SBUS_IN and D2 is SBUS_OUT)
+    if (config->device3.role == D3_SBUS_IN && config->device2.role == D2_SBUS_OUT) {
+        mask |= (1 << IDX_DEVICE2_UART2);
+    }
+    
+    // Device4 if configured for network (SBUS transport via UDP)
+    // NOTE: currently commented out, will be in next phase
+    // if (config->device4.role == D4_NETWORK_BRIDGE) {
+    //     mask |= (1 << IDX_DEVICE4);
+    // }
+    
+    return mask;
 }
 
 void ProtocolPipeline::createSenders(Config* config) {
@@ -330,6 +408,25 @@ void ProtocolPipeline::createSenders(Config* config) {
             ctx->interfaces.device3Serial
         );
         log_msg(LOG_INFO, "Created UART3 sender at index %d", IDX_DEVICE3);
+    }
+    
+    // SBUS Hubs (state-based senders instead of queue-based)
+    if (config->device2.role == D2_SBUS_OUT && ctx->interfaces.device2Serial) {
+        // Replace UART2 sender with SBUS Hub for Device2
+        if (senders[IDX_DEVICE2_UART2]) {
+            delete senders[IDX_DEVICE2_UART2];
+        }
+        senders[IDX_DEVICE2_UART2] = new SbusHub(ctx->interfaces.device2Serial, IDX_DEVICE2_UART2);
+        log_msg(LOG_INFO, "Created SBUS Hub for Device2 at index %d", IDX_DEVICE2_UART2);
+    }
+
+    if (config->device3.role == D3_SBUS_OUT && ctx->interfaces.device3Serial) {
+        // Replace UART3 sender with SBUS Hub for Device3
+        if (senders[IDX_DEVICE3]) {
+            delete senders[IDX_DEVICE3];
+        }
+        senders[IDX_DEVICE3] = new SbusHub(ctx->interfaces.device3Serial, IDX_DEVICE3);
+        log_msg(LOG_INFO, "Created SBUS Hub for Device3 at index %d", IDX_DEVICE3);
     }
     
     // Device4 - UDP (unchanged)
@@ -703,7 +800,7 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
                 break;
                 
-            case PROTOCOL_MAVLINK:  // MAVLink (1)
+            case PROTOCOL_MAVLINK: {  // MAVLink (1)
                 // Rename "packetsDetected" to "packetsParsed" for clarity
                 parserStats["packetsParsed"] = ctx->protocol.stats->packetsDetected;
                 
@@ -720,10 +817,29 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 // Detection errors from parser
                 parserStats["detectionErrors"] = ctx->protocol.stats->detectionErrors;
                 break;
+            }
 
-            // Future: PROTOCOL_SBUS (2)
-            // parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
-            // parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
+            case PROTOCOL_SBUS: {  // SBUS (2)
+                // SBUS specific statistics
+                parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
+                parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
+                
+                // Find SBUS parser in any flow (not just first)
+                for (size_t i = 0; i < activeFlows; i++) {
+                    if (flows[i].parser && 
+                        strcmp(flows[i].parser->getName(), "SBUS_Parser") == 0) {
+                        
+                        // Cast to SbusParser to get specific stats
+                        SbusParser* sbusParser = static_cast<SbusParser*>(flows[i].parser);
+                        parserStats["validFrames"] = sbusParser->getValidFrames();
+                        parserStats["invalidFrames"] = sbusParser->getInvalidFrames();
+                        parserStats["frameLostCount"] = sbusParser->getFrameLostCount();
+                        parserStats["failsafeCount"] = sbusParser->getFailsafeCount();
+                        break;  // Found it, stop searching
+                    }
+                }
+                break;
+            }
         }
         
         // Common metrics for all protocols

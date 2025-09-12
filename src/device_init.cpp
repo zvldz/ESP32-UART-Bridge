@@ -24,6 +24,10 @@ UsbInterface* g_usbInterface = nullptr;
 
 // Initialize main UART bridge (Device 1)
 void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
+  // TEMP: Debug logging for SBUS role detection - remove after testing
+  log_msg(LOG_INFO, "initMainUART called, Device2.role = %d (D2_SBUS_IN=%d)", 
+          config->device2.role, D2_SBUS_IN);
+  
   // Store USB interface pointer
   g_usbInterface = usb;
   
@@ -55,11 +59,17 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
   // Initialize Device 2 if configured
   if (config->device2.role == D2_UART2) {
     initDevice2UART();
+  } else if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
+    initDevice2SBUS();  // NEW: Initialize SBUS for Device 2
   }
-  
-  // Initialize Device 3 if configured
+
+  // Initialize Device 3 if configured  
   if (config->device3.role != D3_NONE) {
-    initDevice3(config->device3.role);
+    if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
+      initDevice3SBUS();  // NEW: Initialize SBUS for Device 3
+    } else {
+      initDevice3(config->device3.role);  // Existing UART modes
+    }
   }
   
 }
@@ -93,6 +103,42 @@ void initDevice2UART() {
             DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN, config.baudrate);
   } else {
     log_msg(LOG_ERROR, "Failed to create Device 2 UART");
+  }
+}
+
+// Initialize Device 2 as SBUS
+void initDevice2SBUS() {
+  // SBUS uses fixed configuration
+  UartConfig sbusCfg = {
+    .baudrate = SBUS_BAUDRATE,        // 100000
+    .databits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_EVEN,
+    .stopbits = UART_STOP_BITS_2,
+    .flowcontrol = false               // SBUS never uses flow control
+  };
+  
+  // Use UartDMA with polling mode for Device 2
+  UartDMA::DmaConfig dmaCfg = {
+    .useEventTask = false,     // Polling mode
+    .dmaRxBufSize = 4096,
+    .dmaTxBufSize = 4096,
+    .ringBufSize = 8192
+  };
+  
+  device2Serial = new UartDMA(UART_NUM_2, dmaCfg);
+  
+  if (device2Serial) {
+    // Initialize with SBUS configuration
+    device2Serial->begin(sbusCfg, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
+    
+    // Enable signal inversion for SBUS
+    uart_set_line_inverse(UART_NUM_2, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+    
+    const char* modeStr = (config.device2.role == D2_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
+    log_msg(LOG_INFO, "Device 2 %s initialized on GPIO%d/%d (100000 8E2 INV)", 
+            modeStr, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
+  } else {
+    log_msg(LOG_ERROR, "Failed to create Device 2 SBUS interface");
   }
 }
 
@@ -144,6 +190,42 @@ void initDevice3(uint8_t role) {
     }
   } else {
     log_msg(LOG_ERROR, "Failed to create Device 3 UART");
+  }
+}
+
+// Initialize Device 3 as SBUS
+void initDevice3SBUS() {
+  // SBUS uses fixed configuration
+  UartConfig sbusCfg = {
+    .baudrate = SBUS_BAUDRATE,        // 100000
+    .databits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_EVEN,
+    .stopbits = UART_STOP_BITS_2,
+    .flowcontrol = false               // SBUS never uses flow control
+  };
+  
+  // Use UartDMA with polling mode for Device 3
+  UartDMA::DmaConfig dmaCfg = {
+    .useEventTask = false,     // Polling mode
+    .dmaRxBufSize = 4096,
+    .dmaTxBufSize = 4096,
+    .ringBufSize = 8192
+  };
+  
+  device3Serial = new UartDMA(UART_NUM_0, dmaCfg);
+  
+  if (device3Serial) {
+    // Initialize with SBUS configuration
+    device3Serial->begin(sbusCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+    
+    // Enable signal inversion for SBUS
+    uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+    
+    const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
+    log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (100000 8E2 INV, UART0)", 
+            modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+  } else {
+    log_msg(LOG_ERROR, "Failed to create Device 3 SBUS interface");
   }
 }
 

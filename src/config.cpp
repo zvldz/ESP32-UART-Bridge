@@ -117,6 +117,9 @@ void config_init(Config* config) {
   
   // MAVLink routing default
   config->mavlinkRouting = false;
+  
+  // SBUS debug enabled for testing - TEMP!
+  config->sbus_debug = true;
 }
 
 // Migrate configuration from old versions

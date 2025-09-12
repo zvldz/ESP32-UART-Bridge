@@ -69,6 +69,7 @@ public:
         result.packets[0].data = new uint8_t[lineLen];
         result.packets[0].size = lineLen;
         result.packets[0].allocSize = lineLen;
+        result.packets[0].format = DataFormat::FORMAT_RAW;
         result.packets[0].timestamp = currentTime;
         result.packets[0].hints.keepWhole = true;
         

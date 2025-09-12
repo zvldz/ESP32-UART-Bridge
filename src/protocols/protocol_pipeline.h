@@ -67,6 +67,7 @@ private:
     
     // Private methods
     void setupFlows(Config* config);
+    uint8_t calculateSbusInputRouting(Config* config);
     void createSenders(Config* config);
     void processFlow(DataFlow& flow);
     void distributePackets(ParsedPacket* packets, size_t count, PacketSource source, uint8_t senderMask);

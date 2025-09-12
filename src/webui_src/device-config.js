@@ -44,6 +44,8 @@ const DeviceConfig = {
                             <option value="0">Disabled</option>
                             <option value="1">UART2</option>
                             <option value="2">USB</option>
+                            <option value="3">SBUS Input</option>
+                            <option value="4">SBUS Output</option>
                         </select>
                     </td>
                 </tr>
@@ -56,6 +58,8 @@ const DeviceConfig = {
                             <option value="1">UART3 Mirror</option>
                             <option value="2">UART3 Bridge</option>
                             <option value="3">UART3 Logger</option>
+                            <option value="4">SBUS Input</option>
+                            <option value="5">SBUS Output</option>
                         </select>
                     </td>
                 </tr>
@@ -174,7 +178,17 @@ const DeviceConfig = {
     attachListeners() {
         const device2Role = document.getElementById('device2_role');
         if (device2Role) {
-            device2Role.addEventListener('change', () => this.updateDevice2Pins());
+            device2Role.addEventListener('change', () => {
+                this.updateDevice2Pins();
+                this.updateProtocolFieldState();  // Update protocol field when device2 role changes
+            });
+        }
+        
+        const device3Role = document.getElementById('device3_role');
+        if (device3Role) {
+            device3Role.addEventListener('change', () => {
+                this.updateProtocolFieldState();  // Update protocol field when device3 role changes
+            });
         }
 
         const device4Role = document.getElementById('device4_role');
@@ -195,6 +209,8 @@ const DeviceConfig = {
             pinsCell.textContent = 'GPIO 8/9';
         } else if (role === '2') { // USB
             pinsCell.textContent = 'USB';
+        } else if (role === '3' || role === '4') { // SBUS IN/OUT
+            pinsCell.textContent = 'GPIO 8/9 (INV)';
         } else {
             pinsCell.textContent = 'N/A';
         }
@@ -212,6 +228,85 @@ const DeviceConfig = {
         if (device3Stats) {
             device3Stats.style.display = (this.config.device3Role !== '0') ? 'table-row' : 'none';
         }
+        
+        // Update protocol field state based on SBUS roles
+        this.updateProtocolFieldState();
+    },
+    
+    updateProtocolFieldState() {
+        // Check if any device has SBUS role active
+        const isSbusActive = (this.config.device2Role === '3' || this.config.device2Role === '4' ||
+                             this.config.device3Role === '4' || this.config.device3Role === '5');
+        
+        // Protocol optimization field should be blocked when SBUS is active
+        const protocolField = document.getElementById('protocol_optimization');
+        if (protocolField) {
+            protocolField.disabled = isSbusActive;
+            // Add visual indication
+            protocolField.style.opacity = isSbusActive ? '0.5' : '1';
+            protocolField.style.cursor = isSbusActive ? 'not-allowed' : 'default';
+            
+            // Set to SBUS protocol when SBUS is active
+            if (isSbusActive && protocolField.value !== '2') {
+                // Add SBUS option if it doesn't exist
+                let sbusOption = protocolField.querySelector('option[value="2"]');
+                if (!sbusOption) {
+                    sbusOption = document.createElement('option');
+                    sbusOption.value = '2';
+                    sbusOption.textContent = 'SBUS';
+                    protocolField.appendChild(sbusOption);
+                }
+                protocolField.value = '2';  // Set to SBUS protocol
+            }
+        }
+        
+        // MAVLink routing checkbox should also be blocked when SBUS is active
+        const mavlinkRouting = document.getElementById('mavlink-routing');
+        if (mavlinkRouting) {
+            mavlinkRouting.disabled = isSbusActive;
+            // Add visual indication to the checkbox and its label
+            mavlinkRouting.style.opacity = isSbusActive ? '0.5' : '1';
+            mavlinkRouting.style.cursor = isSbusActive ? 'not-allowed' : 'default';
+            
+            // Also disable the parent label
+            const label = mavlinkRouting.closest('label');
+            if (label) {
+                label.style.opacity = isSbusActive ? '0.5' : '1';
+                label.style.cursor = isSbusActive ? 'not-allowed' : 'default';
+            }
+        }
+        
+        // Show/hide warning message
+        this.updateSbusWarning(isSbusActive);
+    },
+    
+    updateSbusWarning(isSbusActive) {
+        const existingWarning = document.getElementById('sbus-uart-warning');
+        
+        if (isSbusActive && !existingWarning) {
+            // Create warning message
+            const warning = document.createElement('div');
+            warning.id = 'sbus-uart-warning';
+            warning.style.cssText = `
+                background: #fff3cd; 
+                color: #856404; 
+                padding: 10px; 
+                border: 1px solid #ffeeba; 
+                border-radius: 4px; 
+                margin: 10px 0;
+                font-size: 13px;
+            `;
+            warning.innerHTML = '⚠️ Protocol optimization is automatically set to SBUS when SBUS device roles are active';
+            
+            // Insert after Protocol Optimization section
+            const protocolSection = document.getElementById('protocol_optimization')?.parentElement;
+            if (protocolSection) {
+                protocolSection.appendChild(warning);
+            }
+        } else if (!isSbusActive && existingWarning) {
+            // Remove warning message
+            existingWarning.remove();
+        }
     },
     
     // Get role name for display
@@ -220,13 +315,17 @@ const DeviceConfig = {
             device2: {
                 '0': 'Disabled',
                 '1': 'UART2',
-                '2': 'USB'
+                '2': 'USB',
+                '3': 'SBUS In',
+                '4': 'SBUS Out'
             },
             device3: {
                 '0': 'Disabled',
                 '1': 'Mirror',
                 '2': 'Bridge',
-                '3': 'Logger'
+                '3': 'Logger',
+                '4': 'SBUS In',
+                '5': 'SBUS Out'
             }
         };
         

@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.17.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.18.0-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -16,7 +16,9 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
 - **Advanced Protocol Pipeline**: Modern Parser + Sender architecture with memory pool management
-  - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection with zero latency
+  - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection with zero latency and intelligent routing
+  - **MAVLink Routing**: Multi-GCS support with automatic packet routing based on target system/component IDs
+  - **Bidirectional Processing**: Full input/output pipeline for protocol conversion and data flow management
   - **Raw Protocol Mode**: Adaptive buffering for unknown protocols with timing-based optimization
   - **Memory Pool**: Efficient packet memory management to prevent heap fragmentation
   - **Priority-based Transmission**: CRITICAL > NORMAL > BULK packet prioritization with intelligent dropping
@@ -46,11 +48,10 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Current Limitations
 
 - **Device 3 Adaptive Buffering**: Not yet integrated with new protocol pipeline (uses legacy approach)
-- **Protocol Pipeline**: Currently supports MAVLink and Raw modes (SBUS, CRSF planned for future)
+- **Protocol Pipeline**: Bidirectional pipeline implemented for MAVLink, additional protocols (SBUS, CRSF) planned
 - **Transmission Modes**: USB/UART senders support partial send recovery, UDP sender does not
-- **Device 2/3**: Use polling mode instead of event-driven architecture
+- **Device 2/3**: Use polling mode instead of event-driven architecture  
 - **Device 4**: UDP only (TCP support planned for future versions)
-- **Multi-device Pipeline**: Protocol pipeline optimized for single input → multiple outputs
 
 ## Hardware
 
@@ -310,7 +311,7 @@ Can be configured as:
 Can be configured as:
 - **Disabled**: Not used
 - **Mirror**: One-way copy of Device 1 data (TX only)
-- **Bridge**: Full bidirectional UART bridge with Device 1
+- **Bridge**: Full bidirectional UART bridge with Device 1 and protocol-aware processing
 - **Logger**: Dedicated UART log output at 115200 baud
 
 ### Device 4 - Network Channel
@@ -322,9 +323,9 @@ Requires active Wi-Fi connection. Can be configured as:
   - Configurable log levels (ERROR, WARNING, INFO, DEBUG)
 - **Network Bridge**: Bidirectional UART-to-UDP conversion
   - Default port: 14550
-  - Full duplex communication
+  - Full duplex communication with intelligent MAVLink routing
   - Ideal for wireless serial connections
-  - Use with ground control stations, telemetry systems, etc.
+  - Use with ground control stations, telemetry systems, multi-GCS setups
 
 ### Network Configuration for Device 4
 When Device 4 is enabled, additional settings appear:
