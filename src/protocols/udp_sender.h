@@ -2,6 +2,7 @@
 #define UDP_SENDER_H
 
 #include "packet_sender.h"
+#include "protocol_types.h"  // For DataFormat::FORMAT_SBUS
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
 #include "../wifi/wifi_manager.h"
@@ -265,6 +266,15 @@ public:
         while (!packetQueue.empty()) {
             QueuedPacket* item = &packetQueue.front();
             
+            // === TEMPORARY DIAGNOSTIC START ===
+            // Log SBUS frames being sent via UDP
+            if (item->packet.format == DataFormat::FORMAT_SBUS) {
+                static uint32_t sbusUdpCount = 0;
+                if (++sbusUdpCount % 100 == 0) {
+                    log_msg(LOG_DEBUG, "UDP: Sent %u SBUS frames", sbusUdpCount);
+                }
+            }
+            // === TEMPORARY DIAGNOSTIC END ===
             
             // Route packet based on protocol type (using keepWhole flag)
             if (item->packet.hints.keepWhole) {

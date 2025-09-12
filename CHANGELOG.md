@@ -1,5 +1,58 @@
 # CHANGELOG
 
+## v2.18.1 (SBUS Advanced Features & Multi-Transport Support) ✅ COMPLETED
+
+### Enhanced SBUS Hub Architecture ✅ COMPLETED
+- **Improved Statistics Tracking**: Advanced frame categorization and monitoring
+  - **Real vs Generated Frames**: Distinction between frames with new data vs timing-maintenance frames
+  - **Unchanged Frame Detection**: Channel hash-based detection of unchanged stick positions
+  - **Failsafe Statistics**: Dedicated failsafe event counter and state tracking
+  - **Timing Diagnostics**: Window-miss detection for transmission timing analysis
+  - **Fresh Data Flag**: `hadNewDataSinceLastSend` flag for precise frame categorization
+  
+- **Optimized Frame Generation**: Enhanced timing and efficiency improvements  
+  - **Standard SBUS Timing**: Corrected to 14ms intervals (71 FPS) for protocol compliance
+  - **Continuous Generation**: Always-active frame generation for consistent receiver compatibility
+  - **Improved Failsafe**: Better signal restoration detection and flag management
+  - **Smart Routing**: Enhanced SBUS input routing logic for complex device configurations
+
+### SBUS Multi-Transport Support ✅ COMPLETED
+- **UART→SBUS Bridge**: Transport SBUS frames over regular UART connections
+  - **UartSbusParser**: Dedicated parser for SBUS frames received via UART
+  - **Bridge Flows**: UART2→Device3_SBUS_OUT and UART3→Device2_SBUS_OUT configurations
+  - **Frame Validation**: Robust start/end byte validation for UART-transported SBUS data
+  - **Use Case**: Enable SBUS over any baudrate UART connection between ESP32 devices
+
+- **UDP→SBUS Bridge**: Wireless SBUS transmission over WiFi networks
+  - **UdpSbusParser**: Specialized parser for SBUS frames in UDP packets  
+  - **Network Bridge**: Device4 Network Bridge integration for wireless SBUS transport
+  - **Atomic Packet Handling**: Proper UDP packet atomicity with full-buffer clearing on errors
+  - **WiFi SBUS**: Real-time RC control over WiFi with <50ms latency targeting
+
+### SBUS Routing Enhancements ✅ COMPLETED
+- **UDP Transport Integration**: Full UDP routing support for SBUS data streams
+  - **Routing Activation**: Enabled Device4 UDP routing in SBUS input calculations
+  - **Transport Statistics**: UDP sender SBUS frame counting and diagnostic logging
+  - **Network Compatibility**: SBUS frames transmitted as raw 25-byte UDP payloads
+
+- **Multi-Source Conflict Detection**: Comprehensive input source validation
+  - **Source Identification**: Named detection of Physical SBUS, UART bridges, and UDP inputs
+  - **Conflict Prevention**: Single-source enforcement with detailed conflict reporting
+  - **Future Compatibility**: Framework prepared for Phase 8 multi-source support
+
+### Diagnostic & Monitoring Improvements ✅ COMPLETED  
+- **Enhanced Logging**: Comprehensive diagnostic output for SBUS operations
+  - **UART1 Diagnostics**: SBUS frame transmission logging for protocol analysis
+  - **UDP Diagnostics**: Network-based SBUS frame transmission monitoring  
+  - **Parser Statistics**: Frame reception counting with invalid frame tracking
+  - **Temporary Diagnostics**: Clearly marked diagnostic code for future cleanup
+
+### Transport Method Coverage ✅ COMPLETED
+- **Physical SBUS**: Direct Device2/3 SBUS_IN → SBUS_OUT connections
+- **UART Transport**: SBUS over regular UART at any baudrate (115200-921600+)
+- **WiFi/UDP Transport**: Wireless SBUS over local networks with real-time performance
+- **Hybrid Configurations**: Multiple simultaneous transport methods with conflict detection
+
 ## v2.18.0 (SBUS Protocol Implementation & Hub Architecture) ✅ COMPLETED
 
 ### SBUS Protocol Full Implementation ✅ COMPLETED

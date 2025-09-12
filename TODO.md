@@ -1,46 +1,167 @@
 # TODO / Roadmap
 
+## PROJECT STATUS SUMMARY
+
+**Current Version**: v2.18.1  
+**Current Phase**: Phase 8 - Testing SBUS Implementation  
+**Roadmap**:
+1. Phase 9-10: Multi-source & Failsafe SBUS
+2. Documentation: Update README & Web Help for SBUS
+3. Platform Support: ESP32-S3 Super Mini
+4. Stabilization: Code cleanup & optimization
+
 ## ACTIVE TASKS 🔄
 
-### Priority 1 - Protocol Transport Optimization
+### CURRENT PHASE - Completing SBUS Implementation
 
-#### 1.3 - Protocol-driven Optimizations 🔄 PARTIALLY IMPLEMENTED
+#### Phase 8 - Testing (IMMEDIATE) 🔴 READY FOR TESTING
+
+- [ ] **Physical SBUS Testing** (Phase 4-5 features)
+  - [ ] SBUS_IN from RC receiver → SBUS_OUT to flight controller
+  - [ ] Verify 71 FPS generation rate with oscilloscope
+  - [ ] Test failsafe activation after 100ms signal loss
+  - [ ] Validate all 16 channels + flags transmission
+
+- [ ] **UART Transport Testing** (Phase 6 - UartSbusParser)
+  - [ ] ESP1 (SBUS_IN) → UART → ESP2 (UART→SBUS_OUT)
+  - [ ] Test various baudrates (115200, 460800, 921600)
+  - [ ] Measure end-to-end latency
+  - [ ] Verify frame integrity over long UART cables
+
+- [ ] **UDP/WiFi Transport Testing** (Phase 7 - UdpSbusParser)
+  - [ ] ESP1 (SBUS_IN) → UDP → ESP2 (UDP→SBUS_OUT)
+  - [ ] Measure WiFi latency (target <50ms)
+  - [ ] Test with different network conditions
+  - [ ] Verify operation in both AP and Client modes
+
+- [ ] **Statistics Validation**
+  - [ ] Verify Real vs Generated frame percentages
+  - [ ] Check unchanged frame detection accuracy
+  - [ ] Validate failsafe event counting
+  - [ ] Confirm TX byte statistics for all devices
+
+#### Phase 9 - Multi-Source Support 🟡 NEXT
+
+- [ ] **Implement multi-source SBUS handling**
+  - [ ] Remove single-source limitation
+  - [ ] Add source priority/selection logic
+  - [ ] Handle concurrent SBUS inputs (Physical + UART + UDP)
+
+#### Phase 10 - SBUS Failsafe/Redundancy 🟡 PLANNED
+
+- [ ] **SBUS Failsafe Mode**
+  - [ ] Automatic failover between multiple SBUS sources
+  - [ ] Monitor both SBUS inputs for valid packets
+  - [ ] Auto-switch on primary loss (>100ms timeout)
+  - [ ] Auto-return to primary when signal restored
+
+### DOCUMENTATION UPDATE - After SBUS Completion 🟠 IMPORTANT
+
+#### Update User Documentation
+
+- [ ] **README.md Main File**
+  - [ ] Add SBUS protocol section with features
+  - [ ] Document all SBUS device role combinations
+  - [ ] Add SBUS transport methods (Physical, UART, UDP)
+  - [ ] Include SBUS configuration examples
+  - [ ] Add wiring diagrams for SBUS connections
+  - [ ] Note about hardware inverter requirements
+
+- [ ] **Web Interface Help Page**
+  - [ ] Update device role descriptions for SBUS modes
+  - [ ] Add SBUS statistics explanation
+  - [ ] Document SBUS failsafe behavior
+  - [ ] Add troubleshooting section for SBUS
+  - [ ] Include optimal settings for different use cases
+
+- [ ] **Configuration Examples**
+  - [ ] SBUS RC receiver → Flight controller
+  - [ ] SBUS over UART between ESP32s
+  - [ ] SBUS over WiFi/UDP setup
+  - [ ] Multi-source SBUS with failover (after Phase 10)
+
+### PLATFORM SUPPORT - Before Final Cleanup 🟠
+
+#### ESP32-S3 Super Mini Support
+
+- [ ] **Hardware Adaptation**
+  - [ ] Pin mapping for S3 Super Mini board
+  - [ ] Adjust for different GPIO availability
+  - [ ] Test with reduced flash/RAM if applicable
+  - [ ] Verify USB-CDC functionality
+
+- [ ] **Build Configuration**
+  - [ ] Add platformio environment for S3 Super Mini
+  - [ ] Adjust partition table if needed
+  - [ ] Configure appropriate CPU frequency
+  - [ ] Test both single and dual-core modes
+
+- [ ] **Testing on S3 Super Mini**
+  - [ ] Verify all UART interfaces work
+  - [ ] Test SBUS with hardware inverter
+  - [ ] Validate WiFi performance
+  - [ ] Check power consumption
+
+### STABILIZATION PHASE - After Platform Support 🟢 
+
+#### Code Cleanup & Optimization
+
+- [ ] **Remove Debug Code** (from Priority 1.7)
+  - [ ] Find and remove temporary diagnostic prints
+  - [ ] Clean up experimental code blocks
+  - [ ] Remove "TEMPORARY DIAGNOSTIC" sections
+  - [ ] Finalize production-ready code
+
+- [ ] **Architecture Simplification** (from Priority 1.8)
+  - [ ] Evaluate bridge_processing.h removal
+  - [ ] Simplify uartBridgeTask
+  - [ ] Consolidate initialization
+  - [ ] Minimize to Pipeline + USB only
+
+- [ ] **Final Code Cleanup**
+  - [ ] Remove unnecessary diagnostic code
+  - [ ] Clean up commented-out code blocks
+  - [ ] Optimize memory usage
+  - [ ] Ensure consistent code style
+
+### COMPLETED FEATURES ✅
+
+#### Protocol-driven Optimizations ✅ COMPLETED
 - [x] MAVFtp: Extended timeouts (20ms) - COMPLETED
-- [ ] SBUS/CRSF (future): Minimal latency requirements
+- [x] SBUS: Implemented with 14ms timing (71 FPS) - COMPLETED v2.18.0-2.18.1
+- [ ] CRSF (future): Minimal latency requirements
 - [ ] Modbus RTU (future): Inter-frame timing preservation
 - [ ] Device 3 (Mirror) can utilize same optimizations
 - Architecture ready - just add new protocol implementations
 
-#### 1.7 - Diagnostic Cleanup 🔄 PENDING
-- [ ] **Remove Debug Code** 🔄 PENDING
-  - Find and remove temporary diagnostic prints
-  - Clean up experimental code blocks
-  - Remove "TEMPORARY DEBUG" sections
-  - Finalize production-ready code
+### Priority 6 - SBUS Protocol Support ✅ IMPLEMENTED v2.18.0-2.18.1
 
-### Priority 1.8 - Architecture Simplification (after UART refactoring) 🔄 PENDING
-
-- [ ] **Evaluate bridge_processing.h removal**
-  - After UART refactoring - assess remaining code
-  - After LED centralization - even less code  
-  - After full Protocol Pipeline integration
-  - Consider creating BridgeProcessor class
-  - Or remove file completely
-- [ ] **Simplify uartBridgeTask**
-  - Minimize to Pipeline + USB only
-  - Consider renaming to pipelineTask
-  - Or move to main.cpp if small enough
-- [ ] **Consolidate initialization**
-  - Merge device_init.cpp logic where appropriate
-  - Simplify context initialization
-
-  
-### Priority 6 - SBUS Protocol Support
-
-- [ ] **SBUS Mode** - UART to/from SBUS converter
-  - Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted)
-  - Convert SBUS to standard UART (configurable baud rate)
-  - **Uses Protocol Framework from Priority 4.1**
+- [x] **SBUS Mode** - UART to/from SBUS converter ✅ COMPLETED
+  - [x] Convert standard UART to SBUS protocol (100000 baud, 8E2, inverted) ✅
+  - [x] Convert SBUS to standard UART (configurable baud rate) ✅
+  - [x] **Uses Protocol Framework from Priority 4.1** ✅
+  - **IMPLEMENTED FEATURES (v2.18.0-2.18.1)**:
+    - [x] SbusParser - Full SBUS frame parsing with validation
+    - [x] SbusHub - State-based architecture (replaced queue-based SbusSender)
+    - [x] Auto-protocol detection based on device roles
+    - [x] Advanced statistics (real vs generated frames)
+    - [x] Failsafe support (100ms timeout)
+    - [x] Multi-transport conflict detection
+  - **IMPLEMENTED BUT NOT TESTED (v2.18.1)**:
+    - [x] **Phase 6 - UART→SBUS Bridge** 🟡 NEEDS TESTING
+      - UartSbusParser for receiving SBUS over regular UART
+      - Flows: UART2→Device3_SBUS_OUT, UART3→Device2_SBUS_OUT
+      - Any baudrate support (115200-921600)
+    - [x] **Phase 7 - UDP→SBUS Bridge** 🟡 NEEDS TESTING
+      - UdpSbusParser for receiving SBUS over WiFi
+      - Network Bridge integration
+      - Target <50ms latency
+    - [x] **SBUS→UDP Transport** 🟡 NEEDS TESTING
+      - Sending SBUS frames via UDP packets
+      - Raw 25-byte transmission
+  - **PENDING**:
+    - [ ] **Phase 8**: Real-world testing of all transport modes (CURRENT)
+    - [ ] **Phase 9**: Multi-source support (currently single-source only)
   - **Device Roles**:
     - `D1_UART_TO_SBUS`: Device 1 receives UART, Device 2 outputs SBUS
     - `D1_SBUS_TO_UART`: Device 1 receives SBUS, Device 2 outputs UART
@@ -122,29 +243,24 @@
     - Smooth transitions without control glitches
     - Priority management with hysteresis
 
-### Priority 7 - Multi-Protocol Architecture
+### FUTURE PROTOCOLS & FEATURES 🔵
 
-- [ ] **Advanced Protocol Management**
-  - Per-device protocol configuration (different protocols per Device)
+#### New Protocol Support
+
+- [ ] **CRSF Protocol** - Minimal latency requirements
+- [ ] **Modbus RTU** - Inter-frame timing preservation  
+- [ ] **NMEA GPS** - GPS data parsing and routing
+
+#### Advanced Protocol Management
+
+- [ ] **Protocol Conversion Features**
+  - [x] SBUS↔UART conversion (implemented)
+  - [ ] SBUS↔MAVLink conversion
+  - [ ] Modbus↔JSON conversion
+  - [ ] NMEA→Binary conversion
+  - Per-device protocol configuration
   - Independent protocol detectors per interface
-  - Support for protocol conversion (SBUS↔MAVLink, Modbus↔Text)
-  - Handle complex routing scenarios with protocol translation
-  - **Use Cases**:
-    - Device 1: MAVLink, Device 2: SBUS conversion
-    - Device 1: Modbus RTU, Device 3: JSON over network
-    - Device 1: NMEA GPS, Device 2: Binary protocol conversion
 
-### Priority 8 - Multi-Board Support
-
-- [ ] **ESP32-S3 Super Mini Support**
-  - Add board detection system with compile-time configuration
-  - Create separate PlatformIO environments for different boards:
-    - `waveshare-s3-zero` (full features including USB Host)
-    - `super-mini` (all features except USB Host, RGB LED on GPIO48)
-  - Implement runtime USB Host capability checking
-  - Update web interface to hide USB Host option on unsupported boards
-  - Benefits:
-    - Broader hardware compatibility
     - User choice between full features vs ultra-compact size
     - Same codebase supports multiple popular ESP32-S3 boards
   - **Board Comparison**:
