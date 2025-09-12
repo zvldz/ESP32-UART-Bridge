@@ -175,9 +175,9 @@ void initializeScheduler() {
         
         // Flush if:
         // - 10 complete lines OR  
-        // - any data (lines or partial line) AND 100ms passed
+        // - any complete lines AND 100ms passed
         if (lineCount >= 10 || 
-            ((lineCount > 0 || lineLen > 0) && (now - lastFlushMs) >= 100)) {
+            (lineCount > 0 && (now - lastFlushMs) >= 100)) {
             shouldFlush = true;
         }
         
@@ -211,11 +211,8 @@ void initializeScheduler() {
                 lineLen = 0;
             }
             
-            // IMPORTANT: send partial line if exists
-            if (lineLen > 0) {
-                inputBuffer->write(lineBuffer, lineLen);
-                lineLen = 0;
-            }
+            // Keep partial line for next iteration - DON'T send incomplete lines
+            // lineLen will be preserved as static variable
             
             xSemaphoreGive(udpLogMutex);
             lastFlushMs = now;

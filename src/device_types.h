@@ -34,7 +34,9 @@ enum Device1Role {
 enum Device2Role {
     D2_NONE = 0,
     D2_UART2 = 1,
-    D2_USB = 2
+    D2_USB = 2,
+    D2_SBUS_IN = 3,   // NEW: SBUS input from RC receiver
+    D2_SBUS_OUT = 4   // NEW: SBUS output to servos
 };
 
 // Device 3 role
@@ -42,7 +44,9 @@ enum Device3Role {
     D3_NONE = 0,
     D3_UART3_MIRROR = 1,
     D3_UART3_BRIDGE = 2,
-    D3_UART3_LOG = 3
+    D3_UART3_LOG = 3,
+    D3_SBUS_IN = 4,    // NEW: SBUS input (alternative)
+    D3_SBUS_OUT = 5    // NEW: SBUS output (alternative)
 };
 
 // Device 4 role
@@ -108,4 +112,5 @@ typedef struct {
     uint8_t protocolOptimization;
     bool udpBatchingEnabled;
     bool mavlinkRouting;
+    bool sbus_debug;  // NEW: SBUS debug output
 } Config;

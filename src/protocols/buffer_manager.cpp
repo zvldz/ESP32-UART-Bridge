@@ -7,8 +7,10 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     bool needTelemetryBuffer = 
         (config->device2.role == D2_USB) ||  // USB always needs buffer
         (config->device2.role == D2_UART2) ||
+        (config->device2.role == D2_SBUS_OUT) ||  // SBUS OUT needs telemetry from UART1
         (config->device3.role == D3_UART3_MIRROR) ||
         (config->device3.role == D3_UART3_BRIDGE) ||
+        (config->device3.role == D3_SBUS_OUT) ||  // SBUS OUT needs telemetry from UART1
         (config->device4.role == D4_NETWORK_BRIDGE);
     
     if (needTelemetryBuffer) {
@@ -42,19 +44,33 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     }
     
     // UART2 input buffer
-    if (config->device2.role == D2_UART2) {
+    if (config->device2.role == D2_UART2 || config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
         ctx->buffers.uart2InputBuffer = new CircularBuffer();
-        ctx->buffers.uart2InputBuffer->init(inputBufferSize);
-        log_msg(LOG_INFO, "UART2 input buffer allocated: %zu bytes", inputBufferSize);
+        
+        // SBUS needs smaller buffers (25 bytes per frame)
+        if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
+            ctx->buffers.uart2InputBuffer->init(512);  // ~20 frames buffer
+            log_msg(LOG_INFO, "UART2 SBUS buffer allocated: 512 bytes");
+        } else {
+            ctx->buffers.uart2InputBuffer->init(inputBufferSize);
+            log_msg(LOG_INFO, "UART2 input buffer allocated: %zu bytes", inputBufferSize);
+        }
     } else {
         ctx->buffers.uart2InputBuffer = nullptr;
     }
     
     // UART3 input buffer
-    if (config->device3.role == D3_UART3_BRIDGE) {
+    if (config->device3.role == D3_UART3_BRIDGE || config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
         ctx->buffers.uart3InputBuffer = new CircularBuffer();
-        ctx->buffers.uart3InputBuffer->init(inputBufferSize);
-        log_msg(LOG_INFO, "UART3 input buffer allocated: %zu bytes", inputBufferSize);
+        
+        // SBUS needs smaller buffers (25 bytes per frame)
+        if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
+            ctx->buffers.uart3InputBuffer->init(512);  // ~20 frames buffer
+            log_msg(LOG_INFO, "UART3 SBUS buffer allocated: 512 bytes");
+        } else {
+            ctx->buffers.uart3InputBuffer->init(inputBufferSize);
+            log_msg(LOG_INFO, "UART3 input buffer allocated: %zu bytes", inputBufferSize);
+        }
     } else {
         ctx->buffers.uart3InputBuffer = nullptr;
     }

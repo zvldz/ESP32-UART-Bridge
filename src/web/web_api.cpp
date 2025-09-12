@@ -26,6 +26,25 @@ extern BridgeMode bridgeMode;
 extern SemaphoreHandle_t logMutex;
 extern UartInterface* uartBridgeSerial;
 
+// Validate SBUS configuration
+bool validateSbusConfig(Config& cfg) {
+  // Only forbid critical combinations:
+  
+  // 1. Two SBUS_OUT - always conflict
+  if (cfg.device2.role == D2_SBUS_OUT && cfg.device3.role == D3_SBUS_OUT) {
+    log_msg(LOG_ERROR, "Cannot have SBUS_OUT on both Device2 and Device3");
+    return false;
+  }
+  
+  // 2. Two SBUS_IN - not supported yet (failover planned for future)
+  if (cfg.device2.role == D2_SBUS_IN && cfg.device3.role == D3_SBUS_IN) {
+    log_msg(LOG_ERROR, "Multiple SBUS_IN not supported in current version");
+    return false;
+  }
+  
+  // All other combinations allowed for experiments
+  return true;
+}
 
 // Generate complete configuration JSON for initial page load
 String getConfigJson() {
@@ -257,7 +276,7 @@ void handleSave(AsyncWebServerRequest *request) {
   if (request->hasParam("device2_role", true)) {
     const AsyncWebParameter* p = request->getParam("device2_role", true);
     int role = p->value().toInt();
-    if (role >= D2_NONE && role <= D2_USB) {
+    if (role >= D2_NONE && role <= D2_SBUS_OUT) {
       if (role != config.device2.role) {
         config.device2.role = role;
         configChanged = true;
@@ -270,7 +289,7 @@ void handleSave(AsyncWebServerRequest *request) {
   if (request->hasParam("device3_role", true)) {
     const AsyncWebParameter* p = request->getParam("device3_role", true);
     int role = p->value().toInt();
-    if (role >= D3_NONE && role <= D3_UART3_LOG) {
+    if (role >= D3_NONE && role <= D3_SBUS_OUT) {
       if (role != config.device3.role) {
         config.device3.role = role;
         configChanged = true;
@@ -308,6 +327,13 @@ void handleSave(AsyncWebServerRequest *request) {
   }
   // Copy role to configuration
   config.device4_config.role = config.device4.role;
+
+  // Validate SBUS configuration before saving
+  if (!validateSbusConfig(config)) {
+    request->send(400, "application/json", 
+      "{\"status\":\"error\",\"message\":\"Invalid SBUS configuration. Check device roles.\"}");
+    return;
+  }
 
   // Log levels
   if (request->hasParam("log_level_web", true)) {

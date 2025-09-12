@@ -409,8 +409,11 @@ const StatusUpdates = {
         } else if (protocolType === 1) {
             // MAVLink protocol statistics
             html += this.renderMavlinkStats(stats);
+        } else if (protocolType === 2) {
+            // SBUS protocol statistics
+            html += this.renderSbusStats(stats);
         } else {
-            // Future protocols (SBUS, etc.)
+            // Future protocols (CRSF, etc.)
             html += this.renderGenericStats(stats);
         }
         
@@ -499,6 +502,60 @@ const StatusUpdates = {
                         <div>Average Size:</div><div><strong>${p.avgPacketSize || 0} bytes</strong></div>
                         <div>Size Range:</div><div><strong>${p.minPacketSize || 0}-${p.maxPacketSize || 0}B</strong></div>
                         <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs)}</strong></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderSbusStats(stats) {
+        const p = stats.parser || {};
+        
+        // Calculate quality metrics
+        const totalFrames = (p.validFrames || 0) + (p.invalidFrames || 0);
+        const validPercent = totalFrames > 0 ? ((p.validFrames || 0) / totalFrames * 100).toFixed(1) : '0.0';
+        const frameLostPercent = (p.validFrames || 0) > 0 ? ((p.frameLostCount || 0) / (p.validFrames || 0) * 100).toFixed(2) : '0.00';
+        const failsafePercent = (p.validFrames || 0) > 0 ? ((p.failsafeCount || 0) / (p.validFrames || 0) * 100).toFixed(2) : '0.00';
+        
+        return `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Frame Statistics</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Frames Detected:</div><div><strong>${p.framesDetected || 0}</strong></div>
+                        <div>Valid Frames:</div><div><strong style="color: #28a745;">${p.validFrames || 0}</strong></div>
+                        <div>Invalid Frames:</div><div><strong style="color: #dc3545;">${p.invalidFrames || 0}</strong></div>
+                        <div>Success Rate:</div><div><strong>${validPercent}%</strong></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">SBUS Signal Quality</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Frame Lost:</div><div><strong style="color: ${(p.frameLostCount || 0) > 0 ? '#dc3545' : '#28a745'}">${p.frameLostCount || 0}</strong></div>
+                        <div>Lost Rate:</div><div><strong>${frameLostPercent}%</strong></div>
+                        <div>Failsafe:</div><div><strong style="color: ${(p.failsafeCount || 0) > 0 ? '#dc3545' : '#28a745'}">${p.failsafeCount || 0}</strong></div>
+                        <div>Failsafe Rate:</div><div><strong>${failsafePercent}%</strong></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Protocol Info</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Frame Size:</div><div><strong>25 bytes</strong></div>
+                        <div>Baud Rate:</div><div><strong>100,000</strong></div>
+                        <div>Format:</div><div><strong>8E2 Inverted</strong></div>
+                        <div>Update Rate:</div><div><strong>14ms (71Hz)</strong></div>
+                    </div>
+                </div>
+                
+                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">Activity</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+                        <div>Detection Errors:</div><div><strong style="color: ${(p.framingErrors || 0) > 0 ? '#dc3545' : '#28a745'}">${p.framingErrors || 0}</strong></div>
+                        <div>Avg Frame Size:</div><div><strong>${p.avgPacketSize || 25} bytes</strong></div>
+                        <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs || 0)}</strong></div>
+                        <div>Status:</div><div><strong style="color: ${(p.lastActivityMs || 0) < 5000 ? '#28a745' : '#dc3545'}">${(p.lastActivityMs || 0) < 5000 ? 'Active' : 'Inactive'}</strong></div>
                     </div>
                 </div>
             </div>

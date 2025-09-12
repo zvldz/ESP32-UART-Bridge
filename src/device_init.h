@@ -15,6 +15,10 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb);
 void initDevice2UART();
 void initDevice3(uint8_t role);
 
+// SBUS initialization functions
+void initDevice2SBUS();
+void initDevice3SBUS();
+
 // Initialize and log device configuration
 void initDevices();
 

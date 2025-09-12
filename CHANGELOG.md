@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## v2.18.0 (SBUS Protocol Implementation & Hub Architecture) ✅ COMPLETED
+
+### SBUS Protocol Full Implementation ✅ COMPLETED
+- **SBUS Parser**: Complete SBUS frame parsing with validation and statistics
+  - **Frame Validation**: Start byte (0x0F) and end byte validation (0x00, 0x04, 0x14, 0x24)
+  - **Channel Extraction**: 16-channel data unpacking from 22 bytes using `unpackSbusChannels()`
+  - **Flags Processing**: Frame lost and failsafe flag extraction from SBUS frames
+  - **Statistics**: Valid/invalid frame counters, frame lost/failsafe tracking
+  - **Implementation**: `SbusParser` class inheriting from `ProtocolParser`
+
+### Hub Architecture Introduction ✅ COMPLETED  
+- **SbusHub Implementation**: State-based packet processing replacing queue-based approach
+  - **Problem Solved**: Eliminated 99% packet drops caused by queue overflow at 71 FPS
+  - **State Storage**: Channel state (16 channels + flags) instead of packet queue
+  - **Timer-based Output**: Fixed 14ms interval generation (71.43 FPS) independent of input
+  - **Failsafe Logic**: Automatic failsafe activation after 100ms without input data
+  - **Memory Efficiency**: No packet queuing, immediate state update and packet release
+
+### Protocol Pipeline Integration ✅ COMPLETED
+- **Flow Configuration**: Automatic SBUS flow setup for Device2/Device3 roles
+  - **SBUS Input Flow**: `SBUS_IN` devices (D2_SBUS_IN, D3_SBUS_IN) → UART1 routing
+  - **SBUS Output Flow**: UART1 → `SBUS_OUT` devices (D2_SBUS_OUT, D3_SBUS_OUT) routing
+  - **Dynamic Routing**: Smart routing calculation based on device role combinations
+  - **Parser Integration**: SbusParser automatically instantiated for SBUS input flows
+
+### Auto-Protocol Detection ✅ COMPLETED
+- **Startup Detection**: Automatic protocol optimization based on device roles
+  - **SBUS Detection**: Auto-set `protocolOptimization = PROTOCOL_SBUS` when SBUS devices present
+  - **Runtime Application**: Applied at system startup after config loading
+  - **Statistics Integration**: Proper SBUS statistics display in web interface
+  - **Backward Compatibility**: No manual protocol selection required
+
+### Device Statistics Integration ✅ COMPLETED
+- **TX Statistics**: Proper Device2/Device3 TX byte counting for SBUS output
+  - **Hub Integration**: SbusHub updates `g_deviceStats.device3.txBytes` directly
+  - **Device Awareness**: Hub knows its device index (IDX_DEVICE3, IDX_DEVICE2_UART2)
+  - **Real-time Tracking**: Statistics update with each 25-byte SBUS frame sent
+  - **Web Display**: Correct TX statistics in `/status` interface
+
+### SBUS Web Interface ✅ COMPLETED
+- **Statistics Display**: Dedicated SBUS statistics rendering in web interface
+  - **Frame Statistics**: Valid/invalid frame counts with success rate calculation
+  - **Signal Quality**: Frame lost and failsafe counters with percentage rates
+  - **Parser Detection**: Improved parser search across all flows (not just first)
+  - **Hub Statistics**: Frames received/generated counters from SbusHub
+
+### Technical Improvements ✅ COMPLETED
+- **Code Cleanup**: Removed obsolete `SbusSender` class and unused includes
+- **Comment Standards**: All code comments converted to English per coding standards
+- **Memory Management**: Efficient packet handling without memory leaks
+- **Error Handling**: Robust frame validation with graceful error recovery
+
 ## v2.17.0 (MAVLink Parser Channel Fix & Performance Optimizations) ✅ COMPLETED
 
 ### Critical MAVLink Parser Channel Fix ✅ COMPLETED
