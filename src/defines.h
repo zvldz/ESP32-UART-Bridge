@@ -28,7 +28,7 @@ Hardware: ESP32-S3-Zero
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.17.0"
+#define DEVICE_VERSION "2.18.0"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
@@ -68,7 +68,7 @@ Hardware: ESP32-S3-Zero
 
 // Logging system
 #define LOG_BUFFER_SIZE 100
-#define LOG_DISPLAY_COUNT 50
+#define LOG_DISPLAY_COUNT 95
 
 // UART buffering
 #define DEVICE2_UART_BUFFER_SIZE 2048
@@ -115,5 +115,13 @@ Hardware: ESP32-S3-Zero
 
 // TX ring buffer for UART1
 #define UART1_TX_RING_SIZE 8192  // 8KB for single-writer architecture
+
+// SBUS protocol constants
+#define SBUS_BAUDRATE 100000
+#define SBUS_FRAME_SIZE 25
+#define SBUS_CHANNELS 16
+#define SBUS_START_BYTE 0x0F
+#define SBUS_END_BYTE 0x00
+#define SBUS_UPDATE_RATE_MS 14
 
 #endif // DEFINES_H

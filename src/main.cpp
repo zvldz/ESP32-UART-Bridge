@@ -132,6 +132,24 @@ void setup() {
   config_load(&config);
   log_msg(LOG_INFO, "Configuration loaded");
 
+  // Auto-detect protocol optimization based on device roles
+  bool hasSBUSDevice = (config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
+                       config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
+  
+  if (hasSBUSDevice) {
+    if (config.protocolOptimization != PROTOCOL_SBUS) {
+      config.protocolOptimization = PROTOCOL_SBUS;
+      log_msg(LOG_INFO, "Auto-detected SBUS devices, forcing protocol optimization to SBUS");
+      config_save(&config);  // Save the auto-detected setting
+    }
+  } else {
+    if (config.protocolOptimization == PROTOCOL_SBUS) {
+      config.protocolOptimization = PROTOCOL_NONE;
+      log_msg(LOG_INFO, "No SBUS devices found, resetting protocol optimization to None");
+      config_save(&config);  // Save the corrected setting
+    }
+  }
+
   // Update global usbMode after loading config
   usbMode = config.usb_mode;
   
@@ -596,8 +614,12 @@ void createTasks() {
   // Check all possible sender configurations
   if (config.device2.role == D2_USB ||           // USB sender
       config.device2.role == D2_UART2 ||         // UART2 sender  
+      config.device2.role == D2_SBUS_IN ||       // SBUS input
+      config.device2.role == D2_SBUS_OUT ||      // SBUS output
       config.device3.role == D3_UART3_MIRROR ||  // UART3 mirror
       config.device3.role == D3_UART3_BRIDGE ||  // UART3 bridge
+      config.device3.role == D3_SBUS_IN ||       // SBUS input
+      config.device3.role == D3_SBUS_OUT ||      // SBUS output
       config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
       config.device4.role == D4_LOG_NETWORK) {    // UDP logger
       needSenderTask = true;

@@ -4,58 +4,12 @@
 
 ### Priority 1 - Protocol Transport Optimization
 
-#### 1.1 - UDP Batching Enhancement ✅ COMPLETED (v2.15.3)
-- [x] **Protocol-driven UDP Batching** ✅ COMPLETED
-  - ✅ Implemented MAVFtp-aware batching (20ms vs 5ms for normal telemetry)
-  - ✅ Collect multiple atomic packets into single UDP datagram (up to MTU)
-  - ✅ Use hints.keepWhole from parser for packet integrity
-  - ✅ Added UDP batching disable config option for legacy GCS compatibility
-  - ✅ Universal naming: mavlink* → atomic* for all packet types
-
-#### 1.2 - Device 4 Pipeline Integration ✅ COMPLETED (v2.15.3)
-- [x] **Pipeline Architecture Stabilization** ✅ COMPLETED
-  - ✅ Fixed sender indices (IDX_USB=0, IDX_UART3=1, IDX_UDP=2)
-  - ✅ PacketSource routing (SOURCE_TELEMETRY, SOURCE_LOGS, SOURCE_DEVICE4)
-  - ✅ Buffer separation (telemetry vs log buffers)
-  - ✅ Bridge processing fix for Logger mode
-  - ✅ WiFi connectivity universalization
-
 #### 1.3 - Protocol-driven Optimizations 🔄 PARTIALLY IMPLEMENTED
 - [x] MAVFtp: Extended timeouts (20ms) - COMPLETED
 - [ ] SBUS/CRSF (future): Minimal latency requirements
 - [ ] Modbus RTU (future): Inter-frame timing preservation
 - [ ] Device 3 (Mirror) can utilize same optimizations
 - Architecture ready - just add new protocol implementations
-
-#### 1.4 - UART Refactoring ✅ COMPLETED (v2.15.4)
-- [x] **Device3 UART Pipeline Integration** ✅ COMPLETED
-  - ✅ Extended Pipeline from 3 to 4 sender slots (IDX_DEVICE2_USB, IDX_DEVICE2_UART2, IDX_DEVICE3, IDX_DEVICE4)
-  - ✅ Created Uart2Sender and Uart3Sender classes with specialized functionality
-  - ✅ Updated Pipeline routing to support Device2 USB/UART2 mutual exclusivity
-  - ✅ Unified Device1 input processing through telemetryBuffer for all Device2 types
-  - ✅ Added Device3 Bridge RX polling in main UART task loop
-  - ✅ Completely removed Device3 task architecture (device3_task.cpp/h, mutexes, buffers)
-  - ✅ Preserved D3_UART3_LOG mode for direct logging system writes
-  - ✅ Supports all valid UART combinations: Device2 (USB OR UART2), Device3 (UART3), Device4 (UDP)
-  - ✅ **Statistics Refactoring**: Migrated Device3 statistics to Uart3Sender static members (rxBytes, txBytes)
-  - ✅ **Diagnostics Update**: Updated diagnostics.cpp to use new Uart3Sender statistics interface
-
-#### 1.5 - LED Centralization ✅ COMPLETED (v2.15.5)
-- [x] **Remove LED calls from protocols/senders** ✅ COMPLETED
-  - ✅ Removed all LED calls from protocols/senders throughout codebase
-  - ✅ Created unified LED monitoring task in TaskScheduler (50ms interval)
-  - ✅ LED task reads global statistics from all devices using snapshot comparison
-  - ✅ Implemented LedSnapshot structure for efficient state tracking
-  - ✅ Bridge mode awareness - task enabled/disabled based on bridge mode
-
-#### 1.6 - Statistics Refactoring ✅ COMPLETED (v2.15.5)
-- [x] **Create unified DeviceStatistics structure** ✅ COMPLETED
-  - ✅ Migrated all devices to atomic-based DeviceStatistics with DeviceCounter structure
-  - ✅ Removed scattered global variables and UartStats structure
-  - ✅ Unified web interface statistics using atomic loads (memory_order_relaxed)
-  - ✅ Created single source of truth: global DeviceStatistics g_deviceStats
-  - ✅ Eliminated critical sections and spinlocks for lock-free performance
-  - ✅ Updated all protocol senders to use global statistics directly
 
 #### 1.7 - Diagnostic Cleanup 🔄 PENDING
 - [ ] **Remove Debug Code** 🔄 PENDING
@@ -80,56 +34,6 @@
   - Merge device_init.cpp logic where appropriate
   - Simplify context initialization
 
-### Priority 5 - MAVLink Routing for Multi-GCS Scenarios
-
-- [x] **MAVLink Message Routing** ✅ COMPLETED (v2.16.0-v2.17.0)
-  - **Implementation Completed**:
-    - ✅ Basic routing infrastructure (MavlinkRouter class)
-    - ✅ Address book for sysid tracking
-    - ✅ Target-based packet routing logic
-    - ✅ Web interface configuration option
-    - ✅ Always-broadcast list for telemetry messages
-    - ✅ **Address Book Population**: Resolved via bidirectional pipeline (v2.17.0)
-    - ✅ **Target Extraction**: Implemented pymavlink getters for correct field offsets (v2.16.0)
-    - ✅ **Input Pipeline**: Bidirectional architecture enables full routing functionality (v2.17.0)
-  - **Status**: FULLY OPERATIONAL - All MAVLink routing features implemented and tested
-
-### Priority 5.1 ✅ COMPLETED (v2.17.0)   
-- [x] **Bidirectional Pipeline Architecture** ✅ COMPLETED
-  - **Implementation Completed**: 4 separate input flows (USB, UDP, UART2, UART3) with dedicated parsers and unique MAVLink channels (0-4)
-  - **Key Achievement**: Fixed MAVLink parser channel conflicts that caused packet loss and sequence gaps
-  - **Architecture**: Input Pipeline: Device2/3/4 → Buffer → Parser → Router → UART1
-  - **Problem**: Current unidirectional pipeline limits functionality
-    - Cannot process incoming packets from Device2/3/4
-    - Protocol conversion impossible (SBUS↔UART)
-    - MAVLink routing fails due to missing address information
-  - **Solution**: Symmetric input/output pipelines
-    - Input Pipeline: Device2/3/4 → Buffer → Parser → Router → UART1
-    - Output Pipeline: UART1 → Buffer → Parser → Router → Device2/3/4
-  - **Implementation Phases**:
-    - **Phase 1 - Input Gateway** (Temporary):
-      - Lightweight packet inspection for MAVLink sysid extraction
-      - Single entry point for all UART1-bound data
-      - Enables MAVLink routing without major changes
-      - ~100 lines of code, 2-3 days implementation
-    - **Phase 2 - Full Input Pipeline**:
-      - Complete protocol parsing for incoming data
-      - Protocol conversion support (SBUS↔UART, etc.)
-      - Buffering and flow control
-      - Reuses existing pipeline patterns
-      - 8-12 days implementation
-  - **Benefits**:
-    - Enables protocol conversion between any devices
-    - Complete MAVLink routing support
-    - Future protocol support (SBUS, CRSF, etc.)
-    - Symmetric architecture easier to maintain
-  - **Migration Strategy**:
-    - Implement Input Gateway first (quick fix)
-    - Develop Input Pipeline in parallel
-    - Migrate from Gateway to Pipeline when ready
-    - Remove Gateway after successful migration
-  - **Priority**: High (blocks multiple features)
-  - **Dependencies**: None (can start immediately)
   
 ### Priority 6 - SBUS Protocol Support
 
@@ -275,14 +179,6 @@
 
 ### Code Refactoring and Cleanup
 
-- [x] **Flow Control System Improvements** ✅ COMPLETED (v2.15.7)
-  - ✅ Replaced complex auto-detection system with simple ESP-IDF implementation
-  - ✅ Integrated flow control status into UART interface with `getFlowControlStatus()` method
-  - ✅ Hardware flow control enabled only for UART1 with proper GPIO configuration (RTS=GPIO6, CTS=GPIO7)
-  - ✅ User-controlled activation via web interface instead of automatic detection
-  - ✅ Direct ESP-IDF `UART_HW_FLOWCTRL_CTS_RTS` usage with optimized FIFO threshold (100 bytes)
-  - ✅ Object-oriented architecture eliminates global variables and complex detection logic
-  - **Status**: COMPLETED - Simple, reliable implementation using ESP-IDF built-in support
 
 - [ ] **Final Code Cleanup** - After all features are implemented
   - Remove unnecessary diagnostic code and debug prints

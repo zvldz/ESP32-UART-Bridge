@@ -4,7 +4,7 @@
 #include "protocol_parser.h"
 #include "packet_memory_pool.h"
 #include "protocol_stats.h"
-#include "mavlink_include.h"      // Unified MAVLink header inclusion point
+#include "mavlink_include.h"
 #include "../logging.h"
 
 class MavlinkParser : public ProtocolParser {
@@ -298,6 +298,7 @@ private:
         
         // Set protocol type
         tempPackets[packetCount].protocol = PacketProtocol::MAVLINK;
+        tempPackets[packetCount].format = DataFormat::FORMAT_MAVLINK;
         
         // Set permanent protocol fields
         tempPackets[packetCount].protocolMsgId = msg->msgid;
