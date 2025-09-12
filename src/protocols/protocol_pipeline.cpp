@@ -5,6 +5,8 @@
 #include "sbus_parser.h"
 #include "sbus_packetizer.h"
 #include "sbus_hub.h"
+#include "uart_sbus_parser.h"
+#include "udp_sbus_parser.h"
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) : 
     activeFlows(0),
@@ -353,29 +355,165 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "SBUS Output flow created");
     }
+    
+    // UART2 to SBUS bridge flow (UART2 → SBUS OUT via Device3)
+    if (config->device2.role == D2_UART2 && 
+        config->device3.role == D3_SBUS_OUT &&
+        ctx->buffers.uart2InputBuffer) {
+        
+        DataFlow f;
+        f.name = "UART2_SBUS_Bridge";
+        f.inputBuffer = ctx->buffers.uart2InputBuffer;
+        f.source = SOURCE_TELEMETRY;
+        f.physInterface = PHYS_UART2;
+        f.senderMask = (1 << IDX_DEVICE3);  // To Device3 SBUS Hub
+        f.isInputFlow = true;
+        f.parser = new UartSbusParser();
+        f.router = nullptr;
+        
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "UART2→SBUS bridge created (Device2 UART → Device3 SBUS)");
+    }
+
+    // UART3 to SBUS bridge flow (UART3 → SBUS OUT via Device2)  
+    if (config->device3.role == D3_UART3_BRIDGE && 
+        config->device2.role == D2_SBUS_OUT &&
+        ctx->buffers.uart3InputBuffer) {
+        
+        DataFlow f;
+        f.name = "UART3_SBUS_Bridge";
+        f.inputBuffer = ctx->buffers.uart3InputBuffer;
+        f.source = SOURCE_TELEMETRY;
+        f.physInterface = PHYS_UART3;
+        f.senderMask = (1 << IDX_DEVICE2_UART2);  // To Device2 SBUS Hub
+        f.isInputFlow = true;
+        f.parser = new UartSbusParser();
+        f.router = nullptr;
+        
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "UART3→SBUS bridge created (Device3 UART → Device2 SBUS)");
+    }
+    
+    // UDP to SBUS conversion flow (UDP → SBUS OUT)
+    if (config->device4.role == D4_NETWORK_BRIDGE && 
+        (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT) &&
+        ctx->buffers.udpInputBuffer) {
+        
+        DataFlow f;
+        f.name = "UDP_SBUS_Input";
+        f.inputBuffer = ctx->buffers.udpInputBuffer;
+        f.source = SOURCE_TELEMETRY;
+        f.physInterface = PHYS_UDP;
+        f.isInputFlow = true;
+        f.parser = new UdpSbusParser();
+        f.router = nullptr;
+        
+        // Determine routing - to Device2 or Device3 SBUS Hub
+        if (config->device3.role == D3_SBUS_OUT) {
+            f.senderMask = (1 << IDX_DEVICE3);
+            log_msg(LOG_INFO, "UDP→SBUS: Routing to Device3 SBUS_OUT");
+        } else if (config->device2.role == D2_SBUS_OUT) {
+            f.senderMask = (1 << IDX_DEVICE2_UART2);
+            log_msg(LOG_INFO, "UDP→SBUS: Routing to Device2 SBUS_OUT");
+        }
+        
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "UDP→SBUS input flow created");
+    }
+    
+    // TODO Phase 8: Remove when multi-source support implemented
+    // Check for conflicting SBUS inputs (only one source allowed currently)
+    int sbusSourceCount = 0;
+    const char* sources[4] = {nullptr};
+    int sourceIdx = 0;
+
+    // Check physical SBUS inputs
+    if (config->device2.role == D2_SBUS_IN) {
+        sources[sourceIdx++] = "Device2 SBUS_IN";
+        sbusSourceCount++;
+    }
+    if (config->device3.role == D3_SBUS_IN) {
+        sources[sourceIdx++] = "Device3 SBUS_IN";
+        sbusSourceCount++;
+    }
+
+    // Check UART→SBUS bridges
+    if (config->device2.role == D2_UART2 && config->device3.role == D3_SBUS_OUT) {
+        sources[sourceIdx++] = "UART2→SBUS bridge";
+        sbusSourceCount++;
+    }
+    if (config->device3.role == D3_UART3_BRIDGE && config->device2.role == D2_SBUS_OUT) {
+        sources[sourceIdx++] = "UART3→SBUS bridge";
+        sbusSourceCount++;
+    }
+
+    // Check UDP→SBUS input
+    if (config->device4.role == D4_NETWORK_BRIDGE && 
+        (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT)) {
+        sources[sourceIdx++] = "UDP→SBUS input";
+        sbusSourceCount++;
+    }
+
+    if (sbusSourceCount > 1) {
+        log_msg(LOG_ERROR, "SBUS: Multiple input sources detected (%d):", sbusSourceCount);
+        for (int i = 0; i < sourceIdx; i++) {
+            if (sources[i]) log_msg(LOG_ERROR, "  - %s", sources[i]);
+        }
+        log_msg(LOG_INFO, "Only one SBUS source supported currently (Phase 8 will add multi-source)");
+    }
 }
 
 uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
     uint8_t mask = 0;
     
-    // Device1 always receives data (main UART to flight controller)
+    // Device1 (UART1) always receives SBUS data for SBUS→UART conversion
+    // This allows transporting SBUS over regular UART at different baudrates
     mask |= (1 << IDX_UART1);
     
-    // Device3 if configured as SBUS_OUT (repeater/hub mode)
-    if (config->device3.role == D3_SBUS_OUT) {
-        mask |= (1 << IDX_DEVICE3);
+    // Device2 routing based on its role
+    if (config->device2.role == D2_UART2) {
+        // Device2 is regular UART - send SBUS frames if input from Device3
+        if (config->device3.role == D3_SBUS_IN) {
+            mask |= (1 << IDX_DEVICE2_UART2);
+            log_msg(LOG_INFO, "SBUS routing: D3_SBUS_IN → D2_UART2 enabled");
+        }
+    } else if (config->device2.role == D2_SBUS_OUT) {
+        // Device2 is SBUS_OUT repeater - send if input from Device3
+        if (config->device3.role == D3_SBUS_IN) {
+            mask |= (1 << IDX_DEVICE2_UART2);
+            log_msg(LOG_INFO, "SBUS routing: D3_SBUS_IN → D2_SBUS_OUT enabled");
+        }
     }
     
-    // Device2 SBUS_OUT (when D3 is SBUS_IN and D2 is SBUS_OUT)
-    if (config->device3.role == D3_SBUS_IN && config->device2.role == D2_SBUS_OUT) {
-        mask |= (1 << IDX_DEVICE2_UART2);
+    // Device3 routing based on its role
+    if (config->device3.role == D3_UART3_BRIDGE || 
+        config->device3.role == D3_UART3_MIRROR) {
+        // Device3 is regular UART - send SBUS frames if input from Device2
+        if (config->device2.role == D2_SBUS_IN) {
+            mask |= (1 << IDX_DEVICE3);
+            log_msg(LOG_INFO, "SBUS routing: D2_SBUS_IN → D3_UART enabled");
+        }
+    } else if (config->device3.role == D3_SBUS_OUT) {
+        // Device3 is SBUS_OUT repeater - send if input from Device2
+        if (config->device2.role == D2_SBUS_IN) {
+            mask |= (1 << IDX_DEVICE3);
+            log_msg(LOG_INFO, "SBUS routing: D2_SBUS_IN → D3_SBUS_OUT enabled");
+        }
     }
     
-    // Device4 if configured for network (SBUS transport via UDP)
-    // NOTE: currently commented out, will be in next phase
-    // if (config->device4.role == D4_NETWORK_BRIDGE) {
-    //     mask |= (1 << IDX_DEVICE4);
-    // }
+    // Device4 for network transport
+    if (config->device4.role == D4_NETWORK_BRIDGE) {
+        mask |= (1 << IDX_DEVICE4);
+        log_msg(LOG_INFO, "SBUS routing: SBUS_IN → UDP enabled");
+    }
+    
+    // Log final routing configuration
+    log_msg(LOG_INFO, "SBUS routing mask: 0x%02X (UART1=%d D2=%d D3=%d D4=%d)",
+            mask,
+            (mask & (1 << IDX_UART1)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE2_UART2)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE3)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE4)) ? 1 : 0);
     
     return mask;
 }
