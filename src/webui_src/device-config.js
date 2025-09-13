@@ -161,7 +161,10 @@ const DeviceConfig = {
         const device4TargetIp = document.getElementById('device4_target_ip');
         const device4Port = document.getElementById('device4_port');
         if (device4TargetIp) device4TargetIp.value = this.config.device4TargetIp || '';
-        if (device4Port) device4Port.value = this.config.device4Port || '';
+        if (device4Port) {
+            // Always use saved port from config
+            device4Port.value = this.config.device4Port || '';
+        }
         
         // Set UDP batching checkbox
         const udpBatching = document.getElementById('udp_batching');
@@ -193,7 +196,7 @@ const DeviceConfig = {
 
         const device4Role = document.getElementById('device4_role');
         if (device4Role) {
-            device4Role.addEventListener('change', () => this.updateDevice4Config());
+            device4Role.addEventListener('change', () => this.updateDevice4Config(true));
         }
     },
     
@@ -332,7 +335,7 @@ const DeviceConfig = {
         return roleNames[device]?.[role] || 'Unknown';
     },
 
-    updateDevice4Config() {
+    updateDevice4Config(isRoleChange = false) {
         const device4Role = document.getElementById('device4_role');
         const device4Config = document.getElementById('device4Config');
         const targetIpInput = document.getElementById('device4_target_ip');
@@ -351,11 +354,13 @@ const DeviceConfig = {
                 networkLogLevel.disabled = false;
             }
             
-            // Always update port based on role
-            if (role === '1') {  // Network Bridge
-                portInput.value = '14550';
-            } else if (role === '2') {  // Network Logger
-                portInput.value = '14560';
+            // Only update port when role changes, not on initial load
+            if (isRoleChange) {
+                if (role === '1') {  // Network Bridge
+                    portInput.value = '14550';
+                } else if (role === '2') {  // Network Logger
+                    portInput.value = '14560';
+                }
             }
             
             // Set IP defaults only if field is empty
