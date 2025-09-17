@@ -16,6 +16,8 @@
 
 #### Phase 8 - Testing (IMMEDIATE) 🔴 READY FOR TESTING
 
+**⚠️ Critical Phase:** Architectural issues found here are easier to fix than after Phase 9-10 implementation. Each test requires complete ESP reconfiguration, wiring changes, and firmware flashing.
+
 - [ ] **Physical SBUS Testing** (Phase 4-5 features)
   - [ ] SBUS_IN from RC receiver → SBUS_OUT to flight controller
   - [ ] Verify 71 FPS generation rate with oscilloscope
@@ -41,6 +43,8 @@
   - [ ] Confirm TX byte statistics for all devices
 
 #### Phase 9 - Multi-Source Support 🟡 NEXT
+
+**⚠️ Risk:** May require SbusHub architecture changes if current single-state design incompatible with multiple simultaneous sources.
 
 - [ ] **Implement multi-source SBUS handling**
   - [ ] Remove single-source limitation

@@ -28,7 +28,7 @@ Hardware: ESP32-S3-Zero
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.0"
+#define DEVICE_VERSION "2.18.1"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN 0
