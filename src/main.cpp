@@ -533,7 +533,7 @@ void handleButtonInput() {
         
         if (bridgeMode == BRIDGE_STANDALONE) {
           // From standalone → activate saved WiFi mode
-          log_msg(LOG_INFO, "*** TRIPLE CLICK: Standalone → Saved WiFi Mode ***");
+          log_msg(LOG_INFO, "*** TRIPLE CLICK: Standalone -> Saved WiFi Mode ***");
           
           
           preferences.putBool("temp_net", true);
@@ -548,7 +548,7 @@ void handleButtonInput() {
           // TEMPORARY DEBUG HACK - Move after preferences.end() for proper verification
         } else {
           // From active Client mode → force temporary AP mode
-          log_msg(LOG_INFO, "*** TRIPLE CLICK: Client Mode → Force AP Mode ***");
+          log_msg(LOG_INFO, "*** TRIPLE CLICK: Client Mode -> Force AP Mode ***");
           preferences.putBool("temp_net", true);
           preferences.putString("temp_net_mode", "AP");  // Max 15 chars!
           log_msg(LOG_INFO, "*** Will force temporary AP mode ***");

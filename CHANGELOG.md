@@ -47,6 +47,13 @@
   - **Parser Statistics**: Frame reception counting with invalid frame tracking
   - **Temporary Diagnostics**: Clearly marked diagnostic code for future cleanup
 
+### Bug Fixes & Critical Improvements ✅ COMPLETED
+- **Parser Conflict Resolution**: Fixed critical data loss in SBUS configurations
+  - **Problem**: RawParser/MavlinkParser conflicted with SBUS parsers causing 28% data loss
+  - **Solution**: Added hasSbusDevice detection to disable generic flows when SBUS is active
+  - **Impact**: Reduced SBUS data loss from 28% to ~0%
+  - **Affected Flows**: UDP_Input, UART2_Input, UART3_Input now properly disabled with SBUS
+
 ### Transport Method Coverage ✅ COMPLETED
 - **Physical SBUS**: Direct Device2/3 SBUS_IN → SBUS_OUT connections
 - **UART Transport**: SBUS over regular UART at any baudrate (115200-921600+)

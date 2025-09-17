@@ -35,7 +35,7 @@ public:
             result.bytesConsumed = buffer->available();  // Clear entire buffer
             invalidPackets++;
             // === TEMPORARY DIAGNOSTIC START ===
-            log_msg(LOG_DEBUG, "UDP→SBUS: Invalid packet (bad start byte)");
+            log_msg(LOG_DEBUG, "UDP->SBUS: Invalid packet (bad start byte)");
             // === TEMPORARY DIAGNOSTIC END ===
             return result;
         }
@@ -47,7 +47,7 @@ public:
             result.bytesConsumed = SBUS_FRAME_SIZE;
             invalidPackets++;
             // === TEMPORARY DIAGNOSTIC START ===
-            log_msg(LOG_DEBUG, "UDP→SBUS: Invalid packet (bad end byte)");
+            log_msg(LOG_DEBUG, "UDP->SBUS: Invalid packet (bad end byte)");
             // === TEMPORARY DIAGNOSTIC END ===
             return result;
         }
@@ -67,7 +67,7 @@ public:
         // === TEMPORARY DIAGNOSTIC START ===
         // Diagnostics
         if (framesReceived == 1 || framesReceived % 100 == 0) {
-            log_msg(LOG_INFO, "UDP→SBUS: %u frames received (invalid: %u)", 
+            log_msg(LOG_INFO, "UDP->SBUS: %u frames received (invalid: %u)", 
                     framesReceived, invalidPackets);
         }
         // === TEMPORARY DIAGNOSTIC END ===
