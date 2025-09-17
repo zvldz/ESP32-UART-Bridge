@@ -61,7 +61,7 @@ public:
         // === TEMPORARY DIAGNOSTIC START ===
         // Log first and every 100th frame
         if (framesFound == 1 || framesFound % 100 == 0) {
-            log_msg(LOG_INFO, "UART→SBUS: Frame %u received (invalid: %u)", 
+            log_msg(LOG_INFO, "UART->SBUS: Frame %u received (invalid: %u)", 
                     framesFound, invalidFrames);
         }
         // === TEMPORARY DIAGNOSTIC END ===
