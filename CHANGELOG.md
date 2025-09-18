@@ -1,5 +1,37 @@
 # CHANGELOG
 
+## v2.18.2 (Code Refactoring & WiFi TX Power Control) ✅ COMPLETED
+
+### Code Organization & Memory Optimization ✅ COMPLETED
+- **Constants Refactoring**: Moved domain-specific constants from defines.h to appropriate headers
+  - **WiFi Constants**: RSSI thresholds relocated to wifi_manager.h
+  - **LED Constants**: Timing and color definitions moved to leds.h
+  - **SBUS Constants**: Protocol definitions moved to sbus_common.h
+  - **Crash Log Constants**: File size limits moved to crashlog.h
+  - **Web API Constants**: HTTP response constants moved to web_api.h
+
+- **Memory Leak Fix**: Resolved Logger flow incorrectly processed in telemetry pipeline
+  - **Root Cause**: Logger flow was processed as telemetry data causing frequent ParsedPacket allocations
+  - **Pipeline Fix**: Modified processTelemetryFlow() to exclude flows with SOURCE_LOGS
+  - **Performance**: Reduced memory leak from ~6 bytes/sec to ~1-2 bytes/sec
+  - **Architecture**: Logger flow now processed separately from telemetry pipeline
+
+- **Memory Optimization**: Improved String handling in diagnostics system
+  - **String Operations**: Replaced String concatenation with char[] buffers in runAllStacksDiagnostics()
+  - **Diagnostic Logging**: Optimized runBridgeActivityLog() to eliminate temporary String objects
+  - **Performance**: Reduced potential heap fragmentation from periodic diagnostic tasks
+
+### WiFi TX Power Configuration ✅ COMPLETED
+- **Web Interface Control**: Added WiFi transmission power setting in web configuration
+  - **Power Range**: 6 preset levels from Minimum (2dBm) to Maximum (20dBm)
+  - **Real-time Config**: Immediate power adjustment without restart required
+  - **Persistent Storage**: WiFi TX power setting saved to configuration file
+  - **ESP32 Integration**: Uses esp_wifi_set_max_tx_power() API with 0.25dBm precision
+
+- **Code Style Improvements**: Fixed constructor initialization list formatting consistency
+  - **Comma Placement**: Standardized trailing comma style in UartDMA constructor
+  - **Code Consistency**: Aligned with project coding standards
+
 ## v2.18.1 (SBUS Advanced Features & Multi-Transport Support) ✅ COMPLETED
 
 ### Enhanced SBUS Hub Architecture ✅ COMPLETED
