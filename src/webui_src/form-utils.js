@@ -100,8 +100,10 @@ const FormUtils = {
         // Set client WiFi settings
         const clientSsid = document.getElementById('wifi_client_ssid');
         const clientPassword = document.getElementById('wifi_client_password');
+        const wifiTxPower = document.getElementById('wifi_tx_power');
         if (clientSsid) clientSsid.value = this.config.wifiClientSsid || '';
         if (clientPassword) clientPassword.value = this.config.wifiClientPassword || '';
+        if (wifiTxPower) wifiTxPower.value = this.config.wifiTxPower || 20;
         
         // Show correct settings based on mode
         this.updateWiFiModeDisplay();

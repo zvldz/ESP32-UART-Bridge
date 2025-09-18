@@ -98,13 +98,21 @@ const char* getDevice4RoleName(uint8_t role) {
 
 void runBridgeActivityLog() {
     if (!g_bridgeContext) return;
-    
-    String mode = (*g_bridgeContext->system.bridgeMode == BRIDGE_NET) ? "Network" : "Standalone";
-    log_msg(LOG_DEBUG, "UART bridge alive [%s mode]: D1 RX=%lu TX=%lu bytes%s", mode.c_str(),
-            g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed), 
-            g_deviceStats.device1.txBytes.load(std::memory_order_relaxed),
-            (*g_bridgeContext->diagnostics.totalDroppedBytes > 0 ? 
-             String(", dropped=" + String(*g_bridgeContext->diagnostics.totalDroppedBytes)).c_str() : ""));
+
+    const char* mode = (*g_bridgeContext->system.bridgeMode == BRIDGE_NET) ? "Network" : "Standalone";
+
+    if (*g_bridgeContext->diagnostics.totalDroppedBytes > 0) {
+        log_msg(LOG_DEBUG, "UART bridge alive [%s mode]: D1 RX=%lu TX=%lu bytes, dropped=%lu",
+                mode,
+                g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed),
+                g_deviceStats.device1.txBytes.load(std::memory_order_relaxed),
+                *g_bridgeContext->diagnostics.totalDroppedBytes);
+    } else {
+        log_msg(LOG_DEBUG, "UART bridge alive [%s mode]: D1 RX=%lu TX=%lu bytes",
+                mode,
+                g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed),
+                g_deviceStats.device1.txBytes.load(std::memory_order_relaxed));
+    }
 }
 
 void runStackDiagnostics() {
@@ -174,43 +182,44 @@ void runDroppedDataStats() {
 }
 
 void runAllStacksDiagnostics() {
-    String msg = "Stack free: ";
-    
+    char msg[256];
+    int offset = 0;
+
     // Current task (main loop)
     UBaseType_t currentStack = uxTaskGetStackHighWaterMark(NULL);
-    msg += "Main=" + String(currentStack * 4) + "B";
-    
+    offset += snprintf(msg + offset, sizeof(msg) - offset, "Stack free: Main=%dB", currentStack * 4);
+
     // UART bridge task
     extern TaskHandle_t uartBridgeTaskHandle;
     if (uartBridgeTaskHandle) {
         UBaseType_t uartStack = uxTaskGetStackHighWaterMark(uartBridgeTaskHandle);
-        msg += " UART=" + String(uartStack * 4) + "B";
+        offset += snprintf(msg + offset, sizeof(msg) - offset, " UART=%dB", uartStack * 4);
     }
-    
+
     // AsyncWebServer monitoring (runs in WiFi/TCP context)
     if (bridgeMode == BRIDGE_NET) {
-        msg += " Web=Active";
+        offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Active");
         // Monitor WiFi task which handles AsyncWebServer requests
         TaskHandle_t wifiTask = xTaskGetHandle("wifi");
         if (wifiTask) {
             UBaseType_t wifiStack = uxTaskGetStackHighWaterMark(wifiTask);
-            msg += ",WiFi=" + String(wifiStack * 4) + "B";
+            offset += snprintf(msg + offset, sizeof(msg) - offset, ",WiFi=%dB", wifiStack * 4);
         }
         // Monitor TCP/IP task
         TaskHandle_t tcpipTask = xTaskGetHandle("tcpip_thread");
         if (tcpipTask) {
             UBaseType_t tcpipStack = uxTaskGetStackHighWaterMark(tcpipTask);
-            msg += ",TCP=" + String(tcpipStack * 4) + "B";
+            offset += snprintf(msg + offset, sizeof(msg) - offset, ",TCP=%dB", tcpipStack * 4);
         }
     } else {
-        msg += " Web=Off";
+        offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Off");
     }
-    
+
     // Add heap info
-    msg += ", Heap=" + String(ESP.getFreeHeap()) + "B";
-    msg += ", MaxBlock=" + String(ESP.getMaxAllocHeap()) + "B";
-    
-    log_msg(LOG_DEBUG, "%s", msg.c_str());
+    snprintf(msg + offset, sizeof(msg) - offset, ", Heap=%dB, MaxBlock=%dB",
+             ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
+    log_msg(LOG_DEBUG, "%s", msg);
 }
 
 // Log DMA statistics for a UART interface

@@ -88,6 +88,7 @@ typedef struct {
     BridgeWiFiMode wifi_mode;
     String wifi_client_ssid;
     String wifi_client_password;
+    uint8_t wifi_tx_power;  // WiFi TX power level (8-80, in 0.25dBm steps: 8=2dBm, 80=20dBm)
     
     // System info
     String device_version;
