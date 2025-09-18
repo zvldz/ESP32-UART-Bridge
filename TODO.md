@@ -249,10 +249,37 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
+#### System Reliability & Memory Management
+
+- [ ] **Periodic Reboot System**
+  - [ ] Implement daily scheduled reboot (TaskScheduler)
+    - Configurable interval (default: 24 hours)
+    - Scheduled at low-activity time (3:00 AM)
+    - Graceful shutdown with connection cleanup
+    - Pre-reboot statistics logging
+  - [ ] Web interface configuration
+    - Enable/disable periodic reboot
+    - Configurable interval (12h, 24h, 48h, never)
+    - Next reboot countdown display
+
+- [ ] **Emergency Memory Protection**
+  - [ ] Critical memory threshold monitoring (TaskScheduler)
+    - Critical threshold: 20KB (immediate reboot)
+    - Warning threshold: 50KB (log warnings)
+    - Check interval: 5 seconds
+  - [ ] Emergency reboot implementation
+    - 5-second graceful shutdown delay
+    - Crash log with memory state
+    - RTC memory preservation for post-reboot analysis
+  - [ ] Memory statistics enhancement
+    - Heap fragmentation tracking
+    - Largest free block monitoring
+    - Historical memory usage trends
+
 #### New Protocol Support
 
 - [ ] **CRSF Protocol** - Minimal latency requirements
-- [ ] **Modbus RTU** - Inter-frame timing preservation  
+- [ ] **Modbus RTU** - Inter-frame timing preservation
 - [ ] **NMEA GPS** - GPS data parsing and routing
 
 #### Advanced Protocol Management
