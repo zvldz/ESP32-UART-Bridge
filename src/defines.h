@@ -31,12 +31,12 @@ Hardware: ESP32-S3-Zero
 #define DEVICE_VERSION "2.18.2"
 
 // Hardware pins - Device 1 (Main UART)
-#define BOOT_BUTTON_PIN 0
-#define UART_RX_PIN 4
-#define UART_TX_PIN 5
-#define LED_PIN1 21         // WS2812 RGB LED on GPIO21 for S3-Zero
-#define RTS_PIN 6           // Flow control
-#define CTS_PIN 7           // Flow control
+#define BOOT_BUTTON_PIN     0
+#define UART_RX_PIN         4
+#define UART_TX_PIN         5
+#define LED_PIN1            21  // WS2812 RGB LED on GPIO21 for S3-Zero
+#define RTS_PIN             6   // Flow control
+#define CTS_PIN             7   // Flow control
 
 // Device 2 - Secondary UART pins
 #define DEVICE2_UART_RX_PIN 8
@@ -47,40 +47,39 @@ Hardware: ESP32-S3-Zero
 #define DEVICE3_UART_TX_PIN 12  // Used in all modes
 
 // WiFi settings
-#define WIFI_ACTIVATION_CLICKS 3
-#define CLICK_TIMEOUT 3000  // 3 seconds between clicks
-#define WIFI_TIMEOUT 1200000  // 20 minutes in milliseconds
+#define WIFI_TIMEOUT            1200000 // 20 minutes in milliseconds
+#define WIFI_ACTIVATION_CLICKS  3
+#define CLICK_TIMEOUT           3000    // 3 seconds between clicks
+
 
 // Default WiFi AP credentials
-#define DEFAULT_AP_SSID "ESP-Bridge"
+#define DEFAULT_AP_SSID     "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
 // Logging system
-#define LOG_BUFFER_SIZE 100
-#define LOG_DISPLAY_COUNT 95
+#define LOG_BUFFER_SIZE     100
+#define LOG_DISPLAY_COUNT   95
 
 // Crash logging (need move to crashlog)
-#define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep
-#define CRASHLOG_FILE_PATH "/crashlog.json"  // Path to crash log file
-#define CRASHLOG_MIN_HEAP_WARNING 15000      // Show warning if heap < 15KB
-#define CRASHLOG_UPDATE_INTERVAL_MS 5000     // How often to update RTC variables
-#define CRASHLOG_MAX_FILE_SIZE  4096         // Maximum crash log file size
+#define CRASHLOG_MAX_ENTRIES        10                  // Maximum number of crash entries to keep
+#define CRASHLOG_FILE_PATH          "/crashlog.json"    // Path to crash log file
+#define CRASHLOG_MIN_HEAP_WARNING   15000               // Show warning if heap < 15KB
+#define CRASHLOG_UPDATE_INTERVAL_MS 5000                // How often to update RTC variables
+#define CRASHLOG_MAX_FILE_SIZE      4096                // Maximum crash log file size
 
 // FreeRTOS priorities for multi-core ESP32
-#define UART_TASK_PRIORITY (configMAX_PRIORITIES - 4)  // Highest priority for UART !!
-#define WEB_TASK_PRIORITY (configMAX_PRIORITIES - 15) // Lower priority for web server
+#define UART_TASK_PRIORITY  (configMAX_PRIORITIES - 4)  // Highest priority for UART !!
+#define WEB_TASK_PRIORITY   (configMAX_PRIORITIES - 15) // Lower priority for web server
 
 // Core assignments for multi-core ESP32
-#define UART_TASK_CORE 0      // Main UART bridge task
-#define UART_DMA_TASK_CORE 0  // UART DMA task (same as UART)
-#define WEB_TASK_CORE 1       // Web server task
-//#define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
-//#define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
+#define UART_TASK_CORE      0   // Main UART bridge task
+#define UART_DMA_TASK_CORE  0   // UART DMA task (same as UART)
+#define WEB_TASK_CORE       1   // Web server task
 
 // Input buffer sizes
 #define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
 
 // TX ring buffer for UART1
-#define UART1_TX_RING_SIZE 8192  // 8KB for single-writer architecture
+#define UART1_TX_RING_SIZE 8192 // 8KB for single-writer architecture
 
 #endif // DEFINES_H

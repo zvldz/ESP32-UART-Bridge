@@ -679,7 +679,8 @@ void ProtocolPipeline::processTelemetryFlow() {
     uint32_t startTime = millis();
     
     for (size_t i = 0; i < activeFlows; i++) {
-        if (!flows[i].isInputFlow) {  // Telemetry flow (FC→GCS)
+        if (!flows[i].isInputFlow && flows[i].source != SOURCE_LOGS) {  // Telemetry flow (FC→GCS), exclude Logger
+
             
             // Process this flow until empty or timeout
             size_t iterations = 0;
@@ -733,6 +734,13 @@ void ProtocolPipeline::processTelemetryFlow() {
         lastReport = millis();
     }
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
+
+    // Process Logger flows separately (not part of telemetry)
+    for (size_t i = 0; i < activeFlows; i++) {
+        if (!flows[i].isInputFlow && flows[i].source == SOURCE_LOGS) {
+            processFlow(flows[i]);
+        }
+    }
 }
 
 void ProtocolPipeline::processFlow(DataFlow& flow) {
@@ -746,6 +754,7 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
     // Count bytes available in telemetry buffer before parsing
     size_t available = flow.inputBuffer->available();
     telemetryBytesTotal += available;
+
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     uint32_t now = micros();
