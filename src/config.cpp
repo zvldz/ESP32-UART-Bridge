@@ -92,6 +92,7 @@ void config_init(Config* config) {
   config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
   config->wifi_client_ssid = "";
   config->wifi_client_password = "";
+  config->wifi_tx_power = 20;  // Default 5dBm (20 * 0.25dBm = 5dBm)
   config->device_version = DEVICE_VERSION;
   config->device_name = DEVICE_NAME;
   config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
@@ -262,6 +263,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     config->wifi_mode = (BridgeWiFiMode)(doc["wifi"]["mode"] | BRIDGE_WIFI_MODE_AP);
     config->wifi_client_ssid = doc["wifi"]["client_ssid"] | "";
     config->wifi_client_password = doc["wifi"]["client_password"] | "";
+    config->wifi_tx_power = doc["wifi"]["tx_power"] | 20;  // Default 20 (5dBm) if not present
   }
 
   // Load USB settings
@@ -339,6 +341,7 @@ String config_to_json(Config* config) {
   doc["wifi"]["mode"] = config->wifi_mode;
   doc["wifi"]["client_ssid"] = config->wifi_client_ssid;
   doc["wifi"]["client_password"] = config->wifi_client_password;
+  doc["wifi"]["tx_power"] = config->wifi_tx_power;
 
   // USB settings
   switch(config->usb_mode) {

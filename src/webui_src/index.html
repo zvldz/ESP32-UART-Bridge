@@ -210,6 +210,16 @@
                                     </svg>
                                 </span>
                             </div>
+                            <label for="wifi_tx_power">WiFi TX Power:</label>
+                            <select id="wifi_tx_power" name="wifi_tx_power">
+                                <option value="8">Minimum (2dBm)</option>
+                                <option value="20" selected>Low (5dBm)</option>
+                                <option value="34">Medium-Low (8.5dBm)</option>
+                                <option value="52">Medium (13dBm)</option>
+                                <option value="68">High (17dBm)</option>
+                                <option value="80">Maximum (20dBm)</option>
+                            </select>
+                            <small class="form-text">Lower power = less interference, shorter range</small>
                         </div>
                     </div>
                 </div>
