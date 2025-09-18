@@ -21,11 +21,6 @@
 #include "freertos/semphr.h"
 #include "esp_wifi.h"
 
-// Web interface constants
-#define HTTP_PORT                   80
-#define UPLOAD_BUFFER_RESERVE       4096
-#define ASCII_PRINTABLE_THRESHOLD   32
-
 // External objects from main.cpp
 extern Config config;
 extern SystemState systemState;

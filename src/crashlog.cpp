@@ -4,8 +4,6 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 
-// Crashlog constants
-#define CRASHLOG_MAX_FILE_SIZE  4096
 
 // Helper function to create empty JSON structure
 static void createEmptyLog(JsonDocument& doc) {

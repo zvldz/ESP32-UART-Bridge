@@ -75,12 +75,15 @@ const StatusUpdates = {
         
         container.innerHTML = `
             <table>
-                <tr><td><strong>Device:</strong></td><td>${this.config.deviceName} v${this.config.version}</td></tr>
+                <tr><td><strong>Version:</strong></td><td>v${this.config.version} / ${this.config.arduinoVersion} / ${this.config.idfVersion}</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
                 ${wifiInfo}
+                <!--
                 <tr><td><strong>Current UART:</strong></td><td>${this.config.uartConfig}</td></tr>
                 <tr><td><strong>Flow Control:</strong></td><td>${this.config.flowControl}</td></tr>
+                -->
+                <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? 'No FC' : 'RTS/CTS'}</td></tr>
             </table>
         `;
         

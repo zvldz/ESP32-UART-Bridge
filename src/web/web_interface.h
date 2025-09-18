@@ -5,6 +5,11 @@
 #include <ESPAsyncWebServer.h>
 #include <functional>
 
+// Web interface constants
+#define HTTP_PORT                   80
+#define UPLOAD_BUFFER_RESERVE       4096
+#define ASCII_PRINTABLE_THRESHOLD   32
+
 // Web server interface
 void webserver_init(Config* config, SystemState* state);
 void webserver_cleanup();  // Resource cleanup

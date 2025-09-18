@@ -14,10 +14,9 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include "esp_system.h"           // for esp_get_idf_version()
+#include "esp_arduino_version.h"  // for ESP_ARDUINO_VERSION_STR
 
-// Web API constants
-#define MS_TO_SECONDS           1000
-#define IP_ADDRESS_BUFFER_SIZE  15
 
 // External objects from main.cpp
 extern Config config;
@@ -53,6 +52,8 @@ String getConfigJson() {
     // System info
     doc["deviceName"] = config.device_name;
     doc["version"] = config.device_version;
+    doc["arduinoVersion"] = ESP_ARDUINO_VERSION_STR;  // NEW - Arduino Core version
+    doc["idfVersion"] = esp_get_idf_version();        // NEW - ESP-IDF version
     doc["freeRam"] = ESP.getFreeHeap();
     
     // Calculate uptime
