@@ -75,6 +75,7 @@ String getConfigJson() {
     doc["wifiMode"] = config.wifi_mode;
     doc["wifiClientSsid"] = config.wifi_client_ssid;
     doc["wifiClientPassword"] = config.wifi_client_password;
+    doc["wifiTxPower"] = config.wifi_tx_power;
     
     // Client mode status
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
@@ -527,6 +528,25 @@ void handleSave(AsyncWebServerRequest *request) {
       config.wifi_client_password = newPassword;
       configChanged = true;
       log_msg(LOG_INFO, "WiFi Client password updated");
+    }
+  }
+
+  // WiFi TX Power
+  if (request->hasParam("wifi_tx_power", true)) {
+    const AsyncWebParameter* p = request->getParam("wifi_tx_power", true);
+    uint8_t newTxPower = p->value().toInt();
+
+    // Validate range (8-80 for ESP-IDF)
+    if (newTxPower < 8 || newTxPower > 80) {
+      log_msg(LOG_ERROR, "WiFi TX Power must be between 8 and 80");
+      request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"WiFi TX Power must be between 8 and 80\"}");
+      return;
+    }
+
+    if (newTxPower != config.wifi_tx_power) {
+      config.wifi_tx_power = newTxPower;
+      configChanged = true;
+      log_msg(LOG_INFO, "WiFi TX Power updated to %d (%.1fdBm)", newTxPower, newTxPower * 0.25);
     }
   }
 

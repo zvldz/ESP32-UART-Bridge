@@ -9,7 +9,6 @@
 #define WIFI_RECONNECT_DELAY_MS     500   // Delay between reconnection attempts
 #define WIFI_MDNS_SERVICE_PORT      80    // HTTP service port for mDNS
 #define WIFI_MAC_SUFFIX_BUFFER_SIZE 6     // Buffer size for MAC address suffix
-#define WIFI_TX_POWER_LEVEL         20    // WiFi transmit power level (~5dBm)
 #define WIFI_MIN_HEAP_BYTES         30000 // Minimum heap required for WiFi init
 #define WIFI_SSID_MAX_LEN           32    // Maximum SSID length
 #define WIFI_PASSWORD_MAX_LEN       64    // Maximum password length

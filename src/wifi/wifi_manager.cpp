@@ -399,7 +399,7 @@ esp_err_t wifiStartClient(const String& ssid, const String& password) {
     ESP_ERROR_CHECK(esp_wifi_start());
     
     // Set power parameters
-    esp_wifi_set_max_tx_power(WIFI_TX_POWER_LEVEL);
+    esp_wifi_set_max_tx_power(config.wifi_tx_power);
     
     // Start with a scan
     systemState.wifiClientState = CLIENT_SCANNING;
@@ -438,7 +438,7 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     ESP_ERROR_CHECK(esp_wifi_start());
     
     // Set power parameters
-    esp_wifi_set_max_tx_power(WIFI_TX_POWER_LEVEL);
+    esp_wifi_set_max_tx_power(config.wifi_tx_power);
     
     // Initialize DNS server for captive portal using Arduino DNSServer
     if (!dnsServer) {
