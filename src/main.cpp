@@ -176,8 +176,8 @@ void setup() {
   // Mode-specific initialization
   if (bridgeMode == BRIDGE_STANDALONE) {
     log_msg(LOG_INFO, "Starting standalone mode - UART bridge active");
-    log_msg(LOG_INFO, "Use triple-click BOOT to enter network setup mode");
-    log_msg(LOG_INFO, "Blue LED will flash on data activity");
+//  log_msg(LOG_INFO, "Use triple-click BOOT to enter network setup mode");
+//  log_msg(LOG_INFO, "Blue LED will flash on data activity");
     initStandaloneMode();
     // Enable mode-specific tasks
     enableStandaloneTasks();
@@ -535,7 +535,6 @@ void handleButtonInput() {
           // From standalone → activate saved WiFi mode
           log_msg(LOG_INFO, "*** TRIPLE CLICK: Standalone -> Saved WiFi Mode ***");
           
-          
           preferences.putBool("temp_net", true);
           if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
             preferences.putString("temp_net_mode", "CLIENT");  // Max 15 chars!
@@ -612,14 +611,14 @@ void createTasks() {
   bool needSenderTask = false;
 
   // Check all possible sender configurations
-  if (config.device2.role == D2_USB ||           // USB sender
-      config.device2.role == D2_UART2 ||         // UART2 sender  
-      config.device2.role == D2_SBUS_IN ||       // SBUS input
-      config.device2.role == D2_SBUS_OUT ||      // SBUS output
-      config.device3.role == D3_UART3_MIRROR ||  // UART3 mirror
-      config.device3.role == D3_UART3_BRIDGE ||  // UART3 bridge
-      config.device3.role == D3_SBUS_IN ||       // SBUS input
-      config.device3.role == D3_SBUS_OUT ||      // SBUS output
+  if (config.device2.role == D2_USB ||            // USB sender
+      config.device2.role == D2_UART2 ||          // UART2 sender  
+      config.device2.role == D2_SBUS_IN ||        // SBUS input
+      config.device2.role == D2_SBUS_OUT ||       // SBUS output
+      config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
+      config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
+      config.device3.role == D3_SBUS_IN ||        // SBUS input
+      config.device3.role == D3_SBUS_OUT ||       // SBUS output
       config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
       config.device4.role == D4_LOG_NETWORK) {    // UDP logger
       needSenderTask = true;
@@ -630,16 +629,16 @@ void createTasks() {
       TaskHandle_t senderTaskHandle;
       xTaskCreatePinnedToCore(
           senderTask,                      // Function
-          "sender_task",                    // Name
+          "sender_task",                   // Name
           4096,                            // Stack size
           NULL,                            // Parameter
           UART_TASK_PRIORITY - 2,          // Priority (lower than main UART task)
           &senderTaskHandle,               // Handle
-          UART_TASK_CORE                  // Same core as UART task
+          UART_TASK_CORE                   // Same core as UART task
       );
       
       log_msg(LOG_INFO, "Sender task created on core %d (priority %d)", 
-              UART_TASK_CORE, UART_TASK_PRIORITY - 1);
+              UART_TASK_CORE, UART_TASK_PRIORITY - 2);
   } else {
       log_msg(LOG_INFO, "No senders configured, sender task not created");
   }

@@ -4,6 +4,10 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 
+// Web API constants
+#define MS_TO_SECONDS           1000
+#define IP_ADDRESS_BUFFER_SIZE  15
+
 // Generate configuration JSON
 String getConfigJson();
 

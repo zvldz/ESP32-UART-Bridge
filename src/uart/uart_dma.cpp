@@ -4,30 +4,27 @@
 #include "config.h"   // For conversion functions
 #include <cstring>
 
-// UART DMA event task runs on Core 0 (same as UART Bridge for data consistency)
-#define UART_DMA_TASK_CORE 0
-
 // Constructor with DMA configuration
-UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg) 
-    : uart_num(uart)
-    , DMA_RX_BUF_SIZE(cfg.dmaRxBufSize)
-    , DMA_TX_BUF_SIZE(cfg.dmaTxBufSize)
-    , RING_BUF_SIZE(cfg.ringBufSize)
-    , uart_queue(nullptr)
-    , event_task_handle(nullptr)
-    , rx_mutex(nullptr)
-    , tx_mutex(nullptr)
-    , rx_ring_buf(nullptr)
-    , rx_head(0)
-    , rx_tail(0)
-    , packet_timeout_flag(false)
-    , overrun_flag(false)
-    , dmaConfig(cfg)
-    , rx_pin(-1)
-    , tx_pin(-1)
-    , rx_bytes_total(0)
-    , tx_bytes_total(0)
-    , overrun_count(0) {
+UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg)
+    : uart_num(uart),
+      DMA_RX_BUF_SIZE(cfg.dmaRxBufSize),
+      DMA_TX_BUF_SIZE(cfg.dmaTxBufSize),
+      RING_BUF_SIZE(cfg.ringBufSize),
+      uart_queue(nullptr),
+      event_task_handle(nullptr),
+      rx_mutex(nullptr),
+      tx_mutex(nullptr),
+      rx_ring_buf(nullptr),
+      rx_head(0),
+      rx_tail(0),
+      packet_timeout_flag(false),
+      overrun_flag(false),
+      dmaConfig(cfg),
+      rx_pin(-1),
+      tx_pin(-1),
+      rx_bytes_total(0),
+      tx_bytes_total(0),
+      overrun_count(0) {
     
     // Initialize as not ready
     initialized = false;

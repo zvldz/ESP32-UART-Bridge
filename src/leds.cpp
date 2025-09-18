@@ -427,7 +427,7 @@ void led_set_mode(LedMode mode) {
                 xSemaphoreGive(ledMutex);
             }
             startBlink(BLINK_CLIENT_SEARCH, CRGB(COLOR_ORANGE), -1,
-                      WIFI_CLIENT_BLINK_INTERVAL_MS, WIFI_CLIENT_BLINK_INTERVAL_MS);
+                      LED_WIFI_SEARCH_BLINK_MS, LED_WIFI_SEARCH_BLINK_MS);
             log_msg(LOG_DEBUG, "LED set to WiFi Client Searching - orange slow blink");
             break;
             
@@ -437,7 +437,7 @@ void led_set_mode(LedMode mode) {
                 xSemaphoreGive(ledMutex);
             }
             startBlink(BLINK_CLIENT_ERROR, CRGB(COLOR_RED), -1,
-                      WIFI_CLIENT_ERROR_BLINK_MS, WIFI_CLIENT_ERROR_BLINK_MS);
+                      LED_WIFI_ERROR_BLINK_MS, LED_WIFI_ERROR_BLINK_MS);
             log_msg(LOG_DEBUG, "LED set to WiFi Client Error - red fast blink");
             break;
             

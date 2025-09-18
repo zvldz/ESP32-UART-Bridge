@@ -16,24 +16,32 @@
 #include <string.h>
 #include <DNSServer.h>
 
-// WiFi Manager constants
-#define WIFI_RECONNECT_DELAY_MS     500   // Delay between reconnection attempts
-#define WIFI_MDNS_SERVICE_PORT      80    // HTTP service port for mDNS
-#define WIFI_MAC_SUFFIX_BUFFER_SIZE 6     // Buffer size for MAC address suffix
-#define WIFI_TX_POWER_LEVEL         20    // WiFi transmit power level (~5dBm)
-#define WIFI_MIN_HEAP_BYTES         30000 // Minimum heap required for WiFi init
-#define WIFI_SSID_MAX_LEN           32    // Maximum SSID length
-#define WIFI_PASSWORD_MAX_LEN       64    // Maximum password length  
-#define WIFI_CONNECT_TIMEOUT_MS     10000 // Connection attempt timeout
 
 // External objects
 extern Config config;
 extern SystemState systemState;
 
+// === Static variables (module state) ===
+
 // ESP-IDF global variables
 static esp_netif_t* sta_netif = NULL;
 static esp_netif_t* ap_netif = NULL;
 static bool wifi_initialized = false;
+
+// Client connection state
+static unsigned long lastScanTime = 0;
+static unsigned long lastConnectAttempt = 0;
+static bool scanInProgress = false;
+static bool connectInProgress = false;
+static bool wasConnectedBefore = false;
+static bool targetNetworkFound = false;
+static int scanFailureCount = 0;
+
+// Internal state for client mode
+static String targetSSID;
+static String targetPassword;
+static bool mdnsInitNeeded = false;
+static String clientIP;
 
 // Event group for network status
 EventGroupHandle_t networkEventGroup = NULL;
@@ -43,6 +51,8 @@ RTC_DATA_ATTR int wifiInitFailCount = 0;
 
 // DNS server for captive portal
 DNSServer* dnsServer = nullptr;
+
+// === Forward declarations ===
 
 // Helper functions for consistent error handling
 static esp_err_t handleEspError(esp_err_t ret, const char* operation, bool incrementFailCount = false) {
@@ -66,12 +76,6 @@ static void setWifiCredentials(wifi_config_t* config, bool isAP, const String& s
     strncpy(ssidPtr, ssid.c_str(), WIFI_SSID_MAX_LEN);
     strncpy(passPtr, password.c_str(), WIFI_PASSWORD_MAX_LEN);
 }
-
-// Internal state for client mode
-static String targetSSID;
-static String targetPassword;
-static bool mdnsInitNeeded = false;
-static String clientIP;
 
 // Helper function to create valid mDNS hostname with MAC suffix
 String generateMdnsHostname() {
@@ -123,13 +127,8 @@ static void initMdnsService() {
     
     mdnsInitNeeded = false;  // Reset flag
 }
-static unsigned long lastScanTime = 0;
-static unsigned long lastConnectAttempt = 0;
-static bool scanInProgress = false;
-static bool connectInProgress = false;
-static bool wasConnectedBefore = false;
-static bool targetNetworkFound = false;
-static int scanFailureCount = 0;
+
+// === Public functions ===
 
 // Static event handler
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,

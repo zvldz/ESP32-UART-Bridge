@@ -2,7 +2,14 @@
 #define SBUS_COMMON_H
 
 #include <stdint.h>
-#include "../defines.h"
+
+// SBUS protocol constants
+#define SBUS_BAUDRATE 100000
+#define SBUS_FRAME_SIZE 25
+#define SBUS_CHANNELS 16
+#define SBUS_START_BYTE 0x0F
+#define SBUS_END_BYTE 0x00
+#define SBUS_UPDATE_RATE_MS 14
 
 // SBUS frame structure - exactly 25 bytes
 #pragma pack(push, 1)
