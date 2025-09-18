@@ -7,6 +7,7 @@
 #include "logging.h"
 #include "config.h"
 #include "types.h"
+#include "protocols/sbus_common.h"
 #include <freertos/semphr.h>
 
 // External objects from main.cpp
@@ -14,7 +15,6 @@ extern Config config;
 
 // External objects from uartbridge.cpp
 extern UartInterface* device2Serial;
-
 
 // Device 3 UART interface (defined here, used via extern in device3_task.h)
 UartInterface* device3Serial = nullptr;

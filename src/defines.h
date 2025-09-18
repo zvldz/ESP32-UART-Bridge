@@ -55,50 +55,16 @@ Hardware: ESP32-S3-Zero
 #define DEFAULT_AP_SSID "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
-// WiFi Client Mode constants
-#define WIFI_CLIENT_RETRY_INTERVAL_MS  10000  // Retry every 10 seconds
-#define WIFI_CLIENT_SCAN_INTERVAL_MS   15000  // Scan for networks every 15 seconds
-#define WIFI_CLIENT_BLINK_INTERVAL_MS  2000   // Orange slow blink for searching
-#define WIFI_CLIENT_ERROR_BLINK_MS     500    // Fast blink for errors
-#define WIFI_CLIENT_MAX_RETRIES        5      // Max password attempts before error state
-
-// RSSI thresholds for percentage calculation
-#define WIFI_RSSI_EXCELLENT -30  // 100% signal
-#define WIFI_RSSI_POOR      -90  // 0% signal
-
 // Logging system
 #define LOG_BUFFER_SIZE 100
 #define LOG_DISPLAY_COUNT 95
 
-// UART buffering
-#define DEVICE2_UART_BUFFER_SIZE 2048
-#define DEVICE3_UART_BUFFER_SIZE 2048
-#define DEVICE3_LOG_BUFFER_SIZE 256  // For UART logger TX only
-
-// UDP buffering (was Device 4)
-#define UDP_BRIDGE_BUFFER_SIZE 2048
-
-// UART task statistics update interval
-#define UART_STATS_UPDATE_INTERVAL_MS 500  // How often UART task updates shared statistics
-
-// LED timing constants
-#define LED_DATA_FLASH_MS      50    // Data activity flash duration
-#define LED_BUTTON_FLASH_MS    100   // Button click feedback duration
-#define LED_WIFI_RESET_BLINK_MS 100  // WiFi reset rapid blink interval
-
-// LED colors for Device 3
-#define COLOR_MAGENTA   0xFF00FF  // Device 3 TX
-#define COLOR_YELLOW    0xFFFF00  // Device 3 RX (Bridge mode)
-
-// LED colors - WiFi Client mode
-#define COLOR_ORANGE    0xFF8000  // Client mode connected
-#define COLOR_RED       0xFF0000  // Client mode error
-
-// Crash logging
+// Crash logging (need move to crashlog)
 #define CRASHLOG_MAX_ENTRIES 10              // Maximum number of crash entries to keep
 #define CRASHLOG_FILE_PATH "/crashlog.json"  // Path to crash log file
 #define CRASHLOG_MIN_HEAP_WARNING 15000      // Show warning if heap < 15KB
 #define CRASHLOG_UPDATE_INTERVAL_MS 5000     // How often to update RTC variables
+#define CRASHLOG_MAX_FILE_SIZE  4096         // Maximum crash log file size
 
 // FreeRTOS priorities for multi-core ESP32
 #define UART_TASK_PRIORITY (configMAX_PRIORITIES - 4)  // Highest priority for UART !!
@@ -106,22 +72,15 @@ Hardware: ESP32-S3-Zero
 
 // Core assignments for multi-core ESP32
 #define UART_TASK_CORE 0      // Main UART bridge task
+#define UART_DMA_TASK_CORE 0  // UART DMA task (same as UART)
 #define WEB_TASK_CORE 1       // Web server task
-#define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
-#define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
+//#define DEVICE3_TASK_CORE 0   // Device 3 operations (same as UART)
+//#define DEVICE4_TASK_CORE 1   // Device 4 network operations (same as Web)
 
 // Input buffer sizes
 #define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
 
 // TX ring buffer for UART1
 #define UART1_TX_RING_SIZE 8192  // 8KB for single-writer architecture
-
-// SBUS protocol constants
-#define SBUS_BAUDRATE 100000
-#define SBUS_FRAME_SIZE 25
-#define SBUS_CHANNELS 16
-#define SBUS_START_BYTE 0x0F
-#define SBUS_END_BYTE 0x00
-#define SBUS_UPDATE_RATE_MS 14
 
 #endif // DEFINES_H
