@@ -12,112 +12,112 @@ extern TaskHandle_t uartBridgeTaskHandle;
 
 // Handle OTA update for async web server
 void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
-  static bool updateStarted = false;
+    static bool updateStarted = false;
+
+    // Block OTA in USB Host mode
+    extern Config config;
+    if (config.usb_mode == USB_MODE_HOST) {
+        if (!index) {  // First chunk - send error once
+            log_msg(LOG_ERROR, "OTA update blocked: Not supported in USB Host mode");
+        }
+        return;  // Silently ignore all chunks
+    }
   
-  // Block OTA in USB Host mode
-  extern Config config;
-  if (config.usb_mode == USB_MODE_HOST) {
-    if (!index) {  // First chunk - send error once
-      log_msg(LOG_ERROR, "OTA update blocked: Not supported in USB Host mode");
-    }
-    return;  // Silently ignore all chunks
-  }
-  
-  if (!index) {
-    // File start - this is the first chunk
-    log_msg(LOG_INFO, "Firmware update started: %s", filename.c_str());
-    updateStarted = false;
+    if (!index) {
+        // File start - this is the first chunk
+        log_msg(LOG_INFO, "Firmware update started: %s", filename.c_str());
+        updateStarted = false;
 
-    // Suspend UART tasks during update to prevent interference
-    if (uartBridgeTaskHandle) {
-      log_msg(LOG_DEBUG, "Suspending UART bridge task for OTA update");
-      vTaskSuspend(uartBridgeTaskHandle);
-    }
-    
-    // Ensure all UART data is flushed before starting update
-    if (uartBridgeSerial) {
-      uartBridgeSerial->flush();
-      vTaskDelay(pdMS_TO_TICKS(100)); // Give time for flush to complete
-    }
-    
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start with max available size
-      log_msg(LOG_ERROR, "Failed to begin firmware update: %s", Update.errorString());
-      
-      // Resume tasks if update failed to start
-      if (uartBridgeTaskHandle) {
-        vTaskResume(uartBridgeTaskHandle);
-      }
-      
-      return;
-    }
-    
-    updateStarted = true;
-  }
+        // Suspend UART tasks during update to prevent interference
+        if (uartBridgeTaskHandle) {
+            log_msg(LOG_DEBUG, "Suspending UART bridge task for OTA update");
+            vTaskSuspend(uartBridgeTaskHandle);
+        }
 
-  if (len && updateStarted) {
-    // Write firmware chunk
-    if (Update.write(data, len) != len) {
-      log_msg(LOG_ERROR, "Firmware write failed: %s", Update.errorString());
-      updateStarted = false;
-      
-      // Resume tasks on write failure
-      if (uartBridgeTaskHandle) {
-        vTaskResume(uartBridgeTaskHandle);
-      }
+        // Ensure all UART data is flushed before starting update
+        if (uartBridgeSerial) {
+            uartBridgeSerial->flush();
+            vTaskDelay(pdMS_TO_TICKS(100)); // Give time for flush to complete
+        }
 
-      return;
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start with max available size
+            log_msg(LOG_ERROR, "Failed to begin firmware update: %s", Update.errorString());
+
+            // Resume tasks if update failed to start
+            if (uartBridgeTaskHandle) {
+                vTaskResume(uartBridgeTaskHandle);
+            }
+
+            return;
+        }
+
+        updateStarted = true;
     }
 
-    // Show progress occasionally
-    static unsigned long lastProgress = 0;
-    unsigned long progress = Update.progress();
-    if (progress - lastProgress > 50000) { // Log every 50KB
-      log_msg(LOG_DEBUG, "Firmware update progress: %lu bytes", progress);
-      lastProgress = progress;
-    }
-  }
+    if (len && updateStarted) {
+        // Write firmware chunk
+        if (Update.write(data, len) != len) {
+            log_msg(LOG_ERROR, "Firmware write failed: %s", Update.errorString());
+            updateStarted = false;
 
-  if (final && updateStarted) {
-    // File end - finalize update
-    if (Update.end(true)) { // True to set the size to the current progress
-      log_msg(LOG_INFO, "Firmware update successful: %zu bytes", index + len);
-      log_msg(LOG_INFO, "Rebooting device...");
-      updateStarted = false;
-    } else {
-      log_msg(LOG_ERROR, "Firmware update failed at end: %s", Update.errorString());
-      updateStarted = false;
-      
-      // Resume tasks if update failed
-      if (uartBridgeTaskHandle) {
-        vTaskResume(uartBridgeTaskHandle);
-      }
+            // Resume tasks on write failure
+            if (uartBridgeTaskHandle) {
+                vTaskResume(uartBridgeTaskHandle);
+            }
+
+            return;
+        }
+
+        // Show progress occasionally
+        static unsigned long lastProgress = 0;
+        unsigned long progress = Update.progress();
+        if (progress - lastProgress > 50000) { // Log every 50KB
+            log_msg(LOG_DEBUG, "Firmware update progress: %lu bytes", progress);
+            lastProgress = progress;
+        }
     }
-  }
+
+    if (final && updateStarted) {
+        // File end - finalize update
+        if (Update.end(true)) { // True to set the size to the current progress
+            log_msg(LOG_INFO, "Firmware update successful: %zu bytes", index + len);
+            log_msg(LOG_INFO, "Rebooting device...");
+            updateStarted = false;
+        } else {
+            log_msg(LOG_ERROR, "Firmware update failed at end: %s", Update.errorString());
+            updateStarted = false;
+
+            // Resume tasks if update failed
+            if (uartBridgeTaskHandle) {
+                vTaskResume(uartBridgeTaskHandle);
+            }
+        }
+    }
 }
 
 // Handle update end for async web server
 void handleUpdateEnd(AsyncWebServerRequest *request) {
-  extern Config config;
-  
-  // Check if OTA was blocked
-  if (config.usb_mode == USB_MODE_HOST) {
-    request->send(400, "application/json", 
-      "{\"status\":\"error\",\"message\":\"Firmware update not supported in USB Host mode. Please switch to USB Device mode first.\"}");
-    return;
-  }
-  
-  if (Update.hasError()) {
-    String errorMsg = "{\"status\":\"error\",\"message\":\"Update failed: " + String(Update.errorString()) + "\"}";
-    request->send(400, "application/json", errorMsg);
-    
-    // Resume tasks after failed update
-    if (uartBridgeTaskHandle) {
-      vTaskResume(uartBridgeTaskHandle);
+    extern Config config;
+
+    // Check if OTA was blocked
+    if (config.usb_mode == USB_MODE_HOST) {
+        request->send(400, "application/json",
+            "{\"status\":\"error\",\"message\":\"Firmware update not supported in USB Host mode. Please switch to USB Device mode first.\"}");
+        return;
     }
-  } else {
-    request->send(200, "application/json", 
-      "{\"status\":\"ok\",\"message\":\"Firmware updated successfully! Device rebooting...\"}");
-    
-    scheduleReboot(3000);
-  }
+
+    if (Update.hasError()) {
+        String errorMsg = "{\"status\":\"error\",\"message\":\"Update failed: " + String(Update.errorString()) + "\"}";
+        request->send(400, "application/json", errorMsg);
+
+        // Resume tasks after failed update
+        if (uartBridgeTaskHandle) {
+            vTaskResume(uartBridgeTaskHandle);
+        }
+    } else {
+        request->send(200, "application/json",
+            "{\"status\":\"ok\",\"message\":\"Firmware updated successfully! Device rebooting...\"}");
+
+        scheduleReboot(3000);
+    }
 }

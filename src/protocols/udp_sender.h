@@ -102,7 +102,7 @@ private:
     }
     
     void processAtomicPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
-        // Check if batching is enabled (hardcoded true for now)
+        // Check if batching is enabled (configurable via setBatchingEnabled)
         if (!enableAtomicBatching) {
             // Legacy mode - one packet per datagram
             flushAtomicBatch();
