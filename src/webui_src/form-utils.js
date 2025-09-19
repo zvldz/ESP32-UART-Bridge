@@ -74,6 +74,25 @@ const FormUtils = {
         
         // USB mode
         this.setSelectValue('usbmode', this.config.usbMode);
+
+        // Disable USB Host for boards that don't support it
+        if (this.config.usbHostSupported === false) {
+            const usbModeSelect = document.getElementById('usbmode');
+            if (usbModeSelect) {
+                // Find and disable host option
+                for (let option of usbModeSelect.options) {
+                    if (option.value === 'host') {
+                        option.disabled = true;
+                        option.text = "Host (Not supported on this board)";
+                        break;
+                    }
+                }
+                // Force device mode if somehow set to host
+                if (usbModeSelect.value === 'host') {
+                    usbModeSelect.value = 'device';
+                }
+            }
+        }
         
         // Protocol optimization
         this.setSelectValue('protocol_optimization', this.config.protocolOptimization || 0);

@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## v2.18.3 (ESP32-S3 Super Mini Support) 🟡 IN PROGRESS
+
+### Platform Support - ESP32-S3 Super Mini ✅ IMPLEMENTED (Not Fully Tested)
+- **Multi-Board Architecture**: Added support for ESP32-S3 Super Mini with conditional compilation
+  - **LED Pin Adaptation**: GPIO48 (WS2815) for Super Mini vs GPIO21 (WS2812) for S3-Zero
+  - **Build Environments**: Added `supermini_production` and `supermini_debug` configurations
+  - **Board Detection**: Runtime board identification via `boardType` and `usbHostSupported` fields
+  - **USB Host Limitation**: Super Mini lacks USB Host hardware support
+
+- **Web Interface Adaptation**: Dynamic USB mode control based on board capabilities
+  - **Smart UI**: USB Host option automatically disabled on Super Mini boards
+  - **Visual Indication**: "Host (Not supported on this board)" label for blocked options
+  - **Server Protection**: Backend validation prevents USB Host mode selection on Super Mini
+  - **Graceful Fallback**: Automatic Device mode selection with warning logging
+
+- **Hardware Compatibility Notes**:
+  - **UART Inversion**: Hardware UART inversion support untested on Super Mini
+  - **SBUS Compatibility**: May require software-based signal inversion if hardware inversion fails
+  - **Pin Compatibility**: All UART pins (4/5, 8/9, 11/12) remain identical between boards
+  - **LED Protocol**: WS2815 (Super Mini) is compatible with WS2812 control protocol
+
+### Performance Optimization - LED Task Management ✅ COMPLETED
+- **Dynamic LED Task Control**: Implemented intelligent enable/disable of LED monitoring task
+  - **Task Export**: Made `tLedMonitor` globally accessible via scheduler_tasks.h
+  - **WiFi State Integration**: Automatic task management based on WiFi connection state
+  - **Performance Gain**: ~50 iterations/second improvement in stable WiFi modes
+
+- **LED Task Disable Conditions** (saves CPU cycles):
+  - WiFi Client successfully connected (stable connection)
+  - WiFi AP mode active (no animation needed)
+  - Result: ~950+ iterations/second in stable modes
+
+- **LED Task Enable Conditions** (animation required):
+  - WiFi searching for network (visual feedback)
+  - WiFi authentication errors (error indication)
+  - WiFi reconnection attempts (activity indication)
+  - Initial WiFi client startup (scanning feedback)
+
+### Build Configuration
+- **Production Build**: `pio run -e supermini_production`
+- **Debug Build**: `pio run -e supermini_debug`
+- **Original S3-Zero**: `pio run -e production` or `pio run -e debug` (unchanged)
+
+### Testing Status & Pending Tasks 🟡
+- **Super Mini Implementation**: Code changes completed but not tested on actual hardware
+- **UART Inversion**: Hardware inversion functionality unverified on Super Mini platform
+- **LED Functionality**: GPIO48 LED control implementation needs physical validation
+- **SBUS Operation**: Protocol operation with potential software inversion requirement untested
+- **Documentation Update**: README.md and web interface help pages not yet updated for Super Mini support
+
 ## v2.18.2 (Code Refactoring & WiFi TX Power Control) ✅ COMPLETED
 
 ### Code Organization & Memory Optimization ✅ COMPLETED

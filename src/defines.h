@@ -9,13 +9,17 @@
 Universal UART to USB bridge with web configuration interface.
 Optimized for drone autopilots (ArduPilot, PX4) but works with any UART protocol.
 
-Hardware: ESP32-S3-Zero
+Hardware: ESP32-S3-Zero / ESP32-S3 Super Mini
 - GPIO0: BOOT button (triple-click for WiFi config)
 - GPIO4/5: Device 1 - Main UART (RX/TX)
 - GPIO6/7: RTS/CTS flow control
 - GPIO8/9: Device 2 - Secondary UART (RX/TX) when enabled
 - GPIO11/12: Device 3 - Logger/Mirror/Bridge UART (RX/TX)
-- GPIO21: RGB LED (WS2812 - data activity indicator)
+- RGB LED: GPIO21 (WS2812) for S3-Zero, GPIO48 (WS2815) for Super Mini
+
+Board differences:
+- S3 Zero: USB Host support, WS2812 LED on GPIO21
+- S3 Super Mini: No USB Host, WS2815 LED on GPIO48
 
 ===============================================================================
 
@@ -28,13 +32,21 @@ Hardware: ESP32-S3-Zero
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.2"
+#define DEVICE_VERSION "2.18.3"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN     0
 #define UART_RX_PIN         4
 #define UART_TX_PIN         5
-#define LED_PIN1            21  // WS2812 RGB LED on GPIO21 for S3-Zero
+// LED pin varies by board
+#if defined(BOARD_ESP32_S3_SUPER_MINI)
+  #define LED_PIN1          48  // WS2815 RGB LED on GPIO48 for Super Mini
+#elif defined(BOARD_ESP32_S3_ZERO)
+  #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero
+#else
+  #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero (default fallback)
+  #warning "Board type not specified, defaulting to ESP32-S3-Zero configuration"
+#endif
 #define RTS_PIN             6   // Flow control
 #define CTS_PIN             7   // Flow control
 

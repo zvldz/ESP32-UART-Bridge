@@ -76,14 +76,11 @@ const StatusUpdates = {
         container.innerHTML = `
             <table>
                 <tr><td><strong>Version:</strong></td><td>v${this.config.version} / ${this.config.arduinoVersion} / ${this.config.idfVersion}</td></tr>
-                <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
+                <tr><td><strong>Board:</strong></td><td>${(this.config.boardType || 's3zero') === 's3supermini' ? 'ESP32-S3 Super Mini' : 'ESP32-S3-Zero'}</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
-                ${wifiInfo}
-                <!--
-                <tr><td><strong>Current UART:</strong></td><td>${this.config.uartConfig}</td></tr>
-                <tr><td><strong>Flow Control:</strong></td><td>${this.config.flowControl}</td></tr>
-                -->
+                <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
                 <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? 'No FC' : 'RTS/CTS'}</td></tr>
+                ${wifiInfo}
             </table>
         `;
         

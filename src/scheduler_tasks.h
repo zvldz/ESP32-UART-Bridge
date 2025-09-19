@@ -13,6 +13,9 @@
 // Global scheduler instance
 extern Scheduler taskScheduler;
 
+// LED monitor task - can be controlled from other modules
+extern Task tLedMonitor;
+
 // Initialize the task scheduler
 void initializeScheduler();
 
