@@ -31,7 +31,7 @@ static Task tWiFiTimeout(WIFI_TIMEOUT, TASK_ONCE, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
-static Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring
+Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring - exported for external control
 
 // Simple snapshot for LED comparison (not atomic)
 struct LedSnapshot {
