@@ -74,144 +74,144 @@ void disableBrownout() __attribute__((constructor));
 //================================================================
 
 void setup() {
-  // Disable USB Serial/JTAG peripheral interrupts
-  disableUsbJtagInterrupts();
+    // Disable USB Serial/JTAG peripheral interrupts
+    disableUsbJtagInterrupts();
 
-  // Print boot info
-  printBootInfo();
+    // Print boot info
+    printBootInfo();
 
-  // Initialize configuration
-  config_init(&config);
+    // Initialize configuration
+    config_init(&config);
 
-  // Initialize device statistics
-  initDeviceStatistics();
+    // Initialize device statistics
+    initDeviceStatistics();
 
-  // Clear bootloader messages
-  clearBootloaderSerialBuffer();
+    // Clear bootloader messages
+    clearBootloaderSerialBuffer();
 
-  // Create mutexes FIRST!
-  createMutexes();
+    // Create mutexes FIRST!
+    createMutexes();
 
-  // NOW initialize logging
-  logging_init();
+    // NOW initialize logging
+    logging_init();
 
-  log_msg(LOG_INFO, "%s v%s starting", config.device_name.c_str(), config.device_version.c_str());
+    log_msg(LOG_INFO, "%s v%s starting", config.device_name.c_str(), config.device_version.c_str());
 
-  // Initialize filesystem
-  log_msg(LOG_INFO, "Initializing LittleFS...");
+    // Initialize filesystem
+    log_msg(LOG_INFO, "Initializing LittleFS...");
 
-  #ifdef FORMAT_FILESYSTEM
-    log_msg(LOG_WARNING, "FORMAT_FILESYSTEM flag detected - formatting LittleFS...");
-    if (LittleFS.format()) {
-      log_msg(LOG_INFO, "LittleFS formatted successfully");
+    #ifdef FORMAT_FILESYSTEM
+        log_msg(LOG_WARNING, "FORMAT_FILESYSTEM flag detected - formatting LittleFS...");
+        if (LittleFS.format()) {
+            log_msg(LOG_INFO, "LittleFS formatted successfully");
+        } else {
+            log_msg(LOG_ERROR, "LittleFS format failed");
+        }
+    #endif
+
+    if (!LittleFS.begin()) {
+        log_msg(LOG_WARNING, "LittleFS mount failed, formatting...");
+        if (LittleFS.format()) {
+            log_msg(LOG_INFO, "LittleFS formatted successfully");
+            if (LittleFS.begin()) {
+                log_msg(LOG_INFO, "LittleFS mounted after format");
+            } else {
+                log_msg(LOG_ERROR, "LittleFS mount failed even after format");
+                return;
+            }
+        } else {
+            log_msg(LOG_ERROR, "LittleFS format failed");
+            return;
+        }
     } else {
-      log_msg(LOG_ERROR, "LittleFS format failed");
+        log_msg(LOG_INFO, "LittleFS mounted successfully");
     }
-  #endif
 
-  if (!LittleFS.begin()) {
-    log_msg(LOG_WARNING, "LittleFS mount failed, formatting...");
-    if (LittleFS.format()) {
-      log_msg(LOG_INFO, "LittleFS formatted successfully");
-      if (LittleFS.begin()) {
-        log_msg(LOG_INFO, "LittleFS mounted after format");
-      } else {
-        log_msg(LOG_ERROR, "LittleFS mount failed even after format");
-        return;
-      }
+    // Load configuration from file (this may override defaults including usb_mode)
+    log_msg(LOG_INFO, "Loading configuration...");
+    config_load(&config);
+    log_msg(LOG_INFO, "Configuration loaded");
+
+    // Auto-detect protocol optimization based on device roles
+    bool hasSBUSDevice = (config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
+                         config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
+
+    if (hasSBUSDevice) {
+        if (config.protocolOptimization != PROTOCOL_SBUS) {
+            config.protocolOptimization = PROTOCOL_SBUS;
+            log_msg(LOG_INFO, "Auto-detected SBUS devices, forcing protocol optimization to SBUS");
+            config_save(&config);  // Save the auto-detected setting
+        }
     } else {
-      log_msg(LOG_ERROR, "LittleFS format failed");
-      return;
+        if (config.protocolOptimization == PROTOCOL_SBUS) {
+            config.protocolOptimization = PROTOCOL_NONE;
+            log_msg(LOG_INFO, "No SBUS devices found, resetting protocol optimization to None");
+            config_save(&config);  // Save the corrected setting
+        }
     }
-  } else {
-    log_msg(LOG_INFO, "LittleFS mounted successfully");
-  }
 
-  // Load configuration from file (this may override defaults including usb_mode)
-  log_msg(LOG_INFO, "Loading configuration...");
-  config_load(&config);
-  log_msg(LOG_INFO, "Configuration loaded");
+    // Update global usbMode after loading config
+    usbMode = config.usb_mode;
 
-  // Auto-detect protocol optimization based on device roles
-  bool hasSBUSDevice = (config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
-                       config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
-  
-  if (hasSBUSDevice) {
-    if (config.protocolOptimization != PROTOCOL_SBUS) {
-      config.protocolOptimization = PROTOCOL_SBUS;
-      log_msg(LOG_INFO, "Auto-detected SBUS devices, forcing protocol optimization to SBUS");
-      config_save(&config);  // Save the auto-detected setting
-    }
-  } else {
-    if (config.protocolOptimization == PROTOCOL_SBUS) {
-      config.protocolOptimization = PROTOCOL_NONE;
-      log_msg(LOG_INFO, "No SBUS devices found, resetting protocol optimization to None");
-      config_save(&config);  // Save the corrected setting
-    }
-  }
+    // Initialize devices based on configuration
+    initDevices();
 
-  // Update global usbMode after loading config
-  usbMode = config.usb_mode;
-  
-  // Initialize devices based on configuration
-  initDevices();
+    // Check for crash and log if needed
+    crashlog_check_and_save();
 
-  // Check for crash and log if needed
-  crashlog_check_and_save();
+    // Initialize hardware
+    log_msg(LOG_INFO, "Initializing pins...");
+    initPins();
+    leds_init();
+    log_msg(LOG_INFO, "Hardware initialized");
 
-  // Initialize hardware
-  log_msg(LOG_INFO, "Initializing pins...");
-  initPins();
-  leds_init();
-  log_msg(LOG_INFO, "Hardware initialized");
+    // Detect boot mode
+    log_msg(LOG_INFO, "Detecting boot mode...");
+    detectMode();
+    log_msg(LOG_INFO, "Mode detected: %s", bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network");
 
-  // Detect boot mode
-  log_msg(LOG_INFO, "Detecting boot mode...");
-  detectMode();
-  log_msg(LOG_INFO, "Mode detected: %s", bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network");
+    // Initialize TaskScheduler
+    initializeScheduler();
 
-  // Initialize TaskScheduler
-  initializeScheduler();
-
-  // Mode-specific initialization
-  if (bridgeMode == BRIDGE_STANDALONE) {
-    log_msg(LOG_INFO, "Starting standalone mode - UART bridge active");
+    // Mode-specific initialization
+    if (bridgeMode == BRIDGE_STANDALONE) {
+        log_msg(LOG_INFO, "Starting standalone mode - UART bridge active");
 //  log_msg(LOG_INFO, "Use triple-click BOOT to enter network setup mode");
 //  log_msg(LOG_INFO, "Blue LED will flash on data activity");
-    initStandaloneMode();
-    // Enable mode-specific tasks
-    enableStandaloneTasks();
-  } else if (bridgeMode == BRIDGE_NET) {
-    log_msg(LOG_INFO, "Starting network mode...");
-    log_msg(LOG_INFO, "Purple LED will stay ON during network mode");
-    initNetworkMode();
-    // Enable mode-specific tasks
-    enableNetworkTasks(systemState.isTemporaryNetwork);
-  }
+        initStandaloneMode();
+        // Enable mode-specific tasks
+        enableStandaloneTasks();
+    } else if (bridgeMode == BRIDGE_NET) {
+        log_msg(LOG_INFO, "Starting network mode...");
+        log_msg(LOG_INFO, "Purple LED will stay ON during network mode");
+        initNetworkMode();
+        // Enable mode-specific tasks
+        enableNetworkTasks(systemState.isTemporaryNetwork);
+    }
 
-  // Create FreeRTOS tasks
-  createTasks();
+    // Create FreeRTOS tasks
+    createTasks();
 
-  log_msg(LOG_INFO, "Setup complete!");
+    log_msg(LOG_INFO, "Setup complete!");
 }
 
 void loop() {
-  // Process LED updates from main thread - MUST be first
-  led_process_updates();
+    // Process LED updates from main thread - MUST be first
+    led_process_updates();
 
-  // Process WiFi Manager in network mode
-  if (bridgeMode == BRIDGE_NET) {
-    wifiProcess();
-  }
+    // Process WiFi Manager in network mode
+    if (bridgeMode == BRIDGE_NET) {
+        wifiProcess();
+    }
 
-  // Handle all button interactions
-  handleButtonInput();
+    // Handle all button interactions
+    handleButtonInput();
 
-  // Execute all scheduled tasks
-  taskScheduler.execute();
+    // Execute all scheduled tasks
+    taskScheduler.execute();
 
-  // Small delay to prevent watchdog issues
-  vTaskDelay(pdMS_TO_TICKS(10));
+    // Small delay to prevent watchdog issues
+    vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 //================================================================
@@ -219,232 +219,232 @@ void loop() {
 //================================================================
 
 void initPins() {
-  pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
 
-  // Attach interrupt for button clicks on correct pin
-  attachInterrupt(digitalPinToInterrupt(BOOT_BUTTON_PIN), bootButtonISR, FALLING);
+    // Attach interrupt for button clicks on correct pin
+    attachInterrupt(digitalPinToInterrupt(BOOT_BUTTON_PIN), bootButtonISR, FALLING);
 
-  log_msg(LOG_DEBUG, "BOOT button configured on GPIO%d", BOOT_BUTTON_PIN);
+    log_msg(LOG_DEBUG, "BOOT button configured on GPIO%d", BOOT_BUTTON_PIN);
 }
 
 void detectMode() {
-  // Check for temporary network mode flag in preferences
-  preferences.begin("uartbridge", false);
-  bool tempNetworkRequested = preferences.getBool("temp_net", false);
-  String tempNetworkMode = preferences.getString("temp_net_mode", "AP");  // Max 15 chars!
-  preferences.end();
-
-  if (tempNetworkRequested) {
-    log_msg(LOG_INFO, "Temporary network mode requested via preferences: %s", tempNetworkMode.c_str());
-    // Clear the flags
+    // Check for temporary network mode flag in preferences
     preferences.begin("uartbridge", false);
-    preferences.remove("temp_net");
-    preferences.remove("temp_net_mode");  // Max 15 chars!
+    bool tempNetworkRequested = preferences.getBool("temp_net", false);
+    String tempNetworkMode = preferences.getString("temp_net_mode", "AP");  // Max 15 chars!
     preferences.end();
-    
-    bridgeMode = BRIDGE_NET;
-    systemState.isTemporaryNetwork = true;
-    
-    // Temporarily override WiFi mode for this session only
-    if (tempNetworkMode == "CLIENT") {
-      log_msg(LOG_INFO, "Temporary override: using Client mode");
-      // Will use config.wifi_mode (CLIENT) as saved
-    } else {
-      log_msg(LOG_INFO, "Temporary override: forcing AP mode");
-      // Need to temporarily force AP mode - will handle in initNetworkMode()
-      systemState.tempForceApMode = true;
+
+    if (tempNetworkRequested) {
+        log_msg(LOG_INFO, "Temporary network mode requested via preferences: %s", tempNetworkMode.c_str());
+        // Clear the flags
+        preferences.begin("uartbridge", false);
+        preferences.remove("temp_net");
+        preferences.remove("temp_net_mode");  // Max 15 chars!
+        preferences.end();
+
+        bridgeMode = BRIDGE_NET;
+        systemState.isTemporaryNetwork = true;
+
+        // Temporarily override WiFi mode for this session only
+        if (tempNetworkMode == "CLIENT") {
+            log_msg(LOG_INFO, "Temporary override: using Client mode");
+            // Will use config.wifi_mode (CLIENT) as saved
+        } else {
+            log_msg(LOG_INFO, "Temporary override: forcing AP mode");
+            // Need to temporarily force AP mode - will handle in initNetworkMode()
+            systemState.tempForceApMode = true;
+        }
+        return;
     }
-    return;
-  }
 
-  // Check for permanent network mode configuration
-  if (config.permanent_network_mode) {
-    log_msg(LOG_INFO, "Permanent network mode enabled - entering network mode");
-    bridgeMode = BRIDGE_NET;
-    systemState.isTemporaryNetwork = false;  // Permanent network mode
-    return;
-  }
+    // Check for permanent network mode configuration
+    if (config.permanent_network_mode) {
+        log_msg(LOG_INFO, "Permanent network mode enabled - entering network mode");
+        bridgeMode = BRIDGE_NET;
+        systemState.isTemporaryNetwork = false;  // Permanent network mode
+        return;
+    }
 
-  log_msg(LOG_DEBUG, "Click count at startup: %d", systemState.clickCount);
+    log_msg(LOG_DEBUG, "Click count at startup: %d", systemState.clickCount);
 
-  // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode
-  // and this code won't run at all.
+    // Note: On ESP32-S3, holding BOOT (GPIO0) during power-on will enter bootloader mode
+    // and this code won't run at all.
 
-  // Check for triple click (network mode)
-  log_msg(LOG_DEBUG, "Waiting for potential clicks...");
-  vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
-  log_msg(LOG_DEBUG, "Final click count: %d", systemState.clickCount);
+    // Check for triple click (network mode)
+    log_msg(LOG_DEBUG, "Waiting for potential clicks...");
+    vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
+    log_msg(LOG_DEBUG, "Final click count: %d", systemState.clickCount);
 
-  if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS) {
-    log_msg(LOG_INFO, "Triple click detected - entering network mode");
-    bridgeMode = BRIDGE_NET;
-    systemState.isTemporaryNetwork = true;  // Setup AP is temporary
-    systemState.clickCount = 0;
-    return;
-  }
+    if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS) {
+        log_msg(LOG_INFO, "Triple click detected - entering network mode");
+        bridgeMode = BRIDGE_NET;
+        systemState.isTemporaryNetwork = true;  // Setup AP is temporary
+        systemState.clickCount = 0;
+        return;
+    }
 
-  log_msg(LOG_INFO, "Entering standalone mode");
-  bridgeMode = BRIDGE_STANDALONE;
+    log_msg(LOG_INFO, "Entering standalone mode");
+    bridgeMode = BRIDGE_STANDALONE;
 }
 
 void initStandaloneMode() {
-  // Set LED mode for data flash explicitly
-  led_set_mode(LED_MODE_DATA_FLASH);
-  
-  // Ensure network is not active in standalone mode
-  systemState.networkActive = false;
+    // Set LED mode for data flash explicitly
+    led_set_mode(LED_MODE_DATA_FLASH);
 
-  // Set global USB mode based on configuration
-  usbMode = config.usb_mode;
+    // Ensure network is not active in standalone mode
+    systemState.networkActive = false;
 
-  // Initialize UART DMA - always use DMA implementation
-  if (!uartBridgeSerialDMA) {
-    uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
-    uartBridgeSerial = uartBridgeSerialDMA;
-    log_msg(LOG_INFO, "UART DMA interface created");
-  }
+    // Set global USB mode based on configuration
+    usbMode = config.usb_mode;
 
-  // Create USB interface based on configuration (only if Device 2 is USB)
-  if (config.device2.role == D2_USB) {
-    switch(config.usb_mode) {
-      case USB_MODE_HOST:
-        log_msg(LOG_INFO, "Creating USB Host interface");
-        usbInterface = createUsbHost(config.baudrate);
-        break;
-      case USB_MODE_DEVICE:
-      default:
-        log_msg(LOG_INFO, "Creating USB Device interface");
-        usbInterface = createUsbDevice(config.baudrate);
-        break;
+    // Initialize UART DMA - always use DMA implementation
+    if (!uartBridgeSerialDMA) {
+        uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
+        uartBridgeSerial = uartBridgeSerialDMA;
+        log_msg(LOG_INFO, "UART DMA interface created");
     }
 
-    if (usbInterface) {
-      usbInterface->init();
-      log_msg(LOG_INFO, "USB interface initialized");
+    // Create USB interface based on configuration (only if Device 2 is USB)
+    if (config.device2.role == D2_USB) {
+        switch(config.usb_mode) {
+            case USB_MODE_HOST:
+                log_msg(LOG_INFO, "Creating USB Host interface");
+                usbInterface = createUsbHost(config.baudrate);
+                break;
+            case USB_MODE_DEVICE:
+            default:
+                log_msg(LOG_INFO, "Creating USB Device interface");
+                usbInterface = createUsbDevice(config.baudrate);
+                break;
+        }
+
+        if (usbInterface) {
+            usbInterface->init();
+            log_msg(LOG_INFO, "USB interface initialized");
+        } else {
+            log_msg(LOG_ERROR, "Failed to create USB interface");
+        }
     } else {
-      log_msg(LOG_ERROR, "Failed to create USB interface");
+        log_msg(LOG_INFO, "Device 2 is not configured for USB, skipping USB initialization");
     }
-  } else {
-    log_msg(LOG_INFO, "Device 2 is not configured for USB, skipping USB initialization");
-  }
 
-  // Initialize UART bridge
-  initMainUART(uartBridgeSerial, &config, usbInterface);
+    // Initialize UART bridge
+    initMainUART(uartBridgeSerial, &config, usbInterface);
 
-  log_msg(LOG_INFO, "UART Bridge ready - transparent forwarding active");
+    log_msg(LOG_INFO, "UART Bridge ready - transparent forwarding active");
 }
 
 void initNetworkMode() {
-  // Initialize WiFi Manager
-  esp_err_t ret = wifiInit();
-  
-  if (ret != ESP_OK && config.device4.role != D4_NONE) {
-    // Critical error only if Device 4 is enabled
-    log_msg(LOG_ERROR, "Failed to init WiFi, entering safe mode");
-    systemState.wifiSafeMode = true;
-    led_set_mode(LED_MODE_SAFE_MODE);
-    return;
-  } else if (ret != ESP_OK) {
-    // Device 4 disabled - continue without WiFi
-    log_msg(LOG_WARNING, "WiFi init failed, but Device 4 disabled - continuing");
-  }
+    // Initialize WiFi Manager
+    esp_err_t ret = wifiInit();
 
-  // Start WiFi in appropriate mode
-  if (systemState.tempForceApMode) {
-    log_msg(LOG_INFO, "Starting temporary WiFi AP mode (forced by triple click)");
-    wifiStartAP(config.ssid, config.password);
-    led_set_mode(LED_MODE_WIFI_ON);
-    systemState.tempForceApMode = false;
-  } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
-    log_msg(LOG_INFO, "Starting WiFi Client mode");
-    wifiStartClient(config.wifi_client_ssid, config.wifi_client_password);
-  } else {
-    log_msg(LOG_INFO, "Starting WiFi AP mode");
-    wifiStartAP(config.ssid, config.password);
-    led_set_mode(LED_MODE_WIFI_ON);
-  }
-  
-  // Set network as active
-  systemState.networkActive = true;
-
-  // Use configured USB mode (from config file) - only if Device 2 is USB
-  usbMode = config.usb_mode;
-
-  // Initialize UART DMA - always use DMA implementation
-  if (!uartBridgeSerialDMA) {
-    uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
-    uartBridgeSerial = uartBridgeSerialDMA;
-    log_msg(LOG_INFO, "UART DMA interface created for network mode");
-  }
-
-  // Create USB interface even in network mode (for bridge functionality)
-  if (config.device2.role == D2_USB) {
-    switch(config.usb_mode) {
-      case USB_MODE_HOST:
-        log_msg(LOG_INFO, "Creating USB Host interface in network mode");
-        usbInterface = createUsbHost(config.baudrate);
-        break;
-      case USB_MODE_DEVICE:
-      default:
-        log_msg(LOG_INFO, "Creating USB Device interface in network mode");
-        usbInterface = createUsbDevice(config.baudrate);
-        break;
+    if (ret != ESP_OK && config.device4.role != D4_NONE) {
+        // Critical error only if Device 4 is enabled
+        log_msg(LOG_ERROR, "Failed to init WiFi, entering safe mode");
+        systemState.wifiSafeMode = true;
+        led_set_mode(LED_MODE_SAFE_MODE);
+        return;
+    } else if (ret != ESP_OK) {
+        // Device 4 disabled - continue without WiFi
+        log_msg(LOG_WARNING, "WiFi init failed, but Device 4 disabled - continuing");
     }
-    
-    if (usbInterface) {
-      usbInterface->init();
-      log_msg(LOG_INFO, "USB interface initialized in network mode");
+
+    // Start WiFi in appropriate mode
+    if (systemState.tempForceApMode) {
+        log_msg(LOG_INFO, "Starting temporary WiFi AP mode (forced by triple click)");
+        wifiStartAP(config.ssid, config.password);
+        led_set_mode(LED_MODE_WIFI_ON);
+        systemState.tempForceApMode = false;
+    } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+        log_msg(LOG_INFO, "Starting WiFi Client mode");
+        wifiStartClient(config.wifi_client_ssid, config.wifi_client_password);
     } else {
-      log_msg(LOG_ERROR, "Failed to create USB interface in network mode");
+        log_msg(LOG_INFO, "Starting WiFi AP mode");
+        wifiStartAP(config.ssid, config.password);
+        led_set_mode(LED_MODE_WIFI_ON);
     }
-  } else {
-    log_msg(LOG_INFO, "Device 2 is not configured for USB in network mode");
-  }
 
-  // Initialize UART bridge even in network mode (for statistics)
-  initMainUART(uartBridgeSerial, &config, usbInterface);
+    // Set network as active
+    systemState.networkActive = true;
 
-  // Initialize UDP transport for Device4
-  if (config.device4.role == D4_NETWORK_BRIDGE || 
-      config.device4.role == D4_LOG_NETWORK) {
-    
-    udpTransport = new AsyncUDP();
-    
-    if (udpTransport) {
-      // Create UDP RX buffer for Bridge mode
-      if (config.device4.role == D4_NETWORK_BRIDGE) {
-        udpRxBuffer = new CircularBuffer();
-        udpRxBuffer->init(4096);
-        
-        // Setup UDP listener
-        if (!udpTransport->listen(config.device4_config.port)) {
-          log_msg(LOG_ERROR, "Failed to listen on UDP port %d", config.device4_config.port);
-        } else {
-          log_msg(LOG_INFO, "UDP listening on port %d with 4KB buffer", config.device4_config.port);
-          
-          // Setup callback - only writes to buffer
-          udpTransport->onPacket([](AsyncUDPPacket packet) {
-            if (udpRxBuffer) {
-              size_t written = udpRxBuffer->write(packet.data(), packet.length());
-              if (written < packet.length()) {
-                log_msg(LOG_WARNING, "UDP RX buffer overflow: %zu/%zu bytes dropped",
-                       packet.length() - written, packet.length());
-              }
-              g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
-            }
-          });
+    // Use configured USB mode (from config file) - only if Device 2 is USB
+    usbMode = config.usb_mode;
+
+    // Initialize UART DMA - always use DMA implementation
+    if (!uartBridgeSerialDMA) {
+        uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
+        uartBridgeSerial = uartBridgeSerialDMA;
+        log_msg(LOG_INFO, "UART DMA interface created for network mode");
+    }
+
+    // Create USB interface even in network mode (for bridge functionality)
+    if (config.device2.role == D2_USB) {
+        switch(config.usb_mode) {
+            case USB_MODE_HOST:
+                log_msg(LOG_INFO, "Creating USB Host interface in network mode");
+                usbInterface = createUsbHost(config.baudrate);
+                break;
+            case USB_MODE_DEVICE:
+            default:
+                log_msg(LOG_INFO, "Creating USB Device interface in network mode");
+                usbInterface = createUsbDevice(config.baudrate);
+                break;
         }
-      } else {
-        // Logger mode - TX only
-        log_msg(LOG_INFO, "UDP transport created for Logger mode (TX only)");
-      }
-    } else {
-      log_msg(LOG_ERROR, "Failed to create UDP transport");
-    }
-  }
 
-  // Initialize web server
-  webserver_init(&config, &systemState);
+        if (usbInterface) {
+            usbInterface->init();
+            log_msg(LOG_INFO, "USB interface initialized in network mode");
+        } else {
+            log_msg(LOG_ERROR, "Failed to create USB interface in network mode");
+        }
+    } else {
+        log_msg(LOG_INFO, "Device 2 is not configured for USB in network mode");
+    }
+
+    // Initialize UART bridge even in network mode (for statistics)
+    initMainUART(uartBridgeSerial, &config, usbInterface);
+
+    // Initialize UDP transport for Device4
+    if (config.device4.role == D4_NETWORK_BRIDGE ||
+        config.device4.role == D4_LOG_NETWORK) {
+
+        udpTransport = new AsyncUDP();
+
+        if (udpTransport) {
+            // Create UDP RX buffer for Bridge mode
+            if (config.device4.role == D4_NETWORK_BRIDGE) {
+                udpRxBuffer = new CircularBuffer();
+                udpRxBuffer->init(4096);
+
+                // Setup UDP listener
+                if (!udpTransport->listen(config.device4_config.port)) {
+                    log_msg(LOG_ERROR, "Failed to listen on UDP port %d", config.device4_config.port);
+                } else {
+                    log_msg(LOG_INFO, "UDP listening on port %d with 4KB buffer", config.device4_config.port);
+
+                    // Setup callback - only writes to buffer
+                    udpTransport->onPacket([](AsyncUDPPacket packet) {
+                        if (udpRxBuffer) {
+                            size_t written = udpRxBuffer->write(packet.data(), packet.length());
+                            if (written < packet.length()) {
+                                log_msg(LOG_WARNING, "UDP RX buffer overflow: %zu/%zu bytes dropped",
+                                       packet.length() - written, packet.length());
+                            }
+                            g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    });
+                }
+            } else {
+                // Logger mode - TX only
+                log_msg(LOG_INFO, "UDP transport created for Logger mode (TX only)");
+            }
+        } else {
+            log_msg(LOG_ERROR, "Failed to create UDP transport");
+        }
+    }
+
+    // Initialize web server
+    webserver_init(&config, &systemState);
 }
 
 //================================================================
@@ -452,9 +452,9 @@ void initNetworkMode() {
 //================================================================
 
 void bootButtonISR() {
-  // Minimal ISR - just set flag and time
-  systemState.buttonPressed = true;
-  systemState.buttonPressTime = millis();
+    // Minimal ISR - just set flag and time
+    systemState.buttonPressed = true;
+    systemState.buttonPressTime = millis();
 }
 
 void handleButtonInput() {
@@ -583,65 +583,65 @@ void handleButtonInput() {
 //================================================================
 
 void createMutexes() {
-  // Create logging mutex
-  logMutex = xSemaphoreCreateMutex();
-  if (logMutex == NULL) {
-    // Cannot use log_msg here as logging system not initialized
-    return;
-  }
+    // Create logging mutex
+    logMutex = xSemaphoreCreateMutex();
+    if (logMutex == NULL) {
+        // Cannot use log_msg here as logging system not initialized
+        return;
+    }
 
-  // UDP log mutex is now created in logging_init()
+    // UDP log mutex is now created in logging_init()
 }
 
 void createTasks() {
-  // Create UART bridge task on core 0 (multi-core ESP32)
-  xTaskCreatePinnedToCore(
-    uartBridgeTask,        // Task function
-    "UART_Bridge_Task",    // Task name
-    16384,                 // Stack size (increased from 8192)
-    NULL,                  // Parameters
-    UART_TASK_PRIORITY,    // Priority
-    &uartBridgeTaskHandle, // Task handle
-    UART_TASK_CORE         // Core 0 (dedicated for UART bridge)
-  );
+    // Create UART bridge task on core 0 (multi-core ESP32)
+    xTaskCreatePinnedToCore(
+        uartBridgeTask,        // Task function
+        "UART_Bridge_Task",    // Task name
+        16384,                 // Stack size (increased from 8192)
+        NULL,                  // Parameters
+        UART_TASK_PRIORITY,    // Priority
+        &uartBridgeTaskHandle, // Task handle
+        UART_TASK_CORE         // Core 0 (dedicated for UART bridge)
+    );
 
-  log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
+    log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
 
-  // ADD: Check if we need sender task
-  bool needSenderTask = false;
+    // ADD: Check if we need sender task
+    bool needSenderTask = false;
 
-  // Check all possible sender configurations
-  if (config.device2.role == D2_USB ||            // USB sender
-      config.device2.role == D2_UART2 ||          // UART2 sender  
-      config.device2.role == D2_SBUS_IN ||        // SBUS input
-      config.device2.role == D2_SBUS_OUT ||       // SBUS output
-      config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
-      config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
-      config.device3.role == D3_SBUS_IN ||        // SBUS input
-      config.device3.role == D3_SBUS_OUT ||       // SBUS output
-      config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
-      config.device4.role == D4_LOG_NETWORK) {    // UDP logger
-      needSenderTask = true;
-  }
+    // Check all possible sender configurations
+    if (config.device2.role == D2_USB ||            // USB sender
+        config.device2.role == D2_UART2 ||          // UART2 sender
+        config.device2.role == D2_SBUS_IN ||        // SBUS input
+        config.device2.role == D2_SBUS_OUT ||       // SBUS output
+        config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
+        config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
+        config.device3.role == D3_SBUS_IN ||        // SBUS input
+        config.device3.role == D3_SBUS_OUT ||       // SBUS output
+        config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
+        config.device4.role == D4_LOG_NETWORK) {    // UDP logger
+        needSenderTask = true;
+    }
 
-  // Create sender task only if needed
-  if (needSenderTask) {
-      TaskHandle_t senderTaskHandle;
-      xTaskCreatePinnedToCore(
-          senderTask,                      // Function
-          "sender_task",                   // Name
-          4096,                            // Stack size
-          NULL,                            // Parameter
-          UART_TASK_PRIORITY - 2,          // Priority (lower than main UART task)
-          &senderTaskHandle,               // Handle
-          UART_TASK_CORE                   // Same core as UART task
-      );
-      
-      log_msg(LOG_INFO, "Sender task created on core %d (priority %d)", 
-              UART_TASK_CORE, UART_TASK_PRIORITY - 2);
-  } else {
-      log_msg(LOG_INFO, "No senders configured, sender task not created");
-  }
+    // Create sender task only if needed
+    if (needSenderTask) {
+        TaskHandle_t senderTaskHandle;
+        xTaskCreatePinnedToCore(
+            senderTask,                      // Function
+            "sender_task",                   // Name
+            4096,                            // Stack size
+            NULL,                            // Parameter
+            UART_TASK_PRIORITY - 2,          // Priority (lower than main UART task)
+            &senderTaskHandle,               // Handle
+            UART_TASK_CORE                   // Same core as UART task
+        );
+
+        log_msg(LOG_INFO, "Sender task created on core %d (priority %d)",
+                UART_TASK_CORE, UART_TASK_PRIORITY - 2);
+    } else {
+        log_msg(LOG_INFO, "No senders configured, sender task not created");
+    }
 }
 
 //================================================================
@@ -649,22 +649,22 @@ void createTasks() {
 //================================================================
 
 void on_wifi_connected() {
-  log_msg(LOG_INFO, "WiFi Manager: Client connected successfully");
-  
-  // Set LED mode for connected client
-  led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
-  
-  // Set network event group bit for Device 4 synchronization
-  if (networkEventGroup) {
-    xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
-  }
+    log_msg(LOG_INFO, "WiFi Manager: Client connected successfully");
+
+    // Set LED mode for connected client
+    led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+
+    // Set network event group bit for Device 4 synchronization
+    if (networkEventGroup) {
+        xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
+    }
 }
 
 void on_wifi_disconnected() {
-  log_msg(LOG_WARNING, "WiFi Manager: Client disconnected");
-  
-  // Clear network event group bit
-  if (networkEventGroup) {
-    xEventGroupClearBits(networkEventGroup, NETWORK_CONNECTED_BIT);
-  }
+    log_msg(LOG_WARNING, "WiFi Manager: Client disconnected");
+
+    // Clear network event group bit
+    if (networkEventGroup) {
+        xEventGroupClearBits(networkEventGroup, NETWORK_CONNECTED_BIT);
+    }
 }
