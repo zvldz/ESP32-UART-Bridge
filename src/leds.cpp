@@ -124,7 +124,7 @@ static void processDataActivityUnderMutex() {
 
     // Determine activity type
     ActivityType activity = ACTIVITY_NONE;
-    
+
     // Check Device 3 activity first
     if (device3TxActivity && device3RxActivity) {
         activity = ACTIVITY_DEVICE3_BOTH;
@@ -132,7 +132,7 @@ static void processDataActivityUnderMutex() {
         activity = ACTIVITY_DEVICE3_TX;
     } else if (device3RxActivity) {
         activity = ACTIVITY_DEVICE3_RX;
-    } 
+    }
     // Then check main channel activity
     else if (uartActivity && usbActivity) {
         activity = ACTIVITY_BOTH;
@@ -145,10 +145,10 @@ static void processDataActivityUnderMutex() {
     if (activity != ACTIVITY_NONE) {
         // Flash activity - LED handling under current mutex
         unsigned long now = millis();
-        
+
         // Color mixing logic for overlapping activities
         uint32_t pendingColor = 0;
-        
+
         if (ledOffTime > now && ledIsOn && activity != lastActivity) {
             // Different activity while LED is on - mix colors
             if ((lastActivity == ACTIVITY_UART_RX || lastActivity == ACTIVITY_USB_RX) &&
@@ -222,61 +222,61 @@ static void processDataActivityUnderMutex() {
 
 // Initialize LED
 void leds_init() {
- // Create mutex first
- ledMutex = xSemaphoreCreateMutex();
- if (ledMutex == NULL) {
-   log_msg(LOG_ERROR, "Failed to create LED mutex!");
-   return;
- }
+    // Create mutex first
+    ledMutex = xSemaphoreCreateMutex();
+    if (ledMutex == NULL) {
+        log_msg(LOG_ERROR, "Failed to create LED mutex!");
+        return;
+    }
 
- // FastLED initialization
- FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
- FastLED.setBrightness(LED_BRIGHTNESS);
- FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
+    // FastLED initialization
+    FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(LED_BRIGHTNESS);
+    FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
 
- // Rainbow startup effect
- log_msg(LOG_DEBUG, "Starting rainbow effect...");
- unsigned long startTime = millis();
+    // Rainbow startup effect
+    log_msg(LOG_DEBUG, "Starting rainbow effect...");
+    unsigned long startTime = millis();
 
- // Complete 3 full rainbow cycles in 1 second
- for(int cycle = 0; cycle < 3; cycle++) {
-   for(int i = 0; i < 360; i += 6) {  // 60 steps per cycle
-     if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-       // Use FastLED's HSV for smooth rainbow
-       leds[0] = CHSV(map(i, 0, 360, 0, 255), 255, 255);
-       FastLED.show();
-       xSemaphoreGive(ledMutex);
-     }
-     vTaskDelay(pdMS_TO_TICKS(5));  // ~5ms per step = ~300ms per cycle = ~1 second total
-   }
- }
+    // Complete 3 full rainbow cycles in 1 second
+    for(int cycle = 0; cycle < 3; cycle++) {
+        for(int i = 0; i < 360; i += 6) {  // 60 steps per cycle
+            if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                // Use FastLED's HSV for smooth rainbow
+                leds[0] = CHSV(map(i, 0, 360, 0, 255), 255, 255);
+                FastLED.show();
+                xSemaphoreGive(ledMutex);
+            }
+            vTaskDelay(pdMS_TO_TICKS(5));  // ~5ms per step = ~300ms per cycle = ~1 second total
+        }
+    }
 
- // Turn off LED after rainbow effect
- if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-   leds[0] = CRGB::Black;
-   FastLED.show();
-   xSemaphoreGive(ledMutex);
- }
+    // Turn off LED after rainbow effect
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        leds[0] = CRGB::Black;
+        FastLED.show();
+        xSemaphoreGive(ledMutex);
+    }
 
- unsigned long effectDuration = millis() - startTime;
- log_msg(LOG_INFO, "WS2812 RGB LED initialized on GPIO%d (rainbow effect took %lums)", LED_PIN1, effectDuration);
+    unsigned long effectDuration = millis() - startTime;
+    log_msg(LOG_INFO, "WS2812 RGB LED initialized on GPIO%d (rainbow effect took %lums)", LED_PIN1, effectDuration);
 }
 
 // Notify functions for UART task
 void led_notify_uart_rx() {
- uartRxCounter = uartRxCounter + 1;
+    uartRxCounter = uartRxCounter + 1;
 }
 
 void led_notify_usb_rx() {
- usbRxCounter = usbRxCounter + 1;
+    usbRxCounter = usbRxCounter + 1;
 }
 
 void led_notify_device3_tx() {
- device3TxCounter = device3TxCounter + 1;
+    device3TxCounter = device3TxCounter + 1;
 }
 
 void led_notify_device3_rx() {
- device3RxCounter = device3RxCounter + 1;
+    device3RxCounter = device3RxCounter + 1;
 }
 
 // Clear all blink states (call under mutex)

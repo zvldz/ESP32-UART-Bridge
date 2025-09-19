@@ -52,42 +52,44 @@ const char* getLogLevelName(LogLevel level) {
 
 // Initialize logging system
 void logging_init() {
-  if (!initialized) {
-    for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-      logBuffer[i] = "";
-      logBuffer[i].reserve(128);  // Pre-allocate memory
+    if (!initialized) {
+        for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
+            logBuffer[i] = "";
+            logBuffer[i].reserve(128);  // Pre-allocate memory
+        }
+        initialized = true;
     }
-    initialized = true;
-  }
-  logIndex = 0;
-  logCount = 0;
-  
-  // Create UDP log mutex
-  if (!udpLogMutex) {
-    udpLogMutex = xSemaphoreCreateMutex();
-  }
+    logIndex = 0;
+    logCount = 0;
 
-  // Initialize UDP log buffer to prevent garbage
-  memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
-  udpLogHead = 0;
-  udpLogTail = 0;
+    // Create UDP log mutex only if needed for network logging
+    if (!udpLogMutex &&
+        config.device4.role == D4_LOG_NETWORK &&
+        systemState.networkActive) {
+        udpLogMutex = xSemaphoreCreateMutex();
+    }
+
+    // Initialize UDP log buffer to prevent garbage
+    memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
+    udpLogHead = 0;
+    udpLogTail = 0;
 }
 
 // Initialize UART logging on Device 3
 void logging_init_uart() {
-  // Check if Device 3 is configured for UART logging
-  if (config.device3.role != D3_UART3_LOG) {
-    return;
-  }
-  
-  // Use existing device3Serial interface
-  logSerial = device3Serial;
-  
-  if (logSerial) {
-    log_msg(LOG_INFO, "UART logging using existing Device 3 interface (D3_UART3_LOG mode)");
-  } else {
-    log_msg(LOG_ERROR, "Device 3 UART interface not available for logging");
-  }
+    // Check if Device 3 is configured for UART logging
+    if (config.device3.role != D3_UART3_LOG) {
+        return;
+    }
+
+    // Use existing device3Serial interface
+    logSerial = device3Serial;
+
+    if (logSerial) {
+        log_msg(LOG_INFO, "UART logging using existing Device 3 interface (D3_UART3_LOG mode)");
+    } else {
+        log_msg(LOG_ERROR, "Device 3 UART interface not available for logging");
+    }
 }
 
 // Printf-style logging - thread-safe and heap-safe
@@ -109,47 +111,47 @@ void log_msg(LogLevel level, const char* fmt, ...) {
     // Check if this message should be logged to web interface
     bool shouldLogToWeb = (config.log_level_web != LOG_OFF && level <= config.log_level_web);
     
-// Web interface logging (with mutex)
-if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
-    unsigned long uptimeMs = millis();
-    unsigned long seconds = uptimeMs / 1000;
-    unsigned long ms = uptimeMs % 1000;
-    
-    // Format directly into a temporary buffer
-    char tempBuf[300];
-    int len = snprintf(tempBuf, sizeof(tempBuf), "[%lu.%lus][%s] %s",
-                       seconds, ms/100, getLogLevelName(level), msgBuf);
-    
-    // Ensure null termination and check length
-    if (len > 0 && len < sizeof(tempBuf)) {
-        // Only now assign to String in one operation
-        logBuffer[logIndex] = tempBuf;
-    } else {
-        // Fallback for too long messages
-        logBuffer[logIndex] = "[LOG TOO LONG]";
+    // Web interface logging (with mutex)
+    if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
+        unsigned long uptimeMs = millis();
+        unsigned long seconds = uptimeMs / 1000;
+        unsigned long ms = uptimeMs % 1000;
+
+        // Format directly into a temporary buffer
+        char tempBuf[300];
+        int len = snprintf(tempBuf, sizeof(tempBuf), "[%lu.%lus][%s] %s",
+                           seconds, ms/100, getLogLevelName(level), msgBuf);
+
+        // Ensure null termination and check length
+        if (len > 0 && len < sizeof(tempBuf)) {
+            // Only now assign to String in one operation
+            logBuffer[logIndex] = tempBuf;
+        } else {
+            // Fallback for too long messages
+            logBuffer[logIndex] = "[LOG TOO LONG]";
+        }
+
+        logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
+        if (logCount < LOG_BUFFER_SIZE) {
+            logCount++;
+        }
+        xSemaphoreGive(logMutex);
     }
-    
-    logIndex = (logIndex + 1) % LOG_BUFFER_SIZE;
-    if (logCount < LOG_BUFFER_SIZE) {
-        logCount++;
-    }
-    xSemaphoreGive(logMutex);
-}
     
     // UART logging (non-blocking)
-    if (logSerial && config.device3.role == D3_UART3_LOG && 
+    if (logSerial && config.device3.role == D3_UART3_LOG &&
         config.log_level_uart != LOG_OFF && level <= config.log_level_uart) {
-        
+
         // Format for UART with timestamp
         char uartBuf[320];
         unsigned long uptimeMs = millis();
         unsigned long seconds = uptimeMs / 1000;
         unsigned long ms = uptimeMs % 1000;
-        
-        int uartLen = snprintf(uartBuf, sizeof(uartBuf), 
-                              "[%lu.%lus][%s] %s\r\n", 
+
+        int uartLen = snprintf(uartBuf, sizeof(uartBuf),
+                              "[%lu.%lus][%s] %s\r\n",
                               seconds, ms/100, getLogLevelName(level), msgBuf);
-        
+
         if (uartLen > 0 && uartLen < sizeof(uartBuf)) {
             // Non-blocking write
             if (logSerial->availableForWrite() > uartLen) {
@@ -161,24 +163,24 @@ if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
     // Network logging
     if (systemState.networkActive &&
         config.device4.role == D4_LOG_NETWORK &&
-        config.log_level_network != LOG_OFF && 
+        config.log_level_network != LOG_OFF &&
         level <= config.log_level_network &&
         udpLogMutex) {
-        
+
         // Format for network
         char netBuf[320];
         unsigned long uptimeMs = millis();
         unsigned long seconds = uptimeMs / 1000;
         unsigned long ms = uptimeMs % 1000;
-        
+
         int netLen = snprintf(netBuf, sizeof(netBuf),
                              "[%lu.%lus][%s] %s\n",
                              seconds, ms/100, getLogLevelName(level), msgBuf);
-        
+
         // Add to ring buffer (non-blocking)
-        if (netLen > 0 && netLen < sizeof(netBuf) && 
+        if (netLen > 0 && netLen < sizeof(netBuf) &&
             xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
-            
+
             // Copy to ring buffer
             for (int i = 0; i < netLen; i++) {
                 int nextHead = (udpLogHead + 1) % UDP_LOG_BUFFER_SIZE;
@@ -189,7 +191,7 @@ if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
                     break;  // Buffer full
                 }
             }
-            
+
             xSemaphoreGive(udpLogMutex);
         }
     }
@@ -197,37 +199,37 @@ if (shouldLogToWeb && xSemaphoreTake(logMutex, 0) == pdTRUE) {
 
 // Return logs for web interface
 void logging_get_recent_logs(String* buffer, int maxCount, int* actualCount) {
-  if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
-    *actualCount = 0;
-    int maxEntries = min(maxCount, logCount);
+    if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
+        *actualCount = 0;
+        int maxEntries = min(maxCount, logCount);
 
-    int startIndex;
-    if (logCount < LOG_BUFFER_SIZE) {
-      startIndex = max(0, logCount - maxEntries);
-    } else {
-      startIndex = (logIndex - maxEntries + LOG_BUFFER_SIZE) % LOG_BUFFER_SIZE;
+        int startIndex;
+        if (logCount < LOG_BUFFER_SIZE) {
+            startIndex = max(0, logCount - maxEntries);
+        } else {
+            startIndex = (logIndex - maxEntries + LOG_BUFFER_SIZE) % LOG_BUFFER_SIZE;
+        }
+
+        for (int i = 0; i < maxEntries; i++) {
+            int index = (startIndex + i) % LOG_BUFFER_SIZE;
+            if (logBuffer[index].length() > 0) {
+                buffer[*actualCount] = logBuffer[index];
+                (*actualCount)++;
+            }
+        }
+
+        xSemaphoreGive(logMutex);
     }
-
-    for (int i = 0; i < maxEntries; i++) {
-      int index = (startIndex + i) % LOG_BUFFER_SIZE;
-      if (logBuffer[index].length() > 0) {
-        buffer[*actualCount] = logBuffer[index];
-        (*actualCount)++;
-      }
-    }
-
-    xSemaphoreGive(logMutex);
-  }
 }
 
 // Clear all logs
 void logging_clear() {
-  if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
-    logIndex = 0;
-    logCount = 0;
-    for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-      logBuffer[i].clear();
+    if (xSemaphoreTake(logMutex, 100) == pdTRUE) {
+        logIndex = 0;
+        logCount = 0;
+        for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
+            logBuffer[i].clear();
+        }
+        xSemaphoreGive(logMutex);
     }
-    xSemaphoreGive(logMutex);
-  }
 }

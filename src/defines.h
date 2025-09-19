@@ -38,13 +38,21 @@ Board differences:
 #define BOOT_BUTTON_PIN     0
 #define UART_RX_PIN         4
 #define UART_TX_PIN         5
+// Board type verification at compile time
+#if defined(BOARD_ESP32_S3_SUPER_MINI) && defined(BOARD_ESP32_S3_ZERO)
+  #error "Both BOARD_ESP32_S3_SUPER_MINI and BOARD_ESP32_S3_ZERO are defined - this should not happen"
+#endif
+
 // LED pin varies by board
 #if defined(BOARD_ESP32_S3_SUPER_MINI)
   #define LED_PIN1          48  // WS2815 RGB LED on GPIO48 for Super Mini
+  #define BOARD_TYPE_STRING "ESP32-S3 Super Mini"
 #elif defined(BOARD_ESP32_S3_ZERO)
   #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero
+  #define BOARD_TYPE_STRING "ESP32-S3-Zero"
 #else
   #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero (default fallback)
+  #define BOARD_TYPE_STRING "ESP32-S3-Zero (default)"
   #warning "Board type not specified, defaulting to ESP32-S3-Zero configuration"
 #endif
 #define RTS_PIN             6   // Flow control
