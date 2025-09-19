@@ -39,6 +39,8 @@ dependencies.lock
 sdkconfig.defaults
 sdkconfig.production
 sdkconfig.debug
+sdkconfig.supermini*
+sdkconfig.zero*
 managed_components
 src/CMakeLists.txt
 src/webui_gen/

@@ -45,158 +45,158 @@ static void sendGzippedResponse(AsyncWebServerRequest* request, const char* cont
 
 // Initialize web server in NETWORK mode
 void webserver_init(Config* config, SystemState* state) {
-  log_msg(LOG_INFO, "Starting Network Mode");
+    log_msg(LOG_INFO, "Starting Network Mode");
 
-  state->networkActive = true;
-  state->networkStartTime = millis();
-  state->isTemporaryNetwork = true;  // Setup AP is temporary
+    state->networkActive = true;
+    state->networkStartTime = millis();
+    state->isTemporaryNetwork = true;  // Setup AP is temporary
 
-  // Create async web server
-  server = new AsyncWebServer(HTTP_PORT);
+    // Create async web server
+    server = new AsyncWebServer(HTTP_PORT);
 
-  // Setup main page with gzip compression
-  server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_INDEX_GZ, HTML_INDEX_GZ_LEN);
-    response->addHeader("Content-Encoding", "gzip");
-    request->send(response);
-  });
+    // Setup main page with gzip compression
+    server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_INDEX_GZ, HTML_INDEX_GZ_LEN);
+        response->addHeader("Content-Encoding", "gzip");
+        request->send(response);
+    });
 
-  // Setup API routes
-  server->on("/save", HTTP_POST, handleSave);
-  server->on("/status", HTTP_GET, handleStatus);
-  server->on("/logs", HTTP_GET, handleLogs);
-  server->on("/reboot", HTTP_GET, handleReboot);
-  server->on("/reset_stats", HTTP_GET, handleResetStats);
-  server->on("/help", HTTP_GET, handleHelp);
-  server->on("/success", HTTP_GET, handleSuccess);
-  server->on("/crashlog_json", HTTP_GET, handleCrashLogJson);
-  server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
-  server->on("/config/export", HTTP_GET, handleExportConfig);
-  server->on("/config/import", HTTP_POST, 
-    [](AsyncWebServerRequest *request) {
-      // Handle upload completion
-      handleImportConfig(request);
-    },
-    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
-      // Handle file upload data
-      static String uploadedData = "";
-      
-      if (index == 0) {
-        uploadedData = "";  // Reset for new upload
-        uploadedData.reserve(UPLOAD_BUFFER_RESERVE);  // Reserve space to avoid frequent reallocations
-      }
-      
-      // Only append printable characters and whitespace, skip null bytes
-      for (size_t i = 0; i < len; i++) {
-        char c = (char)data[i];
-        if (c >= ASCII_PRINTABLE_THRESHOLD || c == '\n' || c == '\r' || c == '\t') {
-          uploadedData += c;
+    // Setup API routes
+    server->on("/save", HTTP_POST, handleSave);
+    server->on("/status", HTTP_GET, handleStatus);
+    server->on("/logs", HTTP_GET, handleLogs);
+    server->on("/reboot", HTTP_GET, handleReboot);
+    server->on("/reset_stats", HTTP_GET, handleResetStats);
+    server->on("/help", HTTP_GET, handleHelp);
+    server->on("/success", HTTP_GET, handleSuccess);
+    server->on("/crashlog_json", HTTP_GET, handleCrashLogJson);
+    server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
+    server->on("/config/export", HTTP_GET, handleExportConfig);
+    server->on("/config/import", HTTP_POST,
+        [](AsyncWebServerRequest *request) {
+            // Handle upload completion
+            handleImportConfig(request);
+        },
+        [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+            // Handle file upload data
+            static String uploadedData = "";
+
+            if (index == 0) {
+                uploadedData = "";  // Reset for new upload
+                uploadedData.reserve(UPLOAD_BUFFER_RESERVE);  // Reserve space to avoid frequent reallocations
+            }
+
+            // Only append printable characters and whitespace, skip null bytes
+            for (size_t i = 0; i < len; i++) {
+                char c = (char)data[i];
+                if (c >= ASCII_PRINTABLE_THRESHOLD || c == '\n' || c == '\r' || c == '\t') {
+                    uploadedData += c;
+                }
+            }
+
+            if (final) {
+                // Store complete data for processing
+                request->_tempObject = new String(uploadedData);
+            }
         }
-      }
-      
-      if (final) {
-        // Store complete data for processing
-        request->_tempObject = new String(uploadedData);
-      }
-    }
-  );
-  server->on("/client-ip", HTTP_GET, handleClientIP);
+    );
+    server->on("/client-ip", HTTP_GET, handleClientIP);
   
-  // Serve static files with gzip compression
-  server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
-  });
-  server->on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
-  });
-  server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
-  });
-  server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
-  });
-  server->on("/device-config.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
-  });
-  server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
-  });
-  server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
-  });
+    // Serve static files with gzip compression
+    server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
+    });
+    server->on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
+    });
+    server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
+    });
+    server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
+    });
+    server->on("/device-config.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
+    });
+    server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
+    });
+    server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
+    });
   
-  // Setup OTA update with async handlers
-  server->on("/update", HTTP_POST, 
-    [](AsyncWebServerRequest *request) {
-      handleUpdateEnd(request);
-    },
-    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
-      handleOTA(request, filename, index, data, len, final);
-    }
-  );
+    // Setup OTA update with async handlers
+    server->on("/update", HTTP_POST,
+        [](AsyncWebServerRequest *request) {
+            handleUpdateEnd(request);
+        },
+        [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+            handleOTA(request, filename, index, data, len, final);
+        }
+    );
 
-  // Setup not found handler for captive portal
-  server->onNotFound(handleNotFound);
+    // Setup not found handler for captive portal
+    server->onNotFound(handleNotFound);
 
-  // Start the server
-  server->begin();
-  log_msg(LOG_INFO, "Async web server started on port 80");
-  webServerInitialized = true;
+    // Start the server
+    server->begin();
+    log_msg(LOG_INFO, "Async web server started on port 80");
+    webServerInitialized = true;
 }
 
 // Cleanup resources
 void webserver_cleanup() {
-  if (server != nullptr) {
-    server->end();
-    delete server;
-    server = nullptr;
-  }
-  // DNS server is now managed through wifi_manager
+    if (server != nullptr) {
+        server->end();
+        delete server;
+        server = nullptr;
+    }
+    // DNS server is now managed through wifi_manager
 }
 
 // Check WiFi timeout
 bool checkWiFiTimeout() {
-  if (systemState.networkActive && 
-      systemState.isTemporaryNetwork &&
-      (millis() - systemState.networkStartTime > WIFI_TIMEOUT)) {
-    return true;
-  }
-  return false;
+    if (systemState.networkActive &&
+        systemState.isTemporaryNetwork &&
+        (millis() - systemState.networkStartTime > WIFI_TIMEOUT)) {
+        return true;
+    }
+    return false;
 }
 
-// Handle help page with gzip compression  
+// Handle help page with gzip compression
 void handleHelp(AsyncWebServerRequest *request) {
-  AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_HELP_GZ, HTML_HELP_GZ_LEN);
-  response->addHeader("Content-Encoding", "gzip");
-  request->send(response);
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_HELP_GZ, HTML_HELP_GZ_LEN);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
 }
 
 // Handle success page for captive portal
 void handleSuccess(AsyncWebServerRequest *request) {
-  const char successPage[] = R"(
+    const char successPage[] = R"(
 <!DOCTYPE html><html><head><title>Connected</title></head>
 <body><h1>Successfully Connected!</h1>
 <p>You can now configure your UART Bridge.</p>
 <script>setTimeout(function(){window.location='/';}, 2000);</script>
 </body></html>
 )";
-  request->send(200, "text/html", successPage);
+    request->send(200, "text/html", successPage);
 }
 
 // Handle not found - redirect to main page (Captive Portal)
 void handleNotFound(AsyncWebServerRequest *request) {
-  request->redirect("/");
+    request->redirect("/");
 }
 
 // Handle reboot request
 void handleReboot(AsyncWebServerRequest *request) {
-  log_msg(LOG_INFO, "Device reboot requested via web interface");
-  request->send(200, "text/html", "<h1>Rebooting...</h1>");
-  vTaskDelay(pdMS_TO_TICKS(1000));
-  ESP.restart();
+    log_msg(LOG_INFO, "Device reboot requested via web interface");
+    request->send(200, "text/html", "<h1>Rebooting...</h1>");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    ESP.restart();
 }
 
 // Make server available to other modules
 AsyncWebServer* getWebServer() {
-  return server;
+    return server;
 }
