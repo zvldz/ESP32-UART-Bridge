@@ -55,7 +55,20 @@ String getConfigJson() {
     doc["arduinoVersion"] = ESP_ARDUINO_VERSION_STR;  // NEW - Arduino Core version
     doc["idfVersion"] = esp_get_idf_version();        // NEW - ESP-IDF version
     doc["freeRam"] = ESP.getFreeHeap();
-    
+
+    // Board identification
+#if defined(BOARD_ESP32_S3_SUPER_MINI)
+    doc["boardType"] = "s3supermini";
+    doc["usbHostSupported"] = false;
+#elif defined(BOARD_ESP32_S3_ZERO)
+    doc["boardType"] = "s3zero";
+    doc["usbHostSupported"] = true;
+#else
+    // Default fallback to S3-Zero if no board type specified
+    doc["boardType"] = "s3zero";
+    doc["usbHostSupported"] = true;
+#endif
+
     // Calculate uptime
     doc["uptime"] = (millis() - g_deviceStats.systemStartTime.load(std::memory_order_relaxed)) / MS_TO_SECONDS;
     
@@ -263,14 +276,28 @@ void handleSave(AsyncWebServerRequest *request) {
     const AsyncWebParameter* p = request->getParam("usbmode", true);
     String mode = p->value();
     UsbMode newMode = USB_MODE_DEVICE;
+
+    #if defined(BOARD_ESP32_S3_SUPER_MINI)
+    // Block USB Host mode on Super Mini
+    if (mode == "host") {
+      log_msg(LOG_WARNING, "USB Host mode not supported on Super Mini, using Device mode");
+      newMode = USB_MODE_DEVICE;
+    }
+    #elif defined(BOARD_ESP32_S3_ZERO)
     if (mode == "host") {
       newMode = USB_MODE_HOST;
     }
-    
+    #else
+    // Default S3-Zero behavior - USB Host supported
+    if (mode == "host") {
+      newMode = USB_MODE_HOST;
+    }
+    #endif
+
     if (newMode != config.usb_mode) {
       config.usb_mode = newMode;
       configChanged = true;
-      log_msg(LOG_INFO, "USB mode changed to %s", mode.c_str());
+      log_msg(LOG_INFO, "USB mode changed to %s", newMode == USB_MODE_HOST ? "host" : "device");
     }
   }
 

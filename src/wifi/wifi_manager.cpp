@@ -4,6 +4,7 @@
 #include "defines.h"
 #include "leds.h"
 #include "diagnostics.h"
+#include "scheduler_tasks.h"
 
 // ESP-IDF headers
 #include "esp_wifi.h"
@@ -182,6 +183,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                             log_msg(LOG_WARNING, "Max authentication failures reached - wrong password");
                             systemState.wifiClientState = CLIENT_WRONG_PASSWORD;
                             led_set_mode(LED_MODE_WIFI_CLIENT_ERROR);
+
+                            // Enable LED task for error animation
+                            tLedMonitor.enable();
                             targetNetworkFound = false;
                         }
                         else if (targetNetworkFound && systemState.wifiRetryCount < WIFI_CLIENT_MAX_RETRIES) {
@@ -200,6 +204,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         else {
                             // Network not found or too many retries - need to scan
                             systemState.wifiClientState = CLIENT_SCANNING;
+
+                            // Enable LED task when going back to scanning
+                            tLedMonitor.enable();
                             lastScanTime = 0;
                             scanInProgress = false;
                         }
@@ -256,6 +263,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         targetNetworkFound = false;
                         systemState.wifiClientState = CLIENT_NO_SSID;
                         led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
+
+                        // Enable LED task for searching animation
+                        tLedMonitor.enable();
                         log_msg(LOG_DEBUG, "Target network '%s' not found", targetSSID.c_str());
                     }
                 }
@@ -286,6 +296,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     // Set network connected bit
                     xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
                     led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+
+                    // Disable LED task - stable connection, no animation needed
+                    tLedMonitor.disable();
                 }
                 break;
         }
@@ -404,7 +417,10 @@ esp_err_t wifiStartClient(const String& ssid, const String& password) {
     // Start with a scan
     systemState.wifiClientState = CLIENT_SCANNING;
     led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
-    
+
+    // Enable LED task for searching animation
+    tLedMonitor.enable();
+
     esp_err_t scan_ret = esp_wifi_scan_start(NULL, false);
     if (scan_ret == ESP_OK) {
         scanInProgress = true;
@@ -448,6 +464,9 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     }
     
     led_set_mode(LED_MODE_WIFI_ON);
+
+    // Disable LED task - AP mode is stable
+    tLedMonitor.disable();
     
     return ESP_OK;
 }
@@ -569,6 +588,7 @@ int wifiGetRSSI() {
     
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        log_msg(LOG_DEBUG, "WiFi RSSI: %s", ap.rssi);
         return ap.rssi;
     }
     return 0;

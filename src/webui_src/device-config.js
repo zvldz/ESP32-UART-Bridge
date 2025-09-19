@@ -51,7 +51,7 @@ const DeviceConfig = {
                 </tr>
                 <tr>
                     <td><strong>Device 3</strong></td>
-                    <td>GPIO 11/12</td>
+                    <td id="device3_pins">GPIO 11/12</td>
                     <td>
                         <select name="device3_role" id="device3_role" style="width: 100%;">
                             <option value="0">Disabled</option>
@@ -65,7 +65,7 @@ const DeviceConfig = {
                 </tr>
                 <tr>
                     <td><strong>Device 4</strong></td>
-                    <td>Network</td>
+                    <td id="device4_pins">Network</td>
                     <td>
                         <select name="device4_role" id="device4_role" style="width: 100%;">
                             <option value="0">Disabled</option>
@@ -174,6 +174,12 @@ const DeviceConfig = {
         
         // Update device displays
         this.updateDevice2Pins();
+        try {
+            this.updateDevice3Pins();
+            this.updateDevice4Pins();
+        } catch(e) {
+            console.log('Error updating device pins:', e);
+        }
         this.updateDevice4Config();
         this.updateNetworkLogLevel();
     },
@@ -190,30 +196,76 @@ const DeviceConfig = {
         const device3Role = document.getElementById('device3_role');
         if (device3Role) {
             device3Role.addEventListener('change', () => {
+                try {
+                    this.updateDevice3Pins();
+                } catch(e) {
+                    console.log('Error in device3 pins update:', e);
+                }
                 this.updateProtocolFieldState();  // Update protocol field when device3 role changes
             });
         }
 
         const device4Role = document.getElementById('device4_role');
         if (device4Role) {
-            device4Role.addEventListener('change', () => this.updateDevice4Config(true));
+            device4Role.addEventListener('change', () => {
+                try {
+                    this.updateDevice4Pins();
+                } catch(e) {
+                    console.log('Error in device4 pins update:', e);
+                }
+                this.updateDevice4Config(true);
+            });
         }
     },
     
     updateDevice2Pins() {
         const device2Role = document.getElementById('device2_role');
         const pinsCell = document.getElementById('device2_pins');
-        
+
         if (!device2Role || !pinsCell) return;
-        
+
         const role = device2Role.value;
-        
+
         if (role === '1') { // UART2
             pinsCell.textContent = 'GPIO 8/9';
         } else if (role === '2') { // USB
             pinsCell.textContent = 'USB';
         } else if (role === '3' || role === '4') { // SBUS IN/OUT
             pinsCell.textContent = 'GPIO 8/9 (INV)';
+        } else {
+            pinsCell.textContent = 'N/A';
+        }
+    },
+
+    updateDevice3Pins() {
+        const device3Role = document.getElementById('device3_role');
+        const pinsCell = document.getElementById('device3_pins');
+
+        if (!device3Role || !pinsCell) return;
+
+        const role = device3Role.value;
+
+        if (role === '1' || role === '2') { // UART3 Mirror/Bridge
+            pinsCell.textContent = 'GPIO 11/12';
+        } else if (role === '3') { // UART3 Logger
+            pinsCell.textContent = 'GPIO 12 (TX only)';
+        } else if (role === '4' || role === '5') { // SBUS IN/OUT
+            pinsCell.textContent = 'GPIO 11/12 (INV)';
+        } else {
+            pinsCell.textContent = 'N/A';
+        }
+    },
+
+    updateDevice4Pins() {
+        const device4Role = document.getElementById('device4_role');
+        const pinsCell = document.getElementById('device4_pins');
+
+        if (!device4Role || !pinsCell) return;
+
+        const role = device4Role.value;
+
+        if (role === '1' || role === '2') { // Network Bridge/Logger
+            pinsCell.textContent = 'Network';
         } else {
             pinsCell.textContent = 'N/A';
         }
