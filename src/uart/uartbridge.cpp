@@ -66,113 +66,112 @@ void senderTask(void* parameter) {
 
 // UART Bridge Task - runs with high priority on Core 0
 void uartBridgeTask(void* parameter) {
-  // Wait for system initialization
-  vTaskDelay(pdMS_TO_TICKS(1000));
+    // Wait for system initialization
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
-  log_msg(LOG_INFO, "UART task started on core %d", xPortGetCoreID());
+    log_msg(LOG_INFO, "UART task started on core %d", xPortGetCoreID());
 
-  // Dynamic buffer allocation based on baudrate
-  const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(config.baudrate);
+    // Dynamic buffer allocation based on baudrate
+    const size_t adaptiveBufferSize = calculateAdaptiveBufferSize(config.baudrate);
 
-  log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms", 
-          adaptiveBufferSize, config.baudrate);
+    log_msg(LOG_INFO, "Adaptive buffering: %zu bytes (for %u baud). Thresholds: 200μs/1ms/5ms/15ms",
+            adaptiveBufferSize, config.baudrate);
 
+    // Adaptive buffering variables
+    unsigned long lastByteTime = 0;
+    unsigned long bufferStartTime = 0;
 
-  // Adaptive buffering variables
-  unsigned long lastByteTime = 0;
-  unsigned long bufferStartTime = 0;
+    // Timing variables
+    unsigned long lastWifiYield = 0;
 
-  // Timing variables
-  unsigned long lastWifiYield = 0;
+    // Diagnostic counters
+    unsigned long droppedBytes = 0;
+    unsigned long totalDroppedBytes = 0;
+    unsigned long lastDropLog = 0;
+    unsigned long dropEvents = 0;
+    int maxDropSize = 0;
+    int timeoutDropSizes[10] = {0};
+    int timeoutDropIndex = 0;
 
-  // Diagnostic counters
-  unsigned long droppedBytes = 0;
-  unsigned long totalDroppedBytes = 0;
-  unsigned long lastDropLog = 0;
-  unsigned long dropEvents = 0;
-  int maxDropSize = 0;
-  int timeoutDropSizes[10] = {0};
-  int timeoutDropIndex = 0;
+    // Cache device roles at start to avoid repeated checks
+    bool device3Active = (config.device3.role == D3_UART3_MIRROR || config.device3.role == D3_UART3_BRIDGE);
+    bool device2IsUSB = (config.device2.role == D2_USB && g_usbInterface);
+    bool device2IsUART2 = ((config.device2.role == D2_UART2 ||
+                            config.device2.role == D2_SBUS_IN ||
+                            config.device2.role == D2_SBUS_OUT) && device2Serial);
+    bool device3IsBridge = (config.device3.role == D3_UART3_BRIDGE);
 
-  // Cache device roles at start to avoid repeated checks
-  bool device3Active = (config.device3.role == D3_UART3_MIRROR || config.device3.role == D3_UART3_BRIDGE);
-  bool device2IsUSB = (config.device2.role == D2_USB && g_usbInterface);
-  bool device2IsUART2 = ((config.device2.role == D2_UART2 || 
-                        config.device2.role == D2_SBUS_IN || 
-                        config.device2.role == D2_SBUS_OUT) && device2Serial);
-  bool device3IsBridge = (config.device3.role == D3_UART3_BRIDGE);
+    // Initialize BridgeContext
+    BridgeContext ctx;
+    initBridgeContext(&ctx,
+        // Adaptive buffer
+        adaptiveBufferSize,
+        &lastByteTime, &bufferStartTime,
+        // Device flags
+        device2IsUSB, device2IsUART2, device3Active, device3IsBridge,
+        // Diagnostics
+        &droppedBytes, &totalDroppedBytes,
+        &dropEvents, &maxDropSize,
+        timeoutDropSizes, &timeoutDropIndex,
+        // Interfaces
+        uartBridgeSerial, g_usbInterface,
+        device2Serial, device3Serial,
+        // Timing
+        &lastWifiYield, &lastDropLog,
+        // System
+        &bridgeMode, &config
+    );
 
-  // Initialize BridgeContext
-  BridgeContext ctx;
-  initBridgeContext(&ctx,
-    // Adaptive buffer
-    adaptiveBufferSize,
-    &lastByteTime, &bufferStartTime,
-    // Device flags
-    device2IsUSB, device2IsUART2, device3Active, device3IsBridge,
-    // Diagnostics
-    &droppedBytes, &totalDroppedBytes,
-    &dropEvents, &maxDropSize,
-    timeoutDropSizes, &timeoutDropIndex,
-    // Interfaces
-    uartBridgeSerial, g_usbInterface,
-    device2Serial, device3Serial,
-    // Timing
-    &lastWifiYield, &lastDropLog,
-    // System
-    &bridgeMode, &config
-  );
+    // Set bridge context for diagnostics
+    setBridgeContext(&ctx);
 
-  // Set bridge context for diagnostics
-  setBridgeContext(&ctx);
-  
-  // Add UDP RX buffer to context
-  ctx.buffers.udpRxBuffer = udpRxBuffer;
-  
-  // Create protocol statistics BEFORE pipeline initialization
-  ctx.protocol.stats = new ProtocolStats();
-  log_msg(LOG_INFO, "Protocol statistics created");
+    // Add UDP RX buffer to context
+    ctx.buffers.udpRxBuffer = udpRxBuffer;
 
-  // Initialize protocol buffers based on configuration
-  initProtocolBuffers(&ctx, &config);
-  
-  // Initialize adaptive buffer timing
-  initAdaptiveBuffer(&ctx, adaptiveBufferSize);
+    // Create protocol statistics BEFORE pipeline initialization
+    ctx.protocol.stats = new ProtocolStats();
+    log_msg(LOG_INFO, "Protocol statistics created");
 
-  // Initialize protocol pipeline
-  ctx.protocolPipeline = new ProtocolPipeline(&ctx);
-  ctx.protocolPipeline->init(&config);
+    // Initialize protocol buffers based on configuration
+    initProtocolBuffers(&ctx, &config);
 
-  // ADD: Save pipeline pointer for sender task
-  g_protocolPipeline = ctx.protocolPipeline;
-  
-  log_msg(LOG_INFO, "UART Bridge Task started");
-  log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d", 
-          device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
+    // Initialize adaptive buffer timing
+    initAdaptiveBuffer(&ctx, adaptiveBufferSize);
 
-  // Main loop performance diagnostics (KEEP - important metric)
-  static uint32_t loopCounter = 0;
-  static uint32_t lastReport = 0;
+    // Initialize protocol pipeline
+    ctx.protocolPipeline = new ProtocolPipeline(&ctx);
+    ctx.protocolPipeline->init(&config);
 
-  while (1) {
-    loopCounter++;
-    
-    // Report every second
-    if (millis() - lastReport > 1000) {
-        log_msg(LOG_INFO, "Main loop: %u iterations/sec", loopCounter);
-        loopCounter = 0;
-        lastReport = millis();
-    }
+    // ADD: Save pipeline pointer for sender task
+    g_protocolPipeline = ctx.protocolPipeline;
 
-    // Poll Device 2 UART if configured
-    if (device2IsUART2 && device2Serial) {
-      static_cast<UartDMA*>(device2Serial)->pollEvents();
-    }
+    log_msg(LOG_INFO, "UART Bridge Task started");
+    log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d",
+            device2IsUSB, device2IsUART2, device3Active, device3IsBridge);
 
-    // Yield CPU time to WiFi stack periodically in network mode
-    if (shouldYieldToWiFi(&ctx, bridgeMode)) {
-      vTaskDelay(pdMS_TO_TICKS(5));
-    }
+    // Main loop performance diagnostics (KEEP - important metric)
+    static uint32_t loopCounter = 0;
+    static uint32_t lastReport = 0;
+
+    while (1) {
+        loopCounter++;
+
+        // Report every second
+        if (millis() - lastReport > 1000) {
+            log_msg(LOG_INFO, "Main loop: %u iterations/sec", loopCounter);
+            loopCounter = 0;
+            lastReport = millis();
+        }
+
+        // Poll Device 2 UART if configured
+        if (device2IsUART2 && device2Serial) {
+            static_cast<UartDMA*>(device2Serial)->pollEvents();
+        }
+
+        // Yield CPU time to WiFi stack periodically in network mode
+        if (shouldYieldToWiFi(&ctx, bridgeMode)) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
 
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
@@ -189,46 +188,46 @@ void uartBridgeTask(void* parameter) {
     uint32_t t1 = micros();
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
-    // Process Device 2 input (USB or UART2)  
-    if (device2IsUSB) {
-        processDevice2USB(&ctx);
-    } else if (device2IsUART2) {
-        processDevice2UART(&ctx);
-    }
-
-    // Process Device 3 input (Bridge mode only)
-    if (device3IsBridge && device3Serial) {
-        processDevice3UART(&ctx);
-    }
-
-    // Process Device 4 input (UDP Bridge mode only)
-    if (ctx.buffers.udpRxBuffer) {
-        processDevice4UDP(&ctx);
-    }
-    
-    // Process input flows through bidirectional pipeline
-    if (ctx.protocolPipeline) {
-        // Only process input if there's data (optimization)
-        if (ctx.protocolPipeline->hasInputData()) {
-            ctx.protocolPipeline->processInputFlows();
+        // Process Device 2 input (USB or UART2)
+        if (device2IsUSB) {
+            processDevice2USB(&ctx);
+        } else if (device2IsUART2) {
+            processDevice2UART(&ctx);
         }
-    }
+
+        // Process Device 3 input (Bridge mode only)
+        if (device3IsBridge && device3Serial) {
+            processDevice3UART(&ctx);
+        }
+
+        // Process Device 4 input (UDP Bridge mode only)
+        if (ctx.buffers.udpRxBuffer) {
+            processDevice4UDP(&ctx);
+        }
+
+        // Process input flows through bidirectional pipeline
+        if (ctx.protocolPipeline) {
+            // Only process input if there's data (optimization)
+            if (ctx.protocolPipeline->hasInputData()) {
+                ctx.protocolPipeline->processInputFlows();
+            }
+        }
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     uint32_t t2 = micros();
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
-        
-    // Always process telemetry (FC->GCS is critical)
-    if (ctx.protocolPipeline) {
-        ctx.protocolPipeline->processTelemetryFlow();
-    }
-    
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
-    uint32_t t3 = micros();
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
-    
-    // Process UART1 TX queue (CRITICAL for single-writer mechanism)
-    Uart1TxService::getInstance()->processTxQueue();
+
+        // Always process telemetry (FC->GCS is critical)
+        if (ctx.protocolPipeline) {
+            ctx.protocolPipeline->processTelemetryFlow();
+        }
+
+        // === TEMPORARY DIAGNOSTIC BLOCK START ===
+        uint32_t t3 = micros();
+        // === TEMPORARY DIAGNOSTIC BLOCK END ===
+
+        // Process UART1 TX queue (CRITICAL for single-writer mechanism)
+        Uart1TxService::getInstance()->processTxQueue();
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     uint32_t t4 = micros();
@@ -249,35 +248,35 @@ void uartBridgeTask(void* parameter) {
     }
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
-    
-    // Pipeline statistics output (every 10 seconds)
-    static uint32_t lastPipelineStats = 0;
-    if (millis() - lastPipelineStats > 10000) {
-        char statBuf[512];  // Increased buffer size
-        ctx.protocolPipeline->getStatsString(statBuf, sizeof(statBuf));
-        log_msg(LOG_INFO, "Pipeline stats: %s", statBuf);
-        
-        // Memory pool statistics
-        PacketMemoryPool::getInstance()->getStats(statBuf, sizeof(statBuf));
-        log_msg(LOG_INFO, "%s", statBuf);
-        
-        lastPipelineStats = millis();
+
+        // Pipeline statistics output (every 10 seconds)
+        static uint32_t lastPipelineStats = 0;
+        if (millis() - lastPipelineStats > 10000) {
+            char statBuf[512];  // Increased buffer size
+            ctx.protocolPipeline->getStatsString(statBuf, sizeof(statBuf));
+            log_msg(LOG_INFO, "Pipeline stats: %s", statBuf);
+
+            // Memory pool statistics
+            PacketMemoryPool::getInstance()->getStats(statBuf, sizeof(statBuf));
+            log_msg(LOG_INFO, "%s", statBuf);
+
+            lastPipelineStats = millis();
+        }
+
+        // Fixed delay for multi-core systems (always 1ms)
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 
-    // Fixed delay for multi-core systems (always 1ms)
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
-  
-  // This point is never reached in normal operation, but cleanup if we get here
-  if (ctx.protocolPipeline) {
-    delete ctx.protocolPipeline;
-    ctx.protocolPipeline = nullptr;
-  }
-  
-  // Cleanup protocol buffers
-  freeProtocolBuffers(&ctx);
-  
-  // Cleanup adaptive buffer timing
-  cleanupAdaptiveBuffer(&ctx);
+    // This point is never reached in normal operation, but cleanup if we get here
+    if (ctx.protocolPipeline) {
+        delete ctx.protocolPipeline;
+        ctx.protocolPipeline = nullptr;
+    }
+
+    // Cleanup protocol buffers
+    freeProtocolBuffers(&ctx);
+
+    // Cleanup adaptive buffer timing
+    cleanupAdaptiveBuffer(&ctx);
 }
 

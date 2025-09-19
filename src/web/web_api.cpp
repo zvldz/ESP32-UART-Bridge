@@ -28,19 +28,19 @@ extern UartInterface* uartBridgeSerial;
 // Validate SBUS configuration
 bool validateSbusConfig(Config& cfg) {
   // Only forbid critical combinations:
-  
+
   // 1. Two SBUS_OUT - always conflict
   if (cfg.device2.role == D2_SBUS_OUT && cfg.device3.role == D3_SBUS_OUT) {
     log_msg(LOG_ERROR, "Cannot have SBUS_OUT on both Device2 and Device3");
     return false;
   }
-  
+
   // 2. Two SBUS_IN - not supported yet (failover planned for future)
   if (cfg.device2.role == D2_SBUS_IN && cfg.device3.role == D3_SBUS_IN) {
     log_msg(LOG_ERROR, "Multiple SBUS_IN not supported in current version");
     return false;
   }
-  
+
   // All other combinations allowed for experiments
   return true;
 }
@@ -48,7 +48,7 @@ bool validateSbusConfig(Config& cfg) {
 // Generate complete configuration JSON for initial page load
 String getConfigJson() {
     JsonDocument doc;
-    
+
     // System info
     doc["deviceName"] = config.device_name;
     doc["version"] = config.device_version;
@@ -56,7 +56,7 @@ String getConfigJson() {
     doc["idfVersion"] = esp_get_idf_version();        // NEW - ESP-IDF version
     doc["freeRam"] = ESP.getFreeHeap();
 
-    // Board identification
+    // Board identification with compile-time verification
 #if defined(BOARD_ESP32_S3_SUPER_MINI)
     doc["boardType"] = "s3supermini";
     doc["usbHostSupported"] = false;
@@ -69,27 +69,32 @@ String getConfigJson() {
     doc["usbHostSupported"] = true;
 #endif
 
+    // Compile-time verification
+#if defined(BOARD_ESP32_S3_SUPER_MINI) && defined(BOARD_ESP32_S3_ZERO)
+    #error "Both BOARD_ESP32_S3_SUPER_MINI and BOARD_ESP32_S3_ZERO are defined - this should not happen"
+#endif
+
     // Calculate uptime
     doc["uptime"] = (millis() - g_deviceStats.systemStartTime.load(std::memory_order_relaxed)) / MS_TO_SECONDS;
-    
+
     // Current configuration
     doc["baudrate"] = config.baudrate;
     doc["databits"] = atoi(word_length_to_string(config.databits));
     doc["parity"] = parity_to_string(config.parity);
     doc["stopbits"] = atoi(stop_bits_to_string(config.stopbits));
     doc["flowcontrol"] = config.flowcontrol;
-    
+
     // WiFi
     doc["ssid"] = config.ssid;
     doc["password"] = config.password;
     doc["permanentWifi"] = config.permanent_network_mode;
-    
+
     // WiFi mode and client settings
     doc["wifiMode"] = config.wifi_mode;
     doc["wifiClientSsid"] = config.wifi_client_ssid;
     doc["wifiClientPassword"] = config.wifi_client_password;
     doc["wifiTxPower"] = config.wifi_tx_power;
-    
+
     // Client mode status
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         doc["wifiClientConnected"] = systemState.wifiClientConnected;
@@ -98,43 +103,43 @@ String getConfigJson() {
             doc["rssiPercent"] = rssiToPercent(wifiGetRSSI());
         }
     }
-    
+
     // USB mode
     doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
-    
+
     // Device roles
     doc["device2Role"] = String(config.device2.role);
     doc["device3Role"] = String(config.device3.role);
     doc["device4Role"] = String(config.device4.role);
-    
+
     // Device role names
     doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
     doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
-    
+
     // Device 4 configuration
     doc["device4TargetIp"] = config.device4_config.target_ip;
     doc["device4Port"] = config.device4_config.port;
-    
+
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
     doc["logLevelUart"] = (int)config.log_level_uart;
     doc["logLevelNetwork"] = (int)config.log_level_network;
-    
+
     // UART configuration string
     String uartConfig = String(config.baudrate) + " baud, " +
-                       word_length_to_string(config.databits) + 
+                       word_length_to_string(config.databits) +
                        parity_to_string(config.parity)[0] +  // First char only (N/E/O)
                        stop_bits_to_string(config.stopbits);
     doc["uartConfig"] = uartConfig;
-    
+
     // Flow control status
     if (uartBridgeSerial) {
         doc["flowControl"] = uartBridgeSerial->getFlowControlStatus();
     } else {
         doc["flowControl"] = "Not initialized";
     }
-    
+
     // Statistics
     doc["device1Rx"] = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
     doc["device1Tx"] = g_deviceStats.device1.txBytes.load(std::memory_order_relaxed);
@@ -142,7 +147,7 @@ String getConfigJson() {
     doc["device2Tx"] = g_deviceStats.device2.txBytes.load(std::memory_order_relaxed);
     doc["device3Rx"] = g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed);
     doc["device3Tx"] = g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
-    
+
     // Device4 statistics - KEEP EXACT FIELD NAMES for backward compatibility
     if (config.device4.role != D4_NONE && systemState.networkActive) {
         doc["device4TxBytes"] = g_deviceStats.device4.txBytes.load(std::memory_order_relaxed);
@@ -150,17 +155,17 @@ String getConfigJson() {
         doc["device4RxBytes"] = g_deviceStats.device4.rxBytes.load(std::memory_order_relaxed);
         doc["device4RxPackets"] = g_deviceStats.device4.rxPackets.load(std::memory_order_relaxed);
     }
-    
+
     // Calculate total traffic (local UART/USB only, not network)
-    unsigned long totalTraffic = 
-        g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed) + 
+    unsigned long totalTraffic =
+        g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed) +
         g_deviceStats.device1.txBytes.load(std::memory_order_relaxed) +
-        g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed) + 
+        g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed) +
         g_deviceStats.device2.txBytes.load(std::memory_order_relaxed) +
-        g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed) + 
+        g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed) +
         g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
     doc["totalTraffic"] = totalTraffic;
-    
+
     // Last activity
     unsigned long lastActivity = g_deviceStats.lastGlobalActivity.load(std::memory_order_relaxed);
     if (lastActivity == 0) {
@@ -168,21 +173,21 @@ String getConfigJson() {
     } else {
         doc["lastActivity"] = String((millis() - lastActivity) / MS_TO_SECONDS) + " seconds ago";
     }
-    
+
     // Protocol optimization configuration
     doc["protocolOptimization"] = config.protocolOptimization;
     doc["udpBatchingEnabled"] = config.udpBatchingEnabled;
     doc["mavlinkRouting"] = config.mavlinkRouting;
-    
+
     // Protocol statistics via Pipeline
     BridgeContext* ctx = getBridgeContext();
     if (ctx && ctx->protocolPipeline) {
         ctx->protocolPipeline->appendStatsToJson(doc);
     }
-    
+
     // Log display count
     doc["logDisplayCount"] = LOG_DISPLAY_COUNT;
-    
+
     String json;
     serializeJson(doc, json);
     return json;
@@ -359,7 +364,7 @@ void handleSave(AsyncWebServerRequest *request) {
 
   // Validate SBUS configuration before saving
   if (!validateSbusConfig(config)) {
-    request->send(400, "application/json", 
+    request->send(400, "application/json",
       "{\"status\":\"error\",\"message\":\"Invalid SBUS configuration. Check device roles.\"}");
     return;
   }
@@ -369,7 +374,7 @@ void handleSave(AsyncWebServerRequest *request) {
     const AsyncWebParameter* p = request->getParam("log_level_web", true);
     int level = p->value().toInt();
     if (p->value() == "-1") level = LOG_OFF;
-    
+
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_web) {
         config.log_level_web = (LogLevel)level;
@@ -383,7 +388,7 @@ void handleSave(AsyncWebServerRequest *request) {
     const AsyncWebParameter* p = request->getParam("log_level_uart", true);
     int level = p->value().toInt();
     if (p->value() == "-1") level = LOG_OFF;
-    
+
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_uart) {
         config.log_level_uart = (LogLevel)level;
@@ -397,7 +402,7 @@ void handleSave(AsyncWebServerRequest *request) {
     const AsyncWebParameter* p = request->getParam("log_level_network", true);
     int level = p->value().toInt();
     if (p->value() == "-1") level = LOG_OFF;
-    
+
     if (level >= LOG_OFF && level <= LOG_DEBUG) {
       if (level != config.log_level_network) {
         config.log_level_network = (LogLevel)level;
@@ -414,10 +419,10 @@ void handleSave(AsyncWebServerRequest *request) {
     if (newProtocol != config.protocolOptimization) {
       config.protocolOptimization = newProtocol;
       configChanged = true;
-      const char* protocolName = (newProtocol == 0) ? "None" : 
+      const char* protocolName = (newProtocol == 0) ? "None" :
                                  (newProtocol == 1) ? "MAVLink" : "Unknown";
       log_msg(LOG_INFO, "Protocol optimization changed to %s", protocolName);
-      
+
       // Reinitialize protocol detection with new settings
       BridgeContext* ctx = getBridgeContext();
       if (ctx) {
@@ -503,7 +508,7 @@ void handleSave(AsyncWebServerRequest *request) {
       log_msg(LOG_INFO, "Permanent WiFi mode %s", newPermanent ? "enabled" : "disabled");
     }
   }
-  
+
   // WiFi mode
   if (request->hasParam("wifi_mode", true)) {
     const AsyncWebParameter* p = request->getParam("wifi_mode", true);
@@ -521,16 +526,16 @@ void handleSave(AsyncWebServerRequest *request) {
   if (request->hasParam("wifi_client_ssid", true)) {
     const AsyncWebParameter* p = request->getParam("wifi_client_ssid", true);
     String newSSID = p->value();
-    
+
     // Validate SSID
     newSSID.trim();  // Remove whitespace
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && newSSID.isEmpty()) {
       log_msg(LOG_ERROR, "Client SSID cannot be empty");
-      request->send(400, "application/json", 
+      request->send(400, "application/json",
         "{\"status\":\"error\",\"message\":\"Client SSID cannot be empty\"}");
       return;
     }
-    
+
     if (newSSID != config.wifi_client_ssid) {
       config.wifi_client_ssid = newSSID;
       configChanged = true;
@@ -542,15 +547,15 @@ void handleSave(AsyncWebServerRequest *request) {
   if (request->hasParam("wifi_client_password", true)) {
     const AsyncWebParameter* p = request->getParam("wifi_client_password", true);
     String newPassword = p->value();
-    
+
     // Validate password (empty allowed for open networks, otherwise min 8 chars)
     if (newPassword.length() > 0 && newPassword.length() < 8) {
       log_msg(LOG_ERROR, "Client password must be at least 8 characters or empty");
-      request->send(400, "application/json", 
+      request->send(400, "application/json",
         "{\"status\":\"error\",\"message\":\"WiFi password must be at least 8 characters or empty for open network\"}");
       return;
     }
-    
+
     if (newPassword != config.wifi_client_password) {
       config.wifi_client_password = newPassword;
       configChanged = true;
@@ -580,12 +585,12 @@ void handleSave(AsyncWebServerRequest *request) {
   if (configChanged) {
     // Cancel WiFi timeout when settings are saved successfully
     cancelWiFiTimeout();
-    
+
     config_save(&config);
-    
-    request->send(200, "application/json", 
+
+    request->send(200, "application/json",
         "{\"status\":\"ok\",\"message\":\"Configuration saved successfully! Device restarting...\"}");
-    
+
     scheduleReboot(3000);
   } else {
     request->send(200, "application/json", "{\"status\":\"unchanged\",\"message\":\"Configuration was not modified\"}");
@@ -597,14 +602,14 @@ void handleResetStats(AsyncWebServerRequest *request) {
   log_msg(LOG_INFO, "Resetting statistics and logs...");
   // Use helper function with current time for g_deviceStats reset
   resetDeviceStatistics(g_deviceStats, millis());
-  
+
   // Reset protocol statistics via bridge context accessor
   BridgeContext* ctx = getBridgeContext();
   if (ctx && ctx->protocol.stats) {
     ctx->protocol.stats->reset();
     log_msg(LOG_INFO, "Protocol statistics reset");
   }
-  
+
   logging_clear();
 
   // Return JSON response for AJAX request
@@ -626,15 +631,15 @@ void handleClearCrashLog(AsyncWebServerRequest *request) {
 // Export configuration as downloadable JSON file
 void handleExportConfig(AsyncWebServerRequest *request) {
   log_msg(LOG_INFO, "Configuration export requested");
-  
+
   // Generate random ID for filename uniqueness
   String randomId = String(millis() & 0xFFFFFF, HEX);
   randomId.toUpperCase();
   String filename = "esp32-bridge-config-" + randomId + ".json";
-  
+
   // Get configuration JSON (without runtime statistics)
   String configJson = config_to_json(&config);
-  
+
   // Send as downloadable file
   AsyncWebServerResponse *response = request->beginResponse(200, "application/json", configJson);
   response->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
@@ -652,7 +657,7 @@ void handleImportConfig(AsyncWebServerRequest *request) {
 
   String* fileContent = (String*)request->_tempObject;
   log_msg(LOG_INFO, "Configuration import requested, content length: %zu", fileContent->length());
-  
+
   // Log first 100 characters for debugging (safe for display)
   String preview = fileContent->substring(0, 100);
   log_msg(LOG_DEBUG, "JSON preview: %s", preview.c_str());
@@ -660,25 +665,25 @@ void handleImportConfig(AsyncWebServerRequest *request) {
   // Parse configuration from uploaded JSON
   Config tempConfig;
   config_init(&tempConfig);
-  
+
   if (!config_load_from_json(&tempConfig, *fileContent)) {
     log_msg(LOG_ERROR, "Import failed: JSON parsing error");
     delete fileContent;  // Clean up
     request->send(400, "text/plain", "Invalid configuration file");
     return;
   }
-  
+
   delete fileContent;  // Clean up
 
   // Apply imported configuration
   config = tempConfig;
   config_save(&config);
-  
+
   log_msg(LOG_INFO, "Configuration imported successfully, restarting...");
-  
-  request->send(200, "application/json", 
+
+  request->send(200, "application/json",
     "{\"status\":\"ok\",\"message\":\"Configuration imported successfully! Device restarting...\"}");
-  
+
   scheduleReboot(3000);
 }
 
