@@ -11,6 +11,8 @@
 #include "scheduler_tasks.h"
 #include "../wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
+#include "protocols/sbus_hub.h"
+#include "protocols/sbus_multi_source.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -692,4 +694,150 @@ void handleClientIP(AsyncWebServerRequest *request) {
     String clientIP = request->client()->remoteIP().toString();
     log_msg(LOG_DEBUG, "Client IP requested: %s", clientIP.c_str());
     request->send(200, "text/plain", clientIP);
+}
+
+// Helper to get SbusHub instance
+SbusHub* getSbusHub() {
+    BridgeContext* ctx = getBridgeContext();
+    if (!ctx || !ctx->protocolPipeline) return nullptr;
+
+    // Check Device2 for SBUS_OUT
+    if (config.device2.role == D2_SBUS_OUT) {
+        PacketSender* sender = ctx->protocolPipeline->getSender(IDX_DEVICE2_UART2);
+        if (sender) {
+            return static_cast<SbusHub*>(sender);
+        }
+    }
+
+    // Check Device3 for SBUS_OUT
+    if (config.device3.role == D3_SBUS_OUT) {
+        PacketSender* sender = ctx->protocolPipeline->getSender(IDX_DEVICE3);
+        if (sender) {
+            return static_cast<SbusHub*>(sender);
+        }
+    }
+
+    return nullptr;
+}
+
+// Add SBUS status endpoint
+void handleSbusStatus(AsyncWebServerRequest *request) {
+    JsonDocument doc;
+
+    SbusHub* hub = getSbusHub();
+    if (!hub || !hub->getMultiSource()) {
+        doc["error"] = "SBUS not configured";
+        String json;
+        serializeJson(doc, json);
+        request->send(404, "application/json", json);
+        return;
+    }
+
+    SbusMultiSource* ms = hub->getMultiSource();
+
+    // Current status
+    doc["active"] = SbusMultiSource::getSourceName(ms->getActiveSource());
+    doc["mode"] = ms->isManualMode() ? "manual" : "auto";
+
+    // Source states
+    JsonObject sources = doc["sources"].to<JsonObject>();
+    for (int i = 0; i < 3; i++) {
+        SbusSourceType type = (SbusSourceType)i;
+        const SbusSourceState& state = ms->getSourceState(type);
+
+        JsonObject src = sources[SbusMultiSource::getSourceName(type)].to<JsonObject>();
+        src["quality"] = state.getQuality();
+        src["lastPacket"] = state.hasData ? (millis() - state.lastFrameTime) : 0;
+        src["state"] = state.getStateString();
+        src["framesReceived"] = state.framesReceived;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    request->send(200, "application/json", json);
+}
+
+// Add SBUS source control endpoint
+void handleSbusSource(AsyncWebServerRequest *request) {
+    if (request->method() == HTTP_POST) {
+        SbusHub* hub = getSbusHub();
+        if (!hub || !hub->getMultiSource()) {
+            request->send(404, "application/json", "{\"status\":\"error\",\"message\":\"SBUS not configured\"}");
+            return;
+        }
+
+        if (request->hasParam("source", true)) {
+            String source = request->getParam("source", true)->value();
+            SbusMultiSource* ms = hub->getMultiSource();
+
+            if (source == "auto") {
+                ms->setAutoMode();
+            } else if (source == "local") {
+                ms->forceSource(SBUS_SOURCE_LOCAL);
+            } else if (source == "uart") {
+                ms->forceSource(SBUS_SOURCE_UART);
+            } else if (source == "udp") {
+                ms->forceSource(SBUS_SOURCE_UDP);
+            } else {
+                request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid source\"}");
+                return;
+            }
+
+            request->send(200, "application/json", "{\"status\":\"ok\"}");
+        } else {
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing source parameter\"}");
+        }
+    } else {
+        request->send(405, "application/json", "{\"status\":\"error\",\"message\":\"Method not allowed\"}");
+    }
+}
+
+// Add SBUS config endpoint
+void handleSbusConfig(AsyncWebServerRequest *request) {
+    if (request->method() == HTTP_GET) {
+        SbusHub* hub = getSbusHub();
+        if (!hub || !hub->getMultiSource()) {
+            request->send(404, "application/json", "{\"error\":\"SBUS not configured\"}");
+            return;
+        }
+
+        const SbusMultiSourceConfig& cfg = hub->getMultiSource()->getConfig();
+
+        JsonDocument doc;
+        doc["priorities"][0] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[0]);
+        doc["priorities"][1] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[1]);
+        doc["priorities"][2] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[2]);
+        doc["timeout"] = cfg.timeoutMs;
+        doc["hysteresis"] = cfg.hysteresisMs;
+        doc["failoverEnabled"] = !cfg.manualMode;
+
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+
+    } else if (request->method() == HTTP_POST) {
+        SbusHub* hub = getSbusHub();
+        if (!hub || !hub->getMultiSource()) {
+            request->send(404, "application/json", "{\"error\":\"SBUS not configured\"}");
+            return;
+        }
+
+        // Update runtime config
+        SbusMultiSourceConfig msConfig;
+        msConfig.forcedSource = (SbusSourceType)config.sbusSettings.forcedSource;
+        msConfig.manualMode = config.sbusSettings.manualMode;
+        msConfig.timeoutMs = config.sbusSettings.timeoutMs;
+        msConfig.hysteresisMs = config.sbusSettings.hysteresisMs;
+        memcpy(msConfig.priorities, config.sbusSettings.priorities, sizeof(msConfig.priorities));
+
+        hub->getMultiSource()->setConfig(msConfig);
+
+        // For Phase 9.2, we don't parse POST params yet
+        // Phase 9.3 will add full configuration update
+
+        log_msg(LOG_INFO, "SBUS config updated");
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    } else {
+        request->send(405, "application/json", "{\"status\":\"error\",\"message\":\"Method not allowed\"}");
+    }
 }
