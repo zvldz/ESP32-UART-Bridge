@@ -120,7 +120,7 @@ void runStackDiagnostics() {
     
     UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
     log_msg(LOG_DEBUG, "UART task: Stack free=%u bytes, Heap free=%u bytes, Largest block=%u bytes", 
-            stackFree * 4, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+            stackFree, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     
     // Add DMA diagnostics if available
     UartDMA* dma = static_cast<UartDMA*>(g_bridgeContext->interfaces.uartBridgeSerial);
@@ -187,13 +187,13 @@ void runAllStacksDiagnostics() {
 
     // Current task (main loop)
     UBaseType_t currentStack = uxTaskGetStackHighWaterMark(NULL);
-    offset += snprintf(msg + offset, sizeof(msg) - offset, "Stack free: Main=%dB", currentStack * 4);
+    offset += snprintf(msg + offset, sizeof(msg) - offset, "Stack free: Main=%dB", currentStack);
 
     // UART bridge task
     extern TaskHandle_t uartBridgeTaskHandle;
     if (uartBridgeTaskHandle) {
         UBaseType_t uartStack = uxTaskGetStackHighWaterMark(uartBridgeTaskHandle);
-        offset += snprintf(msg + offset, sizeof(msg) - offset, " UART=%dB", uartStack * 4);
+        offset += snprintf(msg + offset, sizeof(msg) - offset, " UART=%dB", uartStack);
     }
 
     // AsyncWebServer monitoring (runs in WiFi/TCP context)
@@ -203,13 +203,13 @@ void runAllStacksDiagnostics() {
         TaskHandle_t wifiTask = xTaskGetHandle("wifi");
         if (wifiTask) {
             UBaseType_t wifiStack = uxTaskGetStackHighWaterMark(wifiTask);
-            offset += snprintf(msg + offset, sizeof(msg) - offset, ",WiFi=%dB", wifiStack * 4);
+            offset += snprintf(msg + offset, sizeof(msg) - offset, ",WiFi=%dB", wifiStack);
         }
         // Monitor TCP/IP task
         TaskHandle_t tcpipTask = xTaskGetHandle("tcpip_thread");
         if (tcpipTask) {
             UBaseType_t tcpipStack = uxTaskGetStackHighWaterMark(tcpipTask);
-            offset += snprintf(msg + offset, sizeof(msg) - offset, ",TCP=%dB", tcpipStack * 4);
+            offset += snprintf(msg + offset, sizeof(msg) - offset, ",TCP=%dB", tcpipStack);
         }
     } else {
         offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Off");

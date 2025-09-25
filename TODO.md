@@ -29,11 +29,11 @@
   - [x] Test various baudrates (115200, 460800, 921600)
   - [x] Measure end-to-end latency
 
-- [ ] **UDP/WiFi Transport Testing** (Phase 7 - UdpSbusParser)
-  - [ ] ESP1 (SBUS_IN) → UDP → ESP2 (UDP→SBUS_OUT)
-  - [ ] Measure WiFi latency (target <50ms)
-  - [ ] Test with different network conditions
-  - [ ] Verify operation in both AP and Client modes
+- [x] **UDP/WiFi Transport Testing** (Phase 7 - UdpSbusParser)
+  - [x] ESP1 (SBUS_IN) → UDP → ESP2 (UDP→SBUS_OUT)
+  - [x] Measure WiFi latency (target <50ms)
+  - [x] Test with different network conditions
+  - [x] Verify operation in both AP and Client modes
 
 - [x] **Statistics Validation**
   - [x] Verify Real vs Generated frame percentages
@@ -121,6 +121,77 @@
 
 **Status**: Super Mini support implemented but not fully tested. Basic functionality (WiFi, web, LEDs, UDP logs) confirmed working. UART and SBUS functionality requires hardware testing with actual devices.
 
+#### XIAO ESP32-S3 Support 🟡 PLANNED
+
+- [ ] **Hardware Adaptation**
+  - [ ] Pin mapping for XIAO ESP32-S3 board
+  - [ ] Adjust for different GPIO availability
+  - [ ] LED functionality (single color LED, blink-only mode)
+  - [ ] External antenna support configuration
+  - [ ] Verify USB-CDC functionality
+  - [ ] Consider compact form factor constraints
+
+- [ ] **Build Configuration**
+  - [ ] Add platformio environment for XIAO ESP32-S3
+  - [ ] Conditional compilation with board flags
+  - [ ] Web interface board type detection
+  - [ ] SDK configuration for XIAO variant
+
+- [ ] **Testing on XIAO ESP32-S3**
+  - [ ] Basic ESP32 operation verification
+  - [ ] WiFi and web interface functionality
+  - [ ] LED control (blink patterns only, no RGB)
+  - [ ] External antenna range/stability testing
+  - [ ] UDP logging operational
+  - [ ] Verify all UART interfaces work (Device 2, 3, 4)
+  - [ ] Test SBUS with hardware inverter
+  - [ ] Test SBUS over WiFi/UDP with external antenna
+  - [ ] Check power consumption (important for small board)
+  - [ ] Full protocol testing (MAVLink, SBUS, etc.)
+  - [ ] Thermal testing (compact board heat dissipation)
+
+**Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols. Need to verify pin availability and power/thermal characteristics for reliable operation.
+
+### FUTURE ARCHITECTURE IMPROVEMENTS 🔵
+
+#### MultiSource Pattern Generalization 🟡 FUTURE CONSIDERATION
+
+Current `SbusMultiSource` implementation demonstrates a useful pattern that could be generalized for other protocols when needed:
+
+- [ ] **Create Generic MultiSource Framework**
+  - [ ] Extract common logic into template base class:
+    ```cpp
+    template<typename ChannelDataType>
+    class MultiSourceManager {
+        // Common source switching logic
+        // Quality metrics calculation
+        // Failover/failsafe handling
+        // Configuration management
+    };
+    ```
+  - [ ] Alternative interface-based approach:
+    ```cpp
+    class IMultiSource {
+        virtual bool getActiveData(void* data) = 0;
+        virtual void updateSource(SourceType src, void* data) = 0;
+        virtual uint8_t getQuality(SourceType src) = 0;
+    };
+    ```
+
+- [ ] **Protocol Specializations**
+  - [ ] `SbusMultiSource` - current SBUS implementation (already done)
+  - [ ] `MavlinkMultiSource` - for MAVLink command source switching (USB/UART/UDP)
+  - [ ] `TelemetryMultiSource` - for telemetry data aggregation
+  - [ ] `LogMultiSource` - for log source prioritization
+
+- [ ] **Benefits of Generalization**
+  - Consistent UI patterns across protocols
+  - Reusable source quality metrics
+  - Unified failover behavior
+  - Reduced code duplication
+
+**Note**: This is future work - don't implement until a second use case emerges. Current SBUS-specific implementation is sufficient and avoids over-engineering. Refactoring to generic pattern will be straightforward when needed.
+
 ### STABILIZATION PHASE - After Platform Support 🟢
 
 
@@ -189,9 +260,28 @@
 
 #### Final Code Cleanup
 
+- [ ] **Add WiFi AP name uniqueness** - Before final cleanup
+  - [ ] Add unique suffix to WiFi AP name (like mDNS naming)
+  - [ ] Use MAC address last bytes or random suffix
+  - [ ] Prevent AP name conflicts in multi-device environments
+  - [ ] Update web interface to show unique AP name
+
+- [ ] **Add WiFi AP name configuration** - User customization
+  - [ ] Add AP name field to web configuration interface
+  - [ ] Store custom AP name in Config structure
+  - [ ] Validate AP name (length, allowed characters)
+  - [ ] Apply custom name + unique suffix for full uniqueness
+  - [ ] Default to device name + unique suffix if not configured
+
+- [ ] **PSRAM memory optimization** - Before final cleanup
+  - [ ] Move JsonDocument allocations to PSRAM for config/web operations
+  - [ ] Move web log buffers to PSRAM (~12.8KB logBuffer + 2KB udpLogBuffer)
+  - [ ] Make PSRAM usage optional via compile-time define (easy rollback)
+  - [ ] **Potential RAM savings**: ~15KB internal RAM freed
+
 - [ ] **Final Code Cleanup** - After all features are implemented
   - [x] Standardize code indentation to 4 spaces across all files ✅ COMPLETED
-  - [ ] Remove unnecessary diagnostic code and debug prints (from Priority 1.7)
+  - [ ] Remove unnecessary diagnostic code and debug prints
     - [ ] Find and remove temporary diagnostic prints
     - [ ] Clean up experimental code blocks
     - [ ] Remove "TEMPORARY DIAGNOSTIC" sections
@@ -222,6 +312,13 @@
   - [ ] NMEA→Binary conversion
   - Per-device protocol configuration
   - Independent protocol detectors per interface
+
+- [ ] **SBUS Enhancement Options**
+  - [ ] **D1_SBUS_IN Role** (optional variant)
+    - Add SBUS input capability to Device 1 (main UART)
+    - Use case: Direct SBUS reading from RC receiver via main port
+    - Benefits: Simplified single-ESP32 setups without need for Device 2/3
+    - **Note**: Only SBUS_IN, not SBUS_OUT (Device 1 as source, not destination)
 
 ### Future Considerations
 

@@ -119,8 +119,14 @@ void config_init(Config* config) {
     // MAVLink routing default
     config->mavlinkRouting = false;
 
-    // SBUS debug enabled for testing - TEMP!
-    config->sbus_debug = true;
+    // SBUS Multi-source defaults
+    config->sbusSettings.forcedSource = 3;  // NONE
+    config->sbusSettings.manualMode = false;
+    config->sbusSettings.timeoutMs = 1000;
+    config->sbusSettings.hysteresisMs = 100;
+    config->sbusSettings.priorities[0] = 0;  // LOCAL
+    config->sbusSettings.priorities[1] = 1;  // UART
+    config->sbusSettings.priorities[2] = 2;  // UDP
 }
 
 // Migrate configuration from old versions

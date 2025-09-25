@@ -72,6 +72,13 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/crashlog_json", HTTP_GET, handleCrashLogJson);
     server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
     server->on("/config/export", HTTP_GET, handleExportConfig);
+
+    // SBUS API endpoints
+    server->on("/api/sbus/status", HTTP_GET, handleSbusStatus);
+    server->on("/api/sbus/source", HTTP_POST, handleSbusSource);
+    server->on("/api/sbus/config", HTTP_GET, handleSbusConfig);
+    server->on("/api/sbus/config", HTTP_POST, handleSbusConfig);
+
     server->on("/config/import", HTTP_POST,
         [](AsyncWebServerRequest *request) {
             // Handle upload completion
@@ -124,7 +131,10 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
     });
-  
+    server->on("/sbus-source.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_SBUS_SOURCE_GZ, JS_SBUS_SOURCE_GZ_LEN);
+    });
+
     // Setup OTA update with async handlers
     server->on("/update", HTTP_POST,
         [](AsyncWebServerRequest *request) {
