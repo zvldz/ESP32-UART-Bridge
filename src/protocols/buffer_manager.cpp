@@ -1,6 +1,7 @@
 #include "buffer_manager.h"
 #include "../logging.h"
 #include "../adaptive_buffer.h"
+#include <Arduino.h>  // For ESP.getFreeHeap()
 
 void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // Telemetry buffer - needed ALWAYS when there's USB (independent of Logger)
@@ -83,6 +84,52 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     } else {
         ctx->buffers.udpInputBuffer = nullptr;
     }
+
+    // --- TEMPORARY DIAGNOSTICS START ---
+    size_t total = 0;
+
+    if (ctx->buffers.telemetryBuffer) {
+        size_t size = ctx->buffers.telemetryBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] Telemetry: %zu bytes", size);
+        total += size;
+    }
+
+    if (ctx->buffers.usbInputBuffer) {
+        size_t size = ctx->buffers.usbInputBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] USB Input: %zu bytes", size);
+        total += size;
+    }
+
+    if (ctx->buffers.uart2InputBuffer) {
+        size_t size = ctx->buffers.uart2InputBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] UART2 Input: %zu bytes", size);
+        total += size;
+    }
+
+    if (ctx->buffers.uart3InputBuffer) {
+        size_t size = ctx->buffers.uart3InputBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] UART3 Input: %zu bytes", size);
+        total += size;
+    }
+
+    if (ctx->buffers.udpInputBuffer) {
+        size_t size = ctx->buffers.udpInputBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] UDP Input: %zu bytes", size);
+        total += size;
+    }
+
+    if (ctx->buffers.logBuffer) {
+        size_t size = ctx->buffers.logBuffer->getCapacity();
+        log_msg(LOG_INFO, "[BUFFERS] Log: %zu bytes", size);
+        total += size;
+    }
+
+    log_msg(LOG_INFO, "[BUFFERS] TOTAL ALLOCATED: %zu bytes", total);
+
+    // --- TEMPORARY DIAGNOSTICS: FREE HEAP START ---
+    log_msg(LOG_INFO, "[BUFFERS] Free heap after allocation: %d", ESP.getFreeHeap());
+    // --- TEMPORARY DIAGNOSTICS: FREE HEAP END ---
+    // --- TEMPORARY DIAGNOSTICS END ---
 }
 
 void freeProtocolBuffers(BridgeContext* ctx) {

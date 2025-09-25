@@ -15,7 +15,12 @@ async function initializeUI() {
         FormUtils.init(config);
         StatusUpdates.init(config);
         CrashLog.init();
-        
+
+        // Initialize SBUS Source Management (NEW)
+        if (typeof SbusSource !== 'undefined') {
+            SbusSource.init(config);
+        }
+
         // Start periodic updates
         startPeriodicUpdates();
     } catch (error) {

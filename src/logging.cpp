@@ -62,10 +62,8 @@ void logging_init() {
     logIndex = 0;
     logCount = 0;
 
-    // Create UDP log mutex only if needed for network logging
-    if (!udpLogMutex &&
-        config.device4.role == D4_LOG_NETWORK &&
-        systemState.networkActive) {
+    // Create UDP log mutex if not created yet
+    if (!udpLogMutex) {
         udpLogMutex = xSemaphoreCreateMutex();
     }
 

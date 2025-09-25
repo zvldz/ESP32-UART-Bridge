@@ -7,6 +7,7 @@
 #include "sbus_hub.h"
 #include "uart_sbus_parser.h"
 #include "udp_sbus_parser.h"
+#include <Arduino.h>  // For ESP.getFreeHeap()
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) : 
     activeFlows(0),
@@ -602,6 +603,10 @@ void ProtocolPipeline::createSenders(Config* config) {
     } else {
         log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
     }
+
+    // --- TEMPORARY DIAGNOSTICS START ---
+    log_msg(LOG_INFO, "[PIPELINE] After senders creation, free heap: %d", ESP.getFreeHeap());
+    // --- TEMPORARY DIAGNOSTICS END ---
 }
 
 void ProtocolPipeline::process() {

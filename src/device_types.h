@@ -68,6 +68,15 @@ struct Device4Config {
     uint8_t role;
 };
 
+// SBUS Multi-source settings
+struct SbusSourceSettings {
+    uint8_t forcedSource;      // 0=LOCAL, 1=UART, 2=UDP, 3=NONE
+    bool manualMode;           // Manual override active
+    uint32_t timeoutMs;        // Source timeout (for Phase 9.3)
+    uint32_t hysteresisMs;     // Switch stability (for Phase 9.3)
+    uint8_t priorities[3];     // Source priorities (for Phase 9.3)
+};
+
 // Configuration structure (moved here from types.h)
 typedef struct {
     uint16_t config_version;
@@ -113,5 +122,7 @@ typedef struct {
     uint8_t protocolOptimization;
     bool udpBatchingEnabled;
     bool mavlinkRouting;
-    bool sbus_debug;  // NEW: SBUS debug output
+
+    // SBUS Multi-source settings (NEW - add at the end)
+    SbusSourceSettings sbusSettings;
 } Config;

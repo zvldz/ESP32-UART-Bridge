@@ -61,6 +61,7 @@ void senderTask(void* parameter) {
         //vTaskDelay(pdMS_TO_TICKS(5));
         // Run at ~250Hz (4ms delay) | TEMP
         vTaskDelay(pdMS_TO_TICKS(4));
+        //taskYIELD();
     }
 }
 

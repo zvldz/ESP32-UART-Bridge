@@ -224,7 +224,8 @@ def process_html_files(source, target, env):
         "utils.js",
         "device-config.js",
         "form-utils.js",
-        "status-updates.js"
+        "status-updates.js",
+        "sbus-source.js"
     ]
     
     # Check if regeneration needed

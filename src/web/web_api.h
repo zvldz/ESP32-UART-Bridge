@@ -22,4 +22,9 @@ void handleExportConfig(AsyncWebServerRequest *request);
 void handleImportConfig(AsyncWebServerRequest *request);
 void handleClientIP(AsyncWebServerRequest *request);
 
+// SBUS API handlers
+void handleSbusStatus(AsyncWebServerRequest *request);
+void handleSbusSource(AsyncWebServerRequest *request);
+void handleSbusConfig(AsyncWebServerRequest *request);
+
 #endif // WEB_API_H
