@@ -16,6 +16,9 @@ extern Scheduler taskScheduler;
 // LED monitor task - can be controlled from other modules
 extern Task tLedMonitor;
 
+// SBUS Router tick task
+extern Task tSbusRouterTick;
+
 // Initialize the task scheduler
 void initializeScheduler();
 

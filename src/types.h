@@ -63,6 +63,9 @@ typedef struct {
     
     // Safe mode flag
     bool wifiSafeMode;               // WiFi safe mode after initialization failures
+
+    // Firmware update flag
+    bool firmwareUpdateInProgress;   // True during OTA firmware update
 } SystemState;
 
 

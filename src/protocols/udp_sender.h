@@ -314,9 +314,12 @@ public:
             stats["avgPacketsPerBatch"] = serialized(String(avg, 1));
             stats["maxPacketsInBatch"] = batchDiag.maxPacketsInBatch;
             
-            float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) / 
+            float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) /
                               (totalSent > 0 ? totalSent : 1);
-            stats["batchEfficiency"] = String(efficiency, 0) + "%";
+            // Use char buffer to avoid String concatenation
+            char effBuf[16];
+            snprintf(effBuf, sizeof(effBuf), "%.0f%%", efficiency);
+            stats["batchEfficiency"] = effBuf;
         } else {
             // No batches yet - show waiting status
             stats["totalBatches"] = 0;

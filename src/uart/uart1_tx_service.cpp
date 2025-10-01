@@ -30,20 +30,31 @@ Uart1TxService::~Uart1TxService() {
 }
 
 bool Uart1TxService::init(UartInterface* uartInterface, size_t ringSize) {
+    // Get config reference
+    extern Config config;
+
+    // Don't create TX resources for SBUS_IN role
+    if (config.device1.role == D1_SBUS_IN) {
+        uart = uartInterface;  // Store interface but don't create ring
+        log_msg(LOG_INFO, "UART1 TX service disabled for SBUS_IN role (saving ~4KB)");
+        return true;
+    }
+
+    // Normal initialization continues
     uart = uartInterface;
-    
+
     // Create TX ring buffer
     txRing = new CircularBuffer();
     txRing->init(ringSize);
     log_msg(LOG_INFO, "UART1 TX ring initialized: %zu bytes", ringSize);
-    
+
     // Create mutex for thread-safety
     ringMutex = xSemaphoreCreateMutex();
     if (!ringMutex) {
         log_msg(LOG_ERROR, "Failed to create UART1 TX mutex");
         return false;
     }
-    
+
     log_msg(LOG_INFO, "UART1 TX service initialized: %zu byte ring", ringSize);
     return true;
 }
@@ -71,7 +82,8 @@ bool Uart1TxService::enqueue(const uint8_t* data, size_t len) {
 }
 
 void Uart1TxService::processTxQueue() {
-    if (!txRing || !uart || !ringMutex) return;
+    if (!txRing) return;  // Skip if no TX ring (SBUS_IN mode)
+    if (!uart || !ringMutex) return;
     
     // Quick check without mutex
     if (txRing->available() == 0) return;

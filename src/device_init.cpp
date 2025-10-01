@@ -8,6 +8,7 @@
 #include "config.h"
 #include "types.h"
 #include "protocols/sbus_common.h"
+#include "protocols/sbus_router.h"
 #include <freertos/semphr.h>
 
 // External objects from main.cpp
@@ -24,9 +25,48 @@ UsbInterface* g_usbInterface = nullptr;
 
 // Initialize main UART bridge (Device 1)
 void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
-    // TEMP: Debug logging for SBUS role detection - remove after testing
-    log_msg(LOG_INFO, "initMainUART called, Device2.role = %d (D2_SBUS_IN=%d)",
-            config->device2.role, D2_SBUS_IN);
+    // Initialize Device1 for SBUS_IN mode
+    if (config->device1.role == D1_SBUS_IN) {
+        // Store USB interface pointer
+        g_usbInterface = usb;
+
+        // Configure GPIO for SBUS
+        pinMode(UART_RX_PIN, INPUT_PULLUP);
+
+        // SBUS configuration: 100000 8E2 with signal inversion
+        UartConfig sbusCfg = {
+            .baudrate = 100000,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_EVEN,
+            .stopbits = UART_STOP_BITS_2,
+            .flowcontrol = false
+        };
+
+        // Initialize DMA with SBUS configuration (RX only)
+        serial->begin(sbusCfg, UART_RX_PIN, -1);
+
+        // Enable signal inversion for SBUS
+        uart_set_line_inverse(UART_NUM_1, UART_SIGNAL_RXD_INV);
+
+        log_msg(LOG_INFO, "Device1 SBUS_IN initialized: 100000 8E2 INV (DMA active)");
+
+        // Initialize other devices normally
+        if (config->device2.role == D2_UART2) {
+            initDevice2UART();
+        } else if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
+            initDevice2SBUS();
+        }
+
+        if (config->device3.role != D3_NONE) {
+            if (config->device3.role == D3_SBUS_OUT) {
+                initDevice3SBUS();
+            } else {
+                initDevice3(config->device3.role);
+            }
+        }
+
+        return;
+    }
 
     // Store USB interface pointer
     g_usbInterface = usb;
@@ -56,6 +96,7 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
 
     log_msg(LOG_INFO, "Using DMA-accelerated UART");
 
+
     // Initialize Device 2 if configured
     if (config->device2.role == D2_UART2) {
         initDevice2UART();
@@ -65,8 +106,8 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
 
     // Initialize Device 3 if configured
     if (config->device3.role != D3_NONE) {
-        if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
-            initDevice3SBUS();  // NEW: Initialize SBUS for Device 3
+        if (config->device3.role == D3_SBUS_OUT) {
+            initDevice3SBUS();  // Initialize SBUS for Device 3
         } else {
             initDevice3(config->device3.role);  // Existing UART modes
         }
@@ -221,11 +262,42 @@ void initDevice3SBUS() {
         // Enable signal inversion for SBUS
         uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
 
-        const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
+        const char* modeStr = "SBUS OUT";
         log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (100000 8E2 INV, UART0)",
                 modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
     } else {
         log_msg(LOG_ERROR, "Failed to create Device 3 SBUS interface");
+    }
+}
+
+// Helper to check if any SBUS device is configured
+bool hasSbusDevice() {
+    return (config.device1.role == D1_SBUS_IN ||
+            config.device2.role == D2_SBUS_IN ||
+            config.device2.role == D2_SBUS_OUT ||
+            config.device3.role == D3_SBUS_OUT ||
+            config.device4.role == D4_SBUS_UDP_RX ||
+            config.device4.role == D4_SBUS_UDP_TX);
+}
+
+// Register SBUS outputs after UART interfaces are created
+void registerSbusOutputs() {
+    if (!hasSbusDevice()) {
+        return;
+    }
+
+    SbusRouter* router = SbusRouter::getInstance();
+
+    // Register Device2 SBUS output
+    if (config.device2.role == D2_SBUS_OUT && device2Serial) {
+        router->registerOutput(device2Serial);
+        log_msg(LOG_INFO, "SBUS output registered: Device2");
+    }
+
+    // Register Device3 SBUS output
+    if (config.device3.role == D3_SBUS_OUT && device3Serial) {
+        router->registerOutput(device3Serial);
+        log_msg(LOG_INFO, "SBUS output registered: Device3");
     }
 }
 
@@ -235,12 +307,14 @@ void initDevices() {
     log_msg(LOG_INFO, "Device configuration:");
     log_msg(LOG_INFO, "- Device 1: Main UART Bridge (always enabled)");
 
-    // Device 2 with role name
-    String d2Info = "- Device 2: " + String(getDevice2RoleName(config.device2.role));
+    // Device 2 with role name - use direct logging instead of String concatenation
     if (config.device2.role == D2_USB) {
-        d2Info += " (" + String(config.usb_mode == USB_MODE_HOST ? "Host" : "Device") + " mode)";
+        log_msg(LOG_INFO, "- Device 2: %s (%s mode)",
+                getDevice2RoleName(config.device2.role),
+                config.usb_mode == USB_MODE_HOST ? "Host" : "Device");
+    } else {
+        log_msg(LOG_INFO, "- Device 2: %s", getDevice2RoleName(config.device2.role));
     }
-    log_msg(LOG_INFO, "%s", d2Info.c_str());
 
     // Device 3 with role name
     log_msg(LOG_INFO, "- Device 3: %s", getDevice3RoleName(config.device3.role));
@@ -261,4 +335,36 @@ void initDevices() {
     log_msg(LOG_INFO, "- UART logs: %s%s", getLogLevelName(config.log_level_uart),
             config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)");
     log_msg(LOG_INFO, "- Network logs: %s (future)", getLogLevelName(config.log_level_network));
+
+    // Initialize SBUS Router if any SBUS device is configured
+    if (hasSbusDevice()) {
+        SbusRouter* router = SbusRouter::getInstance();
+
+        // Register sources with priorities
+        if (config.device1.role == D1_SBUS_IN) {
+            router->registerSource(SBUS_SOURCE_DEVICE1, 0);  // Highest priority
+            log_msg(LOG_INFO, "SBUS source registered: Device1 (priority 0)");
+        }
+
+        if (config.device2.role == D2_SBUS_IN) {
+            router->registerSource(SBUS_SOURCE_DEVICE2, 1);  // Medium priority
+            log_msg(LOG_INFO, "SBUS source registered: Device2 (priority 1)");
+        }
+
+        if (config.device4.role == D4_SBUS_UDP_RX) {
+            router->registerSource(SBUS_SOURCE_UDP, 2);      // Lowest priority
+            log_msg(LOG_INFO, "SBUS source registered: UDP (priority 2)");
+        }
+
+        // Note: SBUS outputs will be registered later in registerSbusOutputs()
+        // after UART interfaces are created in initMainUART()
+
+        // Set Timing Keeper from config
+        router->setTimingKeeper(config.sbusTimingKeeper);
+        if (config.sbusTimingKeeper) {
+            log_msg(LOG_INFO, "SBUS Timing Keeper enabled");
+        }
+
+        log_msg(LOG_INFO, "SBUS Router initialization complete");
+    }
 }

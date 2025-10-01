@@ -28,11 +28,20 @@ static inline bool shouldYieldToWiFi(BridgeContext* ctx, BridgeMode mode) {
 
 // Process data from Device 1 UART input
 static inline void processDevice1Input(BridgeContext* ctx) {
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
-    static uint32_t d1BytesTotal = 0;
-    static uint32_t lastReport = 0;
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
-    
+    // CRITICAL: Check Device1 role first!
+    extern Config config;
+
+    // Note: Device1 SBUS_IN must still read data from UART!
+    // Old code that skipped reading was from when only Device2/3 could be SBUS
+    // Now Device1 can be SBUS source, so it must read its own data
+
+    // Poll Device1 DMA events first (for both UART and SBUS modes)
+    // TODO: Simplify architecture - add typed DMA pointers to BridgeContext to avoid static_cast
+    if (ctx->interfaces.uartBridgeSerial) {
+        static_cast<UartDMA*>(ctx->interfaces.uartBridgeSerial)->pollEvents();
+    }
+
+    // Normal UART bridge processing for D1_UART1
     // Local buffer for batch reading (sized for MAVLink v2 max frame + margin)
     uint8_t buffer[320];
     
@@ -41,38 +50,21 @@ static inline void processDevice1Input(BridgeContext* ctx) {
         // Batch read - reads all available bytes (up to buffer size)
         // CRITICAL: Does NOT wait for buffer to fill - reads what's available
         size_t bytesRead = ctx->interfaces.uartBridgeSerial->readBytes(buffer, sizeof(buffer));
-        
+
         if (bytesRead == 0) {
             // No data read (mutex was busy or no data)
             break;
         }
         
-        // === TEMPORARY DIAGNOSTIC BLOCK START ===
-        d1BytesTotal += bytesRead;
-        // === TEMPORARY DIAGNOSTIC BLOCK END ===
-        
-        // Write entire batch to telemetry buffer at once
+        // Write to telemetryBuffer (always exists for Device1)
         if (ctx->buffers.telemetryBuffer) {
             size_t written = ctx->buffers.telemetryBuffer->write(buffer, bytesRead);
-            // === TEMPORARY DIAGNOSTIC BLOCK START ===
-            if (written < bytesRead) {
-                log_msg(LOG_WARNING, "[D1] TelemetryBuffer overflow! Lost %u bytes", bytesRead - written);
-            }
-            // === TEMPORARY DIAGNOSTIC BLOCK END ===
         }
         
         // Update statistics once per batch (not per byte)
         g_deviceStats.device1.rxBytes.fetch_add(bytesRead, std::memory_order_relaxed);
         g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
     }
-    
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
-    if (millis() - lastReport > 1000) {
-        log_msg(LOG_INFO, "D1 Input: %u bytes/sec", d1BytesTotal);
-        d1BytesTotal = 0;
-        lastReport = millis();
-    }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
 }
 
 // Process Device3 UART Bridge RX
@@ -179,15 +171,26 @@ static inline void processDevice2USB(BridgeContext* ctx) {
 static inline void processDevice2UART(BridgeContext* ctx) {
     // Poll Device2 DMA events first
     static_cast<UartDMA*>(ctx->interfaces.device2Serial)->pollEvents();
-    
+
+    extern Config config;
+
     // Process data in blocks for efficiency
     uint8_t buffer[256];
     size_t totalProcessed = 0;
-    
+
     while (ctx->interfaces.device2Serial->available() > 0 && totalProcessed < 512) {
-        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
-        size_t toRead = min(min((size_t)ctx->interfaces.device2Serial->available(), 
-                                sizeof(buffer)), canWrite);
+        // For SBUS_IN, don't check UART1 canWrite - data goes to buffer, not UART1
+        size_t toRead;
+        if (config.device2.role == D2_SBUS_IN) {
+            // SBUS_IN: read all available data (up to buffer size)
+            toRead = min((size_t)ctx->interfaces.device2Serial->available(), sizeof(buffer));
+        } else {
+            // UART2/SBUS_OUT: check UART1 write space
+            size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+            toRead = min(min((size_t)ctx->interfaces.device2Serial->available(),
+                            sizeof(buffer)), canWrite);
+        }
+
         size_t actualRead = 0;
         for (int i = 0; i < toRead; i++) {
             int byte = ctx->interfaces.device2Serial->read();

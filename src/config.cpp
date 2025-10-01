@@ -3,12 +3,26 @@
 #include "defines.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include "esp_heap_caps.h"
 
 // Configuration constants
 #define DEFAULT_BAUDRATE        115200
 #define DEFAULT_UDP_PORT        14560
 #define JSON_PREVIEW_SIZE       200
 #define IP_BUFFER_SIZE          15
+
+// Helper function to create optimized JsonDocument for config operations
+static JsonDocument createConfigJsonDocument() {
+    // For large config JSON, try to use PSRAM if available
+    size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (psramFree > 2048) {
+        log_msg(LOG_DEBUG, "Config JSON: PSRAM available (%zu KB free)", psramFree/1024);
+    } else {
+        log_msg(LOG_DEBUG, "Config JSON: Using internal RAM (PSRAM: %zu bytes free)", psramFree);
+    }
+
+    return JsonDocument();
+}
 
 // Helper functions for string conversion
 const char* parity_to_string(uart_parity_t parity) {
@@ -119,14 +133,8 @@ void config_init(Config* config) {
     // MAVLink routing default
     config->mavlinkRouting = false;
 
-    // SBUS Multi-source defaults
-    config->sbusSettings.forcedSource = 3;  // NONE
-    config->sbusSettings.manualMode = false;
-    config->sbusSettings.timeoutMs = 1000;
-    config->sbusSettings.hysteresisMs = 100;
-    config->sbusSettings.priorities[0] = 0;  // LOCAL
-    config->sbusSettings.priorities[1] = 1;  // UART
-    config->sbusSettings.priorities[2] = 2;  // UDP
+    // SBUS settings defaults
+    config->sbusTimingKeeper = false;  // Disabled by default
 }
 
 // Migrate configuration from old versions
@@ -199,6 +207,7 @@ void config_migrate(Config* config) {
         finalizeMigration(config, 9);
         config->mavlinkRouting = false;  // Default disabled
     }
+
 }
 
 // Load configuration from LittleFS
@@ -223,7 +232,7 @@ void config_load(Config* config) {
 bool config_load_from_json(Config* config, const String& jsonString) {
     log_msg(LOG_DEBUG, "Parsing JSON config, length: %zu", jsonString.length());
 
-    JsonDocument doc;
+    JsonDocument doc = createConfigJsonDocument();
     DeserializationError error = deserializeJson(doc, jsonString);
 
     if (error) {
@@ -311,6 +320,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->protocolOptimization = doc["protocol"]["optimization"] | PROTOCOL_NONE;
         config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;
         config->mavlinkRouting = doc["protocol"]["mavlink_routing"] | false;
+        config->sbusTimingKeeper = doc["protocol"]["sbus_timing_keeper"] | false;
     }
 
     // System settings like device_version and device_name are NOT loaded from file
@@ -324,10 +334,8 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     return true;
 }
 
-// Convert configuration to JSON string
-String config_to_json(Config* config) {
-    JsonDocument doc;
-
+// Helper function to populate JsonDocument with config data
+static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     // Configuration version
     doc["config_version"] = CURRENT_CONFIG_VERSION;
 
@@ -380,12 +388,26 @@ String config_to_json(Config* config) {
     doc["protocol"]["optimization"] = config->protocolOptimization;
     doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;
     doc["protocol"]["mavlink_routing"] = config->mavlinkRouting;
+    doc["protocol"]["sbus_timing_keeper"] = config->sbusTimingKeeper;
 
     // Note: device_version and device_name are NOT saved - always use compiled values
+}
+
+// Convert configuration to JSON string
+String config_to_json(Config* config) {
+    JsonDocument doc = createConfigJsonDocument();
+    populateConfigExportJson(doc, config);
 
     String result;
     serializeJson(doc, result);
     return result;
+}
+
+// Stream configuration JSON directly to Print output
+void config_to_json_stream(Print& output, const Config* config) {
+    JsonDocument doc = createConfigJsonDocument();
+    populateConfigExportJson(doc, config);
+    serializeJson(doc, output);
 }
 
 // Save configuration to LittleFS

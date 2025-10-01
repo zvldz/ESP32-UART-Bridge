@@ -5,6 +5,9 @@
 #include "../usb/usb_interface.h"
 #include "uart_interface.h"
 
+// Forward declarations
+class ProtocolPipeline;
+
 // Task functions
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
 void senderTask(void* parameter);      // ADD: Sender task function
@@ -18,5 +21,8 @@ extern SemaphoreHandle_t udpLogMutex;
 // External device serial interfaces (defined in uartbridge.cpp)
 extern UartInterface* device2Serial;
 extern UartInterface* device3Serial;
+
+// Get protocol pipeline instance
+ProtocolPipeline* getProtocolPipeline();
 
 #endif // UARTBRIDGE_H

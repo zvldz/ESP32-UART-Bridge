@@ -13,6 +13,8 @@
 #include "protocols/protocol_pipeline.h"
 #include "circular_buffer.h"
 #include "leds.h"  // For LED notifications
+#include "protocols/sbus_router.h"
+#include "device_init.h"  // For hasSbusDevice()
 
 // External objects
 extern Config config;
@@ -32,6 +34,7 @@ static Task tDnsProcess(150, TASK_FOREVER, nullptr);
 static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
 Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring - exported for external control
+Task tSbusRouterTick(10, TASK_FOREVER, nullptr);  // Every 10ms - exported for external control
 
 // Simple snapshot for LED comparison (not atomic)
 struct LedSnapshot {
@@ -65,7 +68,14 @@ void initializeScheduler() {
         runDroppedDataStats(); 
     });
     
-    tWiFiTimeout.set(WIFI_TIMEOUT, TASK_ONCE, []{ 
+    tWiFiTimeout.set(WIFI_TIMEOUT, TASK_ONCE, []{
+        // Check if firmware update is in progress
+        extern SystemState systemState;
+        if (systemState.firmwareUpdateInProgress) {
+            log_msg(LOG_INFO, "WiFi timeout skipped - firmware update in progress");
+            return;  // Don't reboot during firmware update
+        }
+
         log_msg(LOG_INFO, "WiFi timeout - switching to standalone mode");
         ESP.restart();
     });
@@ -129,7 +139,11 @@ void initializeScheduler() {
             }
         }
     });
-    
+
+    tSbusRouterTick.set(10, TASK_FOREVER, []{
+        SbusRouter::getInstance()->tick();
+    });
+
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
         
@@ -233,7 +247,8 @@ void initializeScheduler() {
     taskScheduler.addTask(tRebootDevice);
     taskScheduler.addTask(tUdpLoggerTask);
     taskScheduler.addTask(tLedMonitor);
-    
+    taskScheduler.addTask(tSbusRouterTick);
+
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
     tCrashlogUpdate.enable();
@@ -251,9 +266,12 @@ void enableStandaloneTasks() {
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
     tLedMonitor.enable();  // Enable LED monitoring in standalone mode
-    
-    
-    
+
+    // Enable SBUS Router tick if ANY SBUS device configured
+    if (hasSbusDevice()) {
+        tSbusRouterTick.enable();
+    }
+
     // Disable network mode tasks
     tDnsProcess.disable();
     tWiFiTimeout.disable();
@@ -262,24 +280,28 @@ void enableStandaloneTasks() {
 void enableNetworkTasks(bool temporaryNetwork) {
     // Enable tasks for network setup mode
     tDnsProcess.enable();
-    
+
     // Only start timeout for temporary network (setup AP)
     if (temporaryNetwork) {
         startWiFiTimeout();
     }
-    
+
     // Bridge tasks continue to work in network mode
     tBridgeActivity.enable();
     tLedMonitor.disable();  // Disable LED monitoring in network mode
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
-    
-    
+
+    // Enable SBUS Router tick if ANY SBUS device configured
+    if (hasSbusDevice()) {
+        tSbusRouterTick.enable();
+    }
+
     // Enable UDP Logger task if Device 4 is in Logger mode
     if (config.device4.role == D4_LOG_NETWORK) {
         tUdpLoggerTask.enable();
     }
-    
+
 }
 
 void disableAllTasks() {
