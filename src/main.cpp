@@ -66,6 +66,7 @@ const char* getDevice3RoleName(uint8_t role);
 void on_wifi_connected();
 void on_wifi_disconnected();
 
+
 // FIRST thing - disable brownout using constructor attribute
 void disableBrownout() __attribute__((constructor));
 
@@ -132,9 +133,32 @@ void setup() {
     config_load(&config);
     log_msg(LOG_INFO, "Configuration loaded");
 
+    // Validate SBUS configuration (block incompatible combinations)
+    if (config.device1.role == D1_SBUS_IN) {
+        // Block D1_SBUS_IN + D2_USB (requires SBUS→UART converter not implemented)
+        if (config.device2.role == D2_USB) {
+            log_msg(LOG_ERROR, "Configuration error: D1_SBUS_IN → D2_USB not supported");
+            log_msg(LOG_ERROR, "SBUS→USB requires protocol converter (not implemented)");
+            log_msg(LOG_INFO, "Please use D2_SBUS_OUT for native SBUS output");
+            // Reset to safe defaults
+            config.device2.role = D2_NONE;
+            config_save(&config);
+        }
+        // Block D1_SBUS_IN + UART Bridge roles
+        if (config.device2.role == D2_UART2 || config.device3.role == D3_UART3_BRIDGE) {
+            log_msg(LOG_ERROR, "Configuration error: SBUS→UART conversion not implemented");
+            log_msg(LOG_INFO, "Use SBUS_OUT roles for native SBUS transmission");
+            // Reset problematic devices
+            if (config.device2.role == D2_UART2) config.device2.role = D2_NONE;
+            if (config.device3.role == D3_UART3_BRIDGE) config.device3.role = D3_NONE;
+            config_save(&config);
+        }
+    }
+
     // Auto-detect protocol optimization based on device roles
-    bool hasSBUSDevice = (config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
-                         config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
+    bool hasSBUSDevice = (config.device1.role == D1_SBUS_IN ||
+                         config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
+                         config.device3.role == D3_SBUS_OUT);
 
     if (hasSBUSDevice) {
         if (config.protocolOptimization != PROTOCOL_SBUS) {
@@ -188,6 +212,9 @@ void setup() {
         // Enable mode-specific tasks
         enableNetworkTasks(systemState.isTemporaryNetwork);
     }
+
+    // Register SBUS outputs after UART interfaces created in both modes
+    registerSbusOutputs();
 
     // Create FreeRTOS tasks
     createTasks();
@@ -287,21 +314,35 @@ void detectMode() {
     bridgeMode = BRIDGE_STANDALONE;
 }
 
-void initStandaloneMode() {
-    // Set LED mode for data flash explicitly
-    led_set_mode(LED_MODE_DATA_FLASH);
-
-    // Ensure network is not active in standalone mode
-    systemState.networkActive = false;
-
+// Common initialization for both Standalone and Network modes
+void initCommonDevices() {
     // Set global USB mode based on configuration
     usbMode = config.usb_mode;
 
     // Initialize UART DMA - always use DMA implementation
     if (!uartBridgeSerialDMA) {
-        uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
-        uartBridgeSerial = uartBridgeSerialDMA;
-        log_msg(LOG_INFO, "UART DMA interface created");
+        if (config.device1.role == D1_SBUS_IN) {
+            // CRITICAL: Special DMA configuration for SBUS
+            UartDMA::DmaConfig dmaCfg = {
+                .useEventTask = false,     // Polling mode for SBUS
+                .dmaRxBufSize = 512,       // Minimal RX buffer for SBUS
+                .dmaTxBufSize = 0,         // NO TX BUFFER - critical for memory saving!
+                .ringBufSize = 1024,       // Small ring buffer
+                .eventTaskPriority = 0,    // Not used in polling mode
+                .eventQueueSize = 10       // Minimal queue
+            };
+
+            uartBridgeSerialDMA = new UartDMA(UART_NUM_1, dmaCfg);
+            uartBridgeSerial = uartBridgeSerialDMA;
+
+            log_msg(LOG_INFO, "Device1 SBUS_IN: Special DMA config (no TX, minimal buffers)");
+        } else {
+            // Normal DMA configuration for UART bridge
+            UartDMA::DmaConfig dmaCfg = UartDMA::getDefaultDmaConfig();
+            uartBridgeSerialDMA = new UartDMA(UART_NUM_1, dmaCfg);
+            uartBridgeSerial = uartBridgeSerialDMA;
+            log_msg(LOG_INFO, "UART DMA interface created");
+        }
     }
 
     // Create USB interface based on configuration (only if Device 2 is USB)
@@ -330,6 +371,17 @@ void initStandaloneMode() {
 
     // Initialize UART bridge
     initMainUART(uartBridgeSerial, &config, usbInterface);
+}
+
+void initStandaloneMode() {
+    // Set LED mode for data flash explicitly
+    led_set_mode(LED_MODE_DATA_FLASH);
+
+    // Ensure network is not active in standalone mode
+    systemState.networkActive = false;
+
+    // Initialize common devices (UART DMA, USB, Device1)
+    initCommonDevices();
 
     log_msg(LOG_INFO, "UART Bridge ready - transparent forwarding active");
 }
@@ -367,42 +419,8 @@ void initNetworkMode() {
     // Set network as active
     systemState.networkActive = true;
 
-    // Use configured USB mode (from config file) - only if Device 2 is USB
-    usbMode = config.usb_mode;
-
-    // Initialize UART DMA - always use DMA implementation
-    if (!uartBridgeSerialDMA) {
-        uartBridgeSerialDMA = new UartDMA(UART_NUM_1);
-        uartBridgeSerial = uartBridgeSerialDMA;
-        log_msg(LOG_INFO, "UART DMA interface created for network mode");
-    }
-
-    // Create USB interface even in network mode (for bridge functionality)
-    if (config.device2.role == D2_USB) {
-        switch(config.usb_mode) {
-            case USB_MODE_HOST:
-                log_msg(LOG_INFO, "Creating USB Host interface in network mode");
-                usbInterface = createUsbHost(config.baudrate);
-                break;
-            case USB_MODE_DEVICE:
-            default:
-                log_msg(LOG_INFO, "Creating USB Device interface in network mode");
-                usbInterface = createUsbDevice(config.baudrate);
-                break;
-        }
-
-        if (usbInterface) {
-            usbInterface->init();
-            log_msg(LOG_INFO, "USB interface initialized in network mode");
-        } else {
-            log_msg(LOG_ERROR, "Failed to create USB interface in network mode");
-        }
-    } else {
-        log_msg(LOG_INFO, "Device 2 is not configured for USB in network mode");
-    }
-
-    // Initialize UART bridge even in network mode (for statistics)
-    initMainUART(uartBridgeSerial, &config, usbInterface);
+    // Initialize common devices (UART DMA, USB, Device1)
+    initCommonDevices();
 
     // Initialize UDP transport for Device4
     if (config.device4.role == D4_NETWORK_BRIDGE ||
@@ -422,17 +440,40 @@ void initNetworkMode() {
                 } else {
                     log_msg(LOG_INFO, "UDP listening on port %d with 4KB buffer", config.device4_config.port);
 
-                    // Setup callback - only writes to buffer
-                    udpTransport->onPacket([](AsyncUDPPacket packet) {
-                        if (udpRxBuffer) {
-                            size_t written = udpRxBuffer->write(packet.data(), packet.length());
-                            if (written < packet.length()) {
-                                log_msg(LOG_WARNING, "UDP RX buffer overflow: %zu/%zu bytes dropped",
-                                       packet.length() - written, packet.length());
+                    // Setup callback based on protocol optimization
+                    if (config.protocolOptimization == PROTOCOL_SBUS) {
+                        // SBUS mode - filter for valid SBUS frames only
+                        udpTransport->onPacket([](AsyncUDPPacket packet) {
+                            if (udpRxBuffer) {
+                                size_t len = packet.length();
+
+                                if (len == 25) {
+                                    // Single frame - validate
+                                    if (packet.data()[0] == 0x0F) {
+                                        udpRxBuffer->write(packet.data(), 25);
+                                        g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
+                                    }
+                                } else if (len == 50) {
+                                    // Two frames - validate both
+                                    if (packet.data()[0] == 0x0F && packet.data()[25] == 0x0F) {
+                                        udpRxBuffer->write(packet.data(), 50);
+                                        g_deviceStats.device4.rxPackets.fetch_add(2, std::memory_order_relaxed);
+                                    }
+                                }
+                                // Ignore other sizes in SBUS mode
                             }
-                            g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
-                        }
-                    });
+                        });
+                        log_msg(LOG_INFO, "UDP callback configured for SBUS protocol (filtering enabled)");
+                    } else {
+                        // RAW/MAVLink mode - accept all packets
+                        udpTransport->onPacket([](AsyncUDPPacket packet) {
+                            if (udpRxBuffer) {
+                                udpRxBuffer->write(packet.data(), packet.length());
+                                g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
+                            }
+                        });
+                        log_msg(LOG_INFO, "UDP callback configured for RAW/MAVLink protocol (no filtering)");
+                    }
                 }
             } else {
                 // Logger mode - TX only
@@ -617,7 +658,7 @@ void createTasks() {
         config.device2.role == D2_SBUS_OUT ||       // SBUS output
         config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
         config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
-        config.device3.role == D3_SBUS_IN ||        // SBUS input
+        // D3_SBUS_IN removed - not supported
         config.device3.role == D3_SBUS_OUT ||       // SBUS output
         config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
         config.device4.role == D4_LOG_NETWORK) {    // UDP logger

@@ -10,6 +10,10 @@
 
 // Generate configuration JSON
 String getConfigJson();
+void getConfigJson(Print& output);
+
+// Generate logs JSON
+void writeLogsJson(Print& output);
 
 // API handlers for async web server
 void handleStatus(AsyncWebServerRequest *request);
@@ -21,10 +25,9 @@ void handleClearCrashLog(AsyncWebServerRequest *request);
 void handleExportConfig(AsyncWebServerRequest *request);
 void handleImportConfig(AsyncWebServerRequest *request);
 void handleClientIP(AsyncWebServerRequest *request);
-
-// SBUS API handlers
+void handleSbusSetSource(AsyncWebServerRequest *request);
+void handleSbusSetMode(AsyncWebServerRequest *request);
 void handleSbusStatus(AsyncWebServerRequest *request);
-void handleSbusSource(AsyncWebServerRequest *request);
-void handleSbusConfig(AsyncWebServerRequest *request);
+
 
 #endif // WEB_API_H

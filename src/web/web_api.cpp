@@ -1,6 +1,7 @@
 #include "protocols/protocol_stats.h"
 #include "web_api.h"
 #include "web_interface.h"
+#include "esp_heap_caps.h"
 #include "logging.h"
 #include "config.h"
 #include "../device_stats.h"
@@ -11,13 +12,14 @@
 #include "scheduler_tasks.h"
 #include "../wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
-#include "protocols/sbus_hub.h"
-#include "protocols/sbus_multi_source.h"
+#include "protocols/sbus_router.h"
+#include "protocols/sbus_fast_parser.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include "esp_system.h"           // for esp_get_idf_version()
 #include "esp_arduino_version.h"  // for ESP_ARDUINO_VERSION_STR
+#include "esp_heap_caps.h"        // for PSRAM allocation
 
 
 // External objects from main.cpp
@@ -29,28 +31,25 @@ extern UartInterface* uartBridgeSerial;
 
 // Validate SBUS configuration
 bool validateSbusConfig(Config& cfg) {
-    // Only forbid critical combinations:
+    // Check if there are SBUS_IN without any SBUS_OUT
+    bool hasSbusIn = (cfg.device1.role == D1_SBUS_IN ||
+                      cfg.device2.role == D2_SBUS_IN ||
+                      cfg.device4.role == D4_SBUS_UDP_RX);
+    bool hasSbusOut = (cfg.device2.role == D2_SBUS_OUT ||
+                       cfg.device3.role == D3_SBUS_OUT ||
+                       cfg.device4.role == D4_SBUS_UDP_TX);
 
-    // 1. Two SBUS_OUT - always conflict
-    if (cfg.device2.role == D2_SBUS_OUT && cfg.device3.role == D3_SBUS_OUT) {
-        log_msg(LOG_ERROR, "Cannot have SBUS_OUT on both Device2 and Device3");
+    if (hasSbusIn && !hasSbusOut) {
+        log_msg(LOG_ERROR, "SBUS_IN devices require at least one SBUS_OUT device");
         return false;
     }
 
-    // 2. Two SBUS_IN - not supported yet (failover planned for future)
-    if (cfg.device2.role == D2_SBUS_IN && cfg.device3.role == D3_SBUS_IN) {
-        log_msg(LOG_ERROR, "Multiple SBUS_IN not supported in current version");
-        return false;
-    }
-
-    // All other combinations allowed for experiments
     return true;
 }
 
 // Generate complete configuration JSON for initial page load
-String getConfigJson() {
-    JsonDocument doc;
-
+// Helper function to populate JsonDocument with config data
+static void populateConfigJson(JsonDocument& doc) {
     // System info
     doc["deviceName"] = config.device_name;
     doc["version"] = config.device_version;
@@ -110,11 +109,13 @@ String getConfigJson() {
     doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
 
     // Device roles
+    doc["device1Role"] = String(config.device1.role);
     doc["device2Role"] = String(config.device2.role);
     doc["device3Role"] = String(config.device3.role);
     doc["device4Role"] = String(config.device4.role);
 
     // Device role names
+    doc["device1RoleName"] = getDevice1RoleName(config.device1.role);
     doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
     doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
@@ -128,12 +129,14 @@ String getConfigJson() {
     doc["logLevelUart"] = (int)config.log_level_uart;
     doc["logLevelNetwork"] = (int)config.log_level_network;
 
-    // UART configuration string
-    String uartConfig = String(config.baudrate) + " baud, " +
-                       word_length_to_string(config.databits) +
-                       parity_to_string(config.parity)[0] +  // First char only (N/E/O)
-                       stop_bits_to_string(config.stopbits);
-    doc["uartConfig"] = uartConfig;
+    // UART configuration string - use char buffer to avoid String concatenation
+    char uartConfigBuf[32];
+    snprintf(uartConfigBuf, sizeof(uartConfigBuf), "%d baud, %s%c%s",
+             config.baudrate,
+             word_length_to_string(config.databits),
+             parity_to_string(config.parity)[0],  // First char only (N/E/O)
+             stop_bits_to_string(config.stopbits));
+    doc["uartConfig"] = uartConfigBuf;
 
     // Flow control status
     if (uartBridgeSerial) {
@@ -168,12 +171,15 @@ String getConfigJson() {
         g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
     doc["totalTraffic"] = totalTraffic;
 
-    // Last activity
+    // Last activity - use char buffer to avoid String concatenation
     unsigned long lastActivity = g_deviceStats.lastGlobalActivity.load(std::memory_order_relaxed);
     if (lastActivity == 0) {
         doc["lastActivity"] = "Never";
     } else {
-        doc["lastActivity"] = String((millis() - lastActivity) / MS_TO_SECONDS) + " seconds ago";
+        char activityBuf[32];
+        snprintf(activityBuf, sizeof(activityBuf), "%lu seconds ago",
+                 (millis() - lastActivity) / MS_TO_SECONDS);
+        doc["lastActivity"] = activityBuf;
     }
 
     // Protocol optimization configuration
@@ -189,22 +195,25 @@ String getConfigJson() {
 
     // Log display count
     doc["logDisplayCount"] = LOG_DISPLAY_COUNT;
+}
+
+String getConfigJson() {
+    JsonDocument doc;
+    populateConfigJson(doc);
 
     String json;
     serializeJson(doc, json);
     return json;
 }
 
-// Handle status request - return full config and stats (used by AJAX)
-void handleStatus(AsyncWebServerRequest *request) {
-    // Use existing getConfigJson() function which includes everything needed
-    String json = getConfigJson();
-    request->send(200, "application/json", json);
+void getConfigJson(Print& output) {
+    JsonDocument doc;
+    populateConfigJson(doc);
+    serializeJson(doc, output);
 }
 
-// Handle logs request
-void handleLogs(AsyncWebServerRequest *request) {
-    JsonDocument doc;
+// Helper function to populate JsonDocument with logs data
+static void populateLogsJson(JsonDocument& doc) {
     JsonArray logs = doc["logs"].to<JsonArray>();
 
     String logBuffer[LOG_DISPLAY_COUNT];
@@ -214,10 +223,32 @@ void handleLogs(AsyncWebServerRequest *request) {
     for (int i = 0; i < actualCount; i++) {
         logs.add(logBuffer[i]);
     }
+}
 
-    String json;
-    serializeJson(doc, json);
-    request->send(200, "application/json", json);
+void writeLogsJson(Print& output) {
+    JsonDocument doc;
+    populateLogsJson(doc);
+    serializeJson(doc, output);
+}
+
+// Handle status request - return full config and stats (used by AJAX)
+void handleStatus(AsyncWebServerRequest *request) {
+    // Stream JSON response to avoid large String allocation
+    auto* res = request->beginResponseStream("application/json");
+    res->addHeader("Connection", "close");
+
+    getConfigJson(*res);
+    request->send(res);
+}
+
+// Handle logs request
+void handleLogs(AsyncWebServerRequest *request) {
+    // Stream JSON response to avoid large String allocation
+    auto* res = request->beginResponseStream("application/json");
+    res->addHeader("Connection", "close");
+
+    writeLogsJson(*res);
+    request->send(res);
 }
 
 // Handle save configuration
@@ -308,6 +339,20 @@ void handleSave(AsyncWebServerRequest *request) {
         }
     }
 
+    // Device 1 role (NEW!)
+    if (request->hasParam("device1_role", true)) {
+        const AsyncWebParameter* p = request->getParam("device1_role", true);
+        int role = p->value().toInt();
+        if (role >= D1_UART1 && role <= D1_SBUS_IN) {
+            if (role != config.device1.role) {
+                config.device1.role = role;
+                configChanged = true;
+                const char* roleName = (role == D1_SBUS_IN) ? "SBUS_IN" : "UART Bridge";
+                log_msg(LOG_INFO, "Device 1 role changed to %s", roleName);
+            }
+        }
+    }
+
     // Device 2 role
     if (request->hasParam("device2_role", true)) {
         const AsyncWebParameter* p = request->getParam("device2_role", true);
@@ -325,6 +370,11 @@ void handleSave(AsyncWebServerRequest *request) {
     if (request->hasParam("device3_role", true)) {
         const AsyncWebParameter* p = request->getParam("device3_role", true);
         int role = p->value().toInt();
+        // Skip value 4 (old SBUS_IN)
+        if (role == 4) {
+            log_msg(LOG_WARNING, "D3_SBUS_IN no longer supported, ignoring");
+            role = D3_NONE;
+        }
         if (role >= D3_NONE && role <= D3_SBUS_OUT) {
             if (role != config.device3.role) {
                 config.device3.role = role;
@@ -634,18 +684,23 @@ void handleClearCrashLog(AsyncWebServerRequest *request) {
 void handleExportConfig(AsyncWebServerRequest *request) {
     log_msg(LOG_INFO, "Configuration export requested");
 
-    // Generate random ID for filename uniqueness
-    String randomId = String(millis() & 0xFFFFFF, HEX);
-    randomId.toUpperCase();
-    String filename = "esp32-bridge-config-" + randomId + ".json";
+    // Generate random ID for filename uniqueness - use char buffer
+    char filename[64];
+    snprintf(filename, sizeof(filename), "esp32-bridge-config-%06X.json",
+             (unsigned int)(millis() & 0xFFFFFF));
 
-    // Get configuration JSON (without runtime statistics)
-    String configJson = config_to_json(&config);
+    // Stream JSON response to avoid large String allocation
+    auto* res = request->beginResponseStream("application/json");
 
-    // Send as downloadable file
-    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", configJson);
-    response->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-    request->send(response);
+    // Build Content-Disposition header with filename
+    char contentDisposition[128];
+    snprintf(contentDisposition, sizeof(contentDisposition),
+             "attachment; filename=\"%s\"", filename);
+    res->addHeader("Content-Disposition", contentDisposition);
+    res->addHeader("Connection", "close");
+
+    config_to_json_stream(*res, &config);
+    request->send(res);
 }
 
 // Import configuration from uploaded JSON file
@@ -653,29 +708,39 @@ void handleImportConfig(AsyncWebServerRequest *request) {
     // Check if file data was uploaded
     if (!request->_tempObject) {
         log_msg(LOG_ERROR, "Import failed: No file uploaded");
-        request->send(400, "text/plain", "No file uploaded");
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"No file uploaded\"}");
         return;
     }
 
-    String* fileContent = (String*)request->_tempObject;
-    log_msg(LOG_INFO, "Configuration import requested, content length: %zu", fileContent->length());
+    ImportData* importData = (ImportData*)request->_tempObject;
+    log_msg(LOG_INFO, "Configuration import requested, content length: %zu", importData->len);
 
     // Log first 100 characters for debugging (safe for display)
-    String preview = fileContent->substring(0, 100);
-    log_msg(LOG_DEBUG, "JSON preview: %s", preview.c_str());
+    size_t previewLen = importData->len > 100 ? 100 : importData->len;
+    char preview[101];
+    strncpy(preview, importData->ptr, previewLen);
+    preview[previewLen] = '\0';
+    log_msg(LOG_DEBUG, "JSON preview: %s", preview);
 
-    // Parse configuration from uploaded JSON
+    // Parse configuration from PSRAM buffer
     Config tempConfig;
     config_init(&tempConfig);
 
-    if (!config_load_from_json(&tempConfig, *fileContent)) {
+    // Create String from buffer for compatibility with existing config_load_from_json
+    String jsonString(importData->ptr);
+
+    if (!config_load_from_json(&tempConfig, jsonString)) {
         log_msg(LOG_ERROR, "Import failed: JSON parsing error");
-        delete fileContent;  // Clean up
-        request->send(400, "text/plain", "Invalid configuration file");
+        heap_caps_free(importData->ptr);
+        delete importData;
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid configuration file\"}");
         return;
     }
 
-    delete fileContent;  // Clean up
+    // Clean up PSRAM buffer
+    heap_caps_free(importData->ptr);
+    delete importData;
+    request->_tempObject = nullptr;
 
     // Apply imported configuration
     config = tempConfig;
@@ -696,148 +761,135 @@ void handleClientIP(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", clientIP);
 }
 
-// Helper to get SbusHub instance
-SbusHub* getSbusHub() {
-    BridgeContext* ctx = getBridgeContext();
-    if (!ctx || !ctx->protocolPipeline) return nullptr;
-
-    // Check Device2 for SBUS_OUT
-    if (config.device2.role == D2_SBUS_OUT) {
-        PacketSender* sender = ctx->protocolPipeline->getSender(IDX_DEVICE2_UART2);
-        if (sender) {
-            return static_cast<SbusHub*>(sender);
-        }
-    }
-
-    // Check Device3 for SBUS_OUT
-    if (config.device3.role == D3_SBUS_OUT) {
-        PacketSender* sender = ctx->protocolPipeline->getSender(IDX_DEVICE3);
-        if (sender) {
-            return static_cast<SbusHub*>(sender);
-        }
-    }
-
-    return nullptr;
-}
-
-// Add SBUS status endpoint
-void handleSbusStatus(AsyncWebServerRequest *request) {
-    JsonDocument doc;
-
-    SbusHub* hub = getSbusHub();
-    if (!hub || !hub->getMultiSource()) {
-        doc["error"] = "SBUS not configured";
-        String json;
-        serializeJson(doc, json);
-        request->send(404, "application/json", json);
+// Handle SBUS source switching
+void handleSbusSetSource(AsyncWebServerRequest *request) {
+    if (!request->hasParam("source")) {
+        request->send(400, "application/json",
+            "{\"status\":\"error\",\"message\":\"Missing source parameter\"}");
         return;
     }
 
-    SbusMultiSource* ms = hub->getMultiSource();
+    String sourceStr = request->getParam("source")->value();
+    uint8_t source = sourceStr.toInt();
 
-    // Current status
-    doc["active"] = SbusMultiSource::getSourceName(ms->getActiveSource());
-    doc["mode"] = ms->isManualMode() ? "manual" : "auto";
-
-    // Source states
-    JsonObject sources = doc["sources"].to<JsonObject>();
-    for (int i = 0; i < 3; i++) {
-        SbusSourceType type = (SbusSourceType)i;
-        const SbusSourceState& state = ms->getSourceState(type);
-
-        JsonObject src = sources[SbusMultiSource::getSourceName(type)].to<JsonObject>();
-        src["quality"] = state.getQuality();
-        src["lastPacket"] = state.hasData ? (millis() - state.lastFrameTime) : 0;
-        src["state"] = state.getStateString();
-        src["framesReceived"] = state.framesReceived;
+    if (source > 2) {
+        request->send(400, "application/json",
+            "{\"status\":\"error\",\"message\":\"Invalid source\"}");
+        return;
     }
 
-    String json;
-    serializeJson(doc, json);
-    request->send(200, "application/json", json);
+    SbusRouter* router = SbusRouter::getInstance();
+
+    // Switch to manual mode and set source
+    router->setMode(SbusRouter::MODE_MANUAL);
+    router->setManualSource(source);
+
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["source"] = source;
+    doc["mode"] = "manual";
+
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+
+    log_msg(LOG_INFO, "SBUS manual source set to %d", source);
 }
 
-// Add SBUS source control endpoint
-void handleSbusSource(AsyncWebServerRequest *request) {
-    if (request->method() == HTTP_POST) {
-        SbusHub* hub = getSbusHub();
-        if (!hub || !hub->getMultiSource()) {
-            request->send(404, "application/json", "{\"status\":\"error\",\"message\":\"SBUS not configured\"}");
-            return;
-        }
-
-        if (request->hasParam("source", true)) {
-            String source = request->getParam("source", true)->value();
-            SbusMultiSource* ms = hub->getMultiSource();
-
-            if (source == "auto") {
-                ms->setAutoMode();
-            } else if (source == "local") {
-                ms->forceSource(SBUS_SOURCE_LOCAL);
-            } else if (source == "uart") {
-                ms->forceSource(SBUS_SOURCE_UART);
-            } else if (source == "udp") {
-                ms->forceSource(SBUS_SOURCE_UDP);
-            } else {
-                request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid source\"}");
-                return;
-            }
-
-            request->send(200, "application/json", "{\"status\":\"ok\"}");
-        } else {
-            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing source parameter\"}");
-        }
-    } else {
-        request->send(405, "application/json", "{\"status\":\"error\",\"message\":\"Method not allowed\"}");
+void handleSbusSetMode(AsyncWebServerRequest *request) {
+    if (!request->hasParam("mode")) {
+        request->send(400, "application/json",
+            "{\"status\":\"error\",\"message\":\"Missing mode parameter\"}");
+        return;
     }
-}
 
-// Add SBUS config endpoint
-void handleSbusConfig(AsyncWebServerRequest *request) {
-    if (request->method() == HTTP_GET) {
-        SbusHub* hub = getSbusHub();
-        if (!hub || !hub->getMultiSource()) {
-            request->send(404, "application/json", "{\"error\":\"SBUS not configured\"}");
-            return;
-        }
+    String modeStr = request->getParam("mode")->value();
+    int mode = modeStr.toInt();
 
-        const SbusMultiSourceConfig& cfg = hub->getMultiSource()->getConfig();
-
-        JsonDocument doc;
-        doc["priorities"][0] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[0]);
-        doc["priorities"][1] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[1]);
-        doc["priorities"][2] = SbusMultiSource::getSourceName((SbusSourceType)cfg.priorities[2]);
-        doc["timeout"] = cfg.timeoutMs;
-        doc["hysteresis"] = cfg.hysteresisMs;
-        doc["failoverEnabled"] = !cfg.manualMode;
-
-        String json;
-        serializeJson(doc, json);
-        request->send(200, "application/json", json);
-
-    } else if (request->method() == HTTP_POST) {
-        SbusHub* hub = getSbusHub();
-        if (!hub || !hub->getMultiSource()) {
-            request->send(404, "application/json", "{\"error\":\"SBUS not configured\"}");
-            return;
-        }
-
-        // Update runtime config
-        SbusMultiSourceConfig msConfig;
-        msConfig.forcedSource = (SbusSourceType)config.sbusSettings.forcedSource;
-        msConfig.manualMode = config.sbusSettings.manualMode;
-        msConfig.timeoutMs = config.sbusSettings.timeoutMs;
-        msConfig.hysteresisMs = config.sbusSettings.hysteresisMs;
-        memcpy(msConfig.priorities, config.sbusSettings.priorities, sizeof(msConfig.priorities));
-
-        hub->getMultiSource()->setConfig(msConfig);
-
-        // For Phase 9.2, we don't parse POST params yet
-        // Phase 9.3 will add full configuration update
-
-        log_msg(LOG_INFO, "SBUS config updated");
-        request->send(200, "application/json", "{\"status\":\"ok\"}");
-    } else {
-        request->send(405, "application/json", "{\"status\":\"error\",\"message\":\"Method not allowed\"}");
+    if (mode != 0 && mode != 1) {
+        request->send(400, "application/json",
+            "{\"status\":\"error\",\"message\":\"Invalid mode (0=AUTO, 1=MANUAL)\"}");
+        return;
     }
+
+    SbusRouter* router = SbusRouter::getInstance();
+    router->setMode(mode == 0 ? SbusRouter::MODE_AUTO : SbusRouter::MODE_MANUAL);
+
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["mode"] = mode;
+
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+
+    log_msg(LOG_INFO, "SBUS mode changed to %s", mode == 0 ? "AUTO" : "MANUAL");
 }
+
+
+// Get current SBUS source status
+void handleSbusStatus(AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    doc["status"] = "ok";
+
+    SbusRouter* router = SbusRouter::getInstance();
+
+    // Router state
+    doc["mode"] = router->getMode();  // 0=AUTO, 1=MANUAL
+    doc["state"] = router->getState();  // 0=OK, 1=HOLD, 2=FAILSAFE
+    doc["activeSource"] = router->getActiveSource();
+
+    // Sources array
+    JsonArray sources = doc["sources"].to<JsonArray>();
+
+    // Device1
+    if (config.device1.role == D1_SBUS_IN) {
+        JsonObject src = sources.add<JsonObject>();
+        src["id"] = SBUS_SOURCE_DEVICE1;
+        src["name"] = "Device1 (GPIO4)";
+        src["configured"] = router->isSourceConfigured(SBUS_SOURCE_DEVICE1);
+        src["quality"] = router->getSourceQuality(SBUS_SOURCE_DEVICE1);
+        src["priority"] = router->getSourcePriority(SBUS_SOURCE_DEVICE1);
+        src["hasData"] = router->getSourceHasData(SBUS_SOURCE_DEVICE1);
+        src["valid"] = router->getSourceIsValid(SBUS_SOURCE_DEVICE1);
+        src["hasFailsafe"] = router->getSourceHasFailsafe(SBUS_SOURCE_DEVICE1);
+    }
+
+    // Device2
+    if (config.device2.role == D2_SBUS_IN) {
+        JsonObject src = sources.add<JsonObject>();
+        src["id"] = SBUS_SOURCE_DEVICE2;
+        src["name"] = "Device2 (GPIO8)";
+        src["configured"] = router->isSourceConfigured(SBUS_SOURCE_DEVICE2);
+        src["quality"] = router->getSourceQuality(SBUS_SOURCE_DEVICE2);
+        src["priority"] = router->getSourcePriority(SBUS_SOURCE_DEVICE2);
+        src["hasData"] = router->getSourceHasData(SBUS_SOURCE_DEVICE2);
+        src["valid"] = router->getSourceIsValid(SBUS_SOURCE_DEVICE2);
+        src["hasFailsafe"] = router->getSourceHasFailsafe(SBUS_SOURCE_DEVICE2);
+    }
+
+    // UDP
+    if (config.device4.role == D4_SBUS_UDP_RX) {
+        JsonObject src = sources.add<JsonObject>();
+        src["id"] = SBUS_SOURCE_UDP;
+        src["name"] = "Device4 (UDP)";
+        src["configured"] = router->isSourceConfigured(SBUS_SOURCE_UDP);
+        src["quality"] = router->getSourceQuality(SBUS_SOURCE_UDP);
+        src["priority"] = router->getSourcePriority(SBUS_SOURCE_UDP);
+        src["hasData"] = router->getSourceHasData(SBUS_SOURCE_UDP);
+        src["valid"] = router->getSourceIsValid(SBUS_SOURCE_UDP);
+        src["hasFailsafe"] = router->getSourceHasFailsafe(SBUS_SOURCE_UDP);
+    }
+
+    // Statistics
+    doc["framesRouted"] = router->getFramesRouted();
+    doc["repeatedFrames"] = router->getRepeatedFrames();
+
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}
+
+
+
+

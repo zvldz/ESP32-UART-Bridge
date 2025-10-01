@@ -224,8 +224,7 @@ def process_html_files(source, target, env):
         "utils.js",
         "device-config.js",
         "form-utils.js",
-        "status-updates.js",
-        "sbus-source.js"
+        "status-updates.js"
     ]
     
     # Check if regeneration needed
@@ -253,12 +252,20 @@ def process_html_files(source, target, env):
         # Process HTML files
         for html_file in sorted(web_src.glob("*.html")):
             print(f"  Processing {html_file.name}")
-            
+
             content = html_file.read_text(encoding='utf-8')
-            
+
+            # Compute version hash and append to asset URLs
+            version_hash = get_files_hash(web_src, js_files)[:8]
+
+            # Append ?v=<hash> to asset URLs in HTML
+            content = content.replace('href="/style.css"', f'href="/style.css?v={version_hash}"')
+            for js_name in js_files:
+                content = content.replace(f'src="/{js_name}"', f'src="/{js_name}?v={version_hash}"')
+
             # Generate constant name
             const_name = f"HTML_{html_file.stem.upper()}"
-            
+
             # Minify and compress
             compressed_data = minify_and_compress(content, 'html', html_file.name)
             

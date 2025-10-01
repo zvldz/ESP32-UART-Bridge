@@ -14,5 +14,5 @@ public:
     bool enqueue(const ParsedPacket& packet) override;
     void processSendQueue(bool bulkMode = false) override;
     bool isReady() const override;
-    const char* getName() const override { return "UART1"; }
+    const char* getName() const override { return "Device1"; }
 };

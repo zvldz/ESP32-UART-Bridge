@@ -2,13 +2,15 @@
 
 ## PROJECT STATUS SUMMARY
 
-**Current Version**: v2.18.1  
-**Current Phase**: Phase 8 - Testing SBUS Implementation  
+**Current Version**: v2.18.4
+**Current Status**: SBUS Phase 2 Complete - Singleton Router with Failsafe & Auto-switching
 **Roadmap**:
-1. Phase 9-10: Multi-source & Failsafe SBUS
-2. Documentation: Update README & Web Help for SBUS
-3. Platform Support: ESP32-S3 Super Mini
-4. Stabilization: Code cleanup & optimization
+1. ✅ Phase 9 (9.1A + 9.2): Manual SBUS multi-source with Web UI - COMPLETED
+2. ✅ Phase 10 (Phase 2): Automatic SBUS source switching and failover - COMPLETED
+3. Documentation: Update README & Web Help for SBUS
+4. ✅ Platform Support: ESP32-S3 Super Mini - COMPLETED (needs testing)
+5. ✅ Memory Optimization: Buffer optimization and PSRAM utilization - COMPLETED
+6. ✅ Code Cleanup & Optimization: Dead code removal, UDP protocol fix - COMPLETED
 
 ## ACTIVE TASKS 🔄
 
@@ -41,33 +43,58 @@
   - [x] Validate failsafe event counting
   - [x] Confirm TX byte statistics for all devices
 
-#### Phase 9 - Multi-Source Support 🟡 NEXT
+#### Phase 9 - Manual Multi-Source Support ✅ COMPLETED
 
-**⚠️ Risk:** May require SbusHub architecture changes if current single-state design incompatible with multiple simultaneous sources.
+- [x] **Implement manual multi-source SBUS handling** ✅ COMPLETED
+  - [x] Phase 9.1A: Web UI foundation with mock data and responsive design
+  - [x] Phase 9.2: Backend implementation with real API endpoints
+  - [x] Multi-source architecture with SbusMultiSource class
+  - [x] **Manual source switching** (LOCAL/UART/UDP) through web interface
+  - [x] Real-time quality metrics and status reporting
+  - [x] Configuration persistence across reboots
+  - [x] Source routing based on physical interface detection
+  - [x] Failsafe integration when no valid source available
+  - [x] UI prepared for automatic mode (Phase 10)
+  - [x] **Device1 & Device2 SBUS_IN support** - Fixed initialization and processing
+  - [x] **Web UI improvements** - Fixed blinking, collapsible blocks, dynamic labels
+  - [x] **Per-device router status** - Each device reports independent SBUS state
 
-- [ ] **Implement multi-source SBUS handling**
-  - [ ] Remove single-source limitation
-  - [ ] Add source priority/selection logic
-  - [ ] Handle concurrent SBUS inputs (Physical + UART + UDP)
-  - [ ] **Device Role Configuration**:
-    - Device 1: SBUS output to flight controller
-    - Device 2: Primary SBUS receiver input
-    - Device 3: Secondary SBUS receiver input
-    - Device 4: Network SBUS stream (UDP) as backup
+#### Phase 10 - SBUS Failsafe/Redundancy ✅ COMPLETED (Phase 2)
 
-#### Phase 10 - SBUS Failsafe/Redundancy 🟡 PLANNED
+- [x] **SBUS Singleton Router Architecture** ✅ COMPLETED
+  - [x] Refactored from multiple routers to single global SbusRouter instance
+  - [x] Smart source selection based on quality metrics (0-100%)
+  - [x] Priority system: Device1 (0) > Device2 (1) > UDP (2)
+  - [x] Anti-flapping protection (500ms delay prevents rapid switching)
+  - [x] Mode control: Auto mode (automatic failover) and Manual mode (forced source)
 
-- [ ] **SBUS Failsafe Mode**
-  - [ ] Automatic failover between multiple SBUS sources
-  - [ ] Monitor all SBUS inputs for valid packets
-  - [ ] Auto-switch on primary loss (>100ms timeout)
-  - [ ] Auto-return to primary when signal restored
-  - [ ] Send SBUS failsafe frame when all inputs lost
-  - [ ] **Technical Requirements**:
-    - Glitch-free switching between sources
-    - Preserve SBUS failsafe flags from receivers
-    - Configurable timeout thresholds
-    - Status indication (LED/Web) showing active source
+- [x] **SBUS Failsafe State Machine** ✅ COMPLETED
+  - [x] OK State: Valid frames received, normal operation
+  - [x] HOLD State: Signal lost, holds last valid frame for 1 second
+  - [x] FAILSAFE State: Extended signal loss, outputs failsafe frame (all channels centered)
+  - [x] Automatic recovery to OK state when valid frames resume
+  - [x] Per-source quality tracking with frame timeout detection
+
+- [x] **WiFi Timing Keeper Integration** ✅ COMPLETED
+  - [x] 20ms frame repeat for UDP source stability (smooths WiFi jitter)
+  - [x] TaskScheduler integration via tSbusRouterTick task
+  - [x] Configurable via config.sbusTimingKeeper flag
+  - [x] Only active for UDP source (intentional design decision)
+
+- [x] **Web API Extensions** ✅ COMPLETED
+  - [x] GET /sbus/status - Returns quality, priority, mode, state for all sources
+  - [x] GET /sbus/set_source - Manual source selection (0=Device1, 1=Device2, 2=UDP)
+  - [x] GET /sbus/set_mode - Mode control (0=Auto, 1=Manual)
+  - [x] Removed legacy multi-router helper functions
+
+- [x] **Code Cleanup & Optimization** ✅ COMPLETED
+  - [x] Removed dead code: lastOutputTime, manualMode, forcedSource variables
+  - [x] Removed legacy enums: SbusRouterMode
+  - [x] Removed from SourceState: lastFrame[25] array (saved 75 bytes per source)
+  - [x] Removed from SbusFastParser: s_lastValidFrame, s_hasValidFrame, lastProcessTime
+  - [x] Enhanced logging: Added sourceSwitches counter to switch messages
+  - [x] Fixed UDP protocol detection bug (was filtering all UDP as SBUS)
+  - [x] Verified protocol isolation (SBUS doesn't affect UART MAVLink/RAW)
 
 ### DOCUMENTATION UPDATE - After SBUS Completion 🟠 IMPORTANT
 
@@ -273,18 +300,27 @@ Current `SbusMultiSource` implementation demonstrates a useful pattern that coul
   - [ ] Apply custom name + unique suffix for full uniqueness
   - [ ] Default to device name + unique suffix if not configured
 
-- [ ] **PSRAM memory optimization** - Before final cleanup
-  - [ ] Move JsonDocument allocations to PSRAM for config/web operations
-  - [ ] Move web log buffers to PSRAM (~12.8KB logBuffer + 2KB udpLogBuffer)
-  - [ ] Make PSRAM usage optional via compile-time define (easy rollback)
-  - [ ] **Potential RAM savings**: ~15KB internal RAM freed
+- [x] **PSRAM memory optimization** ✅ COMPLETED - Buffer and JSON optimization
+  - [x] Move large JsonDocument allocations to PSRAM for config/web operations
+  - [x] Move non-critical log buffer to PSRAM when available
+  - [x] Add PSRAM fallback to internal RAM when PSRAM unavailable
+  - [x] Optimize buffer sizes based on device role and protocol type
+  - [x] Add PSRAM status reporting to all diagnostic functions
+
+- [ ] **Additional Memory Optimizations** - Future improvements
+  - [ ] Consider String class optimization for frequent operations
+  - [ ] Evaluate feasibility of moving more non-critical data to PSRAM
+  - [ ] Static analysis of memory usage patterns
+  - [ ] Consider compile-time protocol selection to reduce unused code
+  - [ ] Evaluate template-based buffer management for type safety
 
 - [ ] **Final Code Cleanup** - After all features are implemented
   - [x] Standardize code indentation to 4 spaces across all files ✅ COMPLETED
   - [ ] Remove unnecessary diagnostic code and debug prints
-    - [ ] Find and remove temporary diagnostic prints
-    - [ ] Clean up experimental code blocks
-    - [ ] Remove "TEMPORARY DIAGNOSTIC" sections
+    - [ ] Find and remove temporary diagnostic prints added during development
+    - [ ] Clean up experimental code blocks from testing phases
+    - [ ] Remove "TEMPORARY DIAGNOSTIC" sections (keep permanent diagnostics)
+    - [ ] Remove commented-out diagnostic blocks that are no longer needed
   - [ ] Clean up commented-out code blocks
   - [ ] Run cppcheck static analysis to find unused functions and variables
   - [ ] Create script to remove trailing whitespace and convert tabs to 4 spaces in all source files
@@ -299,26 +335,40 @@ Current `SbusMultiSource` implementation demonstrates a useful pattern that coul
 
 #### New Protocol Support
 
-- [ ] **CRSF Protocol** - Minimal latency requirements
+- [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
+  - [ ] RC channel monitoring for automated switching (video frequencies, ELRS bands)
+  - [ ] Telemetry data extraction (RSSI, link quality, GPS, voltage, current)
+  - [ ] Integration with VTX control (SmartAudio/IRC Tramp) for video channel/power management
+  - [ ] Support for video RX control (button emulation, SPI direct control)
+  - [ ] Automatic dual-band switching for ELRS setups based on RC channel input
 - [ ] **Modbus RTU** - Inter-frame timing preservation
 - [ ] **NMEA GPS** - GPS data parsing and routing
 
 #### Advanced Protocol Management
 
 - [ ] **Protocol Conversion Features**
-  - [x] SBUS↔UART conversion (implemented)
-  - [ ] SBUS↔MAVLink conversion
+  - [ ] SBUS↔UART conversion (NOT implemented - removed in Phase 2)
+    - [ ] Transport SBUS frames over UART at different baudrates
+    - [ ] Compatibility with hardware UART-SBUS converters (direct wiring)
+    - [ ] Compatibility with software SBUS-UART converters
+    - [ ] Compatibility with socat and ser2net for network transport
+    - [ ] Parse SBUS frames from UART stream and feed to SbusRouter
+    - [ ] Planned combinations: D2_UART2+D3_SBUS_OUT, D3_UART3_BRIDGE+D2_SBUS_OUT
+  - [x] SBUS over WiFi/UDP with frame filtering and validation (implemented)
   - [ ] Modbus↔JSON conversion
   - [ ] NMEA→Binary conversion
   - Per-device protocol configuration
   - Independent protocol detectors per interface
 
-- [ ] **SBUS Enhancement Options**
-  - [ ] **D1_SBUS_IN Role** (optional variant)
-    - Add SBUS input capability to Device 1 (main UART)
-    - Use case: Direct SBUS reading from RC receiver via main port
-    - Benefits: Simplified single-ESP32 setups without need for Device 2/3
-    - **Note**: Only SBUS_IN, not SBUS_OUT (Device 1 as source, not destination)
+- [x] **SBUS Enhancement Options** ✅ COMPLETED
+  - [x] **D1_SBUS_IN Role** ✅ IMPLEMENTED
+    - [x] Add SBUS input capability to Device 1 (main UART)
+    - [x] Use case: Direct SBUS reading from RC receiver via main port
+    - [x] Benefits: Simplified single-ESP32 setups without need for Device 2/3
+    - [x] **Note**: Only SBUS_IN, not SBUS_OUT (Device 1 as source, not destination)
+  - [x] **D2_SBUS_IN Role** ✅ IMPLEMENTED
+    - [x] Add SBUS input capability to Device 2 (UART2/GPIO8)
+    - [x] Dual SBUS input support with independent router per device
 
 ### Future Considerations
 

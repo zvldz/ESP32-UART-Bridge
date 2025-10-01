@@ -10,6 +10,7 @@ void printBootInfo();
 void systemDiagnostics();
 
 // Helper functions for device role names
+const char* getDevice1RoleName(uint8_t role);
 const char* getDevice2RoleName(uint8_t role);
 const char* getDevice3RoleName(uint8_t role);
 const char* getDevice4RoleName(uint8_t role);

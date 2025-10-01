@@ -20,16 +20,45 @@ const CrashLog = {
     
     toggle() {
         if (!this.elements.content || !this.elements.arrow) return;
-        
+
         const isOpening = this.elements.content.style.display === 'none';
-        
+
         if (isOpening) {
             this.elements.content.style.display = 'block';
-            this.elements.arrow.style.transform = 'rotate(180deg)';
+            this.elements.arrow.textContent = '▼';
             this.load();
         } else {
             this.elements.content.style.display = 'none';
-            this.elements.arrow.style.transform = 'rotate(0deg)';
+            this.elements.arrow.textContent = '▶';
+        }
+
+        // Save state to localStorage
+        try {
+            localStorage.setItem('collapse:crash', isOpening ? 'shown' : 'hidden');
+        } catch(e) {
+            console.warn('localStorage not available:', e);
+        }
+    },
+
+    // Restore collapsed state from localStorage
+    restoreState() {
+        if (!this.elements.content || !this.elements.arrow) return;
+
+        let v = null;
+        try {
+            v = localStorage.getItem('collapse:crash');
+        } catch(e) {
+            console.warn('localStorage not available:', e);
+        }
+
+        if (v === 'hidden') {
+            this.elements.content.style.display = 'none';
+            this.elements.arrow.textContent = '▶';
+        } else {
+            this.elements.content.style.display = 'block';
+            this.elements.arrow.textContent = '▼';
+            // Load data if block is open on page load
+            this.load();
         }
     },
     

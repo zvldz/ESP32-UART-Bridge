@@ -14,6 +14,11 @@ public:
     ProtocolParser() : stats(nullptr) {}
     virtual ~ProtocolParser() {}
     
+    // Fast path processing - try to process buffer without full parsing
+    virtual bool tryFastProcess(CircularBuffer* buffer, BridgeContext* ctx) {
+        return false;  // Default: fast path not supported
+    }
+
     // Main parsing method - analyzes buffer and returns packets
     virtual ParseResult parse(
         CircularBuffer* buffer,

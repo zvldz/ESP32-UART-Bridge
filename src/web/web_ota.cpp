@@ -9,6 +9,7 @@
 // External objects from main.cpp
 extern UartInterface* uartBridgeSerial;
 extern TaskHandle_t uartBridgeTaskHandle;
+extern SystemState systemState;
 
 // Handle OTA update for async web server
 void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -28,6 +29,9 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
         log_msg(LOG_INFO, "Firmware update started: %s", filename.c_str());
         updateStarted = false;
 
+        // Set firmware update flag to prevent WiFi timeout reboot
+        systemState.firmwareUpdateInProgress = true;
+
         // Suspend UART tasks during update to prevent interference
         if (uartBridgeTaskHandle) {
             log_msg(LOG_DEBUG, "Suspending UART bridge task for OTA update");
@@ -42,6 +46,9 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
 
         if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { // Start with max available size
             log_msg(LOG_ERROR, "Failed to begin firmware update: %s", Update.errorString());
+
+            // Reset firmware update flag
+            systemState.firmwareUpdateInProgress = false;
 
             // Resume tasks if update failed to start
             if (uartBridgeTaskHandle) {
@@ -83,9 +90,13 @@ void handleOTA(AsyncWebServerRequest *request, const String& filename, size_t in
             log_msg(LOG_INFO, "Firmware update successful: %zu bytes", index + len);
             log_msg(LOG_INFO, "Rebooting device...");
             updateStarted = false;
+            // Note: No need to reset flag here - device will reboot
         } else {
             log_msg(LOG_ERROR, "Firmware update failed at end: %s", Update.errorString());
             updateStarted = false;
+
+            // Reset firmware update flag on failure
+            systemState.firmwareUpdateInProgress = false;
 
             // Resume tasks if update failed
             if (uartBridgeTaskHandle) {

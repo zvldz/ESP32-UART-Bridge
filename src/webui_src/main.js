@@ -16,10 +16,13 @@ async function initializeUI() {
         StatusUpdates.init(config);
         CrashLog.init();
 
-        // Initialize SBUS Source Management (NEW)
-        if (typeof SbusSource !== 'undefined') {
-            SbusSource.init(config);
-        }
+
+        // Restore collapsible section states from localStorage
+        Utils.restoreToggle('systemStatusBlock', 'systemStatusToggle', 'collapse:systemStatus');
+        Utils.restoreToggle('protocolStats', 'protocolStatsToggle', 'collapse:protocolStats');
+        Utils.restoreToggle('logsBlock', 'logsArrow', 'collapse:logs');
+        Utils.restoreToggle('advancedConfigContent', 'advancedConfigArrow', 'collapse:advancedConfig');
+        CrashLog.restoreState();
 
         // Start periodic updates
         startPeriodicUpdates();
@@ -35,7 +38,15 @@ function startPeriodicUpdates() {
     // Combined update interval for better performance
     setInterval(() => {
         StatusUpdates.updateAll();
-        CrashLog.updateCount();
+
+        // Only update crash count if section is visible
+        const crashContent = document.getElementById('crashContent');
+        if (!(crashContent && crashContent.style.display === 'none')) {
+            CrashLog.updateCount();
+        }
+
+        // Update SBUS status if needed
+        updateSbusStatus();
     }, 5000);
 }
 
@@ -45,18 +56,19 @@ document.addEventListener('DOMContentLoaded', initializeUI);
 // Export config for debugging if needed
 window.bridgeConfig = config;
 
+// Toggle system status visibility
+function toggleSystemStatus() {
+    Utils.rememberedToggle('systemStatusBlock', 'systemStatusToggle', 'collapse:systemStatus');
+}
+
 // Toggle protocol statistics visibility
 function toggleProtocolStats() {
-    const statsDiv = document.getElementById('protocolStats');
-    const toggleIcon = document.getElementById('protocolStatsToggle');
-    
-    if (statsDiv && toggleIcon) {
-        if (statsDiv.style.display === 'none') {
-            statsDiv.style.display = 'block';
-            toggleIcon.textContent = '▼';
-        } else {
-            statsDiv.style.display = 'none';
-            toggleIcon.textContent = '▶';
-        }
-    }
+    Utils.rememberedToggle('protocolStats', 'protocolStatsToggle', 'collapse:protocolStats');
 }
+
+// Toggle advanced configuration visibility
+function toggleAdvancedConfig() {
+    Utils.rememberedToggle('advancedConfigContent', 'advancedConfigArrow', 'collapse:advancedConfig');
+}
+
+

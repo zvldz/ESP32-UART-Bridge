@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <ESPAsyncWebServer.h>
+#include "esp_heap_caps.h"
 
 // Local includes
 #include "web_interface.h"
@@ -35,10 +36,11 @@ AsyncWebServer* server = nullptr;
 static bool webServerInitialized = false;
 
 // Helper function for gzipped responses
-static void sendGzippedResponse(AsyncWebServerRequest* request, const char* contentType, 
+static void sendGzippedResponse(AsyncWebServerRequest* request, const char* contentType,
                                const uint8_t* data, size_t len) {
     AsyncWebServerResponse *response = request->beginResponse_P(200, contentType, data, len);
     response->addHeader("Content-Encoding", "gzip");
+    response->addHeader("Cache-Control", "public, max-age=31536000, immutable");
     request->send(response);
 }
 
@@ -73,11 +75,6 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
     server->on("/config/export", HTTP_GET, handleExportConfig);
 
-    // SBUS API endpoints
-    server->on("/api/sbus/status", HTTP_GET, handleSbusStatus);
-    server->on("/api/sbus/source", HTTP_POST, handleSbusSource);
-    server->on("/api/sbus/config", HTTP_GET, handleSbusConfig);
-    server->on("/api/sbus/config", HTTP_POST, handleSbusConfig);
 
     server->on("/config/import", HTTP_POST,
         [](AsyncWebServerRequest *request) {
@@ -85,29 +82,66 @@ void webserver_init(Config* config, SystemState* state) {
             handleImportConfig(request);
         },
         [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
-            // Handle file upload data
-            static String uploadedData = "";
+            // Handle file upload data with PSRAM buffer
+            static char* g_importBuf = nullptr;
+            static size_t g_importLen = 0;
 
             if (index == 0) {
-                uploadedData = "";  // Reset for new upload
-                uploadedData.reserve(UPLOAD_BUFFER_RESERVE);  // Reserve space to avoid frequent reallocations
+                // Clean up any previous buffer
+                if (g_importBuf) {
+                    heap_caps_free(g_importBuf);
+                    g_importBuf = nullptr;
+                }
+
+                // Allocate PSRAM buffer
+                g_importBuf = (char*) heap_caps_malloc(MAX_IMPORT + 1, MALLOC_CAP_SPIRAM);
+                if (!g_importBuf) {
+                    request->send(507, "application/json", "{\"status\":\"error\",\"message\":\"PSRAM allocation failed\"}");
+                    return;
+                }
+                g_importLen = 0;
             }
 
-            // Only append printable characters and whitespace, skip null bytes
-            for (size_t i = 0; i < len; i++) {
+            if (!g_importBuf) {
+                request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"import buffer not initialized\"}");
+                return;
+            }
+
+            // ASCII filter and bounds check
+            for (size_t i = 0; i < len && g_importLen < MAX_IMPORT; i++) {
                 char c = (char)data[i];
                 if (c >= ASCII_PRINTABLE_THRESHOLD || c == '\n' || c == '\r' || c == '\t') {
-                    uploadedData += c;
+                    g_importBuf[g_importLen++] = c;
                 }
             }
 
+            // Hard limit check
+            if (g_importLen >= MAX_IMPORT) {
+                heap_caps_free(g_importBuf);
+                g_importBuf = nullptr;
+                request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"config too large\"}");
+                return;
+            }
+
             if (final) {
-                // Store complete data for processing
-                request->_tempObject = new String(uploadedData);
+                // Null-terminate and pass to handler
+                g_importBuf[g_importLen] = '\0';
+
+                ImportData* importData = new ImportData;
+                importData->ptr = g_importBuf;
+                importData->len = g_importLen;
+                request->_tempObject = importData;
+
+                // Reset static variables (buffer ownership transferred)
+                g_importBuf = nullptr;
+                g_importLen = 0;
             }
         }
     );
     server->on("/client-ip", HTTP_GET, handleClientIP);
+    server->on("/sbus/set_source", HTTP_GET, handleSbusSetSource);
+    server->on("/sbus/set_mode", HTTP_GET, handleSbusSetMode);
+    server->on("/sbus/status", HTTP_GET, handleSbusStatus);
   
     // Serve static files with gzip compression
     server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -131,9 +165,7 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
     });
-    server->on("/sbus-source.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_SBUS_SOURCE_GZ, JS_SBUS_SOURCE_GZ_LEN);
-    });
+    // sbus-source.js removed - functionality integrated into device-config.js
 
     // Setup OTA update with async handlers
     server->on("/update", HTTP_POST,

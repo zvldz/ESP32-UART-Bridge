@@ -102,9 +102,18 @@ const FormUtils = {
         if (mavlinkRouting) {
             mavlinkRouting.checked = this.config.mavlinkRouting || false;
         }
+
+        // SBUS Timing Keeper
+        const sbusTimingKeeper = document.getElementById('sbus-timing-keeper');
+        if (sbusTimingKeeper) {
+            sbusTimingKeeper.checked = this.config.sbusTimingKeeper || false;
+        }
         
         // Update MAVLink routing visibility
         this.updateMavlinkRoutingVisibility();
+
+        // Update SBUS Timing Keeper visibility
+        this.updateSbusTimingKeeperVisibility();
         
         // Set WiFi mode
         const wifiMode = document.getElementById('wifi_mode');
@@ -153,7 +162,10 @@ const FormUtils = {
         // Protocol optimization change listener
         const protocolOpt = document.getElementById('protocol_optimization');
         if (protocolOpt) {
-            protocolOpt.addEventListener('change', () => this.updateMavlinkRoutingVisibility());
+            protocolOpt.addEventListener('change', () => {
+                this.updateMavlinkRoutingVisibility();
+                this.updateSbusTimingKeeperVisibility();
+            });
         }
         
         // Password toggle - attach to global function
@@ -476,12 +488,7 @@ const FormUtils = {
             alert('Please select a .bin firmware file');
             return;
         }
-        
-        // Confirm update
-        if (!confirm('Are you sure you want to update firmware? This will restart the device.')) {
-            return;
-        }
-        
+
         // Show progress and disable button
         if (progressDiv && progressBar && statusText && updateButton) {
             progressDiv.style.display = 'block';
@@ -579,6 +586,21 @@ const FormUtils = {
             } else {
                 routingSection.style.display = 'none';
                 if (routingDesc) routingDesc.style.display = 'none';
+            }
+        }
+    },
+
+    updateSbusTimingKeeperVisibility() {
+        const sbusSection = document.getElementById('sbus-timing-keeper-section');
+
+        if (sbusSection) {
+            // Show section only if there are SBUS_OUT devices (Device2 role=4 or Device3 role=5)
+            const hasSbusOut = (this.config.device2Role === '4' || this.config.device3Role === '5');
+
+            if (hasSbusOut) {
+                sbusSection.style.display = 'block';
+            } else {
+                sbusSection.style.display = 'none';
             }
         }
     }

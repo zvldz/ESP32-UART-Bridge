@@ -107,6 +107,7 @@ table tr:nth-child(odd) {
     background-color: #e9ecef;
     font-family: monospace;
     font-size: 12px;
+    position: relative;
 }
 
 .log-entry {

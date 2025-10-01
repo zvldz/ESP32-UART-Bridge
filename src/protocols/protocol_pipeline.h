@@ -111,7 +111,11 @@ public:
     // Sender access for statistics
     PacketSender* getSender(size_t index) const;
     size_t getSenderCount() const { return MAX_SENDERS; }  // Fixed count
-    
+
+    // Flow access for external components
+    DataFlow* getFlows() { return flows; }
+    int getFlowCount() const { return activeFlows; }
+
     // Packet distribution (used by external components)
     void distributeParsedPackets(ParseResult* result);
     void processSenders();

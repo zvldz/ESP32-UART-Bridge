@@ -6,6 +6,7 @@
 #include "types.h"
 #include "protocols/udp_sender.h"
 #include <Arduino.h>
+#include "esp_heap_caps.h"
 
 // External object from main.cpp  
 extern BridgeMode bridgeMode;
@@ -48,15 +49,31 @@ void printBootInfo() {
 void systemDiagnostics() {
     uint32_t freeHeap = ESP.getFreeHeap();
     uint32_t minFreeHeap = ESP.getMinFreeHeap();
-    
+
+    // PSRAM stats (if available)
+    size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
     // Critical memory conditions
     if (freeHeap < 10000) {
-        log_msg(LOG_ERROR, "CRITICAL: Low memory! Free: %u bytes", freeHeap);
+        log_msg(LOG_ERROR, "CRITICAL: Low memory! Free: %u bytes, Min: %u bytes, PSRAM: %zu/%zu KB",
+                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
     } else if (freeHeap < 20000) {
-        log_msg(LOG_WARNING, "Warning: Memory getting low. Free: %u bytes", freeHeap);
-    } else {
-        log_msg(LOG_DEBUG, "Memory: Free=%u bytes, Min=%u bytes", freeHeap, minFreeHeap);
+        log_msg(LOG_WARNING, "Warning: Memory getting low. Free: %u bytes, Min: %u bytes, PSRAM: %zu/%zu KB",
+                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
+    } else {    
+        log_msg(LOG_DEBUG, "Memory: Free=%u bytes, Min=%u bytes, PSRAM: %zu/%zu KB",
+                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
     }
+}
+
+// Helper function for device1 role names
+const char* getDevice1RoleName(uint8_t role) {
+  switch(role) {
+    case D1_UART1: return "UART Bridge";
+    case D1_SBUS_IN: return "SBUS Input";
+    default: return "Unknown";
+  }
 }
 
 // Helper function for device2 role names
@@ -78,8 +95,8 @@ const char* getDevice3RoleName(uint8_t role) {
     case D3_UART3_MIRROR: return "UART3 Mirror";
     case D3_UART3_BRIDGE: return "UART3 Bridge";
     case D3_UART3_LOG: return "UART3 Logger";
-    case D3_SBUS_IN: return "SBUS Input";    // NEW
-    case D3_SBUS_OUT: return "SBUS Output";  // NEW
+    // case D3_SBUS_IN: return "SBUS Input";    // REMOVED - not supported
+    case D3_SBUS_OUT: return "SBUS Output";
     default: return "Unknown";
   }
 }
@@ -90,6 +107,8 @@ const char* getDevice4RoleName(uint8_t role) {
     case D4_NONE: return "Disabled";
     case D4_NETWORK_BRIDGE: return "Network Bridge";
     case D4_LOG_NETWORK: return "Network Logger";
+    case D4_SBUS_UDP_TX: return "SBUS→UDP (TX only)";
+    case D4_SBUS_UDP_RX: return "UDP→SBUS (RX only)";
     default: return "Unknown";
   }
 }
@@ -117,15 +136,18 @@ void runBridgeActivityLog() {
 
 void runStackDiagnostics() {
     if (!g_bridgeContext) return;
-    
+
     UBaseType_t stackFree = uxTaskGetStackHighWaterMark(NULL);
-    log_msg(LOG_DEBUG, "UART task: Stack free=%u bytes, Heap free=%u bytes, Largest block=%u bytes", 
-            stackFree, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-    
+    size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+
+    log_msg(LOG_DEBUG, "UART task: Stack free=%u bytes, Heap free=%u bytes, Largest block=%u bytes, PSRAM: %zu/%zu KB",
+            stackFree, ESP.getFreeHeap(), ESP.getMaxAllocHeap(), psramFree/1024, psramTotal/1024);
+
     // Add DMA diagnostics if available
     UartDMA* dma = static_cast<UartDMA*>(g_bridgeContext->interfaces.uartBridgeSerial);
     if (dma && dma->isInitialized()) {
-        log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu", 
+        log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu",
                 dma->getRxBytesTotal(), dma->getTxBytesTotal(), dma->getOverrunCount());
     }
 }
@@ -215,9 +237,12 @@ void runAllStacksDiagnostics() {
         offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Off");
     }
 
-    // Add heap info
-    snprintf(msg + offset, sizeof(msg) - offset, ", Heap=%dB, MaxBlock=%dB",
-             ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    // Add heap info including PSRAM
+    size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+
+    snprintf(msg + offset, sizeof(msg) - offset, ", Heap=%dB, MaxBlock=%dB, PSRAM=%zu/%zuKB",
+             ESP.getFreeHeap(), ESP.getMaxAllocHeap(), psramFree/1024, psramTotal/1024);
 
     log_msg(LOG_DEBUG, "%s", msg);
 }

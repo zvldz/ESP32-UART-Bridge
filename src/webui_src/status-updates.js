@@ -18,6 +18,7 @@ const StatusUpdates = {
         this.elements = this.cacheElements();
         this.buildSystemInfo();
         this.buildDeviceStats();
+        this.createSbusSourceControls();
         this.updateAll();
     },
     
@@ -40,6 +41,7 @@ const StatusUpdates = {
             device4Stats: document.getElementById('device4Stats'),
             
             // Device roles
+            device1Role: document.getElementById('device1Role'),
             device2Role: document.getElementById('device2Role'),
             device3Role: document.getElementById('device3Role'),
             device4Role: document.getElementById('device4Role'),
@@ -75,11 +77,12 @@ const StatusUpdates = {
         
         container.innerHTML = `
             <table>
+                <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Info</td></tr>
                 <tr><td><strong>Version:</strong></td><td>v${this.config.version} / ${this.config.arduinoVersion} / ${this.config.idfVersion}</td></tr>
                 <tr><td><strong>Board:</strong></td><td>${(this.config.boardType || 's3zero') === 's3supermini' ? 'ESP32-S3 Super Mini' : 'ESP32-S3-Zero'}</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
-                <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? 'No FC' : 'RTS/CTS'}</td></tr>
+                <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? '<s>RTS/CTS</s>' : 'RTS/CTS'}</td></tr>
                 ${wifiInfo}
             </table>
         `;
@@ -97,7 +100,7 @@ const StatusUpdates = {
             <table>
                 <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Statistics</td></tr>
                 <tr id="device1Stats">
-                    <td><strong>Device 1 (UART1):</strong></td>
+                    <td><strong>Device 1 (<span id="device1Role">${this.config.device1RoleName}</span>):</strong></td>
                     <td id="device1Traffic">${Utils.formatTraffic(this.config.device1Rx || 0, this.config.device1Tx || 0)}</td>
                 </tr>
                 <tr id="device2Stats" style="display: none;">
@@ -116,6 +119,7 @@ const StatusUpdates = {
                 <tr><td><strong>Total Traffic:</strong></td><td id="totalTraffic">${Utils.formatBytes(this.config.totalTraffic || 0)}</td></tr>
                 <tr><td><strong>Last Activity:</strong></td><td id="lastActivity">${this.config.lastActivity}</td></tr>
             </table>
+            <div id="udpBatchingInfo" style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666; margin-top: 10px; text-align: center;"></div>
             <div style="text-align: center; margin: 15px 0;">
                 <button style="background-color: #ff9800;" onclick="StatusUpdates.resetStatistics(this)">Reset Statistics</button>
             </div>
@@ -141,6 +145,9 @@ const StatusUpdates = {
             }
             
             // Update Device 1 traffic (always visible)
+            if (this.elements.device1Role) {
+                this.elements.device1Role.textContent = data.device1RoleName;
+            }
             if (this.elements.device1Traffic) {
                 const formattedTraffic = Utils.formatTraffic(
                     data.device1Rx || 0, 
@@ -231,18 +238,42 @@ const StatusUpdates = {
             if (this.elements.lastActivity) {
                 this.elements.lastActivity.textContent = data.lastActivity || "Never";
             }
-            
+
+            // Update UDP Batching info
+            const udpBatchingInfo = document.getElementById('udpBatchingInfo');
+            if (udpBatchingInfo) {
+                // Check if we have detailed batching stats from protocol statistics
+                const batchingStats = data.protocolStats?.udpBatching;
+
+                if (data.udpBatchingEnabled) {
+                    if (batchingStats && batchingStats.batching && batchingStats.totalBatches > 0) {
+                        // Show detailed stats
+                        udpBatchingInfo.innerHTML = `ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - ${batchingStats.avgPacketsPerBatch} pkts/batch avg, ${batchingStats.maxPacketsInBatch} max, ${batchingStats.batchEfficiency} efficiency`;
+                    } else {
+                        // Enabled but no traffic yet
+                        udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - Ready (no MAVLink traffic yet)';
+                    }
+                } else {
+                    udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #6c757d;">DISABLED</span> - Single packet per datagram';
+                }
+            }
+
             // Update protocol statistics
             this.updateProtocolStats(data);
         });
     },
     
     updateLogs() {
+        // Only fetch logs if section is visible
+        const logsBlock = document.getElementById('logsBlock');
+        const logsHidden = logsBlock && logsBlock.style.display === 'none';
+        if (logsHidden) return;
+
         Utils.safeFetch('/logs', (data) => {
             if (!this.elements.logEntries) return;
-            
+
             this.elements.logEntries.innerHTML = '';
-            
+
             if (data.logs && data.logs.length > 0) {
                 data.logs.forEach(log => {
                     const entry = document.createElement('div');
@@ -256,7 +287,7 @@ const StatusUpdates = {
                 entry.textContent = 'No logs available';
                 this.elements.logEntries.appendChild(entry);
             }
-            
+
             // Auto-scroll to bottom
             if (this.elements.logContainer) {
                 this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
@@ -380,15 +411,20 @@ const StatusUpdates = {
     updateProtocolStats(data) {
         const protocolStatsContent = document.getElementById('protocolStatsContent');
         if (!protocolStatsContent) return;
-        
+
         // Check if protocol stats are available
         if (!data.protocolStats) {
             protocolStatsContent.innerHTML = '<p style="color: #666; text-align: center; margin: 20px 0;">No protocol statistics available</p>';
             return;
         }
-        
+
         const stats = data.protocolStats;
         const protocolType = stats.protocolType || 0;
+
+        // Update SBUS source controls if SBUS protocol is active
+        if (protocolType === 2 && document.getElementById('sbusSourceButtons')) {
+            this.updateSbusSourceStatus();
+        }
         
         // Protocol name mapping
         const PROTOCOL_NAMES = {
@@ -421,35 +457,6 @@ const StatusUpdates = {
         if (stats.senders && stats.senders.length > 0) {
             html += this.renderSenderStats(stats.senders, protocolType);
         }
-        
-        // Check for UDP batching stats
-        if (stats.udpBatching) {
-            if (stats.udpBatching.batching) {
-                const status = stats.udpBatching.totalBatches > 0 ? 
-                    `${stats.udpBatching.avgPacketsPerBatch} pkts/batch avg, ${stats.udpBatching.maxPacketsInBatch} max, ${stats.udpBatching.batchEfficiency} efficiency` :
-                    'Ready (no MAVLink traffic yet)';
-                    
-                html += `
-                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 4px;">
-                        <strong>UDP Batching:</strong> <span style="color: #2e7d2e;">ENABLED</span> - ${status}
-                    </div>
-                `;
-            } else {
-                html += `
-                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                        <strong>UDP Batching:</strong> <span style="color: #6c757d;">DISABLED</span> - Single packet per datagram
-                    </div>
-                `;
-            }
-        }
-        
-        // Footer note
-        html += `
-            <div style="padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 13px; color: #666; margin-top: 15px;">
-                ℹ️ Protocol detection applies to Device 1↔2 data flow. Reset statistics to clear counters.
-            </div>
-        `;
-        
         protocolStatsContent.innerHTML = html;
     },
 
@@ -510,56 +517,291 @@ const StatusUpdates = {
 
     renderSbusStats(stats) {
         const p = stats.parser || {};
-        
+
         // Calculate quality metrics
         const totalFrames = (p.validFrames || 0) + (p.invalidFrames || 0);
         const validPercent = totalFrames > 0 ? ((p.validFrames || 0) / totalFrames * 100).toFixed(1) : '0.0';
-        const frameLostPercent = (p.validFrames || 0) > 0 ? ((p.frameLostCount || 0) / (p.validFrames || 0) * 100).toFixed(2) : '0.00';
-        const failsafePercent = (p.validFrames || 0) > 0 ? ((p.failsafeCount || 0) / (p.validFrames || 0) * 100).toFixed(2) : '0.00';
-        
-        return `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+
+        // Determine Success Rate color
+        const successRateNum = parseFloat(validPercent);
+        let successRateColor = '#28a745'; // Green by default (>= 95%)
+        if (successRateNum < 60) {
+            successRateColor = '#dc3545'; // Dark red (< 60%)
+        } else if (successRateNum < 80) {
+            successRateColor = '#ff6b6b'; // Light red (60-80%)
+        } else if (successRateNum < 95) {
+            successRateColor = '#ffc107'; // Yellow (80-95%)
+        }
+
+        // Build HTML including source switching controls
+        let html = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-bottom: 15px;">
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Frame Statistics</h5>
+                    <h5 style="margin: 0 0 10px 0; color: #333;">SBUS Fast Path Statistics</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Frames Detected:</div><div><strong>${p.framesDetected || 0}</strong></div>
                         <div>Valid Frames:</div><div><strong style="color: #28a745;">${p.validFrames || 0}</strong></div>
                         <div>Invalid Frames:</div><div><strong style="color: #dc3545;">${p.invalidFrames || 0}</strong></div>
-                        <div>Success Rate:</div><div><strong>${validPercent}%</strong></div>
-                    </div>
-                </div>
-                
-                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">SBUS Signal Quality</h5>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Frame Lost:</div><div><strong style="color: ${(p.frameLostCount || 0) > 0 ? '#dc3545' : '#28a745'}">${p.frameLostCount || 0}</strong></div>
-                        <div>Lost Rate:</div><div><strong>${frameLostPercent}%</strong></div>
-                        <div>Failsafe:</div><div><strong style="color: ${(p.failsafeCount || 0) > 0 ? '#dc3545' : '#28a745'}">${p.failsafeCount || 0}</strong></div>
-                        <div>Failsafe Rate:</div><div><strong>${failsafePercent}%</strong></div>
-                    </div>
-                </div>
-                
-                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Protocol Info</h5>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Frame Size:</div><div><strong>25 bytes</strong></div>
-                        <div>Baud Rate:</div><div><strong>100,000</strong></div>
-                        <div>Format:</div><div><strong>8E2 Inverted</strong></div>
-                        <div>Update Rate:</div><div><strong>14ms (71Hz)</strong></div>
-                    </div>
-                </div>
-                
-                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Activity</h5>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Detection Errors:</div><div><strong style="color: ${(p.framingErrors || 0) > 0 ? '#dc3545' : '#28a745'}">${p.framingErrors || 0}</strong></div>
-                        <div>Avg Frame Size:</div><div><strong>${p.avgPacketSize || 25} bytes</strong></div>
-                        <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs || 0)}</strong></div>
-                        <div>Status:</div><div><strong style="color: ${(p.lastActivityMs || 0) < 5000 ? '#28a745' : '#dc3545'}">${(p.lastActivityMs || 0) < 5000 ? 'Active' : 'Inactive'}</strong></div>
+                        <div>Success Rate:</div><div><strong style="color: ${successRateColor}">${validPercent}%</strong></div>
+                        <div>Last Activity:</div><div><strong style="color: ${(p.lastActivityMs || 0) < 5000 ? '#28a745' : '#dc3545'}">${this.formatLastActivity(p.lastActivityMs || 0)}</strong></div>
                     </div>
                 </div>
             </div>
         `;
+
+        return html;
+    },
+
+    createSbusSourceControls() {
+        // Count actual SBUS input devices
+        let inputCount = 0;
+
+        // Count each SBUS input device
+        if (this.config.device1Role === '1') {  // D1_SBUS_IN
+            inputCount++;
+        }
+        if (this.config.device2Role === '3') {  // D2_SBUS_IN
+            inputCount++;
+        }
+        if (this.config.device4Role === '4') {  // D4_SBUS_UDP_RX
+            inputCount++;
+        }
+
+        // Only show controls if we have MORE THAN ONE input
+        if (inputCount < 2) {
+            return;  // Don't show controls if only one input
+        }
+
+        // Check if SBUS controls already exist
+        const existingSbusContainer = document.querySelector('.sbus-source-container');
+        if (existingSbusContainer) {
+            return;  // Already exists, don't recreate
+        }
+
+        // Find placeholder to insert SBUS controls
+        const placeholder = document.getElementById('sbusSourcePlaceholder');
+        if (!placeholder) return;
+
+        // Create new SBUS controls container as a section
+        const sbusContainer = document.createElement('div');
+        sbusContainer.className = 'section sbus-source-container';
+        sbusContainer.style.cssText = 'padding: 15px; border: 2px solid #007bff; border-radius: 4px; background: #f0f8ff;';
+
+        sbusContainer.innerHTML = `
+            <h4 style="margin: 0 0 15px 0; color: #333;">🎮 SBUS Source Selection</h4>
+            <div id="sbusSourceButtons" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <span style="color: #666; font-style: italic;">Loading sources...</span>
+            </div>
+            <div id="sbusSourceStatus" style="margin-top: 10px; font-size: 13px; color: #666;">
+                Active source: <span id="activeSourceName">Loading...</span>
+            </div>
+        `;
+
+        // Insert at placeholder location
+        placeholder.appendChild(sbusContainer);
+
+        // Initialize SBUS source status after DOM is ready
+        setTimeout(() => this.updateSbusSourceStatus(), 100);
+    },
+
+    renderSbusSourceControls() {
+        // This function is now deprecated - controls are created once in createSbusSourceControls()
+        return '';
+    },
+
+    updateSbusSourceStatus() {
+        fetch('/sbus/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok' && data.sources) {
+                    const buttonsContainer = document.getElementById('sbusSourceButtons');
+                    if (!buttonsContainer) return;
+
+                    // Check if buttons already exist, if not create them
+                    let existingButtons = buttonsContainer.querySelectorAll('.sbus-source-btn');
+
+                    if (existingButtons.length === 0 || existingButtons.length !== data.sources.length + 1) {
+                        // Create buttons only if they don't exist or count changed
+                        buttonsContainer.innerHTML = '';
+
+                        // Create AUTO button first
+                        const autoBtn = document.createElement('button');
+                        autoBtn.className = 'sbus-source-btn sbus-auto-btn';
+                        autoBtn.setAttribute('data-source', 'auto');
+                        autoBtn.onclick = () => this.setSbusMode(0); // 0 = AUTO
+                        autoBtn.style.cssText = 'padding: 8px 16px; color: white; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s ease;';
+                        autoBtn.textContent = 'AUTO';
+                        buttonsContainer.appendChild(autoBtn);
+
+                        // Create source buttons
+                        data.sources.forEach(src => {
+                            const btn = document.createElement('button');
+                            btn.className = 'sbus-source-btn';
+                            btn.setAttribute('data-source', src.id);
+                            btn.setAttribute('data-device', src.deviceId);
+                            btn.onclick = () => this.setSbusSource(src.id);
+                            btn.style.cssText = 'padding: 8px 16px; color: white; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s ease;';
+
+                            // Set initial text
+                            btn.textContent = src.name || `Source ${src.id}`;
+
+                            buttonsContainer.appendChild(btn);
+                        });
+                    }
+
+                    // Update AUTO button style based on mode
+                    const autoBtn = buttonsContainer.querySelector('.sbus-auto-btn');
+                    if (autoBtn) {
+                        const isAuto = data.mode === 0; // 0 = AUTO, 1 = MANUAL
+                        if (isAuto) {
+                            // AUTO mode active - button disabled (grayed out)
+                            autoBtn.style.cssText = `
+                                padding: 8px 16px;
+                                background: #6c757d;
+                                color: white;
+                                border: 2px solid transparent;
+                                border-radius: 4px;
+                                cursor: not-allowed;
+                                opacity: 0.6;
+                                min-width: 100px;
+                                text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                            `;
+                            autoBtn.disabled = true;
+                        } else {
+                            // MANUAL mode - AUTO button clickable
+                            autoBtn.style.cssText = `
+                                padding: 8px 16px;
+                                background: #28a745;
+                                color: white;
+                                border: 2px solid #1e7e34;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                min-width: 100px;
+                                text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                            `;
+                            autoBtn.disabled = false;
+                        }
+                    }
+
+                    // Update existing buttons with current status
+                    data.sources.forEach(src => {
+                        const btn = buttonsContainer.querySelector(`[data-source="${src.id}"]`);
+                        if (!btn) return;
+
+                            // Calculate quality percentage (0-100)
+                            let quality = 0;
+                            if (src.hasData) {
+                                // Simple quality: valid=100%, has data but not valid=50%, no data=0%
+                                quality = src.valid ? 100 : 50;
+                                // Reduce quality if failsafe
+                                if (src.hasFailsafe) quality = Math.max(30, quality - 30);
+                            }
+
+                            // Determine colors based on active state and quality
+                            let bgColor, borderColor;
+                            if (src.id === data.activeSource) {
+                                // Active source - green tones
+                                bgColor = quality > 70 ? '#28a745' : quality > 30 ? '#ffc107' : '#dc3545';
+                                borderColor = '#1e7e34';
+                            } else {
+                                // Inactive sources - blue/gray tones
+                                bgColor = quality > 70 ? '#007bff' : quality > 30 ? '#6c757d' : '#495057';
+                                borderColor = 'transparent';
+                            }
+
+                            // Create gradient background (progress bar effect)
+                            const gradientBg = `linear-gradient(90deg, ${bgColor} ${quality}%, rgba(108, 117, 125, 0.3) ${quality}%)`;
+
+                            // Apply styles with gradient
+                            btn.style.cssText = `
+                                padding: 8px 16px;
+                                background: ${gradientBg};
+                                color: white;
+                                border: 2px solid ${borderColor};
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-weight: ${src.id === data.activeSource ? 'bold' : 'normal'};
+                                position: relative;
+                                min-width: 150px;
+                                text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                            `;
+
+                            // Button text with quality percentage
+                            let btnText = src.name || 'Source ' + src.id;
+                            if (quality > 0) {
+                                btnText += ` (${quality}%)`;
+                            }
+                            if (src.framesReceived > 0 && src.framesReceived < 1000) {
+                                btnText += ` ${src.framesReceived}fr`;
+                            } else if (src.framesReceived >= 1000) {
+                                btnText += ` ${Math.floor(src.framesReceived/1000)}k`;
+                            }
+
+                            btn.textContent = btnText;
+                            buttonsContainer.appendChild(btn);
+                    });
+
+                    // Update status text
+                    const activeSource = data.sources.find(s => s.id === data.activeSource);
+                    const statusSpan = document.getElementById('activeSourceName');
+                    if (statusSpan && activeSource) {
+                        statusSpan.textContent = activeSource.name || 'Source ' + activeSource.id;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to fetch SBUS status:', error);
+            });
+    },
+
+
+    setSbusSource(source) {
+        fetch(`/sbus/set_source?source=${source}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Update button states immediately
+                    this.updateSbusSourceStatus();
+
+                    // Show feedback
+                    const btn = document.querySelector(`[data-source="${source}"]`);
+                    if (btn) {
+                        const originalText = btn.textContent;
+                        btn.textContent = 'Switched!';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                        }, 1000);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to set SBUS source:', error);
+                alert('Failed to switch SBUS source');
+            });
+    },
+
+    setSbusMode(mode) {
+        fetch(`/sbus/set_mode?mode=${mode}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Update button states immediately
+                    this.updateSbusSourceStatus();
+
+                    // Show feedback
+                    const autoBtn = document.querySelector('.sbus-auto-btn');
+                    if (autoBtn) {
+                        const originalText = autoBtn.textContent;
+                        autoBtn.textContent = 'AUTO Enabled!';
+                        setTimeout(() => {
+                            autoBtn.textContent = originalText;
+                        }, 1000);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to set SBUS mode:', error);
+                alert('Failed to switch SBUS mode');
+            });
     },
 
     renderGenericStats(stats) {
@@ -635,4 +877,8 @@ const StatusUpdates = {
 // Global functions for onclick handlers
 function copyLogs() {
     StatusUpdates.copyLogs();
+}
+
+function toggleLogs() {
+    Utils.rememberedToggle('logsBlock', 'logsArrow', 'collapse:logs');
 }
