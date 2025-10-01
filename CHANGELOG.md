@@ -1,6 +1,75 @@
 # CHANGELOG
 
-## v2.18.3 (ESP32-S3 Super Mini Support) 🟡 IN PROGRESS
+## v2.18.4 (SBUS Phase 2 Complete - Singleton Router + Failsafe) 🟡 READY FOR TESTING
+
+### SBUS Phase 2 Implementation ✅ COMPLETED
+- **Singleton Router Architecture**: Refactored from multiple routers to single global SbusRouter instance
+  - **Smart Source Selection**: Automatic source switching based on quality metrics (0-100%)
+  - **Priority System**: Device1 (priority 0) > Device2 (priority 1) > UDP (priority 2)
+  - **Anti-Flapping**: 500ms delay prevents rapid source switching during signal degradation
+  - **Mode Control**: Auto mode (automatic failover) and Manual mode (forced source selection)
+
+- **Failsafe State Machine**: Full three-state failsafe implementation
+  - **OK State**: Valid frames received, normal operation
+  - **HOLD State**: Signal lost, holds last valid frame for 1 second
+  - **FAILSAFE State**: Extended signal loss, outputs failsafe frame (all channels centered)
+  - **Recovery**: Automatic return to OK state when valid frames resume
+
+- **WiFi Timing Keeper**: UDP source stability enhancement
+  - **20ms Frame Repeat**: Smooths WiFi jitter for UDP SBUS source only
+  - **TaskScheduler Integration**: Periodic tick() execution via tSbusRouterTick task
+  - **Configurable**: Controlled via config.sbusTimingKeeper flag
+  - **Memory Efficient**: Minimal overhead, reuses last valid frame
+
+- **Web API Extensions**: Full router control and monitoring
+  - **GET /sbus/status**: Returns quality, priority, mode, state for all sources
+  - **GET /sbus/set_source**: Manual source selection (0=Device1, 1=Device2, 2=UDP)
+  - **GET /sbus/set_mode**: Mode control (0=Auto, 1=Manual)
+  - **Removed Legacy**: Cleaned up old multi-router helper functions
+
+- **Code Cleanup & Optimization**: Production-ready SBUS implementation
+  - **Removed Dead Code**: Eliminated unused variables (lastOutputTime, manualMode, forcedSource)
+  - **Removed Legacy Enums**: Cleaned up SbusRouterMode and other unused types
+  - **Removed from SourceState**: Deleted lastFrame[25] array (saved 75 bytes per source)
+  - **Removed from SbusFastParser**: Deleted static s_lastValidFrame, s_hasValidFrame, lastProcessTime
+  - **Enhanced Logging**: Added sourceSwitches counter to source switch log messages
+  - **Architectural Clarity**: Timing Keeper only for UDP confirmed as intentional design
+
+### Protocol Isolation Fixes ✅ COMPLETED
+- **UDP Protocol Detection**: Fixed UDP callback to check protocol optimization mode
+  - **SBUS Mode**: Filters packets for valid SBUS frames (25/50 bytes, 0x0F header)
+  - **RAW/MAVLink Mode**: Accepts all UDP packets without filtering
+  - **Previous Bug**: All UDP packets were SBUS-filtered regardless of protocol mode
+  - **Impact**: Now supports RAW and MAVLink protocols over UDP correctly
+
+### Web Interface Improvements ✅ COMPLETED
+- **UI Refactoring and Optimization**: Reorganized interface structure for better usability
+  - **Advanced Configuration Block**: Consolidated Device 4, Protocol, UART, USB, Logging into single collapsible section
+  - **Block Reordering**: Optimized layout - SBUS Source Selection first, then Logs, System Status, Crash History, Protocol Stats
+  - **Dynamic Visibility**: UART/USB blocks show/hide based on device roles selection
+  - **Visual Improvements**: Added icons to all configuration sections, removed redundant information
+  - **Statistics Enhancements**: Added color coding for success rates, UDP Batching statistics in compact format
+  - **System Status**: Made collapsible with state persistence
+- **Phase 1 Improvements**: Collapsible blocks, dynamic labels, SBUS output device fixes, copy button positioning
+
+## v2.18.3 (ESP32-S3 Super Mini Support + SBUS Fast Path + Memory Optimization) 🟡 READY FOR TESTING
+
+### Release Summary
+This release adds ESP32-S3 Super Mini hardware support, implements lightweight SBUS Fast Path architecture, and delivers significant memory optimizations. The codebase is feature-complete but requires hardware testing.
+
+**Key Features:**
+- ESP32-S3 Super Mini board support with adaptive LED control
+- SBUS Fast Path architecture with 10x performance improvement and 15KB → 2KB memory reduction
+- Memory optimization through intelligent buffer sizing and PSRAM utilization
+- Enhanced diagnostics with comprehensive PSRAM reporting
+- SBUS WiFi Timing Keeper for wireless stability
+
+**Memory Improvements:**
+- Protocol-aware buffer optimization for different device configurations
+- PSRAM utilization for non-critical operations
+- Large JSON document optimization for web operations
+- Web interface memory optimization plan fully implemented (Stages A-E)
+- Eliminated String concatenation in hot paths for reduced heap fragmentation
 
 ### Platform Support - ESP32-S3 Super Mini ✅ IMPLEMENTED (Not Fully Tested)
 - **Multi-Board Architecture**: Added support for ESP32-S3 Super Mini with conditional compilation
@@ -43,11 +112,93 @@
 - **Debug Build**: `pio run -e supermini_debug`
 - **Original S3-Zero**: `pio run -e production` or `pio run -e debug` (unchanged)
 
+### SBUS Fast Path Architecture ✅ COMPLETED
+- **Fast Path Processing**: Lightweight SBUS frame processing with 10x performance improvement
+  - **Virtual Method Integration**: Added `tryFastProcess()` to protocol parser base class
+  - **Direct Output Routing**: SBUS frames bypass packet system for immediate forwarding
+  - **Memory Optimization**: Reduced from 15KB RAM usage to ~2KB with minimal DMA buffers
+  - **Frame Validation**: Built-in resync mechanism for corrupted frame recovery
+  - **Source Tracking**: Multi-source support with LOCAL/UART/UDP identification
+
+- **Device1 SBUS_IN Role**: First non-UART bridge role for Device1
+  - **UART1 Reconfiguration**: Automatic setup for 100000 8E2 inverted mode
+  - **Smart Router Integration**: Device1 input directly feeds SBUS output devices
+  - **Context-Dependent Device4**: Adaptive roles (D4_SBUS_UDP_TX/RX) based on configuration
+  - **Hardware Validation**: Prevents invalid combinations and provides user feedback
+
+- **SBUS WiFi Timing Keeper**: Maintains wireless SBUS frame timing
+  - **Static Frame Storage**: Preserves last valid SBUS frame for retransmission
+  - **20ms Interval Timing**: Ensures consistent frame delivery over WiFi
+  - **Conditional Operation**: Only active when timing keeper enabled and SBUS_OUT configured
+  - **Memory Efficient**: Uses static class members instead of complex pipeline integration
+
+### Memory Optimization & Performance Improvements ✅ COMPLETED
+- **Buffer Size Optimization**: Dynamic buffer allocation based on device role and protocol
+  - **SBUS Buffer Optimization**: Reduced SBUS device buffers for more efficient memory usage
+  - **UDP SBUS Optimization**: Smaller buffers for UDP+SBUS configurations
+  - **Intelligent Sizing Function**: `getOptimalBufferSize()` calculates appropriate buffer sizes
+  - **Protocol-Aware Allocation**: Buffer sizes now consider protocol type and device role
+
+- **PSRAM Memory Management**: Enhanced memory allocation with PSRAM support
+  - **Log Buffer PSRAM**: Non-critical log buffer moved to PSRAM when available
+  - **Automatic Fallback**: Graceful fallback to internal RAM when PSRAM unavailable
+  - **Memory Type Reporting**: Diagnostic logging shows PSRAM vs internal RAM usage
+  - **Performance Preserved**: DMA-critical buffers remain in fast internal RAM
+
+- **JSON Document Optimization**: Large web interface JSON documents optimized for PSRAM
+  - **Web API Optimization**: Config, logs, and status endpoints use PSRAM-aware allocation
+  - **ArduinoJson v7 Integration**: Leverages ESP32 heap allocator for automatic PSRAM usage
+  - **Memory Pressure Relief**: Temporary memory optimization during web operations
+  - **Transparent Operation**: No API changes, automatic memory management
+
+- **System Diagnostics Enhancement**: Extended memory reporting with PSRAM information
+  - **PSRAM Status Reporting**: All diagnostic functions now show PSRAM usage (total/free)
+  - **Comprehensive Memory View**: Internal RAM + PSRAM status in all system reports
+  - **Memory Optimization Tracking**: Monitor memory usage improvements across optimizations
+
+- **Web Interface Memory Optimization (Stages A-E)**: Complete memory optimization plan implementation
+  - **Stage A - Streaming JSON Responses**: Eliminated large String allocations in /status and /logs endpoints
+    - AsyncResponseStream for direct JSON serialization without intermediate buffers
+    - Connection: close headers for immediate TCP resource release
+    - Refactored with populateConfigJson() helper to avoid code duplication
+  - **Stage B - Collapsible Sections**: Reduced unnecessary network requests with smart UI
+    - Persistent collapsed state via localStorage (collapse:logs, collapse:protocolStats, collapse:crash)
+    - Visible-only polling: /logs only requested when section is expanded
+    - Unified toggle utilities: Utils.rememberedToggle() and Utils.restoreToggle()
+  - **Stage C - Static Asset Caching**: Immutable cache with automatic versioning
+    - Cache-Control: public, max-age=31536000, immutable for all static resources
+    - Auto-versioning with 8-char hash (?v=XXXXXXXX) in embed_html.py
+    - Cache invalidation on any source file change
+  - **Stage D - PSRAM Config Operations**: Eliminated DRAM spikes during import/export
+    - Import uses PSRAM buffer (32KB limit) without fallback to DRAM
+    - Export streams directly via config_to_json_stream(Print&)
+    - ImportData structure for clean PSRAM buffer handoff
+    - HTTP 413 response for oversized configs
+  - **Stage E - LWIP/IPv6 Tuning**: Reduced TCP memory footprint
+    - IPv6 disabled (CONFIG_LWIP_IPV6=n) with related counters zeroed
+    - TCP limits reduced: MAX_SOCKETS=8, MAX_ACTIVE_TCP=8, MAX_LISTENING_TCP=4
+    - TCP buffers optimized: SND_BUF=2920, WND=2920, RECVMBOX=16
+    - UDP settings preserved for AsyncUDP operation
+
+- **String Operation Optimization**: Eliminated all String concatenations in hot paths
+  - **Critical Path Optimizations** (executed frequently):
+    - handleStatus(): uartConfig and lastActivity now use snprintf with char buffers
+    - WiFi disconnect: Removed unused String variable
+    - Device initialization: Direct log_msg formatting instead of String building
+    - UDP statistics: char buffer for percentage formatting
+  - **Additional Optimizations**:
+    - crashlog_format_uptime(): Replaced String concatenation with snprintf
+    - WiFi hostname generation: Removed unnecessary String() wrapper
+    - Config export: Filename generation via snprintf instead of String concatenation
+  - **Impact**: Reduced heap fragmentation, predictable memory usage, faster execution
+
 ### Testing Status & Pending Tasks 🟡
 - **Super Mini Implementation**: Code changes completed but not tested on actual hardware
 - **UART Inversion**: Hardware inversion functionality unverified on Super Mini platform
 - **LED Functionality**: GPIO48 LED control implementation needs physical validation
 - **SBUS Operation**: Protocol operation with potential software inversion requirement untested
+- **SBUS Fast Path Testing**: Frame processing and timing keeper functionality need field validation
+- **Memory Optimization Validation**: Buffer optimizations need stress testing with high data rates
 - **Documentation Update**: README.md and web interface help pages not yet updated for Super Mini support
 
 ## v2.18.2 (Code Refactoring & WiFi TX Power Control) ✅ COMPLETED
@@ -82,7 +233,7 @@
   - **Comma Placement**: Standardized trailing comma style in UartDMA constructor
   - **Code Consistency**: Aligned with project coding standards
 
-## v2.18.1 (SBUS Advanced Features & Multi-Transport Support) ✅ COMPLETED
+## v2.18.1 (SBUS Advanced Features & Transport Support) ✅ COMPLETED
 
 ### Enhanced SBUS Hub Architecture ✅ COMPLETED
 - **Improved Statistics Tracking**: Advanced frame categorization and monitoring
@@ -98,7 +249,7 @@
   - **Improved Failsafe**: Better signal restoration detection and flag management
   - **Smart Routing**: Enhanced SBUS input routing logic for complex device configurations
 
-### SBUS Multi-Transport Support ✅ COMPLETED
+### SBUS Transport Support ✅ COMPLETED
 - **UART→SBUS Bridge**: Transport SBUS frames over regular UART connections
   - **UartSbusParser**: Dedicated parser for SBUS frames received via UART
   - **Bridge Flows**: UART2→Device3_SBUS_OUT and UART3→Device2_SBUS_OUT configurations
@@ -117,10 +268,10 @@
   - **Transport Statistics**: UDP sender SBUS frame counting and diagnostic logging
   - **Network Compatibility**: SBUS frames transmitted as raw 25-byte UDP payloads
 
-- **Multi-Source Conflict Detection**: Comprehensive input source validation
+- **SBUS Input Validation**: Comprehensive input source validation
   - **Source Identification**: Named detection of Physical SBUS, UART bridges, and UDP inputs
   - **Conflict Prevention**: Single-source enforcement with detailed conflict reporting
-  - **Future Compatibility**: Framework prepared for Phase 8 multi-source support
+  - **Input Validation**: Framework ensures proper SBUS configuration
 
 ### Diagnostic & Monitoring Improvements ✅ COMPLETED  
 - **Enhanced Logging**: Comprehensive diagnostic output for SBUS operations

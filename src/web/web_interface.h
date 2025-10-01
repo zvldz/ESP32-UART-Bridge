@@ -9,6 +9,13 @@
 #define HTTP_PORT                   80
 #define UPLOAD_BUFFER_RESERVE       4096
 #define ASCII_PRINTABLE_THRESHOLD   32
+#define MAX_IMPORT                  (32 * 1024)  // 32 KiB limit for config import
+
+// Structure for passing PSRAM import data
+struct ImportData {
+    char* ptr;
+    size_t len;
+};
 
 // Web server interface
 void webserver_init(Config* config, SystemState* state);

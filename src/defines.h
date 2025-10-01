@@ -32,7 +32,7 @@ Board differences:
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.3"
+#define DEVICE_VERSION "2.18.4"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN     0
@@ -70,7 +70,6 @@ Board differences:
 #define WIFI_TIMEOUT            1200000 // 20 minutes in milliseconds
 #define WIFI_ACTIVATION_CLICKS  3
 #define CLICK_TIMEOUT           3000    // 3 seconds between clicks
-
 
 // Default WiFi AP credentials
 #define DEFAULT_AP_SSID     "ESP-Bridge"

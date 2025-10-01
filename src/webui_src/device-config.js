@@ -21,6 +21,7 @@ const DeviceConfig = {
     buildHTML() {
         return `
             <h3>Device Configuration</h3>
+            <div id="device-warnings" style="margin-bottom: 15px;"></div>
             <table style="width: 100%;">
                 <tr>
                     <th>Device</th>
@@ -29,10 +30,11 @@ const DeviceConfig = {
                 </tr>
                 <tr>
                     <td><strong>Device 1</strong></td>
-                    <td>GPIO 4/5</td>
+                    <td id="device1_pins">GPIO 4/5</td>
                     <td>
-                        <select name="device1_role" disabled style="width: 100%;">
-                            <option value="0">UART1</option>
+                        <select name="device1_role" id="device1_role" onchange="DeviceConfig.onDevice1RoleChange()" style="width: 100%;">
+                            <option value="0">UART Bridge</option>
+                            <option value="1">SBUS Input</option>
                         </select>
                     </td>
                 </tr>
@@ -40,7 +42,7 @@ const DeviceConfig = {
                     <td><strong>Device 2</strong></td>
                     <td id="device2_pins">Variable</td>
                     <td>
-                        <select name="device2_role" id="device2_role" style="width: 100%;">
+                        <select name="device2_role" id="device2_role" onchange="DeviceConfig.updateDevice4Options()" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">UART2</option>
                             <option value="2">USB</option>
@@ -53,12 +55,11 @@ const DeviceConfig = {
                     <td><strong>Device 3</strong></td>
                     <td id="device3_pins">GPIO 11/12</td>
                     <td>
-                        <select name="device3_role" id="device3_role" style="width: 100%;">
+                        <select name="device3_role" id="device3_role" onchange="DeviceConfig.updateDevice4Options()" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">UART3 Mirror</option>
                             <option value="2">UART3 Bridge</option>
                             <option value="3">UART3 Logger</option>
-                            <option value="4">SBUS Input</option>
                             <option value="5">SBUS Output</option>
                         </select>
                     </td>
@@ -75,76 +76,25 @@ const DeviceConfig = {
                     </td>
                 </tr>
             </table>
-            
-            <div id="device4Config" style="display: none; margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                <h4 style="margin-top: 0;">Device 4 Network Configuration</h4>
-                <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-                    <div>
-                        <label for="device4_target_ip">Target IP:</label>
-                        <input type="text" name="device4_target_ip" id="device4_target_ip" 
-                               style="width: 150px;" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$">
-                    </div>
-                    <div>
-                        <label for="device4_port">Port:</label>
-                        <input type="number" name="device4_port" id="device4_port" 
-                               style="width: 80px;" min="1" max="65535">
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
-                        <label for="udp_batching" style="margin-left: 5px; cursor: pointer;">Batching</label>
-                    </div>
-                </div>
-                <small style="display: block; margin-top: 10px; color: #666;">
-                    ℹ️ Use x.x.x.255 for broadcast<br>
-                    📦 Disable UDP Batching only if your GCS doesn't support it (reduces performance)
-                </small>
-            </div>
-            
-            <h4 style="margin-top: 20px;">Logging Configuration</h4>
-            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <div>
-                    <label>Web Logs:</label>
-                    <select name="log_level_web" id="log_level_web" style="width: 120px;">
-                        <option value="-1">OFF</option>
-                        <option value="0">ERROR</option>
-                        <option value="1">WARNING</option>
-                        <option value="2">INFO</option>
-                        <option value="3">DEBUG</option>
-                    </select>
-                </div>
-                <div>
-                    <label>UART Logs:</label>
-                    <select name="log_level_uart" id="log_level_uart" style="width: 120px;">
-                        <option value="-1">OFF</option>
-                        <option value="0">ERROR</option>
-                        <option value="1">WARNING</option>
-                        <option value="2">INFO</option>
-                        <option value="3">DEBUG</option>
-                    </select>
-                </div>
-                <div>
-                    <label>Network Logs:</label>
-                    <select name="log_level_network" id="log_level_network" disabled style="width: 120px;">
-                        <option value="-1">OFF</option>
-                        <option value="0">ERROR</option>
-                        <option value="1">WARNING</option>
-                        <option value="2">INFO</option>
-                        <option value="3">DEBUG</option>
-                    </select>
-                </div>
-            </div>
         `;
     },
     
     setFormValues() {
         // Set device roles
+        const device1Role = document.getElementById('device1_role');
         const device2Role = document.getElementById('device2_role');
         const device3Role = document.getElementById('device3_role');
         const device4Role = document.getElementById('device4_role');
-        
+
+        if (device1Role) {
+            device1Role.value = this.config.device1Role || '0';
+            this.onDevice1RoleChange();
+        }
         if (device2Role) device2Role.value = this.config.device2Role;
         if (device3Role) device3Role.value = this.config.device3Role;
         if (device4Role) {
+            // Update Device4 options based on SBUS context first
+            this.updateDevice4Options();
             device4Role.value = this.config.device4Role;
         }
         
@@ -173,7 +123,9 @@ const DeviceConfig = {
         }
         
         // Update device displays
+        this.updateDevice1Pins();
         this.updateDevice2Pins();
+        this.updateUsbModeVisibility(device2Role ? device2Role.value : '0');
         try {
             this.updateDevice3Pins();
             this.updateDevice4Pins();
@@ -188,20 +140,30 @@ const DeviceConfig = {
         const device2Role = document.getElementById('device2_role');
         if (device2Role) {
             device2Role.addEventListener('change', () => {
+                this.config.device2Role = device2Role.value;  // Update config
                 this.updateDevice2Pins();
+                this.updateUartConfigVisibility();  // Update UART config visibility
                 this.updateProtocolFieldState();  // Update protocol field when device2 role changes
+                if (FormUtils.updateSbusTimingKeeperVisibility) {
+                    FormUtils.updateSbusTimingKeeperVisibility.call(FormUtils);
+                }
             });
         }
         
         const device3Role = document.getElementById('device3_role');
         if (device3Role) {
             device3Role.addEventListener('change', () => {
+                this.config.device3Role = device3Role.value;  // Update config
                 try {
                     this.updateDevice3Pins();
                 } catch(e) {
                     console.log('Error in device3 pins update:', e);
                 }
                 this.updateProtocolFieldState();  // Update protocol field when device3 role changes
+                this.updateUartConfigVisibility();  // Update UART config visibility
+                if (FormUtils.updateSbusTimingKeeperVisibility) {
+                    FormUtils.updateSbusTimingKeeperVisibility.call(FormUtils);
+                }
             });
         }
 
@@ -230,10 +192,30 @@ const DeviceConfig = {
             pinsCell.textContent = 'GPIO 8/9';
         } else if (role === '2') { // USB
             pinsCell.textContent = 'USB';
-        } else if (role === '3' || role === '4') { // SBUS IN/OUT
-            pinsCell.textContent = 'GPIO 8/9 (INV)';
+        } else if (role === '3') { // SBUS IN
+            pinsCell.textContent = 'GPIO 8 (RX)';
+        } else if (role === '4') { // SBUS OUT
+            pinsCell.textContent = 'GPIO 9 (TX)';
         } else {
             pinsCell.textContent = 'N/A';
+        }
+
+        // Show/hide USB Mode section based on Device2 role
+        this.updateUsbModeVisibility(role);
+        this.updateUartConfigVisibility();
+    },
+
+    updateUsbModeVisibility(device2Role) {
+        // Find USB Mode block in Advanced Configuration
+        const usbModeBlock = document.getElementById('usbModeBlock');
+
+        if (usbModeBlock) {
+            // Show only if Device2 is in USB mode
+            if (device2Role === '2') { // USB
+                usbModeBlock.style.display = 'block';
+            } else {
+                usbModeBlock.style.display = 'none';
+            }
         }
     },
 
@@ -249,8 +231,8 @@ const DeviceConfig = {
             pinsCell.textContent = 'GPIO 11/12';
         } else if (role === '3') { // UART3 Logger
             pinsCell.textContent = 'GPIO 12 (TX only)';
-        } else if (role === '4' || role === '5') { // SBUS IN/OUT
-            pinsCell.textContent = 'GPIO 11/12 (INV)';
+        } else if (role === '5') { // SBUS OUT (role 4 removed - was SBUS IN)
+            pinsCell.textContent = 'GPIO 12 (TX)';
         } else {
             pinsCell.textContent = 'N/A';
         }
@@ -275,17 +257,42 @@ const DeviceConfig = {
         // Update device stats visibility based on roles
         const device2Stats = document.getElementById('device2Stats');
         const device3Stats = document.getElementById('device3Stats');
-        
+
         if (device2Stats) {
             device2Stats.style.display = (this.config.device2Role !== '0') ? 'table-row' : 'none';
         }
-        
+
         if (device3Stats) {
             device3Stats.style.display = (this.config.device3Role !== '0') ? 'table-row' : 'none';
         }
-        
+
+        // Update UART Configuration visibility
+        this.updateUartConfigVisibility();
+
         // Update protocol field state based on SBUS roles
         this.updateProtocolFieldState();
+    },
+
+    updateUartConfigVisibility() {
+        // Check if any device uses UART
+        const hasUartDevices = (
+            this.config.device1Role === '0' ||  // D1_UART1 (bridge mode)
+            this.config.device2Role === '1' ||  // D2_UART2
+            this.config.device3Role === '1' ||  // D3_UART3_MIRROR
+            this.config.device3Role === '2' ||  // D3_UART3_BRIDGE
+            this.config.device3Role === '3'     // D3_UART3_LOG
+        );
+
+        // Find UART Configuration block in Advanced Configuration
+        const uartConfigBlock = document.getElementById('uartConfigBlock');
+
+        if (uartConfigBlock) {
+            if (hasUartDevices) {
+                uartConfigBlock.style.display = 'block';
+            } else {
+                uartConfigBlock.style.display = 'none';
+            }
+        }
     },
     
     updateProtocolFieldState() {
@@ -389,17 +396,17 @@ const DeviceConfig = {
 
     updateDevice4Config(isRoleChange = false) {
         const device4Role = document.getElementById('device4_role');
-        const device4Config = document.getElementById('device4Config');
+        const device4AdvancedConfig = document.getElementById('device4AdvancedConfig');
         const targetIpInput = document.getElementById('device4_target_ip');
         const portInput = document.getElementById('device4_port');
         const networkLogLevel = document.getElementById('log_level_network');
-        
-        if (!device4Role || !device4Config) return;
-        
+
+        if (!device4Role || !device4AdvancedConfig) return;
+
         const role = device4Role.value;
-        
+
         if (role !== '0') {
-            device4Config.style.display = 'block';
+            device4AdvancedConfig.style.display = 'block';
             
             // Enable Network Log Level when Device 4 is active
             if (networkLogLevel) {
@@ -428,8 +435,8 @@ const DeviceConfig = {
                     });
             }
         } else {
-            device4Config.style.display = 'none';
-            
+            device4AdvancedConfig.style.display = 'none';
+
             // Disable Network Log Level when Device 4 is disabled
             if (networkLogLevel) {
                 networkLogLevel.disabled = true;
@@ -441,14 +448,135 @@ const DeviceConfig = {
     updateNetworkLogLevel() {
         const device4Role = document.getElementById('device4_role');
         const networkLogLevel = document.getElementById('log_level_network');
-        
+
         if (!device4Role || !networkLogLevel) return;
-        
+
         // Enable/disable Network Log Level based on Device 4 role
         if (device4Role.value !== '0') {
             networkLogLevel.disabled = false;
         } else {
             networkLogLevel.disabled = true;
         }
+    },
+
+    onDevice1RoleChange() {
+        const role = document.getElementById('device1_role').value;
+        this.config.device1Role = role;  // Update config
+
+        if (role === '1') {  // SBUS_IN
+            // Disable incompatible Device2/3 options when D1_SBUS_IN
+            this.updateDeviceOptionsForSBUS();
+        } else {
+            // Re-enable all options when D1_UART1
+            this.enableAllDeviceOptions();
+        }
+
+        this.updateDevice1Pins();  // Update pin display
+        this.updateUartConfigVisibility();  // Update UART config visibility
+        this.updateDevice4Options();  // Update Device4 context
+    },
+
+    updateDevice1Pins() {
+        const device1Role = document.getElementById('device1_role');
+        const pinsCell = document.getElementById('device1_pins');
+
+        if (!device1Role || !pinsCell) return;
+
+        const role = device1Role.value;
+
+        if (role === '0') { // UART Bridge
+            pinsCell.textContent = 'GPIO 4/5';
+        } else if (role === '1') { // SBUS IN
+            pinsCell.textContent = 'GPIO 4 (RX)';
+        }
+    },
+
+    updateDeviceOptionsForSBUS() {
+        const device2Select = document.getElementById('device2_role');
+        const device3Select = document.getElementById('device3_role');
+
+        // Update Device2 options
+        Array.from(device2Select.options).forEach(option => {
+            if (option.value === '2') {  // D2_USB
+                option.disabled = true;
+                option.text = option.text.includes('(not supported)') ?
+                    option.text : option.text + ' (not supported with SBUS IN)';
+            } else if (option.value === '1') {  // D2_UART2
+                option.disabled = true;
+                option.text = option.text.includes('(converter needed)') ?
+                    option.text : option.text + ' (SBUS→UART converter needed)';
+            }
+        });
+
+        // Update Device3 options
+        Array.from(device3Select.options).forEach(option => {
+            if (option.value === '2') {  // D3_UART3_BRIDGE
+                option.disabled = true;
+                option.text = option.text.includes('(converter needed)') ?
+                    option.text : option.text + ' (SBUS→UART converter needed)';
+            }
+        });
+
+    },
+
+    enableAllDeviceOptions() {
+        const device2Select = document.getElementById('device2_role');
+        const device3Select = document.getElementById('device3_role');
+
+        // Re-enable all Device2 options
+        Array.from(device2Select.options).forEach(option => {
+            option.disabled = false;
+            // Remove warning text
+            option.text = option.text.replace(' (not supported with SBUS IN)', '')
+                                     .replace(' (SBUS→UART converter needed)', '');
+        });
+
+        // Re-enable all Device3 options
+        Array.from(device3Select.options).forEach(option => {
+            option.disabled = false;
+            option.text = option.text.replace(' (SBUS→UART converter needed)', '');
+        });
+
+    },
+
+    updateDevice4Options() {
+        const device1Role = document.getElementById('device1_role').value;
+        const device2Role = document.getElementById('device2_role').value;
+        const device3Role = document.getElementById('device3_role').value;
+
+        const hasSbus = (device1Role === '1' ||  // D1_SBUS_IN
+                         device2Role === '3' || device2Role === '4' ||  // D2_SBUS_IN/OUT
+                         device3Role === '5');   // D3_SBUS_OUT
+
+        const select = document.getElementById('device4_role');
+        if (!select) return;
+
+        const currentValue = select.value;
+        select.innerHTML = '';
+
+        if (hasSbus) {
+            // SBUS context - split TX/RX
+            this.addOption(select, '0', 'Disabled');
+            this.addOption(select, '2', 'UDP Logger');
+            this.addOption(select, '3', 'SBUS → UDP (TX only)');
+            this.addOption(select, '4', 'UDP → SBUS (RX only)');
+        } else {
+            // Normal context
+            this.addOption(select, '0', 'Disabled');
+            this.addOption(select, '1', 'Network Bridge');
+            this.addOption(select, '2', 'UDP Logger');
+        }
+
+        // Restore value if possible
+        if (select.querySelector(`option[value="${currentValue}"]`)) {
+            select.value = currentValue;
+        }
+    },
+
+    addOption(select, value, text) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        select.appendChild(option);
     }
 };

@@ -22,4 +22,10 @@ void initDevice3SBUS();
 // Initialize and log device configuration
 void initDevices();
 
+// Helper to check if any SBUS device is configured
+bool hasSbusDevice();
+
+// Register SBUS outputs after UART interfaces are created
+void registerSbusOutputs();
+
 #endif // DEVICE_INIT_H

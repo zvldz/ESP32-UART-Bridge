@@ -337,7 +337,7 @@ void UartDMA::pollEvents() {
     size_t buffered_len = 0;
     uart_get_buffered_data_len(uart_num, &buffered_len);
     if (buffered_len > 0) {
-        int len = uart_read_bytes(uart_num, poll_buffer, 
+        int len = uart_read_bytes(uart_num, poll_buffer,
                                  (buffered_len > DMA_RX_BUF_SIZE) ? DMA_RX_BUF_SIZE : buffered_len, 0);
         if (len > 0) {
             processRxData(poll_buffer, len);
@@ -349,7 +349,7 @@ void UartDMA::pollEvents() {
 void UartDMA::processRxData(uint8_t* data, size_t len) {
     if (xSemaphoreTake(rx_mutex, portMAX_DELAY) == pdTRUE) {
         rx_bytes_total = rx_bytes_total + len;
-        
+
         for (size_t i = 0; i < len; i++) {
             size_t next_head = (rx_head + 1) % RING_BUF_SIZE;
             

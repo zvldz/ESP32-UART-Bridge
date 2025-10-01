@@ -2,6 +2,7 @@
 #include "../bridge_processing.h"
 #include "../adaptive_buffer.h"
 #include "../protocols/protocol_pipeline.h"
+#include "../protocols/sbus_fast_parser.h"
 #include "../protocols/buffer_manager.h"
 #include "../device_init.h"
 #include "../diagnostics.h"
@@ -27,6 +28,11 @@ extern UartInterface* uartBridgeSerial;
 
 // ADD: Global pipeline pointer for sender task
 static ProtocolPipeline* g_protocolPipeline = nullptr;
+
+// Function to get protocol pipeline instance
+ProtocolPipeline* getProtocolPipeline() {
+    return g_protocolPipeline;
+}
 
 // External USB interface pointer from device_init.cpp
 extern UsbInterface* g_usbInterface;
@@ -184,7 +190,7 @@ void uartBridgeTask(void* parameter) {
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     processDevice1Input(&ctx);
-    
+
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     uint32_t t1 = micros();
     // === TEMPORARY DIAGNOSTIC BLOCK END ===

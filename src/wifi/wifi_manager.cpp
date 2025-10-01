@@ -98,7 +98,7 @@ String generateMdnsHostname() {
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     char macSuffix[WIFI_MAC_SUFFIX_BUFFER_SIZE];
     sprintf(macSuffix, "-%02x%02x", mac[4], mac[5]);
-    hostname += String(macSuffix);
+    hostname += macSuffix;  // Direct append, no need for String()
 
     return hostname;
 }
@@ -150,7 +150,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             case WIFI_EVENT_STA_DISCONNECTED:
                 {
                     wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
-                    String reasonStr = "Disconnect reason: " + String(event->reason);
+                    // Removed unused String concatenation
                     log_msg(LOG_WARNING, "WiFi disconnected: Disconnect reason: %d", event->reason);
 
                     // Check if this is an authentication failure

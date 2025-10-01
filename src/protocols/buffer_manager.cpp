@@ -1,40 +1,54 @@
 #include "buffer_manager.h"
 #include "../logging.h"
 #include "../adaptive_buffer.h"
-#include <Arduino.h>  // For ESP.getFreeHeap()
+#include "../defines.h"
+
+// Calculate optimal buffer size based on device role and protocol type
+size_t getOptimalBufferSize(uint8_t deviceRole, uint8_t protocolType) {
+    // SBUS devices need minimal buffers (SBUS frame = 25 bytes)
+    if (deviceRole == D1_SBUS_IN || deviceRole == D2_SBUS_IN ||
+        deviceRole == D2_SBUS_OUT || deviceRole == D3_SBUS_OUT) {
+        return 256;  // 10 SBUS frames buffer
+    }
+
+    // UDP for SBUS needs smaller buffer than for MAVLink/RAW
+    if ((deviceRole == D4_NETWORK_BRIDGE && protocolType == PROTOCOL_SBUS) ||
+        deviceRole == D4_SBUS_UDP_TX || deviceRole == D4_SBUS_UDP_RX) {
+        return 1024;  // 40 SBUS frames, enough for network jitter
+    }
+
+    // Default for MAVLink/RAW telemetry
+    return INPUT_BUFFER_SIZE;  // 4096 bytes
+}
 
 void initProtocolBuffers(BridgeContext* ctx, Config* config) {
-    // Telemetry buffer - needed ALWAYS when there's USB (independent of Logger)
-    bool needTelemetryBuffer = 
-        (config->device2.role == D2_USB) ||  // USB always needs buffer
-        (config->device2.role == D2_UART2) ||
-        (config->device2.role == D2_SBUS_OUT) ||  // SBUS OUT needs telemetry from UART1
-        (config->device3.role == D3_UART3_MIRROR) ||
-        (config->device3.role == D3_UART3_BRIDGE) ||
-        (config->device3.role == D3_SBUS_OUT) ||  // SBUS OUT needs telemetry from UART1
-        (config->device4.role == D4_NETWORK_BRIDGE);
-    
-    if (needTelemetryBuffer) {
-        size_t size = calculateAdaptiveBufferSize(config->baudrate);
+    // Telemetry buffer - always needed for Device1 data (UART or SBUS)
+    // Size depends on protocol: 512B for SBUS, adaptive for UART
+    if (true) {  // Always create telemetryBuffer for Device1
+        size_t size;
+        if (config->device1.role == D1_SBUS_IN) {
+            size = 512;  // Fixed size for SBUS frames
+            log_msg(LOG_INFO, "Device1 SBUS_IN: Using 512B telemetryBuffer");
+        } else {
+            size = calculateAdaptiveBufferSize(config->baudrate);
+            log_msg(LOG_INFO, "Device1 UART: Using adaptive telemetryBuffer (%zu bytes)", size);
+        }
         ctx->buffers.telemetryBuffer = new CircularBuffer();
         ctx->buffers.telemetryBuffer->init(size);
-        log_msg(LOG_INFO, "Telemetry buffer allocated: %zu bytes", size);
-    } else {
-        ctx->buffers.telemetryBuffer = nullptr;
     }
     
     // Log buffer - only for Logger mode
     if (config->device4.role == D4_LOG_NETWORK) {
         ctx->buffers.logBuffer = new CircularBuffer();
-        ctx->buffers.logBuffer->init(1024);
-        log_msg(LOG_INFO, "Log buffer allocated: 1024 bytes");
+        ctx->buffers.logBuffer->init(1024, true);  // true = use PSRAM if available
+        log_msg(LOG_INFO, "Log buffer allocated: 1024 bytes (PSRAM preferred)");
     } else {
         ctx->buffers.logBuffer = nullptr;
     }
     
     // Input buffers for bidirectional pipeline
     size_t inputBufferSize = INPUT_BUFFER_SIZE;  // Use defined constant (4096)
-    
+
     // USB input buffer
     if (config->device2.role == D2_USB) {
         ctx->buffers.usbInputBuffer = new CircularBuffer();
@@ -47,89 +61,34 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // UART2 input buffer
     if (config->device2.role == D2_UART2 || config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
         ctx->buffers.uart2InputBuffer = new CircularBuffer();
-        
-        // SBUS needs smaller buffers (25 bytes per frame)
-        if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
-            ctx->buffers.uart2InputBuffer->init(512);  // ~20 frames buffer
-            log_msg(LOG_INFO, "UART2 SBUS buffer allocated: 512 bytes");
-        } else {
-            ctx->buffers.uart2InputBuffer->init(inputBufferSize);
-            log_msg(LOG_INFO, "UART2 input buffer allocated: %zu bytes", inputBufferSize);
-        }
+        size_t bufferSize = getOptimalBufferSize(config->device2.role, config->protocolOptimization);
+        ctx->buffers.uart2InputBuffer->init(bufferSize);
+        log_msg(LOG_INFO, "UART2 buffer allocated: %zu bytes", bufferSize);
     } else {
         ctx->buffers.uart2InputBuffer = nullptr;
     }
     
     // UART3 input buffer
-    if (config->device3.role == D3_UART3_BRIDGE || config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
+    if (config->device3.role == D3_UART3_BRIDGE) {
+        // D3_SBUS_OUT removed - Fast Path writes directly, doesn't read
         ctx->buffers.uart3InputBuffer = new CircularBuffer();
-        
-        // SBUS needs smaller buffers (25 bytes per frame)
-        if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
-            ctx->buffers.uart3InputBuffer->init(512);  // ~20 frames buffer
-            log_msg(LOG_INFO, "UART3 SBUS buffer allocated: 512 bytes");
-        } else {
-            ctx->buffers.uart3InputBuffer->init(inputBufferSize);
-            log_msg(LOG_INFO, "UART3 input buffer allocated: %zu bytes", inputBufferSize);
-        }
+        size_t bufferSize = getOptimalBufferSize(config->device3.role, config->protocolOptimization);
+        ctx->buffers.uart3InputBuffer->init(bufferSize);
+        log_msg(LOG_INFO, "UART3 buffer allocated: %zu bytes", bufferSize);
     } else {
         ctx->buffers.uart3InputBuffer = nullptr;
     }
     
     // UDP input buffer
-    if (config->device4.role == D4_NETWORK_BRIDGE) {
+    if (config->device4.role == D4_NETWORK_BRIDGE ||
+        config->device4.role == D4_SBUS_UDP_TX || config->device4.role == D4_SBUS_UDP_RX) {
         ctx->buffers.udpInputBuffer = new CircularBuffer();
-        ctx->buffers.udpInputBuffer->init(inputBufferSize);
-        log_msg(LOG_INFO, "UDP input buffer allocated: %zu bytes", inputBufferSize);
+        size_t bufferSize = getOptimalBufferSize(config->device4.role, config->protocolOptimization);
+        ctx->buffers.udpInputBuffer->init(bufferSize);
+        log_msg(LOG_INFO, "UDP input buffer allocated: %zu bytes", bufferSize);
     } else {
         ctx->buffers.udpInputBuffer = nullptr;
     }
-
-    // --- TEMPORARY DIAGNOSTICS START ---
-    size_t total = 0;
-
-    if (ctx->buffers.telemetryBuffer) {
-        size_t size = ctx->buffers.telemetryBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] Telemetry: %zu bytes", size);
-        total += size;
-    }
-
-    if (ctx->buffers.usbInputBuffer) {
-        size_t size = ctx->buffers.usbInputBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] USB Input: %zu bytes", size);
-        total += size;
-    }
-
-    if (ctx->buffers.uart2InputBuffer) {
-        size_t size = ctx->buffers.uart2InputBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] UART2 Input: %zu bytes", size);
-        total += size;
-    }
-
-    if (ctx->buffers.uart3InputBuffer) {
-        size_t size = ctx->buffers.uart3InputBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] UART3 Input: %zu bytes", size);
-        total += size;
-    }
-
-    if (ctx->buffers.udpInputBuffer) {
-        size_t size = ctx->buffers.udpInputBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] UDP Input: %zu bytes", size);
-        total += size;
-    }
-
-    if (ctx->buffers.logBuffer) {
-        size_t size = ctx->buffers.logBuffer->getCapacity();
-        log_msg(LOG_INFO, "[BUFFERS] Log: %zu bytes", size);
-        total += size;
-    }
-
-    log_msg(LOG_INFO, "[BUFFERS] TOTAL ALLOCATED: %zu bytes", total);
-
-    // --- TEMPORARY DIAGNOSTICS: FREE HEAP START ---
-    log_msg(LOG_INFO, "[BUFFERS] Free heap after allocation: %d", ESP.getFreeHeap());
-    // --- TEMPORARY DIAGNOSTICS: FREE HEAP END ---
-    // --- TEMPORARY DIAGNOSTICS END ---
 }
 
 void freeProtocolBuffers(BridgeContext* ctx) {

@@ -91,40 +91,69 @@ public:
     }
     
     // Initialize buffer with DMA-compatible memory
-    void init(size_t requestedSize) {
+    // useSlowMemory: if true, prefer PSRAM for non-critical buffers (e.g., logs)
+    void init(size_t requestedSize, bool useSlowMemory = false) {
         // Check minimum size
         if (requestedSize < 256) requestedSize = 256;
-        
+
         capacity = roundToPowerOf2(requestedSize);
         capacityMask = capacity - 1;
-        
-        // Allocate DMA-compatible memory for UART operations
-        // IMPORTANT: MALLOC_CAP_DMA for DMA compatibility!
-        mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
-        
-        if (!mainBuffer) {
+
+        // Choose memory type based on usage
+        uint32_t caps = MALLOC_CAP_DMA | MALLOC_CAP_8BIT;  // Default for high-speed UART
+
+        if (useSlowMemory) {
+            // Check PSRAM availability for non-critical buffers
+            size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+            if (psramFree > capacity) {
+                caps = MALLOC_CAP_SPIRAM;
+                log_msg(LOG_INFO, "CircBuf: Using PSRAM for %zu bytes buffer", capacity);
+            } else {
+                log_msg(LOG_WARNING, "CircBuf: PSRAM requested but not available (%zu free, %zu needed), using internal RAM",
+                        psramFree, capacity);
+                // Fall back to internal RAM without DMA (logs don't need DMA)
+                caps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+            }
+        }
+
+        // Allocate memory with chosen capabilities
+        mainBuffer = (uint8_t*)heap_caps_malloc(capacity, caps);
+
+        if (!mainBuffer && !useSlowMemory) {
+            // For high-speed buffers, try fallback options
             log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes (DMA)", capacity);
             // Fallback to regular memory if DMA unavailable
             mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-            
+
             if (!mainBuffer) {
                 // Try smaller size
                 capacity = roundToPowerOf2(requestedSize / 2);
                 capacityMask = capacity - 1;
                 mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-                
+
                 if (!mainBuffer) {
                     // Critical failure
                     esp_restart();
                 }
             }
+        } else if (!mainBuffer && useSlowMemory) {
+            // For slow buffers, try internal RAM as last resort
+            mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (!mainBuffer) {
+                log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes for slow buffer", capacity);
+                esp_restart();
+            }
         }
-        
+
         head = tail = 0;
         memset(&stats, 0, sizeof(stats));
         lastWriteTimeMicros = micros();  // Unified time base!
-        
-        log_msg(LOG_INFO, "CircBuf: Allocated %zu bytes (tempLinearBuffer: %zu bytes BSS)", capacity, sizeof(tempLinearBuffer));
+
+        // Log allocation result
+        const char* memType = (caps == MALLOC_CAP_SPIRAM) ? "PSRAM" :
+                              (caps & MALLOC_CAP_DMA) ? "DMA" : "Internal";
+        log_msg(LOG_INFO, "CircBuf: Allocated %zu bytes in %s (tempLinearBuffer: %zu bytes BSS)",
+                capacity, memType, sizeof(tempLinearBuffer));
     }
     
     // Free space calculation (leave 1 byte empty for full/empty distinction)

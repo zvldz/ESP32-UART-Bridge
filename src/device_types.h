@@ -27,7 +27,8 @@ enum LogLevel {
 
 // Device 1 role
 enum Device1Role {
-    D1_UART1 = 0
+    D1_UART1 = 0,       // Default: Normal UART bridge at configured baudrate
+    D1_SBUS_IN = 1      // NEW: SBUS input from RC receiver (100000 8E2 inverted)
 };
 
 // Device 2 role
@@ -45,15 +46,17 @@ enum Device3Role {
     D3_UART3_MIRROR = 1,
     D3_UART3_BRIDGE = 2,
     D3_UART3_LOG = 3,
-    D3_SBUS_IN = 4,    // NEW: SBUS input (alternative)
-    D3_SBUS_OUT = 5    // NEW: SBUS output (alternative)
+    // D3_SBUS_IN = 4,  // REMOVED - not supported
+    D3_SBUS_OUT = 5     // Keep output role
 };
 
 // Device 4 role
 enum Device4Role {
     D4_NONE = 0,
-    D4_NETWORK_BRIDGE = 1,
-    D4_LOG_NETWORK = 2
+    D4_NETWORK_BRIDGE = 1,  // Full bridge (MAVLink/Raw)
+    D4_LOG_NETWORK = 2,     // Logger
+    D4_SBUS_UDP_TX = 3,     // NEW: SBUS→UDP only
+    D4_SBUS_UDP_RX = 4      // NEW: UDP→SBUS only
 };
 
 // Device configuration
@@ -68,14 +71,6 @@ struct Device4Config {
     uint8_t role;
 };
 
-// SBUS Multi-source settings
-struct SbusSourceSettings {
-    uint8_t forcedSource;      // 0=LOCAL, 1=UART, 2=UDP, 3=NONE
-    bool manualMode;           // Manual override active
-    uint32_t timeoutMs;        // Source timeout (for Phase 9.3)
-    uint32_t hysteresisMs;     // Switch stability (for Phase 9.3)
-    uint8_t priorities[3];     // Source priorities (for Phase 9.3)
-};
 
 // Configuration structure (moved here from types.h)
 typedef struct {
@@ -123,6 +118,6 @@ typedef struct {
     bool udpBatchingEnabled;
     bool mavlinkRouting;
 
-    // SBUS Multi-source settings (NEW - add at the end)
-    SbusSourceSettings sbusSettings;
+    // SBUS settings
+    bool sbusTimingKeeper;
 } Config;

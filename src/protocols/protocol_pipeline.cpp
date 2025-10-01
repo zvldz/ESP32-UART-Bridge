@@ -2,14 +2,9 @@
 #include "../logging.h"
 #include "uart1_sender.h"
 #include "../uart/uart1_tx_service.h"
-#include "sbus_parser.h"
-#include "sbus_packetizer.h"
-#include "sbus_hub.h"
-#include "uart_sbus_parser.h"
-#include "udp_sbus_parser.h"
-#include <Arduino.h>  // For ESP.getFreeHeap()
+#include "sbus_fast_parser.h"
 
-ProtocolPipeline::ProtocolPipeline(BridgeContext* context) : 
+ProtocolPipeline::ProtocolPipeline(BridgeContext* context) :
     activeFlows(0),
     ctx(context),
     sharedRouter(nullptr) {
@@ -47,11 +42,44 @@ void ProtocolPipeline::init(Config* config) {
 
 void ProtocolPipeline::setupFlows(Config* config) {
     activeFlows = 0;
-    
+
+    // Device1 SBUS_IN flow (CRITICAL - new feature!)
+    if (config->device1.role == D1_SBUS_IN && ctx->buffers.telemetryBuffer) {
+        DataFlow f;
+        f.name = "Device1_SBUS_IN";
+        f.inputBuffer = ctx->buffers.telemetryBuffer;  // Device1 uses telemetryBuffer
+        f.physInterface = PHYS_UART1;
+        f.source = SOURCE_TELEMETRY;
+        f.senderMask = calculateSbusInputRouting(config);
+        f.isInputFlow = true;
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);  // Device1 SBUS_IN
+        f.router = nullptr;
+
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "Device1 SBUS_IN flow created - FIRST TIME Device1 is not UART bridge!");
+    }
+
+    // Device2 SBUS_IN flow
+    if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
+        DataFlow f;
+        f.name = "Device2_SBUS_IN";
+        f.inputBuffer = ctx->buffers.uart2InputBuffer;  // Device2 uses uart2InputBuffer
+        f.physInterface = PHYS_UART2;
+        f.source = SOURCE_TELEMETRY;
+        f.senderMask = calculateSbusInputRouting(config);
+        f.isInputFlow = true;
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);  // Device2 SBUS_IN
+        f.router = nullptr;
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "Device2 SBUS_IN flow created");
+    }
+
     // Check if any SBUS device is configured
-    bool hasSbusDevice = (config->device2.role == D2_SBUS_IN || 
+    bool hasSbusDevice = (config->device1.role == D1_SBUS_IN ||
+                          config->device2.role == D2_SBUS_IN ||
                           config->device2.role == D2_SBUS_OUT ||
-                          config->device3.role == D3_SBUS_IN || 
                           config->device3.role == D3_SBUS_OUT);
     
     // Flow 1: Telemetry
@@ -80,8 +108,9 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
     }
     
-    // EXISTING Telemetry flow - update to use shared router
-    if (telemetryMask && ctx->buffers.telemetryBuffer) {
+    // EXISTING Telemetry flow - only for D1_UART1 mode
+    // D1_SBUS_IN has its own dedicated flow above
+    if (telemetryMask && ctx->buffers.telemetryBuffer && config->device1.role != D1_SBUS_IN) {
         DataFlow f;
         f.name = "Telemetry";
         f.inputBuffer = ctx->buffers.telemetryBuffer;
@@ -317,25 +346,17 @@ void ProtocolPipeline::setupFlows(Config* config) {
     }
     
     // SBUS Input flow (SBUS → UART1)
-    if ((config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) ||
-        (config->device3.role == D3_SBUS_IN && ctx->buffers.uart3InputBuffer)) {
+    if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         
         DataFlow f;
-        f.name = "SBUS_Input";
-        
-        // Select buffer based on which device is SBUS_IN
-        if (config->device2.role == D2_SBUS_IN) {
-            f.inputBuffer = ctx->buffers.uart2InputBuffer;
-            f.physInterface = PHYS_UART2;
-        } else {
-            f.inputBuffer = ctx->buffers.uart3InputBuffer;
-            f.physInterface = PHYS_UART3;
-        }
+        f.name = "SBUS_Input_D2";
+        f.inputBuffer = ctx->buffers.uart2InputBuffer;
+        f.physInterface = PHYS_UART2;
         
         f.source = SOURCE_TELEMETRY;
         f.senderMask = calculateSbusInputRouting(config);  // Dynamic routing calculation
         f.isInputFlow = true;
-        f.parser = new SbusParser();
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);  // Device2 SBUS_IN
         f.router = nullptr;  // No routing for SBUS
         
         flows[activeFlows++] = f;
@@ -343,8 +364,12 @@ void ProtocolPipeline::setupFlows(Config* config) {
     }
 
     // SBUS Output flow (UART1 → SBUS)
-    if ((config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT) &&
-        ctx->buffers.telemetryBuffer) {
+    // SBUS_OUTPUT via legacy pipeline (only when no Fast Path SBUS input)
+    // Fast Path handles SBUS_OUT directly, legacy path needs telemetryBuffer
+    bool hasLegacySbusOut = (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT);
+    bool hasFastPathSbusIn = (config->device1.role == D1_SBUS_IN || config->device2.role == D2_SBUS_IN);
+
+    if (hasLegacySbusOut && !hasFastPathSbusIn && ctx->buffers.telemetryBuffer) {
         
         DataFlow f;
         f.name = "SBUS_Output";
@@ -352,7 +377,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.source = SOURCE_TELEMETRY;
         f.physInterface = PHYS_UART1;
         f.isInputFlow = false;
-        f.parser = new SbusPacketizer();
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);
         f.router = nullptr;
         
         // Select output device
@@ -365,47 +390,25 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "SBUS Output flow created");
     }
-    
-    // UART2 to SBUS bridge flow (UART2 → SBUS OUT via Device3)
-    if (config->device2.role == D2_UART2 && 
-        config->device3.role == D3_SBUS_OUT &&
-        ctx->buffers.uart2InputBuffer) {
-        
-        DataFlow f;
-        f.name = "UART2_SBUS_Bridge";
-        f.inputBuffer = ctx->buffers.uart2InputBuffer;
-        f.source = SOURCE_TELEMETRY;
-        f.physInterface = PHYS_UART2;
-        f.senderMask = (1 << IDX_DEVICE3);  // To Device3 SBUS Hub
-        f.isInputFlow = true;
-        f.parser = new UartSbusParser();
-        f.router = nullptr;
-        
-        flows[activeFlows++] = f;
-        log_msg(LOG_INFO, "UART2->SBUS bridge created (Device2 UART -> Device3 SBUS)");
+
+    // TODO: UART→SBUS conversion not implemented in Phase 2
+    // Legacy SBUS Hub architecture removed - need new implementation
+    // Planned combinations:
+    //   - D2_UART2 + D3_SBUS_OUT (UART2 transport → SBUS OUT)
+    //   - D3_UART3_BRIDGE + D2_SBUS_OUT (UART3 transport → SBUS OUT)
+    // Requires: Parser to extract SBUS frames from UART stream
+    //           Integration with SbusRouter singleton
+
+    // Context-aware Device4 handling
+    // Use the hasSbusDevice variable already defined above
+
+    if (hasSbusDevice && config->device4.role == D4_NETWORK_BRIDGE) {
+        // Split into separate TX/RX for SBUS
+        log_msg(LOG_WARNING, "SBUS detected - Device4 should use SBUS_UDP_TX or SBUS_UDP_RX");
     }
 
-    // UART3 to SBUS bridge flow (UART3 → SBUS OUT via Device2)  
-    if (config->device3.role == D3_UART3_BRIDGE && 
-        config->device2.role == D2_SBUS_OUT &&
-        ctx->buffers.uart3InputBuffer) {
-        
-        DataFlow f;
-        f.name = "UART3_SBUS_Bridge";
-        f.inputBuffer = ctx->buffers.uart3InputBuffer;
-        f.source = SOURCE_TELEMETRY;
-        f.physInterface = PHYS_UART3;
-        f.senderMask = (1 << IDX_DEVICE2_UART2);  // To Device2 SBUS Hub
-        f.isInputFlow = true;
-        f.parser = new UartSbusParser();
-        f.router = nullptr;
-        
-        flows[activeFlows++] = f;
-        log_msg(LOG_INFO, "UART3->SBUS bridge created (Device3 UART -> Device2 SBUS)");
-    }
-    
-    // UDP to SBUS conversion flow (UDP → SBUS OUT)
-    if (config->device4.role == D4_NETWORK_BRIDGE && 
+    // Handle SBUS UDP RX (UDP → SBUS)
+    if (config->device4.role == D4_SBUS_UDP_RX &&
         (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT) &&
         ctx->buffers.udpInputBuffer) {
         
@@ -415,7 +418,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.source = SOURCE_TELEMETRY;
         f.physInterface = PHYS_UDP;
         f.isInputFlow = true;
-        f.parser = new UdpSbusParser();
+        f.parser = new SbusFastParser(SBUS_SOURCE_UDP);  // UDP source
         f.router = nullptr;
         
         // Determine routing - to Device2 or Device3 SBUS Hub
@@ -430,6 +433,36 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "UDP->SBUS input flow created");
     }
+
+    // Handle SBUS UDP TX (SBUS → UDP)
+    // D4_SBUS_UDP_TX: Read from appropriate SBUS input buffer
+    if (config->device4.role == D4_SBUS_UDP_TX) {
+        CircularBuffer* sbusInputBuffer = nullptr;
+        const char* sourceDesc = "Unknown";
+
+        if (config->device1.role == D1_SBUS_IN && ctx->buffers.telemetryBuffer) {
+            sbusInputBuffer = ctx->buffers.telemetryBuffer;
+            sourceDesc = "Device1_SBUS";
+        } else if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
+            sbusInputBuffer = ctx->buffers.uart2InputBuffer;
+            sourceDesc = "Device2_SBUS";
+        }
+
+        if (sbusInputBuffer) {
+            DataFlow f;
+            f.name = "SBUS_UDP_Output";
+            f.inputBuffer = sbusInputBuffer;  // From SBUS input buffer
+            f.source = SOURCE_TELEMETRY;
+            f.physInterface = PHYS_UART1;  // SBUS source
+        f.isInputFlow = false;  // Output flow
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);  // Process for UDP send
+        f.router = nullptr;
+        f.senderMask = (1 << IDX_DEVICE4);  // To UDP sender
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "SBUS->UDP output flow created");
+        }
+    }
     
     // TODO Phase 8: Remove when multi-source support implemented
     // Check for conflicting SBUS inputs (only one source allowed currently)
@@ -442,10 +475,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         sources[sourceIdx++] = "Device2 SBUS_IN";
         sbusSourceCount++;
     }
-    if (config->device3.role == D3_SBUS_IN) {
-        sources[sourceIdx++] = "Device3 SBUS_IN";
-        sbusSourceCount++;
-    }
+    // D3_SBUS_IN removed - no longer supported
 
     // Check UART→SBUS bridges
     if (config->device2.role == D2_UART2 && config->device3.role == D3_SBUS_OUT) {
@@ -482,17 +512,9 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
     
     // Device2 routing based on its role
     if (config->device2.role == D2_UART2) {
-        // Device2 is regular UART - send SBUS frames if input from Device3
-        if (config->device3.role == D3_SBUS_IN) {
-            mask |= (1 << IDX_DEVICE2_UART2);
-            log_msg(LOG_INFO, "SBUS routing: D3_SBUS_IN -> D2_UART2 enabled");
-        }
+        // D3_SBUS_IN no longer supported
     } else if (config->device2.role == D2_SBUS_OUT) {
-        // Device2 is SBUS_OUT repeater - send if input from Device3
-        if (config->device3.role == D3_SBUS_IN) {
-            mask |= (1 << IDX_DEVICE2_UART2);
-            log_msg(LOG_INFO, "SBUS routing: D3_SBUS_IN -> D2_SBUS_OUT enabled");
-        }
+        // D3_SBUS_IN no longer supported
     }
     
     // Device3 routing based on its role
@@ -559,23 +581,8 @@ void ProtocolPipeline::createSenders(Config* config) {
     }
     
     // SBUS Hubs (state-based senders instead of queue-based)
-    if (config->device2.role == D2_SBUS_OUT && ctx->interfaces.device2Serial) {
-        // Replace UART2 sender with SBUS Hub for Device2
-        if (senders[IDX_DEVICE2_UART2]) {
-            delete senders[IDX_DEVICE2_UART2];
-        }
-        senders[IDX_DEVICE2_UART2] = new SbusHub(ctx->interfaces.device2Serial, IDX_DEVICE2_UART2);
-        log_msg(LOG_INFO, "Created SBUS Hub for Device2 at index %d", IDX_DEVICE2_UART2);
-    }
-
-    if (config->device3.role == D3_SBUS_OUT && ctx->interfaces.device3Serial) {
-        // Replace UART3 sender with SBUS Hub for Device3
-        if (senders[IDX_DEVICE3]) {
-            delete senders[IDX_DEVICE3];
-        }
-        senders[IDX_DEVICE3] = new SbusHub(ctx->interfaces.device3Serial, IDX_DEVICE3);
-        log_msg(LOG_INFO, "Created SBUS Hub for Device3 at index %d", IDX_DEVICE3);
-    }
+    // SBUS_OUT devices are now handled by SbusRouter through fast path
+    // No special senders needed - Router outputs directly to UART interfaces
     
     // Device4 - UDP (unchanged)
     if ((config->device4.role == D4_NETWORK_BRIDGE || 
@@ -603,10 +610,6 @@ void ProtocolPipeline::createSenders(Config* config) {
     } else {
         log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
     }
-
-    // --- TEMPORARY DIAGNOSTICS START ---
-    log_msg(LOG_INFO, "[PIPELINE] After senders creation, free heap: %d", ESP.getFreeHeap());
-    // --- TEMPORARY DIAGNOSTICS END ---
 }
 
 void ProtocolPipeline::process() {
@@ -750,20 +753,25 @@ void ProtocolPipeline::processTelemetryFlow() {
 
 void ProtocolPipeline::processFlow(DataFlow& flow) {
     if (!flow.parser || !flow.inputBuffer) return;
-    
+
+    // NEW: Try fast path first
+    if (flow.parser->tryFastProcess(flow.inputBuffer, ctx)) {
+        return;  // Processed via fast path, skip normal parsing
+    }
+
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     static uint32_t telemetryBytesTotal = 0;
     static uint32_t parsedPacketsTotal = 0;
     static uint32_t lastFlowReport = 0;
-    
+
     // Count bytes available in telemetry buffer before parsing
     size_t available = flow.inputBuffer->available();
     telemetryBytesTotal += available;
 
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
-    
+
     uint32_t now = micros();
-    
+
     // Parse packets from input buffer
     ParseResult result = flow.parser->parse(flow.inputBuffer, now);
     
@@ -988,14 +996,13 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 // Find SBUS parser in any flow (not just first)
                 for (size_t i = 0; i < activeFlows; i++) {
                     if (flows[i].parser && 
-                        strcmp(flows[i].parser->getName(), "SBUS_Parser") == 0) {
+                        strcmp(flows[i].parser->getName(), "SBUS_Fast") == 0) {
                         
-                        // Cast to SbusParser to get specific stats
-                        SbusParser* sbusParser = static_cast<SbusParser*>(flows[i].parser);
+                        // Cast to SbusFastParser to get specific stats
+                        SbusFastParser* sbusParser = static_cast<SbusFastParser*>(flows[i].parser);
                         parserStats["validFrames"] = sbusParser->getValidFrames();
                         parserStats["invalidFrames"] = sbusParser->getInvalidFrames();
-                        parserStats["frameLostCount"] = sbusParser->getFrameLostCount();
-                        parserStats["failsafeCount"] = sbusParser->getFailsafeCount();
+                        // Fast Path doesn't need complex legacy metrics
                         break;  // Found it, stop searching
                     }
                 }
@@ -1027,6 +1034,11 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
     JsonArray sendersArray = stats["senders"].to<JsonArray>();
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (senders[i]) {  // Check sender pointer
+            // Skip Device1 (UART1) when it's in SBUS_IN mode - it's an INPUT, not output
+            if (i == IDX_UART1 && ctx->system.config->device1.role == D1_SBUS_IN) {
+                continue;  // Don't show Device1 SBUS_IN in Output Devices
+            }
+
             JsonObject sender = sendersArray.createNestedObject();
             sender["name"] = senders[i]->getName();
             sender["index"] = i;  // Show fixed index
@@ -1036,7 +1048,32 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
             sender["maxQueueDepth"] = senders[i]->getMaxQueueDepth();
         }
     }
-    
+
+    // Add SBUS output devices as virtual senders (for Output Devices display)
+    if (ctx->system.config) {
+        // Device2 SBUS_OUT
+        if (ctx->system.config->device2.role == D2_SBUS_OUT) {
+            JsonObject sender = sendersArray.createNestedObject();
+            sender["name"] = "Device2 SBUS";
+            sender["index"] = 100;  // Virtual index
+            sender["sent"] = g_deviceStats.device2.txBytes.load(std::memory_order_relaxed) / 25;  // SBUS frames
+            sender["dropped"] = 0;  // SBUS fast path doesn't track drops
+            sender["queueDepth"] = 0;  // Fast path has no queue
+            sender["maxQueueDepth"] = 0;
+        }
+
+        // Device3 SBUS_OUT
+        if (ctx->system.config->device3.role == D3_SBUS_OUT) {
+            JsonObject sender = sendersArray.createNestedObject();
+            sender["name"] = "Device3 SBUS";
+            sender["index"] = 101;  // Virtual index
+            sender["sent"] = g_deviceStats.device3.txBytes.load(std::memory_order_relaxed) / 25;  // SBUS frames
+            sender["dropped"] = 0;  // SBUS fast path doesn't track drops
+            sender["queueDepth"] = 0;  // Fast path has no queue
+            sender["maxQueueDepth"] = 0;
+        }
+    }
+
     // Add UDP batching stats for UDP sender
     if (senders[IDX_DEVICE4]) {
         JsonObject udpStats = stats["udpBatching"].to<JsonObject>();
@@ -1124,7 +1161,10 @@ void ProtocolPipeline::cleanup() {
         }
     }
     activeFlows = 0;
-    
+
+    // Reset shared router pointer (don't delete - belongs to parser)
+    sharedRouter = nullptr;
+
     // Delete all senders
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (senders[i]) {

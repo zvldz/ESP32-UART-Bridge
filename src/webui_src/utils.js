@@ -72,9 +72,9 @@ const Utils = {
     toggleElement(contentId, arrowId) {
         const content = document.getElementById(contentId);
         const arrow = document.getElementById(arrowId);
-        
+
         if (!content) return false;
-        
+
         if (content.style.display === 'none') {
             content.style.display = 'block';
             if (arrow) arrow.textContent = '▼';
@@ -83,6 +83,50 @@ const Utils = {
             content.style.display = 'none';
             if (arrow) arrow.textContent = '▶';
             return false; // closed
+        }
+    },
+
+    // Toggle element with localStorage persistence
+    rememberedToggle(blockId, arrowId, storageKey) {
+        const el = document.getElementById(blockId);
+        const arrow = document.getElementById(arrowId);
+        if (!el) return;
+
+        const nowHidden = el.style.display !== 'none' ? true : false;
+        if (nowHidden) {
+            el.style.display = 'none';
+            if (arrow) arrow.textContent = '▶';
+        } else {
+            el.style.display = 'block';
+            if (arrow) arrow.textContent = '▼';
+        }
+
+        try {
+            localStorage.setItem(storageKey, el.style.display === 'none' ? 'hidden' : 'shown');
+        } catch(e) {
+            console.warn('localStorage not available:', e);
+        }
+    },
+
+    // Restore toggle state from localStorage
+    restoreToggle(blockId, arrowId, storageKey) {
+        const el = document.getElementById(blockId);
+        const arrow = document.getElementById(arrowId);
+        if (!el) return;
+
+        let v = null;
+        try {
+            v = localStorage.getItem(storageKey);
+        } catch(e) {
+            console.warn('localStorage not available:', e);
+        }
+
+        if (v === 'hidden') {
+            el.style.display = 'none';
+            if (arrow) arrow.textContent = '▶';
+        } else {
+            el.style.display = 'block';
+            if (arrow) arrow.textContent = '▼';
         }
     },
 
