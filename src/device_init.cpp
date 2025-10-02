@@ -1,6 +1,7 @@
 #include "device_init.h"
 #include "uart/uart_dma.h"
 #include "uart/uart_interface.h"
+#include "uart/uartbridge.h"
 #include "usb/usb_interface.h"
 #include "diagnostics.h"
 #include "defines.h"
@@ -9,6 +10,8 @@
 #include "types.h"
 #include "protocols/sbus_common.h"
 #include "protocols/sbus_router.h"
+#include "protocols/protocol_pipeline.h"
+#include "protocols/packet_sender.h"
 #include <freertos/semphr.h>
 
 // External objects from main.cpp
@@ -288,16 +291,43 @@ void registerSbusOutputs() {
 
     SbusRouter* router = SbusRouter::getInstance();
 
+    // Get protocol pipeline to access senders
+    extern ProtocolPipeline* getProtocolPipeline();
+    ProtocolPipeline* pipeline = getProtocolPipeline();
+
+    if (!pipeline) {
+        log_msg(LOG_ERROR, "Pipeline not available for SBUS output registration");
+        return;
+    }
+
     // Register Device2 SBUS output
-    if (config.device2.role == D2_SBUS_OUT && device2Serial) {
-        router->registerOutput(device2Serial);
-        log_msg(LOG_INFO, "SBUS output registered: Device2");
+    if (config.device2.role == D2_SBUS_OUT) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE2_UART2);
+        if (sender) {
+            router->registerOutput(sender);
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device2 sender for SBUS output");
+        }
     }
 
     // Register Device3 SBUS output
-    if (config.device3.role == D3_SBUS_OUT && device3Serial) {
-        router->registerOutput(device3Serial);
-        log_msg(LOG_INFO, "SBUS output registered: Device3");
+    if (config.device3.role == D3_SBUS_OUT) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE3);
+        if (sender) {
+            router->registerOutput(sender);
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device3 sender for SBUS output");
+        }
+    }
+
+    // Register Device4 UDP output
+    if (config.device4.role == D4_SBUS_UDP_TX) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE4);
+        if (sender) {
+            router->registerOutput(sender);
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device4 sender for SBUS UDP output");
+        }
     }
 }
 

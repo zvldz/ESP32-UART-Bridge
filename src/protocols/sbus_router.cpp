@@ -1,6 +1,6 @@
 #include "sbus_router.h"
-#include "../uart/uart_interface.h"
 #include "../device_stats.h"
+#include "packet_sender.h"
 
 // Static instance initialization
 SbusRouter* SbusRouter::instance = nullptr;
@@ -56,9 +56,6 @@ bool SbusRouter::routeFrame(const uint8_t* frame, uint8_t sourceId) {
 
     src.hasFailsafe = sourceInFailsafe;
 
-    // Save last valid frame (preserve failsafe flag for now)
-    memcpy(lastValidFrame, frame, 25);
-
     // Count configured sources for single-source optimization
     int configuredCount = 0;
     for (int i = 0; i < 3; i++) {
@@ -89,22 +86,28 @@ bool SbusRouter::routeFrame(const uint8_t* frame, uint8_t sourceId) {
         updateFailsafeState();
     }
 
+    // Save frame from UDP source for Timing Keeper (regardless of active source)
+    // When WiFi lags and activeSource is UDP, tick() will repeat this frame
+    if (sourceId == SBUS_SOURCE_UDP) {
+        memcpy(lastValidFrame, frame, 25);
+    }
+
     // Route frame if this is active source
     if (sourceId == activeSource) {
-        writeToOutputs(lastValidFrame);
+        writeToOutputs(frame);
         return true;
     }
 
     return false;
 }
 
-void SbusRouter::registerOutput(UartInterface* uart) {
-    if (!uart) {
-        log_msg(LOG_ERROR, "Attempted to register null UART output");
+void SbusRouter::registerOutput(PacketSender* sender) {
+    if (!sender) {
+        log_msg(LOG_ERROR, "Attempted to register null sender output");
         return;
     }
-    outputs.push_back(uart);
-    log_msg(LOG_INFO, "SBUS output registered, total outputs: %zu", outputs.size());
+    outputs.push_back(sender);
+    log_msg(LOG_INFO, "SBUS output registered: %s (total outputs: %zu)", sender->getName(), outputs.size());
 }
 
 void SbusRouter::registerSource(uint8_t sourceId, uint8_t priority) {
@@ -117,30 +120,16 @@ void SbusRouter::registerSource(uint8_t sourceId, uint8_t priority) {
     log_msg(LOG_INFO, "SBUS source %d registered with priority %d", sourceId, priority);
 }
 
-void SbusRouter::writeToOutputs(uint8_t* frame) {
+void SbusRouter::writeToOutputs(const uint8_t* frame) {
     if (outputs.empty()) {
         // No outputs registered - this is normal during init
         return;
     }
 
-    // FAST PATH: Direct UART write, no packet queues
-    // This is different from other protocols that use sender queues
-
-    // Compare pointers to identify which device for statistics
-    extern UartInterface* device2Serial;
-    extern UartInterface* device3Serial;
-
-    for (auto* uart : outputs) {
-        size_t written = uart->write(frame, 25);
-
-        // Update device statistics (same as in UartSender)
-        if (written > 0) {
-            if (uart == device2Serial) {
-                g_deviceStats.device2.txBytes.fetch_add(written, std::memory_order_relaxed);
-            } else if (uart == device3Serial) {
-                g_deviceStats.device3.txBytes.fetch_add(written, std::memory_order_relaxed);
-            }
-        }
+    // FAST PATH: Send via sendDirect() - unified interface for all sender types
+    // Statistics are updated inside each sender's sendDirect() method
+    for (auto* sender : outputs) {
+        sender->sendDirect(frame, 25);
     }
 
     framesRouted++;
@@ -265,7 +254,12 @@ uint8_t SbusRouter::selectBestSource() {
         // Anti-flapping protection
         if (bestSource == previousSourceId &&
             millis() - lastSwitchMs < switchDelayMs) {
-            log_msg(LOG_DEBUG, "Anti-flap: blocking return to source %d", bestSource);
+            // Rate-limited logging to avoid spam during startup
+            static uint32_t lastAntiFlapLog = 0;
+            if (millis() - lastAntiFlapLog > 5000) {  // Log once per 5 seconds
+                log_msg(LOG_DEBUG, "Anti-flap: blocking return to source %d", bestSource);
+                lastAntiFlapLog = millis();
+            }
             return activeSource;
         }
 
