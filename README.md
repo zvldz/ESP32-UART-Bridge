@@ -15,36 +15,24 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), RC (SBUS), and more
-- **Advanced Protocol Pipeline**: Modern Parser + Sender architecture with memory pool management
-  - **SBUS Protocol Support**: Native SBUS frame parsing with multi-source failover and WiFi transport
-  - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection with zero latency and intelligent routing
-  - **MAVLink Routing**: Multi-GCS support with automatic packet routing based on target system/component IDs
-  - **Bidirectional Processing**: Full input/output pipeline for protocol conversion and data flow management
-  - **Raw Protocol Mode**: Adaptive buffering for unknown protocols with timing-based optimization
-  - **Memory Pool**: Efficient packet memory management to prevent heap fragmentation
-  - **Priority-based Transmission**: CRITICAL > NORMAL > BULK packet prioritization with intelligent dropping
-- **DMA-Accelerated Performance**: Hardware DMA with ESP-IDF drivers for minimal CPU usage and minimal packet loss
-- **Circular Buffer Architecture**: Zero-copy circular buffer with scatter-gather I/O for optimal performance
-  - Prevents data corruption from buffer operations
-  - Adaptive traffic detection (normal vs burst modes)
-  - Smart USB bottleneck handling with percentage-based thresholds
-- **Dynamic Buffer Sizing**: Automatically adjusts buffer size based on baud rate (256-2048 bytes)
-- **USB Host/Device Modes**: 
-  - Device mode: Connect ESP32 to PC as USB serial device
-  - Host mode: Connect USB modems or serial adapters to ESP32
-  - Configurable via web interface
-- **High Performance**: Hardware packet detection (UART idle timeout) and event-driven architecture (Device 1)
-- **Dual WiFi Modes**: Flexible network connectivity options
-  - **WiFi Access Point (AP) Mode**: Create hotspot for direct configuration 
-  - **WiFi Client Mode**: Connect to existing WiFi networks for remote access
-  - **Permanent Network Mode**: Wi-Fi remains active permanently for always-on access
-  - **Temporary Setup Mode**: Wi-Fi timeout for quick configuration (triple-click activation)
-- **Visual Feedback**: RGB LED shows data flow direction and system status
+- **Protocol Optimization**:
+  - **SBUS**: Multi-source failover, WiFi transport with UDP batching
+  - **MAVLink**: Zero-latency packet forwarding, multi-GCS routing, priority-based transmission
+  - **Raw Mode**: Adaptive buffering for unknown protocols
+- **High Performance**: DMA-accelerated UART with adaptive buffering (256-2048 bytes based on baud rate)
+- **USB Host/Device Modes**:
+  - Device mode: ESP32 as USB-to-Serial converter
+  - Host mode: Connect USB modems/devices to ESP32
+- **Dual WiFi Modes**:
+  - **Access Point**: Create hotspot for direct configuration
+  - **Client Mode**: Connect to existing WiFi networks
+  - **Permanent Mode**: Always-on WiFi (20-minute timeout)
+  - **Temporary Mode**: Triple-click activation for quick setup
+- **Visual Feedback**: RGB LED shows data flow and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
-- **Crash Logging**: Automatic crash detection and logging for diagnostics
-- **Flexible Logging**: Multi-level logging system with web interface
-- **OTA Updates**: Firmware updates via web interface
+- **Web Interface**: Configuration, monitoring, crash logs, OTA updates
+- **Flexible Logging**: Multi-level logs via web, UART, or UDP network stream
 
 ## Current Limitations
 
@@ -504,43 +492,12 @@ nc -u -l 14560
 
 ## Performance Notes
 
-The bridge features DMA-accelerated UART communication with adaptive buffering based on baud rate:
-
-**What it actually does:**
-- Uses hardware DMA for efficient data transfer without CPU involvement
-- Dynamically adjusts buffer size based on baud rate (256-2048 bytes)
-- Implements time-based packet detection using inter-byte gaps
-- Works with any UART protocol without protocol-specific knowledge
-
-**Buffer sizing:**
-- 115200 baud: 288 bytes (384 with protocol optimization)
-- 230400 baud: 768 bytes
-- 460800 baud: 1024 bytes
-- ≥921600 baud: 2048 bytes
-
-**Technical implementation:**
-- ESP-IDF native drivers with hardware DMA
-- Hardware idle detection (10 character periods timeout)
-- Event-driven architecture for Device 1 (main UART)
-- Polling mode for Device 2/3 (secondary channels)
-- Circular buffer with shadow buffer for protocol parsing
-- Gap-based traffic detection with adaptive transmission thresholds
-
-The hardware idle detection works in conjunction with software buffering - the UART controller detects inter-packet gaps and triggers DMA transfers, while the software layer groups these transfers based on timing for optimal USB transmission.
-
-Current implementation achieves:
-- Minimal packet loss under normal conditions
-- Low latency for small packets
-- Reliable operation up to 1000000 baud
-- Reduced CPU usage thanks to DMA
-
-**Protocol Pipeline Architecture:**
-The bridge now uses a modern Parser + Sender architecture:
-- **RAW mode**: Uses timing-based heuristics to group bytes (works with most protocols)
-- **MAVLink mode**: Protocol-aware parsing with perfect packet boundaries
-- **Memory Pool**: Efficient packet allocation prevents heap fragmentation
-- **Multi-Sender**: Single parsed stream distributed to multiple output devices (USB, UART, UDP)
-- **Priority System**: Critical packets bypass normal queuing for guaranteed delivery
+- **DMA-Accelerated UART**: Hardware DMA reduces CPU usage and packet loss
+- **Adaptive Buffering**: Buffer size auto-adjusts based on baud rate (256-2048 bytes)
+- **Protocol Modes**:
+  - **RAW**: Timing-based packet detection for unknown protocols
+  - **MAVLink/SBUS**: Protocol-aware parsing with zero-latency forwarding
+- **Reliable Operation**: Tested up to 1000000 baud with minimal packet loss
 
 ## Advanced Features
 
@@ -575,25 +532,11 @@ Logs are viewable through the web interface. The system supports multiple output
 - **UART Output**: Optional logging to Device 3 UART TX pin (115200 baud)
 - **Network Logging**: UDP log streaming via Device 4 (when configured as Network Logger)
 
-### Circular Buffer Technology
-
-The bridge uses advanced circular buffer architecture for optimal data handling:
-- **Zero-copy operations**: Eliminates expensive memory copy operations
-- **Scatter-gather I/O**: Efficient transmission of fragmented data
-- **Traffic-aware buffering**: Automatic detection of normal vs burst traffic patterns
-- **Smart dropping**: Prevents system hangs with intelligent data management
-- **Protocol-aware**: Optimized packet boundary preservation for detected protocols
-
-This implementation provides superior performance and reliability compared to traditional linear buffering, especially under high data loads and varying traffic patterns.
 
 ## Development
 
 - **[CHANGELOG.md](CHANGELOG.md)** - Detailed version history and technical implementation details
 - **[TODO.md](TODO.md)** - Future roadmap and current architecture documentation
-
-## Technical Notes
-
-- **Web Interface**: HTML files use gzip compression (70-78% size reduction) with preserved text readability. JavaScript/CSS remain minified for optimal performance.
 
 ## Acknowledgments
 
