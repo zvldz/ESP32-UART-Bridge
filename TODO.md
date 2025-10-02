@@ -2,15 +2,16 @@
 
 ## PROJECT STATUS SUMMARY
 
-**Current Version**: v2.18.4
-**Current Status**: SBUS Phase 2 Complete - Singleton Router with Failsafe & Auto-switching
+**Current Version**: v2.18.5
+**Current Status**: SBUS Phase 11 Complete - Unified Senders with UDP Batching
 **Roadmap**:
 1. ✅ Phase 9 (9.1A + 9.2): Manual SBUS multi-source with Web UI - COMPLETED
-2. ✅ Phase 10 (Phase 2): Automatic SBUS source switching and failover - COMPLETED
-3. Documentation: Update README & Web Help for SBUS
-4. ✅ Platform Support: ESP32-S3 Super Mini - COMPLETED (needs testing)
-5. ✅ Memory Optimization: Buffer optimization and PSRAM utilization - COMPLETED
-6. ✅ Code Cleanup & Optimization: Dead code removal, UDP protocol fix - COMPLETED
+2. ✅ Phase 10: Automatic SBUS source switching and failover - COMPLETED
+3. ✅ Phase 11: Unified sender architecture with UDP batching - COMPLETED
+4. Documentation: Update README & Web Help for SBUS
+5. ✅ Platform Support: ESP32-S3 Super Mini - COMPLETED (needs testing)
+6. ✅ Memory Optimization: Buffer optimization and PSRAM utilization - COMPLETED
+7. ✅ Code Cleanup & Optimization: Dead code removal, UDP protocol fix - COMPLETED
 
 ## ACTIVE TASKS 🔄
 
@@ -26,12 +27,12 @@
   - [x] Test failsafe activation after 100ms signal loss
   - [x] Validate all 16 channels + flags transmission
 
-- [x] **UART Transport Testing** (Phase 6 - UartSbusParser)
+- [x] **UART Transport Testing** (Phase 6 - UartSbusParser) ✅ VERIFIED
   - [x] ESP1 (SBUS_IN) → UART → ESP2 (UART→SBUS_OUT)
   - [x] Test various baudrates (115200, 460800, 921600)
   - [x] Measure end-to-end latency
 
-- [x] **UDP/WiFi Transport Testing** (Phase 7 - UdpSbusParser)
+- [x] **UDP/WiFi Transport Testing** (Phase 7 - UdpSbusParser) ✅ VERIFIED
   - [x] ESP1 (SBUS_IN) → UDP → ESP2 (UDP→SBUS_OUT)
   - [x] Measure WiFi latency (target <50ms)
   - [x] Test with different network conditions
@@ -100,13 +101,12 @@
 
 #### Update User Documentation
 
-- [ ] **README.md Main File**
-  - [ ] Add SBUS protocol section with features
-  - [ ] Document all SBUS device role combinations
-  - [ ] Add SBUS transport methods (Physical, UART, UDP)
-  - [ ] Include SBUS configuration examples
-  - [ ] Add wiring diagrams for SBUS connections
-  - [ ] Note about hardware inverter requirements
+- [x] **README.md Main File** ✅ COMPLETED
+  - [x] Add SBUS protocol section with features
+  - [x] Document all SBUS device role combinations
+  - [x] Add SBUS transport methods (Physical, UART, UDP)
+  - [x] Include SBUS configuration examples
+  - [x] Note about hardware inverter requirements
 
 - [ ] **Web Interface Help Page**
   - [ ] Update device role descriptions for SBUS modes
@@ -114,12 +114,6 @@
   - [ ] Document SBUS failsafe behavior
   - [ ] Add troubleshooting section for SBUS
   - [ ] Include optimal settings for different use cases
-
-- [ ] **Configuration Examples**
-  - [ ] SBUS RC receiver → Flight controller
-  - [ ] SBUS over UART between ESP32s
-  - [ ] SBUS over WiFi/UDP setup
-  - [ ] Multi-source SBUS with failover (after Phase 10)
 
 ### PLATFORM SUPPORT - Before Final Cleanup 🟠
 

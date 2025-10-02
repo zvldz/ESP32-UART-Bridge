@@ -388,7 +388,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (request->hasParam("device4_role", true)) {
         const AsyncWebParameter* p = request->getParam("device4_role", true);
         int role = p->value().toInt();
-        if (role >= D4_NONE && role <= D4_LOG_NETWORK) {
+        if (role >= D4_NONE && role <= D4_SBUS_UDP_RX) {
             if (role != config.device4.role) {
                 config.device4.role = role;
                 configChanged = true;

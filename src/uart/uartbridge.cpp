@@ -26,6 +26,9 @@ extern Config config;
 extern SystemState systemState;
 extern UartInterface* uartBridgeSerial;
 
+// External functions from device_init.cpp
+extern void registerSbusOutputs();
+
 // ADD: Global pipeline pointer for sender task
 static ProtocolPipeline* g_protocolPipeline = nullptr;
 
@@ -151,6 +154,10 @@ void uartBridgeTask(void* parameter) {
 
     // ADD: Save pipeline pointer for sender task
     g_protocolPipeline = ctx.protocolPipeline;
+
+    // Register SBUS outputs with router (after pipeline is ready)
+    // Safe to call unconditionally - hasSbusDevice() check inside
+    registerSbusOutputs();
 
     log_msg(LOG_INFO, "UART Bridge Task started");
     log_msg(LOG_DEBUG, "Device optimization: D2 USB=%d, D2 UART2=%d, D3 Active=%d, D3 Bridge=%d",
