@@ -267,8 +267,8 @@ void enableStandaloneTasks() {
     tDroppedDataStats.enable();
     tLedMonitor.enable();  // Enable LED monitoring in standalone mode
 
-    // Enable SBUS Router tick if ANY SBUS device configured
-    if (hasSbusDevice()) {
+    // Enable SBUS Router tick ONLY for UDP RX (Timing Keeper needs it)
+    if (config.device4.role == D4_SBUS_UDP_RX) {
         tSbusRouterTick.enable();
     }
 
@@ -292,8 +292,8 @@ void enableNetworkTasks(bool temporaryNetwork) {
     tAllStacksDiagnostics.enable();
     tDroppedDataStats.enable();
 
-    // Enable SBUS Router tick if ANY SBUS device configured
-    if (hasSbusDevice()) {
+    // Enable SBUS Router tick ONLY for UDP RX (Timing Keeper needs it)
+    if (config.device4.role == D4_SBUS_UDP_RX) {
         tSbusRouterTick.enable();
     }
 

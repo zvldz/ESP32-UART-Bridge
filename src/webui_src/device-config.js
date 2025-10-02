@@ -72,6 +72,8 @@ const DeviceConfig = {
                             <option value="0">Disabled</option>
                             <option value="1">Network Bridge</option>
                             <option value="2">Network Logger</option>
+                            <option value="3">SBUS→UDP TX</option>
+                            <option value="4">UDP→SBUS RX</option>
                         </select>
                     </td>
                 </tr>
@@ -269,6 +271,9 @@ const DeviceConfig = {
         // Update UART Configuration visibility
         this.updateUartConfigVisibility();
 
+        // Initialize Device4 config and validation on page load
+        this.updateDevice4Config(false);
+
         // Update protocol field state based on SBUS roles
         this.updateProtocolFieldState();
     },
@@ -405,25 +410,53 @@ const DeviceConfig = {
 
         const role = device4Role.value;
 
-        if (role !== '0') {
+        // Network Configuration block needed for all network roles (1, 2, 3, 4)
+        // - Network Bridge (1): needs IP and port to send
+        // - Network Logger (2): needs IP and port to send
+        // - SBUS→UDP TX (3): needs IP and port to send
+        // - SBUS UDP RX (4): needs port to listen (IP ignored)
+        if (role === '1' || role === '2' || role === '3' || role === '4') {
             device4AdvancedConfig.style.display = 'block';
-            
-            // Enable Network Log Level when Device 4 is active
-            if (networkLogLevel) {
-                networkLogLevel.disabled = false;
+
+            // Enable/disable fields based on role
+            if (role === '4') {
+                // SBUS UDP RX - only port needed (listens on all interfaces)
+                if (targetIpInput) {
+                    targetIpInput.disabled = true;  // IP not used for RX
+                    targetIpInput.value = '0.0.0.0';  // Show that it listens on all
+                    targetIpInput.removeAttribute('required');  // Not required when disabled
+                    targetIpInput.removeAttribute('pattern');  // Remove pattern validation when disabled
+                }
+                if (portInput) portInput.disabled = false;
+            } else {
+                // TX roles - need both IP and port
+                if (targetIpInput) {
+                    targetIpInput.disabled = false;
+                    targetIpInput.setAttribute('required', 'required');  // Required for TX
+                    targetIpInput.setAttribute('pattern', '^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$');  // IP validation
+                    // Clear invalid placeholder if switching from RX role
+                    if (targetIpInput.value === '0.0.0.0') {
+                        targetIpInput.value = '';
+                    }
+                }
+                if (portInput) portInput.disabled = false;
             }
-            
+
             // Only update port when role changes, not on initial load
             if (isRoleChange) {
                 if (role === '1') {  // Network Bridge
                     portInput.value = '14550';
                 } else if (role === '2') {  // Network Logger
                     portInput.value = '14560';
+                } else if (role === '3') {  // SBUS→UDP TX
+                    portInput.value = '14551';
+                } else if (role === '4') {  // SBUS UDP RX
+                    portInput.value = '14552';  // Listen port
                 }
             }
-            
-            // Set IP defaults only if field is empty
-            if (!targetIpInput.value || targetIpInput.value === '') {
+
+            // Set IP defaults only if field is empty (and not RX role)
+            if (role !== '4' && (!targetIpInput.value || targetIpInput.value === '')) {
                 // Try to get client IP first, fallback to broadcast
                 fetch('/client-ip')
                     .then(response => response.text())
@@ -437,8 +470,16 @@ const DeviceConfig = {
         } else {
             device4AdvancedConfig.style.display = 'none';
 
-            // Disable Network Log Level when Device 4 is disabled
-            if (networkLogLevel) {
+            // Disable IP/Port fields to prevent validation when hidden
+            if (targetIpInput) targetIpInput.disabled = true;
+            if (portInput) portInput.disabled = true;
+        }
+
+        // Enable/disable Network Log Level based on Device 4 being active (any role except 0)
+        if (networkLogLevel) {
+            if (role !== '0') {
+                networkLogLevel.disabled = false;
+            } else {
                 networkLogLevel.disabled = true;
                 networkLogLevel.value = '-1'; // Set to OFF
             }

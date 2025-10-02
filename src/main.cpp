@@ -213,8 +213,7 @@ void setup() {
         enableNetworkTasks(systemState.isTemporaryNetwork);
     }
 
-    // Register SBUS outputs after UART interfaces created in both modes
-    registerSbusOutputs();
+    // NOTE: registerSbusOutputs() now called in uartBridgeTask after pipeline init
 
     // Create FreeRTOS tasks
     createTasks();
@@ -424,13 +423,17 @@ void initNetworkMode() {
 
     // Initialize UDP transport for Device4
     if (config.device4.role == D4_NETWORK_BRIDGE ||
-        config.device4.role == D4_LOG_NETWORK) {
+        config.device4.role == D4_LOG_NETWORK ||
+        config.device4.role == D4_SBUS_UDP_TX ||
+        config.device4.role == D4_SBUS_UDP_RX) {
 
         udpTransport = new AsyncUDP();
 
         if (udpTransport) {
-            // Create UDP RX buffer for Bridge mode
-            if (config.device4.role == D4_NETWORK_BRIDGE) {
+            // Create UDP RX buffer for Bridge and SBUS RX modes
+            if (config.device4.role == D4_NETWORK_BRIDGE ||
+                config.device4.role == D4_SBUS_UDP_RX) {
+
                 udpRxBuffer = new CircularBuffer();
                 udpRxBuffer->init(4096);
 
@@ -440,8 +443,8 @@ void initNetworkMode() {
                 } else {
                     log_msg(LOG_INFO, "UDP listening on port %d with 4KB buffer", config.device4_config.port);
 
-                    // Setup callback based on protocol optimization
-                    if (config.protocolOptimization == PROTOCOL_SBUS) {
+                    // Setup callback based on role and protocol
+                    if (config.device4.role == D4_SBUS_UDP_RX || config.protocolOptimization == PROTOCOL_SBUS) {
                         // SBUS mode - filter for valid SBUS frames only
                         udpTransport->onPacket([](AsyncUDPPacket packet) {
                             if (udpRxBuffer) {
@@ -452,6 +455,12 @@ void initNetworkMode() {
                                     if (packet.data()[0] == 0x0F) {
                                         udpRxBuffer->write(packet.data(), 25);
                                         g_deviceStats.device4.rxPackets.fetch_add(1, std::memory_order_relaxed);
+                                    }
+                                } else if (len == 75) {
+                                    // Three frames batched (3x25) - validate all
+                                    if (packet.data()[0] == 0x0F && packet.data()[25] == 0x0F && packet.data()[50] == 0x0F) {
+                                        udpRxBuffer->write(packet.data(), 75);
+                                        g_deviceStats.device4.rxPackets.fetch_add(3, std::memory_order_relaxed);
                                     }
                                 } else if (len == 50) {
                                     // Two frames - validate both
@@ -476,8 +485,8 @@ void initNetworkMode() {
                     }
                 }
             } else {
-                // Logger mode - TX only
-                log_msg(LOG_INFO, "UDP transport created for Logger mode (TX only)");
+                // Logger or SBUS TX mode - TX only
+                log_msg(LOG_INFO, "UDP transport created for TX only mode");
             }
         } else {
             log_msg(LOG_ERROR, "Failed to create UDP transport");

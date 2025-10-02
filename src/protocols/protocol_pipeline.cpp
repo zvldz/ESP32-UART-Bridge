@@ -411,7 +411,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
     if (config->device4.role == D4_SBUS_UDP_RX &&
         (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT) &&
         ctx->buffers.udpInputBuffer) {
-        
+
         DataFlow f;
         f.name = "UDP_SBUS_Input";
         f.inputBuffer = ctx->buffers.udpInputBuffer;
@@ -420,18 +420,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.isInputFlow = true;
         f.parser = new SbusFastParser(SBUS_SOURCE_UDP);  // UDP source
         f.router = nullptr;
-        
-        // Determine routing - to Device2 or Device3 SBUS Hub
-        if (config->device3.role == D3_SBUS_OUT) {
-            f.senderMask = (1 << IDX_DEVICE3);
-            log_msg(LOG_INFO, "UDP->SBUS: Routing to Device3 SBUS_OUT");
-        } else if (config->device2.role == D2_SBUS_OUT) {
-            f.senderMask = (1 << IDX_DEVICE2_UART2);
-            log_msg(LOG_INFO, "UDP->SBUS: Routing to Device2 SBUS_OUT");
-        }
-        
+        f.senderMask = 0;  // No senders - routing via SbusRouter in parser
+
         flows[activeFlows++] = f;
-        log_msg(LOG_INFO, "UDP->SBUS input flow created");
+        log_msg(LOG_INFO, "UDP->SBUS input flow created (routing via SbusRouter)");
     }
 
     // Handle SBUS UDP TX (SBUS → UDP)
@@ -556,37 +548,36 @@ void ProtocolPipeline::createSenders(Config* config) {
         senders[i] = nullptr;
     }
     
-    // Device2 - USB or UART2 (mutually exclusive)
+    // Device2 - USB, UART2, or SBUS_OUT (mutually exclusive)
     if (config->device2.role == D2_USB && ctx->interfaces.usbInterface) {
         senders[IDX_DEVICE2_USB] = new UsbSender(
             ctx->interfaces.usbInterface
         );
         log_msg(LOG_INFO, "Created USB sender at index %d", IDX_DEVICE2_USB);
-    } 
-    else if (config->device2.role == D2_UART2 && ctx->interfaces.device2Serial) {
+    }
+    else if ((config->device2.role == D2_UART2 || config->device2.role == D2_SBUS_OUT) &&
+             ctx->interfaces.device2Serial) {
         senders[IDX_DEVICE2_UART2] = new Uart2Sender(
             ctx->interfaces.device2Serial
         );
-        log_msg(LOG_INFO, "Created UART2 sender at index %d", IDX_DEVICE2_UART2);
+        log_msg(LOG_INFO, "Created UART2 sender at index %d for role %d", IDX_DEVICE2_UART2, config->device2.role);
     }
     
-    // Device3 - UART3 (for MIRROR and BRIDGE modes only)
-    if ((config->device3.role == D3_UART3_MIRROR || 
-         config->device3.role == D3_UART3_BRIDGE) &&
+    // Device3 - UART3 (for MIRROR, BRIDGE, and SBUS_OUT modes)
+    if ((config->device3.role == D3_UART3_MIRROR ||
+         config->device3.role == D3_UART3_BRIDGE ||
+         config->device3.role == D3_SBUS_OUT) &&
         ctx->interfaces.device3Serial) {
         senders[IDX_DEVICE3] = new Uart3Sender(
             ctx->interfaces.device3Serial
         );
-        log_msg(LOG_INFO, "Created UART3 sender at index %d", IDX_DEVICE3);
+        log_msg(LOG_INFO, "Created UART3 sender at index %d for role %d", IDX_DEVICE3, config->device3.role);
     }
     
-    // SBUS Hubs (state-based senders instead of queue-based)
-    // SBUS_OUT devices are now handled by SbusRouter through fast path
-    // No special senders needed - Router outputs directly to UART interfaces
-    
-    // Device4 - UDP (unchanged)
-    if ((config->device4.role == D4_NETWORK_BRIDGE || 
-         config->device4.role == D4_LOG_NETWORK)) {
+    // Device4 - UDP sender (for all UDP TX roles)
+    if ((config->device4.role == D4_NETWORK_BRIDGE ||
+         config->device4.role == D4_LOG_NETWORK ||
+         config->device4.role == D4_SBUS_UDP_TX)) {
         extern AsyncUDP* udpTransport;
         if (udpTransport) {
             UdpSender* udpSender = new UdpSender(
@@ -594,7 +585,7 @@ void ProtocolPipeline::createSenders(Config* config) {
             );
             udpSender->setBatchingEnabled(config->udpBatchingEnabled);
             senders[IDX_DEVICE4] = udpSender;
-            log_msg(LOG_INFO, "Created UDP sender at index %d", IDX_DEVICE4);
+            log_msg(LOG_INFO, "Created UDP sender at index %d for role %d", IDX_DEVICE4, config->device4.role);
         }
     }
     
@@ -612,12 +603,15 @@ void ProtocolPipeline::createSenders(Config* config) {
     }
 }
 
+// LEGACY: Old unified process() method - no longer used
+// TODO: Remove after verification that processInputFlows() + processSendQueues() split works correctly
+/*
 void ProtocolPipeline::process() {
     // Process all data flows
     for (size_t i = 0; i < activeFlows; i++) {
         processFlow(flows[i]);
     }
-    
+
     // Calculate bulk mode from ALL active flows (not just first!)
     bool bulkMode = false;
     for (size_t i = 0; i < activeFlows; i++) {
@@ -626,7 +620,7 @@ void ProtocolPipeline::process() {
             break;
         }
     }
-    
+
     // Process send queues for all senders with bulk mode state
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (senders[i]) {
@@ -634,6 +628,7 @@ void ProtocolPipeline::process() {
         }
     }
 }
+*/
 
 void ProtocolPipeline::processInputFlows() {
     // CRITICAL: Add time limit to prevent blocking main loop during heavy traffic
@@ -1132,6 +1127,8 @@ void ProtocolPipeline::distributeParsedPackets(ParseResult* result) {
 }
 
 void ProtocolPipeline::processSenders() {
+    extern Config config;
+
     // Calculate bulk mode from all active flows
     bool bulkMode = false;
     for (size_t i = 0; i < activeFlows; i++) {
@@ -1140,11 +1137,17 @@ void ProtocolPipeline::processSenders() {
             break;
         }
     }
-    
+
     for (size_t i = 0; i < MAX_SENDERS; i++) {
-        if (senders[i]) {
-            senders[i]->processSendQueue(bulkMode);
-        }
+        if (!senders[i]) continue;
+
+        // Skip queue processing for SBUS fast path senders
+        // SBUS uses sendDirect() called from SbusRouter (no queue involved)
+        if (i == IDX_DEVICE2_UART2 && config.device2.role == D2_SBUS_OUT) continue;
+        if (i == IDX_DEVICE3 && config.device3.role == D3_SBUS_OUT) continue;
+        if (i == IDX_DEVICE4 && config.device4.role == D4_SBUS_UDP_TX) continue;
+
+        senders[i]->processSendQueue(bulkMode);
     }
 }
 

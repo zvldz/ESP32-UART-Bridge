@@ -9,7 +9,10 @@ private:
     
 public:
     Uart1Sender();
-    
+
+    // Direct send NOT supported for UART1 - always use TX service queue
+    size_t sendDirect(const uint8_t* data, size_t size) override;
+
     // Override to bypass local queue
     bool enqueue(const ParsedPacket& packet) override;
     void processSendQueue(bool bulkMode = false) override;

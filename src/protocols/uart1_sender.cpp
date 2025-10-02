@@ -2,9 +2,15 @@
 #include "../logging.h"
 #include "protocol_types.h"
 
-Uart1Sender::Uart1Sender() : 
+Uart1Sender::Uart1Sender() :
     PacketSender(0, 0) {  // CRITICAL: Zero queue to avoid double-buffering!
     txService = Uart1TxService::getInstance();
+}
+
+size_t Uart1Sender::sendDirect(const uint8_t* data, size_t size) {
+    // UART1 does not support direct send - must use TX service queue
+    log_msg(LOG_ERROR, "UART1 sendDirect() not supported - use enqueue() instead");
+    return 0;
 }
 
 bool Uart1Sender::enqueue(const ParsedPacket& packet) {

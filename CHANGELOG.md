@@ -1,6 +1,46 @@
 # CHANGELOG
 
-## v2.18.4 (SBUS Phase 2 Complete - Singleton Router + Failsafe) 🟡 READY FOR TESTING
+## v2.18.5 (SBUS Phase 3 - Unified Senders + UDP Batching) 🟡 IN DEVELOPMENT
+
+### SBUS Phase 3 Implementation ✅
+- **Unified Sender Architecture**: Single sendDirect() method for all protocols
+  - **Fast Path**: SBUS/Raw protocols use sendDirect() directly (no queue, minimal latency)
+  - **Slow Path**: MAVLink/Logs use sendDirect() internally from processSendQueue()
+  - **No Code Duplication**: Single transmission point, unified statistics
+
+- **UDP Batching for SBUS**: Optimized network efficiency
+  - **3-Frame Batching**: Combines 3 SBUS frames (75 bytes) into single UDP packet
+  - **Packet Reduction**: ~178 → ~25 UDP packets/sec (85% reduction)
+  - **Stale Protection**: 50ms timeout for incomplete batches
+  - **Web Statistics**: Real-time batching metrics (avg/max frames per batch, efficiency)
+
+- **Device4 SBUS UDP Support**: Full bidirectional SBUS over WiFi
+  - **D4_SBUS_UDP_TX (role 3)**: Send SBUS frames over UDP with batching
+  - **D4_SBUS_UDP_RX (role 4)**: Receive SBUS frames from UDP with failover support
+  - **Web UI**: IP/Port configuration for both TX/RX modes
+  - **Timing Keeper**: Frame repeat for RX mode to smooth WiFi jitter
+
+- **Protocol Pipeline Optimization**: Improved fast/slow path separation
+  - **Smart Queue Processing**: processSendQueue() skipped for SBUS roles
+  - **Conflict Resolution**: Fixed atomicBatchPackets race condition
+  - **Unified Flush**: Single flushBatch() function for all protocols
+
+### UI Improvements
+- Device 4 Network Configuration visibility for SBUS roles
+- IP validation for TX roles, disabled for RX role
+- SBUS WiFi Timing Keeper visibility for UDP RX mode
+- Anti-flap log rate limiting (5sec) to reduce startup spam
+
+### Bug Fixes
+- Fixed UDP transport initialization for D4_SBUS_UDP_RX
+- Fixed batching statistics calculation (efficiency display)
+- Fixed web form validation for SBUS UDP roles
+- Fixed SBUS Timing Keeper logic: save lastValidFrame only from UDP source (not from active source)
+- Fixed SBUS Timing Keeper visibility: show only for D4_SBUS_UDP_RX (not for UART SBUS outputs)
+- Optimized tSbusRouterTick task: enabled only for D4_SBUS_UDP_RX (reduced CPU usage for UART-only configs)
+- Various stability improvements
+
+## v2.18.4 (SBUS Phase 2 Complete - Singleton Router + Failsafe) ✅ COMPLETED
 
 ### SBUS Phase 2 Implementation ✅ COMPLETED
 - **Singleton Router Architecture**: Refactored from multiple routers to single global SbusRouter instance

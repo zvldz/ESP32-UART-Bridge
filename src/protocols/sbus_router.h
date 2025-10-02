@@ -8,7 +8,7 @@
 #include <vector>
 
 // Forward declarations
-class UartInterface;
+class PacketSender;
 
 // Source identifiers
 enum SbusSourceType {
@@ -65,8 +65,8 @@ private:
     SbusRouter(const SbusRouter&) = delete;
     SbusRouter& operator=(const SbusRouter&) = delete;
 
-    // Output registration
-    std::vector<UartInterface*> outputs;
+    // Output registration (unified - can be UART, UDP, USB senders)
+    std::vector<PacketSender*> outputs;
 
     // Source configuration
     bool sourceConfigured[3] = {false, false, false};
@@ -97,8 +97,8 @@ public:
     // Fast routing without parsing channels
     bool routeFrame(const uint8_t* frame, uint8_t sourceId);
 
-    // Output registration
-    void registerOutput(UartInterface* uart);
+    // Output registration (unified interface for all sender types)
+    void registerOutput(PacketSender* sender);
 
     // Source registration with priority
     void registerSource(uint8_t sourceId, uint8_t priority);
@@ -155,7 +155,7 @@ public:
     void tick();
 
     // Write to all registered outputs
-    void writeToOutputs(uint8_t* frame);
+    void writeToOutputs(const uint8_t* frame);
 
     // Source selection
     uint8_t selectBestSource();

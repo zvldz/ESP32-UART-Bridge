@@ -49,7 +49,7 @@ private:
     } batchDiag;
     // === DIAGNOSTIC END ===
 
-    // Batching thresholds
+    // Batching thresholds for MAVLink/Logs (slow path)
     static constexpr size_t ATOMIC_BATCH_PACKETS_NORMAL = 2;
     static constexpr size_t ATOMIC_BATCH_PACKETS_BULK = 5;
     static constexpr size_t ATOMIC_BATCH_BYTES_NORMAL = 600;
@@ -57,8 +57,12 @@ private:
     static constexpr uint32_t ATOMIC_BATCH_TIMEOUT_MS_NORMAL = 5;
     static constexpr uint32_t ATOMIC_BATCH_TIMEOUT_MS_BULK = 20;
     static constexpr uint32_t RAW_BATCH_TIMEOUT_MS = 5;
+
+    // Batching thresholds for SBUS (fast path via sendDirect)
+    static constexpr size_t SBUS_BATCH_FRAMES = 3;
+    static constexpr uint32_t SBUS_BATCH_STALE_MS = 50;  // Discard stale batch
     
-    void flushAtomicBatch() {
+    void flushBatch() {
         if (atomicBatchSize > 0) {
             // === DIAGNOSTIC START === (Remove after batching validation)
             batchDiag.totalBatches++;
@@ -71,12 +75,12 @@ private:
             } else {
                 batchDiag.normalModeBatches++;
             }
-            
+
             // === DIAGNOSTIC END ===
-            
+
             sendUdpDatagram(atomicBatchBuffer, atomicBatchSize);
             totalSent += atomicBatchPackets;  // Count packets sent
-            
+
             // Reset batch
             atomicBatchSize = 0;
             atomicBatchPackets = 0;
@@ -97,7 +101,7 @@ private:
     }
     
     void flushAllBatches() {
-        flushAtomicBatch();
+        flushBatch();
         flushRawBatch();
     }
     
@@ -105,15 +109,15 @@ private:
         // Check if batching is enabled (configurable via setBatchingEnabled)
         if (!enableAtomicBatching) {
             // Legacy mode - one packet per datagram
-            flushAtomicBatch();
+            flushBatch();
             sendUdpDatagram(item->packet.data, item->packet.size);
             totalSent++;
             return;
         }
-        
+
         // Check if packet fits in current batch
         if (atomicBatchSize + item->packet.size > MTU_SIZE) {
-            flushAtomicBatch();
+            flushBatch();
         }
         
         // Add to batch
@@ -147,7 +151,7 @@ private:
         }
         
         if (shouldFlush) {
-            flushAtomicBatch();
+            flushBatch();
         }
         // NON-BLOCKING: No else with waiting
     }
@@ -176,7 +180,7 @@ private:
         if (atomicBatchSize > 0) {
             uint32_t timeout = bulkMode ? ATOMIC_BATCH_TIMEOUT_MS_BULK : ATOMIC_BATCH_TIMEOUT_MS_NORMAL;
             if ((now - atomicBatchStartMs) >= timeout) {
-                flushAtomicBatch();
+                flushBatch();
             }
             // NON-BLOCKING: No else with waiting
         }
@@ -191,12 +195,51 @@ private:
     }
     
 public:
+    // Direct send without queue (for SBUS fast path)
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        if (!udpTransport || !wifiIsReady()) return 0;
+
+        uint32_t now = millis();
+
+        // Check if batch is stale (no new frames for 50ms) - discard it
+        if (atomicBatchSize > 0 && (now - atomicBatchStartMs) >= SBUS_BATCH_STALE_MS) {
+            // Stale batch - discard without sending (SBUS is state-based)
+            log_msg(LOG_WARNING, "[SBUS-UDP] Discarded stale batch: %zu frames, %zu bytes, age %lums",
+                atomicBatchPackets, atomicBatchSize, (now - atomicBatchStartMs));
+            atomicBatchSize = 0;
+            atomicBatchPackets = 0;
+            atomicBatchStartMs = 0;
+        }
+
+        // Check if batch buffer overflows
+        if (atomicBatchSize + size > MTU_SIZE) {
+            // Flush current batch (incomplete - MTU overflow)
+            flushBatch();
+        }
+
+        // Add to batch
+        memcpy(atomicBatchBuffer + atomicBatchSize, data, size);
+        atomicBatchSize += size;
+        atomicBatchPackets++;
+
+        if (atomicBatchStartMs == 0) {
+            atomicBatchStartMs = now;
+        }
+
+        // Flush if reached SBUS batch threshold
+        if (atomicBatchPackets >= SBUS_BATCH_FRAMES) {
+            flushBatch();
+        }
+
+        return size;
+    }
+
     // Configuration method
-    void setBatchingEnabled(bool enabled) { 
-        enableAtomicBatching = enabled; 
+    void setBatchingEnabled(bool enabled) {
+        enableAtomicBatching = enabled;
         log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
     }
-    
+
     UdpSender(AsyncUDP* udp) : 
         PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),
         udpTransport(udp),
@@ -223,7 +266,6 @@ public:
     
     void processSendQueue(bool bulkMode = false) override {
         // Check WiFi readiness for data transmission (works for both Client and AP modes)
-        extern Config config;
         if (!wifiIsReady()) {
             // Clear queue silently (not counted as drops)
             while (!packetQueue.empty()) {
@@ -231,13 +273,13 @@ public:
                 packetQueue.front().packet.free();
                 packetQueue.pop_front();
             }
-            
-            // Reset batch buffers to avoid stale data
+
+            // Reset batch buffers for slow path only (MAVLink/Log)
+            // NOTE: Do NOT reset atomicBatchPackets here - it's used by sendDirect() fast path
             atomicBatchSize = 0;
-            atomicBatchPackets = 0;
-            atomicBatchStartMs = 0;
             rawBatchSize = 0;
-            
+            atomicBatchStartMs = 0;
+
             return;
         }
         
@@ -333,16 +375,16 @@ public:
     void sendUdpDatagram(uint8_t* data, size_t size) {
         // Early exit checks
         if (!udpTransport || size == 0) return;
-        
+
         extern Config config;
         size_t sent = 0;
-        
+
         if (isBroadcast) {
             sent = udpTransport->broadcastTo(data, size, config.device4_config.port);
         } else {
             sent = udpTransport->writeTo(data, size, targetIP, config.device4_config.port);
         }
-        
+
         if (sent == 0) {
             // Rate-limited warning for UDP failures
             static uint32_t lastFailLog = 0;

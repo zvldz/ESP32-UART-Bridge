@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.18.4-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.18.5-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -14,8 +14,9 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## Features
 
-- **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), and more
+- **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), RC (SBUS), and more
 - **Advanced Protocol Pipeline**: Modern Parser + Sender architecture with memory pool management
+  - **SBUS Protocol Support**: Native SBUS frame parsing with multi-source failover and WiFi transport
   - **MAVLink Protocol Optimization**: Native MAVLink v1/v2 packet detection with zero latency and intelligent routing
   - **MAVLink Routing**: Multi-GCS support with automatic packet routing based on target system/component IDs
   - **Bidirectional Processing**: Full input/output pipeline for protocol conversion and data flow management
@@ -47,26 +48,20 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## Current Limitations
 
-- **Device 3 Adaptive Buffering**: Not yet integrated with new protocol pipeline (uses legacy approach)
-- **Protocol Pipeline**: Bidirectional pipeline implemented for MAVLink, additional protocols (SBUS, CRSF) planned
-- **Transmission Modes**: USB/UART senders support partial send recovery, UDP sender does not
-- **Device 2/3**: Use polling mode instead of event-driven architecture  
-- **Device 4**: UDP only (TCP support planned for future versions)
+- **Transmission Modes**: USB/UART senders support partial send when buffer is full, UDP sender drops packets
+- **Device 2/3 UART**: Use polling mode instead of event-driven architecture (Device 1 only)
+- **Device 4 Network**: UDP only
+- **Protocol Pipeline**: Additional protocols (CRSF, Modbus) planned for future releases
 
 ## Hardware
 
-- **Recommended Board**: [Waveshare ESP32-S3-Zero](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-  - Compact size (25x24mm)
-  - Built-in WS2812 RGB LED
-  - USB-C connector with native USB support
-  - 4MB Flash
-  - Dual-core processor (required)
-- **Alternative**: Compatible ESP32-S3 boards
-  - Must have ESP32-S3 chip with native USB support (for USB Host mode)
-  - **Must be dual-core variant** (single-core ESP32 not supported)
-  - USB-C or micro-USB with data lines connected to ESP32-S3
-  - Similar pinout and features to ESP32-S3-Zero
-  - Note: May require code modifications for different LED pins or missing components
+- **Recommended Boards**:
+  - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash, USB Host support
+  - **ESP32-S3 Super Mini**: Ultra-compact, WS2815 RGB LED (GPIO48), USB-C, 4MB Flash, no USB Host (basic testing completed, full hardware validation pending)
+- **Requirements**:
+  - ESP32-S3 chip with dual-core (single-core not supported)
+  - USB-C or micro-USB with data lines connected
+- **Other Boards**: May require code modifications for LED pins or missing components
 - **Connections**:
   - **Device 1 (Main UART - Always Active)**:
     - GPIO4: UART RX (connect to device TX)
@@ -163,8 +158,8 @@ The device supports two WiFi connection modes that can operate in temporary or p
 
 **Permanent Network Mode**
 - Configured via web interface "Permanent Network Mode" checkbox
-- Wi-Fi remains active indefinitely until manually disabled  
-- No automatic timeout - maintains connection across reboots
+- Wi-Fi remains active until manually disabled (20-minute timeout for safety)
+- Maintains connection across reboots
 - **Benefits**: Always-on remote access, continuous network logging
 
 ### Mode Switching
@@ -226,9 +221,10 @@ The device implements intelligent connection management with different behaviors
 
 ## Common Use Cases
 
+- **RC Systems**: SBUS bridging, WiFi transport, multi-source failover for RC receivers and flight controllers
+- **Vehicle Telemetry**: MAVLink communication for drones, rovers, boats with native protocol optimization
 - **Industrial Automation**: Connect Modbus RTU devices to modern systems
 - **IoT Connectivity**: Bridge 4G/LTE USB modems to embedded devices
-- **Vehicle Telemetry**: MAVLink communication for drones, rovers, boats with native protocol optimization
 - **Marine Electronics**: NMEA GPS/AIS data bridging
 - **Legacy Equipment**: Modernize RS232/RS485 equipment
 - **Development**: Debug embedded systems with USB convenience
@@ -289,23 +285,25 @@ The web interface allows configuration of:
 - **WiFi Settings**: Choose AP or Client mode, configure credentials
 - **USB Mode**: Device (default) or Host mode
 - **Network Mode**: Temporary setup or permanent Wi-Fi operation
-- **Device Roles**: Configure Device 2, 3, and 4 functionality
-- **Protocol Optimization**: Choose RAW (timing-based) or MAVLink (packet-aware) optimization
+- **Device Roles**: Configure Device 1, 2, 3, and 4 functionality (including SBUS modes)
+- **Protocol Optimization**: Choose RAW (timing-based), MAVLink (packet-aware), or SBUS (frame-based) optimization
 
 ## Device Roles
 
 The bridge supports multiple configurable devices:
 
 ### Device 1 - Main UART (Always Active)
-- Primary UART interface on GPIO 4/5
-- Cannot be disabled - this is the main data channel
-- Supports full range of baud rates and configurations
+Primary UART interface on GPIO 4/5. Can be configured as:
+- **Standard UART**: Full range of baud rates and configurations
+- **SBUS Input**: Read SBUS frames from RC receiver (100000 baud, 8E2, inverted - requires hardware inverter)
 
 ### Device 2 - Secondary Channel
 Can be configured as:
 - **Disabled**: No secondary channel
 - **UART2**: Additional UART on GPIO 8/9
 - **USB**: USB device or host mode
+- **SBUS Input**: Second SBUS source for failover
+- **SBUS Output**: Send SBUS to flight controller (requires hardware inverter)
 
 ### Device 3 - Auxiliary UART
 Can be configured as:
@@ -313,19 +311,15 @@ Can be configured as:
 - **Mirror**: One-way copy of Device 1 data (TX only)
 - **Bridge**: Full bidirectional UART bridge with Device 1 and protocol-aware processing
 - **Logger**: Dedicated UART log output at 115200 baud
+- **SBUS Output**: Send SBUS to flight controller (requires hardware inverter)
 
 ### Device 4 - Network Channel
 Requires active Wi-Fi connection. Can be configured as:
 - **Disabled**: Not used
-- **Network Logger**: Stream system logs via UDP
-  - Default port: 14560
-  - Supports broadcast (x.x.x.255) or unicast
-  - Configurable log levels (ERROR, WARNING, INFO, DEBUG)
-- **Network Bridge**: Bidirectional UART-to-UDP conversion
-  - Default port: 14550
-  - Full duplex communication with intelligent MAVLink routing
-  - Ideal for wireless serial connections
-  - Use with ground control stations, telemetry systems, multi-GCS setups
+- **Network Logger**: Stream system logs via UDP (port 14560)
+- **Network Bridge**: Bidirectional UART-to-UDP conversion (port 14550)
+- **SBUS UDP TX**: Send SBUS frames over WiFi with batching
+- **SBUS UDP RX**: Receive SBUS from WiFi with failover support
 
 ### Network Configuration for Device 4
 When Device 4 is enabled, additional settings appear:
@@ -334,6 +328,39 @@ When Device 4 is enabled, additional settings appear:
   - Use specific IP for unicast (single destination)
 - **Port**: UDP port number (1-65535)
 - **Network Log Level**: Only visible when Device 4 is active
+
+## SBUS Protocol Support
+
+SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. Standard configuration: 100000 baud, 8E2, inverted signal.
+
+### Hardware Requirements
+- **Signal Inverter**: SBUS uses inverted UART - requires hardware inverter between ESP32 and SBUS device
+- **Common Solutions**: Dedicated SBUS inverter boards, simple transistor circuit, or FrSky uninverted pads (where available)
+
+### SBUS Features
+- **Multi-source Failover**: Automatic switching between up to 3 SBUS sources (Device1, Device2, UDP)
+- **Priority System**: Device1 > Device2 > UDP (configurable to Auto or Manual mode)
+- **WiFi Transport**: Send/receive SBUS over UDP with 3-frame batching (~85% packet reduction)
+- **Timing Keeper**: Repeats last frame every 20ms when WiFi source lags (configurable)
+- **Web Monitoring**: Real-time source quality, failsafe state, and switching statistics
+
+### Common Configurations
+
+**Direct Connection** (RC receiver → Flight controller):
+- Device 1: SBUS Input (from RC receiver)
+- Device 2: SBUS Output (to flight controller)
+- Single ESP32 bridge between receiver and FC
+
+**WiFi Link** (Wireless SBUS between ESP32 units):
+- ESP1: Device 1 SBUS Input, Device 4 SBUS UDP TX
+- ESP2: Device 4 SBUS UDP RX, Device 2/3 SBUS Output
+- SBUS transmitted wirelessly with automatic batching
+
+**Multi-source Failover** (Redundant SBUS inputs):
+- Device 1: SBUS Input (primary source)
+- Device 2: SBUS Input (backup source)
+- Device 4: SBUS UDP RX (tertiary WiFi source)
+- Automatic failover based on signal quality
 
 ## LED Indicators
 
@@ -422,7 +449,11 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 **General fix:** Look for options to disable DTR/RTS control, hardware flow control, or "serial handshaking" in your application's connection settings.
 
 ### Protocol-Specific Considerations
-- **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding 
+- **SBUS devices**: Enable Protocol Optimization → SBUS for native frame parsing
+  - 100000 baud, 8E2, inverted signal (requires hardware inverter)
+  - Multi-source failover with automatic quality-based switching
+  - WiFi transport with 3-frame UDP batching for efficiency
+- **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding
   - Supports v1/v2 protocols at any baud rate with perfect packet boundaries
   - Memory pool optimization prevents heap fragmentation during intensive communication
   - Priority-based transmission ensures critical packets are delivered first

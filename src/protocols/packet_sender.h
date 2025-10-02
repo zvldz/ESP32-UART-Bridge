@@ -96,13 +96,18 @@ public:
         return true;
     }
     
+    // Direct send without queue (for fast path protocols like SBUS)
+    // Must be implemented by all senders
+    // Returns number of bytes sent (may be 0 on error)
+    virtual size_t sendDirect(const uint8_t* data, size_t size) = 0;
+
     // Process queue and send packets (MUST handle partial send!)
     // @param bulkMode - true if parser detected bulk transfer
     virtual void processSendQueue(bool bulkMode = false) = 0;
-    
+
     // Check if device is ready
     virtual bool isReady() const = 0;
-    
+
     // Get device name for logging
     virtual const char* getName() const = 0;
     

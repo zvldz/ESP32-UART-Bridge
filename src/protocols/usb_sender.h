@@ -107,7 +107,7 @@ private:
     }
     
 public:
-    UsbSender(UsbInterface* usb) : 
+    UsbSender(UsbInterface* usb) :
         PacketSender(USB_MAX_PACKETS, USB_MAX_BYTES),
         usbInterface(usb),
         lastSendAttempt(0),
@@ -115,7 +115,19 @@ public:
         lastStatsLog(0) {
         log_msg(LOG_DEBUG, "UsbSender initialized");
     }
-    
+
+    // Direct send without queue (for fast path)
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        if (!usbInterface) return 0;
+
+        size_t sent = usbInterface->write(data, size);
+        if (sent > 0) {
+            g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        }
+        return sent;
+    }
+
     void processSendQueue(bool bulkMode = false) override {
         uint32_t now = millis();
         

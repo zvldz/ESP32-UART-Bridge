@@ -594,10 +594,12 @@ const FormUtils = {
         const sbusSection = document.getElementById('sbus-timing-keeper-section');
 
         if (sbusSection) {
-            // Show section only if there are SBUS_OUT devices (Device2 role=4 or Device3 role=5)
-            const hasSbusOut = (this.config.device2Role === '4' || this.config.device3Role === '5');
+            // Show section ONLY for Device4 SBUS UDP RX (role 4)
+            // Timing Keeper repeats last frame when WiFi lags to keep output stable
+            // NOT needed for UART SBUS outputs (Device2/3) - they have no WiFi jitter
+            const hasSbusUdpRx = (this.config.device4Role === '4');
 
-            if (hasSbusOut) {
+            if (hasSbusUdpRx) {
                 sbusSection.style.display = 'block';
             } else {
                 sbusSection.style.display = 'none';

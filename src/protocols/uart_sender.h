@@ -13,12 +13,18 @@ protected:
     
 public:
     UartSender(UartInterface* uart) :
-        PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),  
+        PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),
         uartInterface(uart),
         lastSendTime(0) {
         log_msg(LOG_DEBUG, "UartSender initialized");
     }
-    
+
+    // Direct send without queue (for fast path)
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        if (!uartInterface) return 0;
+        return uartInterface->write(data, size);
+    }
+
     void processSendQueue(bool bulkMode = false) override {
         // UART sender may ignore bulkMode parameter
         uint32_t now = micros();
@@ -50,8 +56,8 @@ public:
                 break;  // Can't make progress
             }
             
-            // Send what we can
-            size_t sent = uartInterface->write(
+            // Send what we can (reuse sendDirect for consistency)
+            size_t sent = sendDirect(
                 item->packet.data + item->sendOffset,
                 toSend
             );
@@ -91,11 +97,21 @@ class Uart2Sender : public UartSender {
 public:
     using UartSender::UartSender;
     const char* getName() const override { return "UART2"; }
-    
+
+    // Override sendDirect to update Device2 statistics
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        size_t sent = UartSender::sendDirect(data, size);
+        if (sent > 0) {
+            g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        }
+        return sent;
+    }
+
     void processSendQueue(bool bulkMode = false) override {
         size_t bytesBefore = currentQueueBytes;
         UartSender::processSendQueue(bulkMode);
-        
+
         // Update Device2 TX statistics if bytes were sent
         size_t bytesSent = bytesBefore - currentQueueBytes;
         if (bytesSent > 0) {
@@ -104,16 +120,26 @@ public:
     }
 };
 
-// Device3 UART3 sender  
+// Device3 UART3 sender
 class Uart3Sender : public UartSender {
 public:
     using UartSender::UartSender;
     const char* getName() const override { return "UART3"; }
-    
+
+    // Override sendDirect to update Device3 statistics
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        size_t sent = UartSender::sendDirect(data, size);
+        if (sent > 0) {
+            g_deviceStats.device3.txBytes.fetch_add(sent, std::memory_order_relaxed);
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        }
+        return sent;
+    }
+
     void processSendQueue(bool bulkMode = false) override {
         size_t bytesBefore = currentQueueBytes;
         UartSender::processSendQueue(bulkMode);
-        
+
         // Update Device3 TX statistics if bytes were sent
         size_t bytesSent = bytesBefore - currentQueueBytes;
         if (bytesSent > 0) {
