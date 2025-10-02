@@ -26,8 +26,8 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Dual WiFi Modes**:
   - **Access Point**: Create hotspot for direct configuration
   - **Client Mode**: Connect to existing WiFi networks
-  - **Permanent Mode**: Always-on WiFi (20-minute timeout)
-  - **Temporary Mode**: Triple-click activation for quick setup
+  - **Permanent Mode**: Always-on WiFi without timeout
+  - **Temporary Mode**: Triple-click activation with 20-minute timeout
 - **Visual Feedback**: RGB LED shows data flow and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
@@ -36,10 +36,8 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## Current Limitations
 
-- **Transmission Modes**: USB/UART senders support partial send when buffer is full, UDP sender drops packets
-- **Device 2/3 UART**: Use polling mode instead of event-driven architecture (Device 1 only)
 - **Device 4 Network**: UDP only
-- **Protocol Pipeline**: Additional protocols (CRSF, Modbus) planned for future releases
+- **Additional Protocols**: CRSF, Modbus planned for future releases
 
 ## Hardware
 
@@ -146,7 +144,7 @@ The device supports two WiFi connection modes that can operate in temporary or p
 
 **Permanent Network Mode**
 - Configured via web interface "Permanent Network Mode" checkbox
-- Wi-Fi remains active until manually disabled (20-minute timeout for safety)
+- Wi-Fi remains active indefinitely until manually disabled
 - Maintains connection across reboots
 - **Benefits**: Always-on remote access, continuous network logging
 

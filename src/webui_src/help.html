@@ -12,27 +12,17 @@
         <h1>🔗 ESP32 UART Bridge - Connection Help</h1>
         
         <div class="section">
-            <h3>📡 Universal Protocol Support</h3>
+            <h3>📡 Protocol Support</h3>
             <div class="success">
-                <strong>Works with ANY UART protocol:</strong> This bridge is protocol-agnostic - it doesn't parse or understand specific protocols. Instead, it uses timing-based buffering with hardware DMA for efficient data transfer with any UART protocol.
+                <strong>Works with ANY UART protocol:</strong> DMA-accelerated with adaptive buffering (256-2048 bytes based on baud rate).
             </div>
-            <p><strong>How it works:</strong></p>
+            <p><strong>Optimized Protocols:</strong></p>
             <ul style="margin-left: 20px;">
-                <li><strong>Hardware DMA</strong> - ESP-IDF drivers with minimal CPU usage</li>
-                <li><strong>Adaptive Buffering</strong> - Groups bytes based on inter-byte gaps</li>
-                <li><strong>Dynamic Buffer Sizing</strong> - Automatically adjusts by baud rate:
-                    <ul style="margin-left: 20px; font-size: 0.9em;">
-                        <li>≤19200: 256 bytes</li>
-                        <li>115200: 288 bytes (optimized for MAVLink timing)</li>
-                        <li>230400: 768 bytes</li>
-                        <li>≥921600: 2048 bytes</li>
-                    </ul>
-                </li>
-                <li><strong>Timing Thresholds</strong> - 200μs/1ms/5ms/15ms for packet detection</li>
+                <li><strong>SBUS</strong> - Multi-source failover, WiFi transport with UDP batching</li>
+                <li><strong>MAVLink</strong> - Zero-latency forwarding, multi-GCS routing, priority transmission</li>
+                <li><strong>Raw Mode</strong> - Timing-based packet detection for unknown protocols</li>
             </ul>
-            <p><strong>Compatible with all protocols including:</strong> MAVLink (drone telemetry), NMEA (GPS), Modbus RTU (industrial), AT Commands (modems), and any other UART-based protocol.</p>
-            <p style="margin-top: 10px;"><small><strong>Note:</strong> While the bridge works with all protocols, the buffer sizing at 115200 baud (288 bytes) was specifically tuned to reduce packet loss during MAVLink parameter transfers.</small></p>
-            <p style="margin-top: 10px;"><strong>🌐 Network Features:</strong> The bridge can also stream data over network using Device 4 - send logs via UDP or create wireless UART bridges for remote device access.</p>
+            <p><strong>Compatible with:</strong> SBUS (RC), MAVLink (drones), NMEA (GPS), Modbus RTU, AT Commands, and any UART-based protocol.</p>
         </div>
         
         <div class="section">
@@ -50,8 +40,8 @@
                 - <strong>Smart Connection:</strong> Scans every 15s, tries 5x when found<br>
                 - Unlimited reconnection after successful initial connection<br><br>
                 <strong>Operation Duration:</strong><br>
-                - <strong>Temporary:</strong> Triple-click activation, auto timeout<br>
-                - <strong>Permanent:</strong> Always-on via web checkbox
+                - <strong>Temporary:</strong> Triple-click activation, 20-minute timeout<br>
+                - <strong>Permanent:</strong> Always-on via web checkbox, no timeout
             </div>
             <div class="warning">
                 <strong>💡 WiFi Mode Tips:</strong><br>
@@ -83,6 +73,9 @@
         
         <div class="section">
             <h3>Pin Connections</h3>
+            <div class="warning" style="margin-bottom: 10px;">
+                <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. ESP32-S3 Super Mini also supported (no USB Host, LED on GPIO48, basic testing completed).
+            </div>
             <table>
                 <tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
                 <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 1 - Main UART (Always Active)</td></tr>
@@ -111,9 +104,10 @@
                 <strong>🌐 Device 4 - Network Channel:</strong><br>
                 - <strong>Network Logger:</strong> Stream system logs via UDP (port 14560)<br>
                 - <strong>Network Bridge:</strong> Bidirectional UART↔UDP conversion (port 14550)<br>
+                - <strong>SBUS UDP TX:</strong> Send SBUS frames over WiFi with batching<br>
+                - <strong>SBUS UDP RX:</strong> Receive SBUS from WiFi with failover<br>
                 - Configure target IP and port in main settings<br>
-                - Requires active Wi-Fi connection<br>
-                <small>For detailed configuration, see README documentation.</small>
+                - Requires active Wi-Fi connection
             </div>
         </div>
         
