@@ -121,12 +121,13 @@ const Utils = {
             console.warn('localStorage not available:', e);
         }
 
-        if (v === 'hidden') {
-            el.style.display = 'none';
-            if (arrow) arrow.textContent = '▶';
-        } else {
+        if (v === 'shown') {
             el.style.display = 'block';
             if (arrow) arrow.textContent = '▼';
+        } else {
+            // Default: collapsed (including when v === null - no saved state)
+            el.style.display = 'none';
+            if (arrow) arrow.textContent = '▶';
         }
     },
 
