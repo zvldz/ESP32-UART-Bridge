@@ -38,6 +38,9 @@
 - Fixed SBUS Timing Keeper logic: save lastValidFrame only from UDP source (not from active source)
 - Fixed SBUS Timing Keeper visibility: show only for D4_SBUS_UDP_RX (not for UART SBUS outputs)
 - Optimized tSbusRouterTick task: enabled only for D4_SBUS_UDP_RX (reduced CPU usage for UART-only configs)
+- **Fixed RAW protocol over UDP regression**: Removed incorrect "single input" restriction that blocked bidirectional data flow
+- **Fixed buffer allocation bug**: Removed `D1_SBUS_IN` from `getOptimalBufferSize()` enum check that caused Device4 Network Bridge to use 256 bytes instead of 4096
+- **Fixed USB Host regression**: Added `out_transfer_busy` flag to prevent `ESP_ERR_NOT_FINISHED` errors caused by Sender task writing data faster than USB transfers complete
 - Various stability improvements
 
 ## v2.18.4 (SBUS Phase 2 Complete - Singleton Router + Failsafe) ✅ COMPLETED

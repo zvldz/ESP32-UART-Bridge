@@ -318,32 +318,6 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
     
-    // RAW mode check - only one input allowed
-    if (config->protocolOptimization == PROTOCOL_NONE) {
-        int inputFlowCount = 0;
-        for (size_t i = 0; i < activeFlows; i++) {
-            if (flows[i].isInputFlow) {  // Use explicit flag instead of senderMask check
-                inputFlowCount++;
-            }
-        }
-        if (inputFlowCount > 1) {
-            log_msg(LOG_ERROR, "RAW mode supports only single input! Disabling extra flows.");
-            // Keep only first input flow
-            // TODO: Better strategy - disable all but primary input
-            size_t firstInputIdx = 0;
-            for (size_t i = 0; i < activeFlows; i++) {
-                if (flows[i].isInputFlow) {
-                    if (firstInputIdx == 0) {
-                        firstInputIdx = i;
-                    } else {
-                        // Disable this flow
-                        flows[i].isInputFlow = false;
-                        flows[i].senderMask = 0;
-                    }
-                }
-            }
-        }
-    }
     
     // SBUS Input flow (SBUS → UART1)
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
@@ -662,75 +636,82 @@ void ProtocolPipeline::processTelemetryFlow() {
     static uint32_t lastReport = 0;
     static uint32_t exhaustiveIterations = 0;  // Track how many parse iterations
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
-    
+
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Count function call frequency
     static uint32_t callCount = 0;
     static uint32_t lastCallReport = 0;
     callCount++;
-    
+
     if (millis() - lastCallReport > 1000) {
         log_msg(LOG_INFO, "[FLOW] processTelemetryFlow called %u times/sec", callCount);
         callCount = 0;
         lastCallReport = millis();
     }
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
-    
-    // Process telemetry with exhaustive parsing for efficiency
+
+    // Process telemetry with exhaustive parsing for efficiency (MAVLink/SBUS only)
     const uint32_t MAX_TIME_MS = 10;  // Max 10ms for telemetry processing
     const size_t MAX_ITERATIONS = 20; // Safety limit to prevent infinite loops
     uint32_t startTime = millis();
-    
+
     for (size_t i = 0; i < activeFlows; i++) {
         if (!flows[i].isInputFlow && flows[i].source != SOURCE_LOGS) {  // Telemetry flow (FC→GCS), exclude Logger
 
-            
-            // Process this flow until empty or timeout
-            size_t iterations = 0;
-            while (flows[i].inputBuffer && 
-                   flows[i].inputBuffer->available() > 0 &&
-                   (millis() - startTime) < MAX_TIME_MS &&
-                   iterations < MAX_ITERATIONS) {
-                
-                // === TEMPORARY DIAGNOSTIC BLOCK START ===
-                size_t beforePackets = packetCount;
-                // === TEMPORARY DIAGNOSTIC BLOCK END ===
-                
-                // Remember buffer state before processing
-                size_t availableBefore = flows[i].inputBuffer->available();
-                
-                // Process one chunk (up to 296 bytes for MAVLink)
+            // RAW parser uses timeout-based logic, incompatible with exhaustive loop
+            // Exhaustive loop calls parse() too fast (< 1ms) preventing timeouts from triggering
+            if (flows[i].parser && strcmp(flows[i].parser->getName(), "RAW") == 0) {
+                // RAW parser: single iteration only
                 processFlow(flows[i]);
-                
-                // Check if parser made progress
-                size_t availableAfter = flows[i].inputBuffer->available();
-                if (availableAfter >= availableBefore) {
-                    break;
+            } else {
+                // MAVLink/SBUS: exhaustive loop (packet/frame-based parsers)
+                // Process this flow until empty or timeout
+                size_t iterations = 0;
+                while (flows[i].inputBuffer &&
+                       flows[i].inputBuffer->available() > 0 &&
+                       (millis() - startTime) < MAX_TIME_MS &&
+                       iterations < MAX_ITERATIONS) {
+
+                    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                    size_t beforePackets = packetCount;
+                    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+
+                    // Remember buffer state before processing
+                    size_t availableBefore = flows[i].inputBuffer->available();
+
+                    // Process one chunk (up to 296 bytes for MAVLink)
+                    processFlow(flows[i]);
+
+                    // Check if parser made progress
+                    size_t availableAfter = flows[i].inputBuffer->available();
+                    if (availableAfter >= availableBefore) {
+                        break;
+                    }
+
+                    iterations++;
+
+                    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                    exhaustiveIterations++;
+                    // Count packets processed (approximation)
+                    if (availableAfter > 0) {
+                        packetCount++;
+                    }
+                    // === TEMPORARY DIAGNOSTIC BLOCK END ===
                 }
-                
-                iterations++;
-                
-                // === TEMPORARY DIAGNOSTIC BLOCK START ===
-                exhaustiveIterations++;
-                // Count packets processed (approximation)
-                if (availableAfter > 0) {
-                    packetCount++;
+
+                // Log if we hit limits (for debugging)
+                if (iterations >= MAX_ITERATIONS) {
+                    log_msg(LOG_WARNING, "Telemetry processing hit iteration limit (%zu)", iterations);
+                } else if ((millis() - startTime) >= MAX_TIME_MS) {
+                    log_msg(LOG_DEBUG, "Telemetry processing hit time limit after %zu iterations", iterations);
                 }
-                // === TEMPORARY DIAGNOSTIC BLOCK END ===
-            }
-            
-            // Log if we hit limits (for debugging)
-            if (iterations >= MAX_ITERATIONS) {
-                log_msg(LOG_WARNING, "Telemetry processing hit iteration limit (%zu)", iterations);
-            } else if ((millis() - startTime) >= MAX_TIME_MS) {
-                log_msg(LOG_DEBUG, "Telemetry processing hit time limit after %zu iterations", iterations);
             }
         }
     }
-    
+
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     if (millis() - lastReport > 1000) {
-        log_msg(LOG_INFO, "Telemetry: %u packets/sec, %u parse iterations/sec", 
+        log_msg(LOG_INFO, "Telemetry: %u packets/sec, %u parse iterations/sec",
                 packetCount, exhaustiveIterations);
         packetCount = 0;
         exhaustiveIterations = 0;
@@ -765,10 +746,11 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
 
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
 
-    uint32_t now = micros();
+    uint32_t nowMicros = micros();
+    uint32_t nowMillis = millis();
 
-    // Parse packets from input buffer
-    ParseResult result = flow.parser->parse(flow.inputBuffer, now);
+    // Parse packets from input buffer (pass millis for lastPacketTime tracking)
+    ParseResult result = flow.parser->parse(flow.inputBuffer, nowMillis);
     
     // === TEMPORARY DIAGNOSTIC BLOCK START ===
     // Count successfully parsed packets
@@ -1013,8 +995,8 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
         
         // Calculate time since last activity
         unsigned long currentMillis = millis();
-        unsigned long lastActivityMs = 0;
-        if (ctx->protocol.stats->lastPacketTime > 0 && 
+        long lastActivityMs = -1;  // -1 means never had packets
+        if (ctx->protocol.stats->lastPacketTime > 0 &&
             currentMillis >= ctx->protocol.stats->lastPacketTime) {
             lastActivityMs = currentMillis - ctx->protocol.stats->lastPacketTime;
         }

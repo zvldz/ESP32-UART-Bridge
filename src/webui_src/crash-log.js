@@ -51,14 +51,15 @@ const CrashLog = {
             console.warn('localStorage not available:', e);
         }
 
-        if (v === 'hidden') {
-            this.elements.content.style.display = 'none';
-            this.elements.arrow.textContent = '▶';
-        } else {
+        if (v === 'shown') {
             this.elements.content.style.display = 'block';
             this.elements.arrow.textContent = '▼';
             // Load data if block is open on page load
             this.load();
+        } else {
+            // Default: collapsed (including when v === null - no saved state)
+            this.elements.content.style.display = 'none';
+            this.elements.arrow.textContent = '▶';
         }
     },
     

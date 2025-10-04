@@ -68,7 +68,7 @@ struct ParsedPacket {
     uint8_t* data;           // Pointer to packet data
     size_t size;             // Packet size
     size_t allocSize;        // Allocated size (for pool)
-    uint32_t timestamp;      // When packet was received (micros)
+    uint32_t timestamp;      // LEGACY: Not currently used, consider removing during cleanup
     TransmitHints hints;     // Transmission optimization hints
     PacketMemoryPool* pool;  // Pool to return memory to
     PacketSource source;     // Source of packet data for routing

@@ -452,9 +452,10 @@ const StatusUpdates = {
             // Future protocols (CRSF, etc.)
             html += this.renderGenericStats(stats);
         }
-        
-        // Sender statistics (common for all protocols)
-        if (stats.senders && stats.senders.length > 0) {
+
+        // Sender statistics (only for protocols with packet parsing, not RAW)
+        // protocolType: 0=RAW, 1=MAVLink, 2=SBUS
+        if (protocolType !== 0 && stats.senders && stats.senders.length > 0) {
             html += this.renderSenderStats(stats.senders, protocolType);
         }
         protocolStatsContent.innerHTML = html;
@@ -462,8 +463,7 @@ const StatusUpdates = {
 
     renderRawStats(stats) {
         const p = stats.parser || {};
-        const b = stats.buffer || {};
-        
+
         return `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
                 <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
@@ -473,15 +473,6 @@ const StatusUpdates = {
                         <div>Bytes Processed:</div><div><strong>${Utils.formatBytes(p.bytesProcessed || 0)}</strong></div>
                         <div>Average Chunk:</div><div><strong>${p.avgPacketSize || 0} bytes</strong></div>
                         <div>Size Range:</div><div><strong>${p.minPacketSize || 0}-${p.maxPacketSize || 0}B</strong></div>
-                    </div>
-                </div>
-                
-                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    <h5 style="margin: 0 0 10px 0; color: #333;">Buffer Status</h5>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                        <div>Buffer Usage:</div><div><strong>${b.used || 0}/${b.capacity || 0} bytes</strong></div>
-                        <div>Utilization:</div><div><strong>${b.utilizationPercent || 0}%</strong></div>
-                        <div>Last Activity:</div><div><strong>${this.formatLastActivity(p.lastActivityMs)}</strong></div>
                     </div>
                 </div>
             </div>
@@ -520,10 +511,17 @@ const StatusUpdates = {
 
         // Calculate quality metrics
         const totalFrames = (p.validFrames || 0) + (p.invalidFrames || 0);
-        const validPercent = totalFrames > 0 ? ((p.validFrames || 0) / totalFrames * 100).toFixed(1) : '0.0';
+        const lastActivityMs = p.lastActivityMs || 0;
+
+        // If no activity for 5+ seconds, show 0% (ignore old counters)
+        let validPercent = '0.0';
+        let successRateNum = 0;
+        if (lastActivityMs >= 0 && lastActivityMs < 5000 && totalFrames > 0) {
+            validPercent = ((p.validFrames || 0) / totalFrames * 100).toFixed(1);
+            successRateNum = parseFloat(validPercent);
+        }
 
         // Determine Success Rate color
-        const successRateNum = parseFloat(validPercent);
         let successRateColor = '#28a745'; // Green by default (>= 95%)
         if (successRateNum < 60) {
             successRateColor = '#dc3545'; // Dark red (< 60%)
@@ -821,7 +819,11 @@ const StatusUpdates = {
 
     renderSenderStats(senders, protocolType) {
         if (!senders || senders.length === 0) return '';
-        
+
+        // Add unit clarification for MAVLink (protocolType: 0=RAW, 1=MAVLink, 2=SBUS)
+        const sentLabel = protocolType === 1 ? 'Sent (packets)' : 'Sent';
+        const droppedLabel = protocolType === 1 ? 'Dropped (packets)' : 'Dropped';
+
         let html = `
             <div style="margin-top: 20px;">
                 <h5 style="margin: 0 0 10px 0; color: #333;">Output Devices</h5>
@@ -829,8 +831,8 @@ const StatusUpdates = {
                     <thead>
                         <tr style="background: #f0f0f0;">
                             <th style="text-align: left; padding: 8px;">Device</th>
-                            <th style="text-align: left; padding: 8px;">Sent</th>
-                            <th style="text-align: left; padding: 8px;">Dropped</th>
+                            <th style="text-align: left; padding: 8px;">${sentLabel}</th>
+                            <th style="text-align: left; padding: 8px;">${droppedLabel}</th>
                             <th style="text-align: left; padding: 8px;">Queue</th>
                         </tr>
                     </thead>
@@ -867,6 +869,7 @@ const StatusUpdates = {
     },
 
     formatLastActivity(ms) {
+        if (ms < 0) return 'Never';  // -1 means no packets received yet
         if (!ms || ms === 0) return 'just now';
         if (ms < 1000) return `${ms}ms ago`;
         if (ms < 60000) return `${Math.floor(ms/1000)}s ago`;

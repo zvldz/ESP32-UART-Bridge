@@ -252,7 +252,7 @@ void initializeScheduler() {
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
     tCrashlogUpdate.enable();
-    
+
     // Distribute tasks over time to prevent simultaneous execution
     // This prevents all tasks from running at t=0, t=30s, t=60s, etc.
     tBridgeActivity.delay(5000);      // Start after 5 seconds
@@ -284,6 +284,9 @@ void enableNetworkTasks(bool temporaryNetwork) {
     // Only start timeout for temporary network (setup AP)
     if (temporaryNetwork) {
         startWiFiTimeout();
+    } else {
+        // Permanent network mode - ensure timeout is disabled
+        tWiFiTimeout.disable();
     }
 
     // Bridge tasks continue to work in network mode

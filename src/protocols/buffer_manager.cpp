@@ -3,24 +3,6 @@
 #include "../adaptive_buffer.h"
 #include "../defines.h"
 
-// Calculate optimal buffer size based on device role and protocol type
-size_t getOptimalBufferSize(uint8_t deviceRole, uint8_t protocolType) {
-    // SBUS devices need minimal buffers (SBUS frame = 25 bytes)
-    if (deviceRole == D1_SBUS_IN || deviceRole == D2_SBUS_IN ||
-        deviceRole == D2_SBUS_OUT || deviceRole == D3_SBUS_OUT) {
-        return 256;  // 10 SBUS frames buffer
-    }
-
-    // UDP for SBUS needs smaller buffer than for MAVLink/RAW
-    if ((deviceRole == D4_NETWORK_BRIDGE && protocolType == PROTOCOL_SBUS) ||
-        deviceRole == D4_SBUS_UDP_TX || deviceRole == D4_SBUS_UDP_RX) {
-        return 1024;  // 40 SBUS frames, enough for network jitter
-    }
-
-    // Default for MAVLink/RAW telemetry
-    return INPUT_BUFFER_SIZE;  // 4096 bytes
-}
-
 void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // Telemetry buffer - always needed for Device1 data (UART or SBUS)
     // Size depends on protocol: 512B for SBUS, adaptive for UART
@@ -61,7 +43,12 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // UART2 input buffer
     if (config->device2.role == D2_UART2 || config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
         ctx->buffers.uart2InputBuffer = new CircularBuffer();
-        size_t bufferSize = getOptimalBufferSize(config->device2.role, config->protocolOptimization);
+        size_t bufferSize;
+        if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
+            bufferSize = 256;  // Physical SBUS
+        } else {
+            bufferSize = 4096;  // UART2
+        }
         ctx->buffers.uart2InputBuffer->init(bufferSize);
         log_msg(LOG_INFO, "UART2 buffer allocated: %zu bytes", bufferSize);
     } else {
@@ -72,7 +59,7 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     if (config->device3.role == D3_UART3_BRIDGE) {
         // D3_SBUS_OUT removed - Fast Path writes directly, doesn't read
         ctx->buffers.uart3InputBuffer = new CircularBuffer();
-        size_t bufferSize = getOptimalBufferSize(config->device3.role, config->protocolOptimization);
+        size_t bufferSize = 4096;  // UART3
         ctx->buffers.uart3InputBuffer->init(bufferSize);
         log_msg(LOG_INFO, "UART3 buffer allocated: %zu bytes", bufferSize);
     } else {
@@ -83,7 +70,12 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     if (config->device4.role == D4_NETWORK_BRIDGE ||
         config->device4.role == D4_SBUS_UDP_TX || config->device4.role == D4_SBUS_UDP_RX) {
         ctx->buffers.udpInputBuffer = new CircularBuffer();
-        size_t bufferSize = getOptimalBufferSize(config->device4.role, config->protocolOptimization);
+        size_t bufferSize;
+        if (config->device4.role == D4_SBUS_UDP_TX || config->device4.role == D4_SBUS_UDP_RX) {
+            bufferSize = 1024;  // Network SBUS
+        } else {
+            bufferSize = 4096;  // Network Bridge (MAVLink/RAW)
+        }
         ctx->buffers.udpInputBuffer->init(bufferSize);
         log_msg(LOG_INFO, "UDP input buffer allocated: %zu bytes", bufferSize);
     } else {

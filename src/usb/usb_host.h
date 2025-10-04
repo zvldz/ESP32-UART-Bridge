@@ -31,7 +31,10 @@ private:
     uint8_t bulk_out_endpoint;     // OUT endpoint address
     usb_transfer_t* in_transfer;   // IN transfer structure
     usb_transfer_t* out_transfer;  // OUT transfer structure
-    
+
+    // Transfer state tracking
+    volatile bool out_transfer_busy;  // Track if OUT transfer is in progress
+
     // Static instance for callbacks
     static UsbHost* instance;
 

@@ -369,17 +369,17 @@ public:
     // Confirm transmission with validation
     void consume(size_t bytes) {
         portENTER_CRITICAL(&bufferMux);
-        
+
         size_t avail = available();
         if (bytes > avail) {
             log_msg(LOG_ERROR, "CircBuf: Trying to consume %zu but only %zu available",
                     bytes, avail);
             bytes = avail;
         }
-        
+
         tail = (tail + bytes) & capacityMask;
         stats.bytesRead += bytes;
-        
+
         portEXIT_CRITICAL(&bufferMux);
     }
     
