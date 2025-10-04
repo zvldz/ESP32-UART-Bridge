@@ -11,7 +11,7 @@ extern UsbMode usbMode;
 UsbHost* UsbHost::instance = nullptr;
 
 // Constructor
-UsbHost::UsbHost(uint32_t baudrate) : UsbBase(baudrate), device_handle(nullptr), interface_num(0), client_handle(nullptr), bulk_in_endpoint(0), bulk_out_endpoint(0), in_transfer(nullptr), out_transfer(nullptr) {
+UsbHost::UsbHost(uint32_t baudrate) : UsbBase(baudrate), device_handle(nullptr), interface_num(0), client_handle(nullptr), bulk_in_endpoint(0), bulk_out_endpoint(0), in_transfer(nullptr), out_transfer(nullptr), out_transfer_busy(false) {
     instance = this;
 }
 
@@ -397,6 +397,11 @@ void UsbHost::transmitPendingData() {
     return;
   }
 
+  // Check if previous transfer is still in progress
+  if (out_transfer_busy) {
+    return;  // Wait for callback to clear the flag
+  }
+
   uint8_t transmission_buffer[USB_TRANSFER_SIZE];
   size_t bytes_to_send = getFromTxBuffer(transmission_buffer, sizeof(transmission_buffer));
 
@@ -408,15 +413,22 @@ void UsbHost::transmitPendingData() {
     out_transfer->callback = outTransferCallback;
     out_transfer->context = this;
 
+    out_transfer_busy = true;  // Mark as busy before submit
+
     esp_err_t err = usb_host_transfer_submit(out_transfer);
     if (err != ESP_OK) {
       log_msg(LOG_DEBUG, "USB Host: Failed to submit OUT transfer: %s", esp_err_to_name(err));
+      out_transfer_busy = false;  // Clear flag on error
       is_connected = false;
     }
   }
 }
 // OUT transfer callback - handles transmission completion
 void UsbHost::outTransferCallback(usb_transfer_t* transfer) {
+  // Clear busy flag when transfer completes
+  if (instance) {
+    instance->out_transfer_busy = false;
+  }
   // OUT transfer completed successfully - no additional processing needed
 }
 // Cleanup USB resources and reset state

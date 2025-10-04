@@ -26,7 +26,7 @@
                 🧾 System Logs
                 <span id="logsArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="logsBlock" style="position: relative;">
+            <div id="logsBlock" style="position: relative; display: none;">
                 <span id="copyBtn" onclick="copyLogs()" style="position: absolute; top: 10px; right: 10px; cursor: pointer; user-select: none; display: flex; align-items: center; padding: 5px; z-index: 10; background: rgba(233, 236, 239, 0.9); border-radius: 4px;" title="Copy logs to clipboard">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5">
                         <rect x="6" y="6" width="10" height="12" rx="1"></rect>
@@ -46,9 +46,9 @@
         <div class="section">
             <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleSystemStatus()">
                 📊 System Status
-                <span id="systemStatusToggle" style="float: right; font-size: 18px;">▼</span>
+                <span id="systemStatusToggle" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="systemStatusBlock" style="display: block;">
+            <div id="systemStatusBlock" style="display: none;">
                 <div id="systemInfo"></div>
                 <div id="deviceStats"></div>
             </div>
@@ -97,7 +97,7 @@
                 📈 Protocol Statistics
                 <span id="protocolStatsToggle" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="protocolStats" style="display: block;">
+            <div id="protocolStats" style="display: none;">
                 <div id="protocolStatsContent">
                     <p style="color: #666; text-align: center; margin: 20px 0;">No protocol statistics available</p>
                 </div>
@@ -155,9 +155,11 @@
                                     <option value="1">MAVLink</option>
                                 </select>
                                 <div id="mavlink-routing-section" style="display: none;">
-                                    <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
-                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
-                                        <span>Target-only Routing</span>
+                                    <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;"
+                                           title="Routes messages by target System ID. Fallback: broadcast">
+                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing"
+                                               title="Routes messages by target System ID. Fallback: broadcast">
+                                        <span style="cursor: help;">Target-only Routing</span>
                                     </label>
                                 </div>
                                 <div id="sbus-timing-keeper-section" style="display: none;">
@@ -170,10 +172,7 @@
                                 </div>
                             </div>
                             <small style="display: block; margin-top: 5px; color: #666;">
-                                ℹ️ Reduces latency by detecting packet boundaries.<br>
-                                <span id="mavlink-routing-desc" style="display: none;">
-                                    Routes messages by target System ID. Fallback: broadcast.
-                                </span>
+                                ℹ️ Reduces latency by detecting packet boundaries.
                             </small>
                         </div>
 
