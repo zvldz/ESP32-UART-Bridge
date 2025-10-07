@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.18.5-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.18.6-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -44,18 +44,19 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Recommended Boards**:
   - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash, USB Host support
   - **ESP32-S3 Super Mini**: Ultra-compact, WS2815 RGB LED (GPIO48), USB-C, 4MB Flash, no USB Host (basic testing completed, full hardware validation pending)
+  - **XIAO ESP32-S3**: Ultra-compact (21x17.5mm), single-color LED, USB-C, 8MB Flash/8MB PSRAM, USB Host support, external antenna connector (basic mode tested: UART Bridge + USB)
 - **Requirements**:
   - ESP32-S3 chip with dual-core (single-core not supported)
   - USB-C or micro-USB with data lines connected
 - **Other Boards**: May require code modifications for LED pins or missing components
-- **Connections**:
+- **Connections (ESP32-S3-Zero / Super Mini)**:
   - **Device 1 (Main UART - Always Active)**:
     - GPIO4: UART RX (connect to device TX)
     - GPIO5: UART TX (connect to device RX)
     - GPIO6: RTS (optional flow control)
     - GPIO7: CTS (optional flow control)
   - **Device 2 (Secondary UART - When UART2 Role Selected)**:
-    - GPIO8: UART RX 
+    - GPIO8: UART RX
     - GPIO9: UART TX
   - **Device 3 (Mirror/Bridge/Logger UART)**:
     - GPIO11: UART RX (used only in Bridge mode)
@@ -66,20 +67,39 @@ Universal UART to USB bridge with web configuration interface for any serial com
     - Network Bridge: Bidirectional UDP for UART data (default: 14550)
   - **System**:
     - GPIO0: BOOT button (built-in) - triple-click for network mode
-    - GPIO21: RGB LED (WS2812 - built-in on ESP32-S3-Zero)
+    - GPIO21: RGB LED (WS2812 - Zero) or GPIO48 (WS2815 - Super Mini)
+- **Connections (XIAO ESP32-S3)** - Uses D-pin labels on board:
+  - **Device 1 (Main UART - Always Active)**:
+    - D3 (GPIO4): UART RX (connect to device TX)
+    - D4 (GPIO5): UART TX (connect to device RX)
+    - D0 (GPIO1): RTS (optional flow control)
+    - D1 (GPIO2): CTS (optional flow control)
+  - **Device 2 (Secondary UART - When UART2 Role Selected)**:
+    - D8 (GPIO8): UART RX
+    - D9 (GPIO9): UART TX
+  - **Device 3 (Mirror/Bridge/Logger UART)**:
+    - D7 (GPIO44): UART RX (used only in Bridge mode)
+    - D6 (GPIO43): UART TX (used in all Device 3 modes)
+  - **Device 4 (Network Channel)**:
+    - No physical pins - uses Wi-Fi network
+    - Network Logger: UDP port for log streaming (default: 14560)
+    - Network Bridge: Bidirectional UDP for UART data (default: 14550)
+  - **System**:
+    - GPIO0: BOOT button (built-in) - triple-click for network mode
+    - GPIO21: Single-color LED (blink-only, no RGB)
   - **⚠️ Warning**: ESP32-S3 supports only 3.3V logic levels!
 
 ## Quick Start
 
 1. **Connect Hardware**:
-   - Device TX → ESP32 GPIO4
-   - Device RX → ESP32 GPIO5
-   - Device GND → ESP32 GND
+   - **Zero/SuperMini**: Device TX → GPIO4, Device RX → GPIO5, GND → GND
+   - **XIAO**: Device TX → D3, Device RX → D4, GND → GND
    - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
 
 2. **Power On**:
    - Connect USB-C cable to computer
-   - Rainbow LED effect indicates successful boot
+   - **Zero/SuperMini**: Rainbow LED effect indicates successful boot
+   - **XIAO**: Three quick blinks indicate successful boot (single-color LED)
 
 3. **Configure**:
    

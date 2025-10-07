@@ -74,8 +74,10 @@
         <div class="section">
             <h3>Pin Connections</h3>
             <div class="warning" style="margin-bottom: 10px;">
-                <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. ESP32-S3 Super Mini also supported (no USB Host, LED on GPIO48, basic testing completed).
+                <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED, external antenna).
             </div>
+
+            <h4>ESP32-S3-Zero / Super Mini Pin Connections</h4>
             <table>
                 <tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
                 <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 1 - Main UART (Always Active)</td></tr>
@@ -96,10 +98,36 @@
                 <tr><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
                 <tr><td>GPIO21</td><td>RGB LED</td><td>Built-in (WS2812)</td><td>✅ Yes</td></tr>
             </table>
+
+            <h4 style="margin-top: 20px;">XIAO ESP32-S3 Pin Connections</h4>
+            <div class="warning" style="margin-bottom: 10px;">
+                <strong>📌 XIAO uses D-pin labels on board (castellated holes).</strong> Web interface shows both GPIO and D-pin numbers.
+            </div>
+            <table>
+                <tr><th>XIAO Pin</th><th>GPIO</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
+                <tr><td colspan="5" style="background: #f0f4f8; font-weight: bold;">Device 1 - Main UART (Always Active)</td></tr>
+                <tr><td>D3</td><td>GPIO4</td><td>UART RX</td><td>Device TX</td><td>✅ Yes</td></tr>
+                <tr><td>D4</td><td>GPIO5</td><td>UART TX</td><td>Device RX</td><td>✅ Yes</td></tr>
+                <tr><td>D0</td><td>GPIO1</td><td>RTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+                <tr><td>D1</td><td>GPIO2</td><td>CTS</td><td>Flow Control</td><td>⚪ Optional</td></tr>
+                <tr><td colspan="5" style="background: #f0f4f8; font-weight: bold;">Device 2 - Secondary UART (When UART2 Role Selected)</td></tr>
+                <tr><td>D8</td><td>GPIO8</td><td>UART RX</td><td>Device TX</td><td>📌 If enabled</td></tr>
+                <tr><td>D9</td><td>GPIO9</td><td>UART TX</td><td>Device RX</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="5" style="background: #f0f4f8; font-weight: bold;">Device 3 - Mirror/Bridge/Logger</td></tr>
+                <tr><td>D7</td><td>GPIO44</td><td>UART RX</td><td>Bridge mode only</td><td>📌 If bridge</td></tr>
+                <tr><td>D6</td><td>GPIO43</td><td>UART TX</td><td>All Device 3 modes</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="5" style="background: #f0f4f8; font-weight: bold;">Device 4 - Network Channel</td></tr>
+                <tr><td colspan="2">Wi-Fi</td><td>Network</td><td>Logger/Bridge via UDP</td><td>📌 If enabled</td></tr>
+                <tr><td colspan="5" style="background: #f0f4f8; font-weight: bold;">System</td></tr>
+                <tr><td>GND</td><td>-</td><td>Ground</td><td>Device GND</td><td>✅ Yes</td></tr>
+                <tr><td>-</td><td>GPIO0</td><td>BOOT Button</td><td>Built-in</td><td>✅ Yes</td></tr>
+                <tr><td>-</td><td>GPIO21</td><td>Single LED</td><td>Built-in (blink-only)</td><td>✅ Yes</td></tr>
+            </table>
+
             <div class="warning" style="margin-top: 10px;">
                 <strong>📌 Note:</strong> Device 2, 3, and 4 are only active when their respective roles are enabled in the configuration.
             </div>
-            
+
             <div class="success" style="margin-top: 15px;">
                 <strong>🌐 Device 4 - Network Channel:</strong><br>
                 - <strong>Network Logger:</strong> Stream system logs via UDP (port 14560)<br>
@@ -114,7 +142,7 @@
         <div class="section">
             <h3>💡 LED Status Indicators</h3>
             <div class="success">
-                <strong>The RGB LED (GPIO21) provides comprehensive visual feedback:</strong><br><br>
+                <strong>Zero/SuperMini - RGB LED provides comprehensive visual feedback:</strong><br><br>
                 <strong>📊 Data Activity (Standalone Mode):</strong><br>
                 - <strong>Blue flashes</strong> - Data from device (UART RX)<br>
                 - <strong>Green flashes</strong> - Data from computer (USB RX)<br>
@@ -138,6 +166,16 @@
                 <tr><td>WiFi Error</td><td>Red fast blink</td><td>Wrong password (5 attempts failed)</td></tr>
                 <tr><td>Button Feedback</td><td>White blinks</td><td>Shows click count</td></tr>
             </table>
+
+            <div class="warning" style="margin-top: 15px;">
+                <strong>XIAO ESP32-S3 - Single-color LED (blink-only mode):</strong><br>
+                - <strong>Blinks</strong> indicate data activity (no color differentiation)<br>
+                - <strong>Three quick blinks</strong> - Boot sequence<br>
+                - <strong>Solid ON</strong> - WiFi AP mode active<br>
+                - <strong>Slow blink</strong> - WiFi Client searching<br>
+                - <strong>Fast blink</strong> - WiFi Client error<br>
+                - <strong>OFF</strong> - Idle, no data transfer
+            </div>
         </div>
         
         <div class="section">
@@ -145,9 +183,10 @@
             <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
                 <h4>Minimal Setup - UART to USB Bridge</h4>
                 <p style="font-size: 18px; background: #e9ecef; padding: 10px; border-radius: 5px;">
-                    Device TX → ESP32 GPIO4<br>
-                    Device RX → ESP32 GPIO5<br>
-                    Device GND → ESP32 GND
+                    <strong>Zero/SuperMini:</strong><br>
+                    Device TX → GPIO4, Device RX → GPIO5, GND → GND<br><br>
+                    <strong>XIAO:</strong><br>
+                    Device TX → D3, Device RX → D4, GND → GND
                 </p>
                 <h4>Step 2: Connect USB</h4>
                 <p style="font-size: 18px; background: #d1ecf1; padding: 10px; border-radius: 5px;">

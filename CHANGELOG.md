@@ -1,6 +1,34 @@
 # CHANGELOG
 
-## v2.18.5 (SBUS Phase 3 - Unified Senders + UDP Batching) 🟡 IN DEVELOPMENT
+## v2.18.6 (XIAO ESP32-S3 Support) 🟡 IN DEVELOPMENT
+
+### Platform Support
+- **XIAO ESP32-S3 Board Support**: Initial implementation
+  - **Pin Mapping**: Custom GPIO mapping for XIAO compact pinout
+    - Device 1 (UART Bridge): GPIO4/5 (D3/D4 pins)
+    - Device 2 (UART2/USB): GPIO8/9 (D8/D9 pins)
+    - Device 3 (UART3): GPIO43/44 (D6/D7 pins)
+    - RTS/CTS flow control: GPIO1/2 (D0/D1 pins)
+  - **LED Support**: Single-color LED on GPIO21 with inverted logic (LOW=ON)
+    - Blink-only mode (no RGB colors)
+    - FastLED replaced with simple GPIO control for XIAO
+  - **Build Configuration**: Added xiao_production and xiao_debug environments
+  - **Web Interface**: Board type detection and D-pin display in device configuration
+  - **Testing Status**: Basic mode tested (Device1 UART Bridge + Device2 USB with flight controller)
+
+### Code Changes
+- Updated defines.h with XIAO-specific pin definitions and comments
+- Updated leds.cpp with conditional compilation for single-color LED support
+- Updated web_api.cpp with XIAO board type detection
+- Updated device-config.js with GPIO to D-pin mapping table for web interface
+- Updated status-updates.js with XIAO board name display
+
+### Documentation
+- Updated README.md with XIAO board information and D-pin connections
+- Updated help.html with XIAO pin mapping table and LED indicators
+- Updated version to 2.18.6
+
+## v2.18.5 (SBUS Phase 3 - Unified Senders + UDP Batching) ✅ COMPLETED
 
 ### SBUS Phase 3 Implementation ✅
 - **Unified Sender Architecture**: Single sendDirect() method for all protocols

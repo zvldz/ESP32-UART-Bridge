@@ -85,7 +85,12 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
         // NO mutex take here - already held by caller!
         if (blink.isOn) {
             // Turn off
+#if defined(LED_TYPE_SINGLE_COLOR)
+            digitalWrite(LED_PIN1, HIGH);  // OFF (inverted)
+#else
             leds[0] = CRGB::Black;
+            FastLED.show();
+#endif
             blink.isOn = false;
             blink.nextTime = now + blink.offTime;
             
@@ -98,11 +103,15 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
             }
         } else {
             // Turn on with stored color
+#if defined(LED_TYPE_SINGLE_COLOR)
+            digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+#else
             leds[0] = CRGB(blink.colorValue);
+            FastLED.show();
+#endif
             blink.isOn = true;
             blink.nextTime = now + blink.onTime;
         }
-        FastLED.show();
     }
     
     return blink.active;  // Still processing
@@ -196,16 +205,24 @@ static void processDataActivityUnderMutex() {
         }
 
         // Set LED color and schedule auto-off
+#if defined(LED_TYPE_SINGLE_COLOR)
+        digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+#else
         leds[0] = CRGB(pendingColor);
         FastLED.show();
+#endif
         ledIsOn = true;
         ledOffTime = now + LED_DATA_FLASH_MS;
     }
 
     // Handle automatic LED off
     if (ledOffTime > 0 && time_reached(millis(), ledOffTime)) {
+#if defined(LED_TYPE_SINGLE_COLOR)
+        digitalWrite(LED_PIN1, HIGH);  // OFF (inverted)
+#else
         leds[0] = CRGB::Black;
         FastLED.show();
+#endif
         ledOffTime = 0;
         ledIsOn = false;
         lastActivity = ACTIVITY_NONE;
@@ -229,7 +246,23 @@ void leds_init() {
         return;
     }
 
-    // FastLED initialization
+#if defined(LED_TYPE_SINGLE_COLOR)
+    // XIAO: Simple GPIO LED (inverted: LOW=ON, HIGH=OFF)
+    pinMode(LED_PIN1, OUTPUT);
+    digitalWrite(LED_PIN1, HIGH);  // OFF initially
+
+    // Simple blink test instead of rainbow
+    log_msg(LOG_DEBUG, "Starting LED test...");
+    for(int i = 0; i < 3; i++) {
+        digitalWrite(LED_PIN1, LOW);   // ON
+        vTaskDelay(pdMS_TO_TICKS(100));
+        digitalWrite(LED_PIN1, HIGH);  // OFF
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    log_msg(LOG_INFO, "Single color LED initialized on GPIO%d (inverted)", LED_PIN1);
+#else
+    // Zero/SuperMini: FastLED for RGB LED
     FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
     FastLED.setBrightness(LED_BRIGHTNESS);
     FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
@@ -260,6 +293,7 @@ void leds_init() {
 
     unsigned long effectDuration = millis() - startTime;
     log_msg(LOG_INFO, "WS2812 RGB LED initialized on GPIO%d (rainbow effect took %lums)", LED_PIN1, effectDuration);
+#endif
 }
 
 // Notify functions for UART task
@@ -300,8 +334,12 @@ static void clearOtherBlinks(BlinkType keepActive) {
 // Set static LED color and clear all blinks
 static void setStaticLED(CRGB color) {
     if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+#if defined(LED_TYPE_SINGLE_COLOR)
+        digitalWrite(LED_PIN1, (color == CRGB::Black) ? HIGH : LOW);  // inverted
+#else
         leds[0] = color;
         FastLED.show();
+#endif
         clearAllBlinks();
         xSemaphoreGive(ledMutex);
     }
@@ -384,9 +422,13 @@ void led_process_updates() {
     if (bridgeMode == BRIDGE_NET) {
         bool rapidActive = processBlinkPatternUnderMutex(BLINK_RAPID);
         if (!rapidActive && !blinkStates[BLINK_RAPID].active) {
-            // Keep purple constant logic
+            // Keep LED constant (purple for RGB, just ON for single color)
+#if defined(LED_TYPE_SINGLE_COLOR)
+            digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+#else
             leds[0] = CRGB::Purple;
             FastLED.show();
+#endif
         }
         xSemaphoreGive(ledMutex);
         return;
