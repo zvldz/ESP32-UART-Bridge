@@ -9,17 +9,29 @@
 Universal UART to USB bridge with web configuration interface.
 Optimized for drone autopilots (ArduPilot, PX4) but works with any UART protocol.
 
-Hardware: ESP32-S3-Zero / ESP32-S3 Super Mini
+Hardware: ESP32-S3-Zero / ESP32-S3 Super Mini / XIAO ESP32-S3
 - GPIO0: BOOT button (triple-click for WiFi config)
-- GPIO4/5: Device 1 - Main UART (RX/TX)
-- GPIO6/7: RTS/CTS flow control
-- GPIO8/9: Device 2 - Secondary UART (RX/TX) when enabled
-- GPIO11/12: Device 3 - Logger/Mirror/Bridge UART (RX/TX)
-- RGB LED: GPIO21 (WS2812) for S3-Zero, GPIO48 (WS2815) for Super Mini
+- Device 1 - Main UART:
+  - Zero/SuperMini: GPIO4/5 (RX/TX)
+  - XIAO: GPIO4/5 (D3/D4 pins)
+- RTS/CTS flow control:
+  - Zero/SuperMini: GPIO6/7
+  - XIAO: GPIO1/2 (D0/D1 pins)
+- Device 2 - Secondary UART:
+  - Zero/SuperMini: GPIO8/9 (RX/TX)
+  - XIAO: GPIO8/9 (D8/D9 pins)
+- Device 3 - Logger/Mirror/Bridge UART:
+  - Zero/SuperMini: GPIO11/12 (RX/TX)
+  - XIAO: GPIO43/44 (D6/D7 pins)
+- LED:
+  - S3-Zero: GPIO21 (WS2812 RGB)
+  - Super Mini: GPIO48 (WS2815 RGB)
+  - XIAO: GPIO21 (single-color, inverted)
 
 Board differences:
 - S3 Zero: USB Host support, WS2812 LED on GPIO21
 - S3 Super Mini: No USB Host, WS2815 LED on GPIO48
+- XIAO ESP32-S3: USB Host support, single-color LED on GPIO21, compact pinout
 
 ===============================================================================
 
@@ -36,8 +48,8 @@ Board differences:
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN     0
-#define UART_RX_PIN         4
-#define UART_TX_PIN         5
+#define UART_RX_PIN         4   // Zero/SuperMini: GPIO4, XIAO: GPIO4 (D3)
+#define UART_TX_PIN         5   // Zero/SuperMini: GPIO5, XIAO: GPIO5 (D4)
 // Board type verification at compile time
 #if defined(BOARD_ESP32_S3_SUPER_MINI) && defined(BOARD_ESP32_S3_ZERO)
   #error "Both BOARD_ESP32_S3_SUPER_MINI and BOARD_ESP32_S3_ZERO are defined - this should not happen"
@@ -47,6 +59,10 @@ Board differences:
 #if defined(BOARD_ESP32_S3_SUPER_MINI)
   #define LED_PIN1          48  // WS2815 RGB LED on GPIO48 for Super Mini
   #define BOARD_TYPE_STRING "ESP32-S3 Super Mini"
+#elif defined(BOARD_XIAO_ESP32_S3)
+  #define LED_PIN1          21  // Single color LED on GPIO21 for XIAO (inverted: LOW=ON)
+  #define BOARD_TYPE_STRING "XIAO ESP32-S3"
+  #define LED_TYPE_SINGLE_COLOR  // Blink-only mode (no RGB colors)
 #elif defined(BOARD_ESP32_S3_ZERO)
   #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero
   #define BOARD_TYPE_STRING "ESP32-S3-Zero"
@@ -55,16 +71,27 @@ Board differences:
   #define BOARD_TYPE_STRING "ESP32-S3-Zero (default)"
   #warning "Board type not specified, defaulting to ESP32-S3-Zero configuration"
 #endif
-#define RTS_PIN             6   // Flow control
-#define CTS_PIN             7   // Flow control
+// RTS/CTS pins vary by board
+#if defined(BOARD_XIAO_ESP32_S3)
+  #define RTS_PIN             1   // XIAO: GPIO1 (D0) - flow control
+  #define CTS_PIN             2   // XIAO: GPIO2 (D1) - flow control
+#else
+  #define RTS_PIN             6   // Zero/SuperMini: GPIO6 - flow control
+  #define CTS_PIN             7   // Zero/SuperMini: GPIO7 - flow control
+#endif
 
 // Device 2 - Secondary UART pins
-#define DEVICE2_UART_RX_PIN 8
-#define DEVICE2_UART_TX_PIN 9
+#define DEVICE2_UART_RX_PIN 8   // Zero/SuperMini: GPIO8, XIAO: GPIO8 (D8)
+#define DEVICE2_UART_TX_PIN 9   // Zero/SuperMini: GPIO9, XIAO: GPIO9 (D9)
 
 // Device 3 - Logger/Mirror/Bridge pins
-#define DEVICE3_UART_RX_PIN 11  // Used only in Bridge mode
-#define DEVICE3_UART_TX_PIN 12  // Used in all modes
+#if defined(BOARD_XIAO_ESP32_S3)
+  #define DEVICE3_UART_RX_PIN 44  // XIAO: GPIO44 (D7) - UART RX
+  #define DEVICE3_UART_TX_PIN 43  // XIAO: GPIO43 (D6) - UART TX
+#else
+  #define DEVICE3_UART_RX_PIN 11  // Zero/SuperMini: GPIO11 - used only in Bridge mode
+  #define DEVICE3_UART_TX_PIN 12  // Zero/SuperMini: GPIO12 - used in all modes
+#endif
 
 // WiFi settings
 #define WIFI_TIMEOUT            1200000 // 20 minutes in milliseconds

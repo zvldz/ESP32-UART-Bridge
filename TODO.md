@@ -66,36 +66,41 @@
 
 **Status**: Super Mini support implemented but not fully tested. Basic functionality (WiFi, web, LEDs, UDP logs) confirmed working. UART and SBUS functionality requires hardware testing with actual devices.
 
-#### XIAO ESP32-S3 Support 🟡 PLANNED
+#### XIAO ESP32-S3 Support ✅ PARTIALLY TESTED
 
-- [ ] **Hardware Adaptation**
-  - [ ] Pin mapping for XIAO ESP32-S3 board
-  - [ ] Adjust for different GPIO availability
-  - [ ] LED functionality (single color LED, blink-only mode)
-  - [ ] External antenna support configuration
-  - [ ] Verify USB-CDC functionality
-  - [ ] Consider compact form factor constraints
+- [x] **Hardware Adaptation** ✅ COMPLETED
+  - [x] Pin mapping for XIAO ESP32-S3 board (D0-D10 castellated pins)
+  - [x] GPIO mapping documented (Device1: D3/D4, Device2: D8/D9, Device3: D6/D7, RTS/CTS: D0/D1)
+  - [x] LED functionality (single color LED on GPIO21, blink-only mode with inverted logic)
+  - [x] Adjust for different GPIO availability (11 GPIO pins available)
+  - [x] External antenna support configuration
+  - [x] Consider compact form factor constraints
 
-- [ ] **Build Configuration**
-  - [ ] Add platformio environment for XIAO ESP32-S3
-  - [ ] Conditional compilation with board flags
-  - [ ] Web interface board type detection
-  - [ ] SDK configuration for XIAO variant
+- [x] **Build Configuration** ✅ COMPLETED
+  - [x] Add platformio environment for XIAO ESP32-S3 (xiao_production, xiao_debug)
+  - [x] Conditional compilation with board flags (BOARD_XIAO_ESP32_S3)
+  - [x] Web interface board type detection and D-pin display
+  - [x] SDK configuration for XIAO variant
 
-- [ ] **Testing on XIAO ESP32-S3**
-  - [ ] Basic ESP32 operation verification
-  - [ ] WiFi and web interface functionality
-  - [ ] LED control (blink patterns only, no RGB)
+- [x] **Testing on XIAO ESP32-S3** 🟡 BASIC MODE TESTED (Device1 UART + Device2 USB)
+  - [x] Basic ESP32 operation verified ✅
+  - [x] WiFi and web interface functionality ✅
+  - [x] LED control (blink patterns only, no RGB) ✅
+  - [x] Device 1 (UART Bridge) on D3/D4 tested with flight controller ✅
+  - [x] Device 2 (USB) tested with Mission Planner ✅
   - [ ] External antenna range/stability testing
   - [ ] UDP logging operational
-  - [ ] Verify all UART interfaces work (Device 2, 3, 4)
+  - [ ] Verify Device 3 UART interface (D6/D7 pins)
+  - [ ] Test RTS/CTS flow control (D0/D1 pins)
   - [ ] Test SBUS with hardware inverter
   - [ ] Test SBUS over WiFi/UDP with external antenna
   - [ ] Check power consumption (important for small board)
   - [ ] Full protocol testing (MAVLink, SBUS, etc.)
   - [ ] Thermal testing (compact board heat dissipation)
 
-**Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols. Need to verify pin availability and power/thermal characteristics for reliable operation.
+**Status**: XIAO ESP32-S3 support fully implemented and basic configuration tested (Device1 UART Bridge + Device2 USB working with flight controller and Mission Planner). Pin mapping verified: all GPIO pins are available on castellated edge holes. Web interface correctly displays D-pin names (D3/D4 for Device1, D8/D9 for Device2, D6/D7 for Device3). LED blink-only mode working. Need extended testing for Device3, RTS/CTS, network modes, and protocols.
+
+**Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols.
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 

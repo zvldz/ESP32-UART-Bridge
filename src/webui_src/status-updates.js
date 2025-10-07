@@ -22,6 +22,13 @@ const StatusUpdates = {
         this.updateAll();
     },
     
+    getBoardName() {
+        const boardType = this.config.boardType || 's3zero';
+        if (boardType === 'xiao') return 'XIAO ESP32-S3';
+        if (boardType === 's3supermini') return 'ESP32-S3 Super Mini';
+        return 'ESP32-S3-Zero';
+    },
+
     cacheElements() {
         // Cache frequently accessed elements for better performance
         return {
@@ -79,7 +86,7 @@ const StatusUpdates = {
             <table>
                 <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Info</td></tr>
                 <tr><td><strong>Version:</strong></td><td>v${this.config.version} / ${this.config.arduinoVersion} / ${this.config.idfVersion}</td></tr>
-                <tr><td><strong>Board:</strong></td><td>${(this.config.boardType || 's3zero') === 's3supermini' ? 'ESP32-S3 Super Mini' : 'ESP32-S3-Zero'}</td></tr>
+                <tr><td><strong>Board:</strong></td><td>${this.getBoardName()}</td></tr>
                 <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
                 <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? '<s>RTS/CTS</s>' : 'RTS/CTS'}</td></tr>
@@ -264,10 +271,16 @@ const StatusUpdates = {
     },
     
     updateLogs() {
-        // Only fetch logs if section is visible
+        // Only fetch logs if section is visible or will be visible after restore
         const logsBlock = document.getElementById('logsBlock');
         const logsHidden = logsBlock && logsBlock.style.display === 'none';
-        if (logsHidden) return;
+
+        // Check localStorage - if block should be visible, load logs even if currently hidden
+        const savedState = localStorage.getItem('collapse:logs');
+        const shouldBeVisible = savedState === 'shown';
+
+        // Skip only if currently hidden AND should stay hidden
+        if (logsHidden && !shouldBeVisible) return;
 
         Utils.safeFetch('/logs', (data) => {
             if (!this.elements.logEntries) return;

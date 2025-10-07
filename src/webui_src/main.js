@@ -44,9 +44,6 @@ function startPeriodicUpdates() {
         if (!(crashContent && crashContent.style.display === 'none')) {
             CrashLog.updateCount();
         }
-
-        // Update SBUS status if needed
-        updateSbusStatus();
     }, 5000);
 }
 
