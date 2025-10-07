@@ -2,14 +2,54 @@
 
 const DeviceConfig = {
     config: null,
-    
+
+    // XIAO ESP32-S3 GPIO to D-pin mapping
+    // Based on official pinout from Seeed Studio wiki
+    // All pins available on castellated edge holes
+    xiaoGpioToDPin: {
+        1: 'D0',   // RTS (flow control)
+        2: 'D1',   // CTS (flow control)
+        3: 'D2',   // Available GPIO
+        4: 'D3',   // Device 1 RX (UART Bridge)
+        5: 'D4',   // Device 1 TX (UART Bridge)
+        6: 'D5',   // Available GPIO
+        7: 'D6',   // Available GPIO
+        8: 'D8',   // Device 2 RX (UART2)
+        9: 'D9',   // Device 2 TX (UART2)
+        10: 'D10', // Available GPIO
+        43: 'D6',  // Device 3 TX (GPIO43 = D6 pin on board)
+        44: 'D7'   // Device 3 RX (GPIO44 = D7 pin on board)
+    },
+
     init(config) {
         this.config = config;
         this.render();
         this.attachListeners();
         this.updateVisibility();
     },
-    
+
+    // Format GPIO pin text with D-pin name for XIAO
+    formatGpioPin(gpioNum) {
+        const boardType = this.config.boardType || 's3zero';
+        const isXiao = (boardType === 'xiao');
+
+        if (isXiao && this.xiaoGpioToDPin[gpioNum]) {
+            return `GPIO ${gpioNum} (${this.xiaoGpioToDPin[gpioNum]})`;
+        }
+        return `GPIO ${gpioNum}`;
+    },
+
+    // Format GPIO pin pair text with D-pin names for XIAO
+    formatGpioPinPair(gpio1, gpio2) {
+        const boardType = this.config.boardType || 's3zero';
+        const isXiao = (boardType === 'xiao');
+
+        if (isXiao && this.xiaoGpioToDPin[gpio1] && this.xiaoGpioToDPin[gpio2]) {
+            return `GPIO ${gpio1}/${gpio2} (${this.xiaoGpioToDPin[gpio1]}/${this.xiaoGpioToDPin[gpio2]})`;
+        }
+        return `GPIO ${gpio1}/${gpio2}`;
+    },
+
     render() {
         const container = document.getElementById('deviceConfig');
         if (container) {
@@ -53,9 +93,9 @@ const DeviceConfig = {
                 </tr>
                 <tr>
                     <td><strong>Device 3</strong></td>
-                    <td id="device3_pins">GPIO 11/12</td>
+                    <td id="device3_pins">N/A</td>
                     <td>
-                        <select name="device3_role" id="device3_role" onchange="DeviceConfig.updateDevice4Options()" style="width: 100%;">
+                        <select name="device3_role" id="device3_role" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">UART3 Mirror</option>
                             <option value="2">UART3 Bridge</option>
@@ -93,7 +133,10 @@ const DeviceConfig = {
             this.onDevice1RoleChange();
         }
         if (device2Role) device2Role.value = this.config.device2Role;
-        if (device3Role) device3Role.value = this.config.device3Role;
+        if (device3Role) {
+            device3Role.value = this.config.device3Role;
+            this.updateDevice3Pins();
+        }
         if (device4Role) {
             // Update Device4 options based on SBUS context first
             this.updateDevice4Options();
@@ -161,6 +204,7 @@ const DeviceConfig = {
                 } catch(e) {
                     console.log('Error in device3 pins update:', e);
                 }
+                this.updateDevice4Options();  // Update Device4 options based on context
                 this.updateProtocolFieldState();  // Update protocol field when device3 role changes
                 this.updateUartConfigVisibility();  // Update UART config visibility
                 if (FormUtils.updateSbusTimingKeeperVisibility) {
@@ -191,13 +235,13 @@ const DeviceConfig = {
         const role = device2Role.value;
 
         if (role === '1') { // UART2
-            pinsCell.textContent = 'GPIO 8/9';
+            pinsCell.textContent = this.formatGpioPinPair(8, 9);
         } else if (role === '2') { // USB
             pinsCell.textContent = 'USB';
         } else if (role === '3') { // SBUS IN
-            pinsCell.textContent = 'GPIO 8 (RX)';
+            pinsCell.textContent = this.formatGpioPin(8) + ' (RX)';
         } else if (role === '4') { // SBUS OUT
-            pinsCell.textContent = 'GPIO 9 (TX)';
+            pinsCell.textContent = this.formatGpioPin(9) + ' (TX)';
         } else {
             pinsCell.textContent = 'N/A';
         }
@@ -228,13 +272,15 @@ const DeviceConfig = {
         if (!device3Role || !pinsCell) return;
 
         const role = device3Role.value;
+        const boardType = this.config.boardType || 's3zero';
+        const isXiao = (boardType === 'xiao');
 
         if (role === '1' || role === '2') { // UART3 Mirror/Bridge
-            pinsCell.textContent = 'GPIO 11/12';
+            pinsCell.textContent = isXiao ? this.formatGpioPinPair(43, 44) : 'GPIO 11/12';
         } else if (role === '3') { // UART3 Logger
-            pinsCell.textContent = 'GPIO 12 (TX only)';
+            pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX only)' : 'GPIO 12 (TX only)';
         } else if (role === '5') { // SBUS OUT (role 4 removed - was SBUS IN)
-            pinsCell.textContent = 'GPIO 12 (TX)';
+            pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX)' : 'GPIO 12 (TX)';
         } else {
             pinsCell.textContent = 'N/A';
         }
@@ -526,9 +572,9 @@ const DeviceConfig = {
         const role = device1Role.value;
 
         if (role === '0') { // UART Bridge
-            pinsCell.textContent = 'GPIO 4/5';
+            pinsCell.textContent = this.formatGpioPinPair(4, 5);
         } else if (role === '1') { // SBUS IN
-            pinsCell.textContent = 'GPIO 4 (RX)';
+            pinsCell.textContent = this.formatGpioPin(4) + ' (RX)';
         }
     },
 
