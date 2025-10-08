@@ -31,6 +31,7 @@ static bool writeJsonToFile(JsonDocument& doc) {
 RTC_NOINIT_ATTR uint32_t g_last_heap;
 RTC_NOINIT_ATTR uint32_t g_last_uptime;
 RTC_NOINIT_ATTR uint32_t g_min_heap;
+RTC_NOINIT_ATTR char g_last_version[16];  // Store version string at crash time
 
 // Check reset reason and save crash if needed
 void crashlog_check_and_save() {
@@ -99,6 +100,55 @@ void crashlog_check_and_save() {
         newEntry["uptime"] = g_last_uptime;
         newEntry["heap"] = g_last_heap;
         newEntry["min_heap"] = g_min_heap;
+
+        // Save firmware version at crash time (not current version)
+        if (g_last_version[0] != '\0') {
+            newEntry["version"] = g_last_version;
+        }
+
+        // Try to get coredump details if available
+        esp_core_dump_summary_t summary;
+        if (esp_core_dump_get_summary(&summary) == ESP_OK) {
+            JsonObject panic = newEntry["panic"].to<JsonObject>();
+
+            // Program counter where crash occurred
+            char pc_buf[12];
+            snprintf(pc_buf, sizeof(pc_buf), "0x%08x", summary.exc_pc);
+            panic["pc"] = pc_buf;
+
+            // Task name
+            if (summary.exc_task[0] != '\0') {
+                panic["task"] = summary.exc_task;
+            }
+
+            // Exception cause and address
+            char exc_buf[12];
+            snprintf(exc_buf, sizeof(exc_buf), "0x%08x", summary.ex_info.exc_cause);
+            panic["excause"] = exc_buf;
+
+            snprintf(exc_buf, sizeof(exc_buf), "0x%08x", summary.ex_info.exc_vaddr);
+            panic["excvaddr"] = exc_buf;
+
+            // Backtrace array
+            JsonArray backtrace = panic["backtrace"].to<JsonArray>();
+            for (int i = 0; i < summary.exc_bt_info.depth && i < 16; i++) {
+                char bt_buf[12];
+                snprintf(bt_buf, sizeof(bt_buf), "0x%08x", summary.exc_bt_info.bt[i]);
+                backtrace.add(bt_buf);
+            }
+
+            // Mark if backtrace was truncated
+            if (summary.exc_bt_info.depth >= 16) {
+                panic["truncated"] = true;
+            }
+            if (summary.exc_bt_info.corrupted) {
+                panic["corrupted"] = true;
+            }
+
+            // Erase coredump after successful read
+            esp_core_dump_image_erase();
+            log_msg(LOG_INFO, "Coredump captured: PC=%s, Task=%s", pc_buf, summary.exc_task);
+        }
 
         // Keep only last CRASHLOG_MAX_ENTRIES
         while (entries.size() > CRASHLOG_MAX_ENTRIES) {
@@ -198,4 +248,8 @@ void crashlog_update_variables() {
     if (g_last_heap < g_min_heap) {
         g_min_heap = g_last_heap;
     }
+
+    // Store current firmware version for crash logging
+    strncpy(g_last_version, DEVICE_VERSION, sizeof(g_last_version) - 1);
+    g_last_version[sizeof(g_last_version) - 1] = '\0';
 }

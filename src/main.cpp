@@ -128,6 +128,9 @@ void setup() {
         log_msg(LOG_INFO, "LittleFS mounted successfully");
     }
 
+    // Check for crash and log if needed (MUST be early, before most initialization)
+    crashlog_check_and_save();
+
     // Load configuration from file (this may override defaults including usb_mode)
     log_msg(LOG_INFO, "Loading configuration...");
     config_load(&config);
@@ -179,9 +182,6 @@ void setup() {
 
     // Initialize devices based on configuration
     initDevices();
-
-    // Check for crash and log if needed
-    crashlog_check_and_save();
 
     // Initialize hardware
     log_msg(LOG_INFO, "Initializing pins...");

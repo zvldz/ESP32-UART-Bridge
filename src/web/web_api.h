@@ -28,6 +28,7 @@ void handleClientIP(AsyncWebServerRequest *request);
 void handleSbusSetSource(AsyncWebServerRequest *request);
 void handleSbusSetMode(AsyncWebServerRequest *request);
 void handleSbusStatus(AsyncWebServerRequest *request);
+void handleTestCrash(AsyncWebServerRequest *request);
 
 
 #endif // WEB_API_H

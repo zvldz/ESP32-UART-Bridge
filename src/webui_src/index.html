@@ -72,22 +72,26 @@
                 </span>
             </h4>
             <div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;">
-                <div class="log-container" style="height: 150px;">
+                <div class="log-container" style="height: auto; max-height: 400px;">
                     <table style="width: 100%; font-size: 12px;">
                         <thead>
                             <tr>
-                                <th style="width: 10%;">#</th>
-                                <th style="width: 25%;">Type</th>
-                                <th style="width: 25%;">Uptime</th>
-                                <th style="width: 20%;">Heap</th>
-                                <th style="width: 20%;">Min</th>
+                                <th style="width: 8%;">#</th>
+                                <th style="width: 18%;">Type</th>
+                                <th style="width: 18%;">Uptime</th>
+                                <th style="width: 15%;">Heap</th>
+                                <th class="crash-min-heap" style="width: 15%;">Min</th>
+                                <th class="crash-details" style="width: 26%;">Details</th>
                             </tr>
                         </thead>
                         <tbody id="crashTableBody">
-                            <tr><td colspan="5" style="text-align: center;">Loading...</td></tr>
+                            <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
+                <p style="margin-top: 10px; margin-bottom: 0; font-size: 11px; color: #666;">
+                    <small>💡 Click on a row with 🔍 to view detailed backtrace information</small>
+                </p>
             </div>
         </div>
 
