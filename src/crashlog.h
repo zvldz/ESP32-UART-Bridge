@@ -3,11 +3,13 @@
 
 #include <Arduino.h>
 #include <esp_system.h>
+#include <esp_core_dump.h>
 
 // RTC variables for crash logging (survive reset but not power loss)
 extern uint32_t g_last_heap;
 extern uint32_t g_last_uptime;
 extern uint32_t g_min_heap;
+extern char g_last_version[16];
 
 // Public interface
 void crashlog_check_and_save();   // Called from main.cpp on startup

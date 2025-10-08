@@ -683,6 +683,19 @@ void handleClearCrashLog(AsyncWebServerRequest *request) {
     request->send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
+// Handle test crash request - triggers intentional crash for coredump testing
+void handleTestCrash(AsyncWebServerRequest *request) {
+    log_msg(LOG_WARNING, "Test crash requested via web interface");
+    request->send(200, "text/plain", "Triggering test crash in 2 seconds...\nDevice will reboot and crash log will be available after restart.");
+
+    // Give time for response to be sent
+    delay(2000);
+
+    // Trigger null pointer dereference (LoadProhibited exception)
+    volatile int* null_ptr = nullptr;
+    *null_ptr = 42;  // This will cause a crash
+}
+
 // Export configuration as downloadable JSON file
 void handleExportConfig(AsyncWebServerRequest *request) {
     log_msg(LOG_INFO, "Configuration export requested");

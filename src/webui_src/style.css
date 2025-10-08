@@ -163,8 +163,29 @@ pre {
     font-weight: bold;
 }
 
+.crash-other {
+    color: #666;
+}
+
 .heap-critical {
     background: #fff3cd;
+}
+
+.crash-details-row {
+    background: #f5f5f5 !important;
+}
+
+.crash-details-row td {
+    border-top: none !important;
+}
+
+.panic-details {
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.panic-details strong {
+    color: #d32f2f;
 }
 
 /* Mobile responsive */
@@ -173,21 +194,35 @@ pre {
         padding: 15px;
         margin: 10px;
     }
-    
+
     td:first-child {
         width: 40%;
         font-size: 14px;
     }
-    
+
     td:last-child {
         width: 60%;
         font-size: 14px;
     }
-    
+
     button {
         padding: 12px 16px !important;
         font-size: 16px !important;
         min-height: 44px;
+    }
+
+    /* Hide Min Heap column on mobile to save space */
+    .crash-min-heap {
+        display: none;
+    }
+
+    /* Adjust crash details column for mobile */
+    .crash-details {
+        font-size: 10px;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     
     h1 {

@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## v2.18.7 (Coredump to Flash - Crash Analysis) 🟢 COMPLETED
+
+### Core Dump System
+- **ESP-IDF Coredump to Flash**: Automatic crash backtrace capture and storage
+  - **Flash Storage**: Crash data saved to dedicated 64KB coredump partition
+  - **Post-Mortem Analysis**: Captures Program Counter, task name, exception cause/address, and backtrace (up to 16 addresses)
+  - **Automatic Capture**: Triggers on PANIC, TASK_WDT, INT_WDT crashes
+  - **SDK Configuration**: Enabled `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH` and `CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF` for all environments
+  - **Auto-Clear**: Coredump erased after successful read to prevent re-processing
+
+### Crash Log Enhancements
+- **Extended Crash History**: JSON format now includes panic details and firmware version
+  - **Exception Info**: Program Counter (PC), Task name, Exception Cause, Exception Address
+  - **Firmware Version**: Stores version at crash time (not current version) via RTC variables
+  - **Backtrace**: Array of memory addresses for addr2line debugging
+  - **Backward Compatible**: Old crash entries without panic data continue to work
+
+- **Web Interface Improvements**:
+  - **New "Details" Column**: Shows PC address and task name for panic crashes
+  - **Expandable Rows**: Click on crash entry to view full exception details with firmware version
+  - **Backtrace Display**: Formatted memory addresses (4 per line for mobile readability)
+  - **Copy Buttons**:
+    - "Copy Exception" - copies complete exception details (version, PC, task, cause, backtrace) as text for reports/issues
+    - "Copy addr2line" - copies ready-to-use addr2line command for terminal execution
+  - **Exception Decoder**: Human-readable descriptions for common ESP32 exception causes (LoadProhibited, StoreProhibited, etc.)
+  - **Mobile Responsive**: Hides "Min Heap" column on mobile, compact backtrace layout
+
+### Debug Tools
+- **Test Crash Endpoint**: `/test_crash` triggers intentional null pointer crash for testing
+  - Demonstrates coredump capture workflow
+  - Provides 2-second warning before crash
+  - Useful for verifying crash analysis pipeline
+
+### Technical Implementation
+- **crashlog.cpp**:
+  - Added `esp_core_dump_get_summary()` integration for backtrace capture
+  - Added RTC variable `g_last_version[16]` to store firmware version at crash time
+  - Updated `crashlog_update_variables()` to save current version to RTC memory
+- **web_api.cpp**: Added `handleTestCrash()` endpoint for testing
+- **crash-log.js**: Complete rewrite with expandable rows, exception text export, and copy functionality
+- **index.html**: Updated table structure with new Details column
+- **style.css**: Added panic details styling and mobile optimizations
+
+### Documentation
+- **Release Requirements**: Added note to TODO.md - releases must include both firmware.bin (for flashing) and firmware.elf (for crash debugging with addr2line)
+
+### Known Issues
+- Coredump functionality requires specific SDK configuration which may conflict with certain Arduino framework versions
+- addr2line analysis requires exact firmware.elf file matching the crashed firmware
+
 ## v2.18.6 (XIAO ESP32-S3 Support) 🟡 IN DEVELOPMENT
 
 ### Platform Support
