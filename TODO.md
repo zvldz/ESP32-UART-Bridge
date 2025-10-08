@@ -2,43 +2,6 @@
 
 ## ACTIVE TASKS 🔄
 
-### REGRESSION TESTING - After SBUS Phase 11 🔴 CRITICAL
-
-**Priority**: Verify that unified sender architecture (Phase 11) didn't break existing functionality
-
-- [x] **Basic UART Bridge Testing** ✅ TESTED
-  - [x] Test Device 1 UART → USB bridge with different baud rates
-  - [x] Verify data integrity (bidirectional transfer)
-  - [ ] Test flow control (RTS/CTS) if available
-  - [x] Confirm LED indicators work for data activity
-
-- [x] **Protocol Optimization Testing**
-  - [x] **MAVLink Mode**: Verify zero-latency forwarding still works ✅ TESTED
-    - [x] Test with Mission Planner or QGroundControl
-    - [x] Verify multi-GCS routing (Target-only Routing working)
-    - [x] Check priority-based transmission
-    - [x] Statistics and monitoring working correctly
-  - [x] **RAW Mode**: Verify timing-based buffering works ✅ TESTED
-    - [x] Test with flight controller telemetry
-    - [x] Verify bidirectional data flow (UART ↔ USB)
-    - [x] Statistics showing correct data processing
-
-- [x] **Device Roles Testing** ✅ TESTED
-  - [x] **Device 2**: USB Device mode tested ✅
-  - [x] **Device 2**: UART2 mode tested ✅
-  - [x] **Device 3**: Mirror, Bridge, Logger modes tested ✅
-  - [x] **Device 4**: Network Bridge mode tested ✅
-    - [x] UDP Bridge with MAVLink protocol tested ✅
-    - [x] UDP Bridge with RAW protocol tested ✅
-  - [x] **Device 4**: Network Logger mode tested ✅
-
-- [x] **USB Modes** ✅ TESTED
-  - [x] Test USB Device mode (ESP32 as COM port) ✅ TESTED
-  - [x] Test USB Host mode (USB devices connected to ESP32) ✅ TESTED
-    - [x] Fixed regression: added `out_transfer_busy` flag to prevent ESP_ERR_NOT_FINISHED
-
-**Note**: All regression testing completed! Unified sender architecture verified with all device modes and protocols.
-
 ### PLATFORM SUPPORT - Before Final Cleanup 🟠
 
 #### ESP32-S3 Super Mini Support 🟡 PARTIALLY TESTED
@@ -116,6 +79,9 @@
     - Scheduled at low-activity time (3:00 AM)
     - Graceful shutdown with connection cleanup
     - Pre-reboot statistics logging
+    - 5-second graceful shutdown delay
+    - Crash log with memory state
+    - RTC memory preservation for post-reboot analysis
   - [ ] Web interface configuration
     - Enable/disable periodic reboot
     - Configurable interval (12h, 24h, 48h, never)
@@ -126,16 +92,20 @@
     - Critical threshold: 20KB (immediate reboot)
     - Warning threshold: 50KB (log warnings)
     - Check interval: 5 seconds
-  - [ ] Emergency reboot implementation
-    - 5-second graceful shutdown delay
-    - Crash log with memory state
-    - RTC memory preservation for post-reboot analysis
   - [ ] Memory statistics enhancement
     - Heap fragmentation tracking
     - Largest free block monitoring
     - Historical memory usage trends
 
 #### Final Code Cleanup
+
+- [ ] **Release Package Requirements** 📦
+  - [ ] Each release archive must contain both firmware.bin AND firmware.elf
+  - [ ] firmware.bin - for flashing to device
+  - [ ] firmware.elf - for crash debugging with addr2line (debug symbols)
+  - [ ] Both files must match exactly (same build)
+  - [ ] Recommended structure: `release_vX.Y.Z_<board>_<variant>.zip` containing both files
+  - [ ] Consider adding CHANGELOG.md and debug instructions to release archive
 
 - [ ] **Add WiFi AP name uniqueness** - Before final cleanup
   - [ ] Add unique suffix to WiFi AP name (like mDNS naming)
