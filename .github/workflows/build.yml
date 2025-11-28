@@ -3,7 +3,7 @@ name: Build firmware
 on:
   push:
     tags:
-      - '*'                 
+      - '*'
   workflow_dispatch:
 
 jobs:
@@ -24,16 +24,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
 
-      - name: Build firmware
-        run: pio run
+      - name: Build all production firmware
+        run: pio run -e zero_production -e supermini_production -e xiao_production
 
-      - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+      - name: Prepare release zip
+        run: |
+          mkdir -p tmp
+          cp .pio/build/zero_production/firmware.bin tmp/firmware-zero.bin
+          cp .pio/build/zero_production/firmware.elf tmp/firmware-zero.elf
+          cp .pio/build/supermini_production/firmware.bin tmp/firmware-supermini.bin
+          cp .pio/build/supermini_production/firmware.elf tmp/firmware-supermini.elf
+          cp .pio/build/xiao_production/firmware.bin tmp/firmware-xiao.bin
+          cp .pio/build/xiao_production/firmware.elf tmp/firmware-xiao.elf
+          cd tmp && zip -r ../firmware-${{ github.ref_name }}.zip .
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ github.ref_name }}"
+          # Extract section between current version and next version header (or EOF)
+          BODY=$(awk "/^## ${VERSION}/,/^## v[0-9]/" CHANGELOG.md | sed '$d' | tail -n +2)
+          if [ -z "$BODY" ]; then
+            BODY="Release ${VERSION}"
+          fi
+          # Save to file to preserve multiline
+          echo "$BODY" > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: firmware-${{ github.ref_name }}
-          path: |
-            .pio/build/*/firmware.bin
-            .pio/build/*/firmware.elf
-            .pio/build/*/firmware.hex
-            .pio/build/*/firmware.map
-            .pio/build/*/partitions.bin
+          files: firmware-${{ github.ref_name }}.zip
+          body_path: release_notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
