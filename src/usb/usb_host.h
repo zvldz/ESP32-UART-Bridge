@@ -39,7 +39,7 @@ private:
     static UsbHost* instance;
 
 public:
-    UsbHost(uint32_t baudrate);
+    explicit UsbHost(uint32_t baudrate);
     ~UsbHost();
     
     // UsbBase interface implementation

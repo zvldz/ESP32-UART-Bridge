@@ -33,11 +33,6 @@ static LogConfig logConfig;
 // UART logger interface - now using UartInterface instead of HardwareSerial
 static UartInterface* logSerial = nullptr;
 
-// Get configuration for external access
-LogConfig* logging_get_config() {
-    return &logConfig;
-}
-
 // Helper function to get short level name
 const char* getLogLevelName(LogLevel level) {
     switch(level) {
@@ -100,9 +95,9 @@ void log_msg(LogLevel level, const char* fmt, ...) {
     // Format the message
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(msgBuf, sizeof(msgBuf), fmt, args);
+    vsnprintf(msgBuf, sizeof(msgBuf), fmt, args);
     va_end(args);
-    
+
     // Ensure null termination
     msgBuf[sizeof(msgBuf) - 1] = '\0';
     
@@ -117,11 +112,11 @@ void log_msg(LogLevel level, const char* fmt, ...) {
 
         // Format directly into a temporary buffer
         char tempBuf[300];
-        int len = snprintf(tempBuf, sizeof(tempBuf), "[%lu.%lus][%s] %s",
-                           seconds, ms/100, getLogLevelName(level), msgBuf);
+        int webLen = snprintf(tempBuf, sizeof(tempBuf), "[%lu.%lus][%s] %s",
+                              seconds, ms/100, getLogLevelName(level), msgBuf);
 
         // Ensure null termination and check length
-        if (len > 0 && len < sizeof(tempBuf)) {
+        if (webLen > 0 && webLen < (int)sizeof(tempBuf)) {
             // Only now assign to String in one operation
             logBuffer[logIndex] = tempBuf;
         } else {
@@ -150,10 +145,10 @@ void log_msg(LogLevel level, const char* fmt, ...) {
                               "[%lu.%lus][%s] %s\r\n",
                               seconds, ms/100, getLogLevelName(level), msgBuf);
 
-        if (uartLen > 0 && uartLen < sizeof(uartBuf)) {
+        if (uartLen > 0 && uartLen < (int)sizeof(uartBuf)) {
             // Non-blocking write
             if (logSerial->availableForWrite() > uartLen) {
-                logSerial->write((const uint8_t*)uartBuf, uartLen);
+                logSerial->write(reinterpret_cast<const uint8_t*>(uartBuf), uartLen);
             }
         }
     }

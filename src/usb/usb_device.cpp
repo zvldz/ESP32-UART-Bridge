@@ -6,7 +6,7 @@
 // Concrete implementation for USB device (CDC over USB)
 class UsbDevice : public UsbInterface {
 public:
-    UsbDevice(uint32_t baudrate) : baudrate(baudrate), initialized(false) {}
+    explicit UsbDevice(uint32_t baudrate) : baudrate(baudrate), initialized(false) {}
 
     void init() override {
         Serial.begin(baudrate);

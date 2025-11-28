@@ -72,8 +72,8 @@ static void logMdnsError(esp_err_t ret, const char* operation) {
 }
 
 static void setWifiCredentials(wifi_config_t* config, bool isAP, const String& ssid, const String& password) {
-    char* ssidPtr = isAP ? (char*)config->ap.ssid : (char*)config->sta.ssid;
-    char* passPtr = isAP ? (char*)config->ap.password : (char*)config->sta.password;
+    char* ssidPtr = isAP ? reinterpret_cast<char*>(config->ap.ssid) : reinterpret_cast<char*>(config->sta.ssid);
+    char* passPtr = isAP ? reinterpret_cast<char*>(config->ap.password) : reinterpret_cast<char*>(config->sta.password);
     strncpy(ssidPtr, ssid.c_str(), WIFI_SSID_MAX_LEN);
     strncpy(passPtr, password.c_str(), WIFI_PASSWORD_MAX_LEN);
 }
@@ -142,14 +142,14 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_STA_CONNECTED:
                 {
-                    wifi_event_sta_connected_t* event = (wifi_event_sta_connected_t*)event_data;
-                    log_msg(LOG_INFO, "WiFi connected to %s", (char*)event->ssid);
+                    wifi_event_sta_connected_t* event = static_cast<wifi_event_sta_connected_t*>(event_data);
+                    log_msg(LOG_INFO, "WiFi connected to %s", reinterpret_cast<char*>(event->ssid));
                 }
                 break;
 
             case WIFI_EVENT_STA_DISCONNECTED:
                 {
-                    wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
+                    wifi_event_sta_disconnected_t* event = static_cast<wifi_event_sta_disconnected_t*>(event_data);
                     // Removed unused String concatenation
                     log_msg(LOG_WARNING, "WiFi disconnected: Disconnect reason: %d", event->reason);
 
@@ -230,12 +230,12 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     // Check if target SSID was found
                     bool networkFoundNow = false;
                     if (networksFound > 0) {
-                        wifi_ap_record_t* ap_records = (wifi_ap_record_t*)malloc(networksFound * sizeof(wifi_ap_record_t));
+                        wifi_ap_record_t* ap_records = static_cast<wifi_ap_record_t*>(malloc(networksFound * sizeof(wifi_ap_record_t)));
                         if (ap_records) {
                             esp_wifi_scan_get_ap_records(&networksFound, ap_records);
 
                             for (int i = 0; i < networksFound; i++) {
-                                if (strcmp((char*)ap_records[i].ssid, targetSSID.c_str()) == 0) {
+                                if (strcmp(reinterpret_cast<char*>(ap_records[i].ssid), targetSSID.c_str()) == 0) {
                                     networkFoundNow = true;
                                     targetNetworkFound = true;
                                     break;
@@ -274,7 +274,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
         switch (event_id) {
             case IP_EVENT_STA_GOT_IP:
                 {
-                    ip_event_got_ip_t* event = (ip_event_got_ip_t*)event_data;
+                    ip_event_got_ip_t* event = static_cast<ip_event_got_ip_t*>(event_data);
                     char ipAddressStr[16];
                     sprintf(ipAddressStr, IPSTR, IP2STR(&event->ip_info.ip));
                     log_msg(LOG_INFO, "WiFi got IP: %s", ipAddressStr);
@@ -320,7 +320,7 @@ esp_err_t wifiInit() {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+        ESP_ERROR_CHECK(nvs_flash_init());
     }
 
     // Check memory
@@ -470,32 +470,6 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     return ESP_OK;
 }
 
-void wifiStop() {
-    if (!wifi_initialized) return;
-
-    log_msg(LOG_INFO, "Stopping WiFi Manager");
-
-    // Stop DNS server
-    if (dnsServer) {
-        dnsServer->stop();
-        delete dnsServer;
-        dnsServer = nullptr;
-        log_msg(LOG_DEBUG, "DNS Server stopped");
-    }
-
-    // Stop WiFi
-    esp_wifi_stop();
-    esp_wifi_set_mode(WIFI_MODE_NULL);
-
-    // Reset state
-    systemState.wifiClientConnected = false;
-    systemState.wifiClientState = CLIENT_IDLE;
-
-    if (networkEventGroup) {
-        xEventGroupClearBits(networkEventGroup, NETWORK_CONNECTED_BIT);
-    }
-}
-
 void wifiProcess() {
     // Initialize mDNS if needed (safely outside event handler)
     initMdnsService();
@@ -533,16 +507,16 @@ void wifiProcess() {
             if (scanFailureCount >= 10) {
                 // Too many failures - try to recover
                 log_msg(LOG_WARNING, "Too many scan failures, attempting WiFi reset");
-                esp_wifi_stop();
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                esp_wifi_start();
-                scanFailureCount = 0;
-
                 // If still failing after reset, reboot might be needed
                 if (scanFailureCount >= 20) {
                     log_msg(LOG_ERROR, "WiFi subsystem unrecoverable, rebooting...");
                     ESP.restart();
                 }
+
+                esp_wifi_stop();
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                esp_wifi_start();
+                scanFailureCount = 0;
             }
 
             // Retry scan after 1 second
@@ -587,14 +561,10 @@ int wifiGetRSSI() {
 
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
-        log_msg(LOG_DEBUG, "WiFi RSSI: %d", ap.rssi);
+        //log_msg(LOG_DEBUG, "WiFi RSSI: %d", ap.rssi);
         return ap.rssi;
     }
     return 0;
-}
-
-WiFiClientState wifiGetState() {
-    return systemState.wifiClientState;
 }
 
 int rssiToPercent(int rssi) {

@@ -30,7 +30,7 @@ UartDMA::UartDMA(uart_port_t uart, const DmaConfig& cfg)
     initialized = false;
     
     // Allocate ring buffer with configured size
-    rx_ring_buf = (uint8_t*)heap_caps_malloc(RING_BUF_SIZE, MALLOC_CAP_DMA);
+    rx_ring_buf = static_cast<uint8_t*>(heap_caps_malloc(RING_BUF_SIZE, MALLOC_CAP_DMA));
     if (!rx_ring_buf) {
         log_msg(LOG_ERROR, "Failed to allocate DMA ring buffer of size %d", RING_BUF_SIZE);
         return;  // Critical error - cannot continue without buffer
@@ -202,9 +202,9 @@ void UartDMA::begin(uint32_t baudrate, int8_t rxPin, int8_t txPin) {
 
 // Event handling task
 void UartDMA::uartEventTask(void* pvParameters) {
-    UartDMA* uart = (UartDMA*)pvParameters;
+    UartDMA* uart = static_cast<UartDMA*>(pvParameters);
     uart_event_t event;
-    uint8_t* dtmp = (uint8_t*)heap_caps_malloc(uart->DMA_RX_BUF_SIZE, MALLOC_CAP_DMA);
+    uint8_t* dtmp = static_cast<uint8_t*>(heap_caps_malloc(uart->DMA_RX_BUF_SIZE, MALLOC_CAP_DMA));
     
     if (!dtmp) {
         log_msg(LOG_ERROR, "Failed to allocate DMA event buffer");
@@ -291,7 +291,7 @@ void UartDMA::pollEvents() {
     // Static buffer to avoid allocation on each call
     static uint8_t* poll_buffer = nullptr;
     if (!poll_buffer) {
-        poll_buffer = (uint8_t*)heap_caps_malloc(DMA_RX_BUF_SIZE, MALLOC_CAP_DMA);
+        poll_buffer = static_cast<uint8_t*>(heap_caps_malloc(DMA_RX_BUF_SIZE, MALLOC_CAP_DMA));
         if (!poll_buffer) {
             log_msg(LOG_ERROR, "Failed to allocate poll buffer");
             return;
@@ -346,7 +346,7 @@ void UartDMA::pollEvents() {
 }
 
 // Process received data into ring buffer
-void UartDMA::processRxData(uint8_t* data, size_t len) {
+void UartDMA::processRxData(const uint8_t* data, size_t len) {
     if (xSemaphoreTake(rx_mutex, portMAX_DELAY) == pdTRUE) {
         rx_bytes_total = rx_bytes_total + len;
 

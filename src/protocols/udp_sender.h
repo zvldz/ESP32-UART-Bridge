@@ -240,20 +240,21 @@ public:
         log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
     }
 
-    UdpSender(AsyncUDP* udp) : 
+    explicit UdpSender(AsyncUDP* udp) :
         PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),
         udpTransport(udp),
         rawBatchSize(0),
         lastBatchTime(0),
         lastStatsLog(0) {
-        
+
         // Parse target IP
         extern Config config;
-        isBroadcast = (strcmp(config.device4_config.target_ip, "192.168.4.255") == 0) ||
-                      (strstr(config.device4_config.target_ip, ".255") != nullptr);
-        
+        Config& cfg = config;
+        isBroadcast = (strcmp(cfg.device4_config.target_ip, "192.168.4.255") == 0) ||
+                      (strstr(cfg.device4_config.target_ip, ".255") != nullptr);
+
         if (!isBroadcast) {
-            targetIP.fromString(config.device4_config.target_ip);
+            targetIP.fromString(cfg.device4_config.target_ip);
         }
         
         log_msg(LOG_DEBUG, "UdpSender initialized");
@@ -287,17 +288,15 @@ public:
         uint32_t now = millis();
         
         // === DIAGNOSTIC START === (Remove after batching validation)
-        static uint32_t bulkStartMs = 0;
         if (bulkMode != lastBulkMode) {
             if (bulkMode) {
+                static uint32_t bulkStartMs = 0;
                 bulkStartMs = now;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode ON (queue=%zu)", packetQueue.size());
             } else {
+                static uint32_t bulkStartMs = 0;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode OFF after %ums", now - bulkStartMs);
-            }
-            
-            // Force flush on mode change
-            if (!bulkMode && lastBulkMode) {
+                // Force flush on mode change (always true here: !bulkMode && lastBulkMode)
                 flushAllBatches();
             }
             lastBulkMode = bulkMode;

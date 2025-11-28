@@ -30,7 +30,7 @@ extern SemaphoreHandle_t logMutex;
 extern UartInterface* uartBridgeSerial;
 
 // Validate SBUS configuration
-bool validateSbusConfig(Config& cfg) {
+bool validateSbusConfig(const Config& cfg) {
     // Check if there are SBUS_IN without any SBUS_OUT
     bool hasSbusIn = (cfg.device1.role == D1_SBUS_IN ||
                       cfg.device2.role == D2_SBUS_IN ||
@@ -692,8 +692,9 @@ void handleTestCrash(AsyncWebServerRequest *request) {
     delay(2000);
 
     // Trigger null pointer dereference (LoadProhibited exception)
+    // cppcheck-suppress nullPointer
     volatile int* null_ptr = nullptr;
-    *null_ptr = 42;  // This will cause a crash
+    *null_ptr = 42;  // Intentional crash for coredump testing
 }
 
 // Export configuration as downloadable JSON file
@@ -728,7 +729,7 @@ void handleImportConfig(AsyncWebServerRequest *request) {
         return;
     }
 
-    ImportData* importData = (ImportData*)request->_tempObject;
+    ImportData* importData = static_cast<ImportData*>(request->_tempObject);
     log_msg(LOG_INFO, "Configuration import requested, content length: %zu", importData->len);
 
     // Log first 100 characters for debugging (safe for display)

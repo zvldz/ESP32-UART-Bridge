@@ -87,7 +87,7 @@ const StatusUpdates = {
                 <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Info</td></tr>
                 <tr><td><strong>Version:</strong></td><td>v${this.config.version} / ${this.config.arduinoVersion} / ${this.config.idfVersion}</td></tr>
                 <tr><td><strong>Board:</strong></td><td>${this.getBoardName()}</td></tr>
-                <tr><td><strong>Uptime:</strong></td><td id="uptime">${this.config.uptime} seconds</td></tr>
+                <tr><td><strong>Uptime:</strong></td><td id="uptime">${Utils.formatUptime(this.config.uptime)}</td></tr>
                 <tr><td><strong>Free RAM:</strong></td><td id="freeRam">${Utils.formatBytes(this.config.freeRam)}</td></tr>
                 <tr><td><strong>UART Config:</strong></td><td>${this.config.uartConfig}, ${this.config.flowControl === 'Disabled' ? '<s>RTS/CTS</s>' : 'RTS/CTS'}</td></tr>
                 ${wifiInfo}
@@ -148,7 +148,7 @@ const StatusUpdates = {
                 this.elements.freeRam.textContent = Utils.formatBytes(data.freeRam);
             }
             if (this.elements.uptime) {
-                this.elements.uptime.textContent = `${data.uptime} seconds`;
+                this.elements.uptime.textContent = Utils.formatUptime(data.uptime);
             }
             
             // Update Device 1 traffic (always visible)

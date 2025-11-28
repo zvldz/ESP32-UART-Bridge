@@ -63,7 +63,7 @@ private:
     volatile uint32_t overrun_count;
     
     // Private methods
-    void processRxData(uint8_t* data, size_t len);
+    void processRxData(const uint8_t* data, size_t len);
     size_t getRxBytesAvailable() const;
     static void uartEventTask(void* pvParameters);
     

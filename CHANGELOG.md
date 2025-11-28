@@ -46,6 +46,21 @@
 ### Documentation
 - **Release Requirements**: Added note to TODO.md - releases must include both firmware.bin (for flashing) and firmware.elf (for crash debugging with addr2line)
 
+### Code Quality Improvements
+- **cppcheck Static Analysis Cleanup**: Fixed ~40 style warnings across codebase
+  - Added `explicit` to single-argument constructors to prevent implicit conversions
+  - Replaced C-style casts with `static_cast`/`reinterpret_cast` for type safety
+  - Fixed shadow variables and improved const correctness
+  - Removed 7 unused legacy functions (logging_get_config, webserver_cleanup, checkWiFiTimeout, getWebServer, wifiStop, wifiGetState, crashlog_format_uptime)
+  - Fixed dead code bug in WiFi scan failure recovery (scanFailureCount reset before check)
+
+### Dependency Updates
+- **TaskScheduler**: Updated to v4.0.1 (from v3.8.5)
+
+### Bug Fixes
+- **WiFi Timeout in Permanent Mode**: Fixed 20-minute reboot bug caused by `isTemporaryNetwork` flag being overwritten in web_interface.cpp
+- **Uptime Display**: Enabled formatted uptime display (shows "4m 47s", "2h 15m" instead of raw seconds)
+
 ### Known Issues
 - Coredump functionality requires specific SDK configuration which may conflict with certain Arduino framework versions
 - addr2line analysis requires exact firmware.elf file matching the crashed firmware

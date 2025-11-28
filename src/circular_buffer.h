@@ -117,19 +117,19 @@ public:
         }
 
         // Allocate memory with chosen capabilities
-        mainBuffer = (uint8_t*)heap_caps_malloc(capacity, caps);
+        mainBuffer = static_cast<uint8_t*>(heap_caps_malloc(capacity, caps));
 
         if (!mainBuffer && !useSlowMemory) {
             // For high-speed buffers, try fallback options
             log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes (DMA)", capacity);
             // Fallback to regular memory if DMA unavailable
-            mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            mainBuffer = static_cast<uint8_t*>(heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
             if (!mainBuffer) {
                 // Try smaller size
                 capacity = roundToPowerOf2(requestedSize / 2);
                 capacityMask = capacity - 1;
-                mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+                mainBuffer = static_cast<uint8_t*>(heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 
                 if (!mainBuffer) {
                     // Critical failure
@@ -138,7 +138,7 @@ public:
             }
         } else if (!mainBuffer && useSlowMemory) {
             // For slow buffers, try internal RAM as last resort
-            mainBuffer = (uint8_t*)heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            mainBuffer = static_cast<uint8_t*>(heap_caps_malloc(capacity, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
             if (!mainBuffer) {
                 log_msg(LOG_ERROR, "CircBuf: Failed to allocate %zu bytes for slow buffer", capacity);
                 esp_restart();

@@ -19,8 +19,6 @@ struct ImportData {
 
 // Web server interface
 void webserver_init(Config* config, SystemState* state);
-void webserver_cleanup();  // Resource cleanup
-bool checkWiFiTimeout();
 
 // Page handlers
 void handleRoot(AsyncWebServerRequest *request);
@@ -40,8 +38,5 @@ void handleStatusUpdatesJS(AsyncWebServerRequest *request);
 
 // Template processing for built-in AsyncWebServer processor
 String processor(const String& var);
-
-// Get server instance for other modules
-AsyncWebServer* getWebServer();
 
 #endif // ESP32_BRIDGE_WEBSERVER_H
