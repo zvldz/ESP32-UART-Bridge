@@ -100,6 +100,18 @@
     - Largest free block monitoring
     - Historical memory usage trends
 
+#### USB Boot Message Issue 🔴 HIGH PRIORITY
+
+- [ ] **Suppress ESP32 boot messages over USB**
+  - Problem: ESP32-S3 outputs bootloader messages on USB-CDC at startup
+  - Mission Planner interprets these as garbage data and resets the device
+  - This creates infinite reboot loop: boot → garbage → MP reset → boot...
+  - [ ] Research ESP-IDF options to suppress boot output on USB
+  - [ ] Check `CONFIG_ESP_CONSOLE_*` options in sdkconfig
+  - [ ] Consider `CONFIG_BOOTLOADER_LOG_LEVEL_NONE`
+  - [ ] Test `ARDUINO_USB_CDC_ON_BOOT` behavior
+  - [ ] Document workaround for Mission Planner users if not fixable
+
 #### Final Code Cleanup
 
 - [ ] **Release Package Requirements** 📦
