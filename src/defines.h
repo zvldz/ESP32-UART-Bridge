@@ -44,7 +44,7 @@ Board differences:
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.7"
+#define DEVICE_VERSION "2.18.8"
 
 // Hardware pins - Device 1 (Main UART)
 #define BOOT_BUTTON_PIN     0
