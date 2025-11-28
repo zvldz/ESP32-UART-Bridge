@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v2.18.8 (Build Automation & Code Cleanup)
+
+### CI/CD Improvements
+- **GitHub Actions Multi-Board Build**: Automated firmware build for all supported boards
+  - Builds zero_production, supermini_production, xiao_production in single workflow
+  - Creates unified release zip with firmware.bin and firmware.elf for each board
+  - Automatic GitHub Release creation on tag push
+  - Release notes extracted from CHANGELOG.md
+
+### Bug Fixes
+- **WiFi TX Power UI**: Fixed visibility issue - TX Power selector now visible in both AP and Client modes (was hidden in AP mode)
+
+### Code Quality
+- **cppcheck Static Analysis**: Additional cleanup pass
+  - Replaced C-style casts with `static_cast`/`reinterpret_cast`
+  - Added `explicit` to single-argument constructors
+  - Fixed shadow variables and improved const correctness
+  - Removed unused legacy functions
+
+### Dependency Updates
+- **TaskScheduler**: 4.0.1 → 4.0.3
+- **ESPAsyncWebServer**: 3.8.1 → 3.9.1
+- **AsyncTCP**: 3.4.8 → 3.4.9
+
 ## v2.18.7 (Coredump to Flash - Crash Analysis) 🟢 COMPLETED
 
 ### Core Dump System
