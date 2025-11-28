@@ -130,10 +130,10 @@ void Uart1TxService::processTxQueue() {
         
         // Write second segment if any
         if (segments.second.size > 0 && totalWritten < maxWritePerCall) {
-            size_t canWrite = uart->availableForWrite();
-            if (canWrite > 0) {
+            size_t canWriteSecond = uart->availableForWrite();
+            if (canWriteSecond > 0) {
                 size_t toWrite = min(segments.second.size,
-                                   min(canWrite, maxWritePerCall - totalWritten));
+                                   min(canWriteSecond, maxWritePerCall - totalWritten));
                 size_t written = uart->write(segments.second.data, toWrite);
                 
                 if (written > 0) {

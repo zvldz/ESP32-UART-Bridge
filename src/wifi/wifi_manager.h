@@ -27,14 +27,12 @@
 esp_err_t wifiInit();
 esp_err_t wifiStartClient(const String& ssid, const String& password);
 esp_err_t wifiStartAP(const String& ssid, const String& password);
-void wifiStop();
 void wifiProcess();  // Called from main loop
 
 // Status functions
 bool wifiIsReady();  // Universal check for data transmission
 int wifiGetRSSI();
 String wifiGetIP();
-WiFiClientState wifiGetState();
 
 // Utility functions
 int rssiToPercent(int rssi);

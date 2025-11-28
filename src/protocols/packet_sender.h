@@ -20,7 +20,7 @@ struct QueuedPacket {
     uint32_t enqueueTime;   // When packet was queued
     
     QueuedPacket() : sendOffset(0), enqueueTime(0) {}
-    QueuedPacket(const ParsedPacket& p) : packet(p), sendOffset(0) {
+    explicit QueuedPacket(const ParsedPacket& p) : packet(p), sendOffset(0) {
         enqueueTime = micros();
     }
 };

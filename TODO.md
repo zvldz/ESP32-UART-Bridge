@@ -80,8 +80,8 @@
     - Graceful shutdown with connection cleanup
     - Pre-reboot statistics logging
     - 5-second graceful shutdown delay
-    - Crash log with memory state
-    - RTC memory preservation for post-reboot analysis
+    - Save memory statistics to RTC before reboot (heap, fragmentation, uptime)
+    - Display pre-reboot memory state in web interface after restart
   - [ ] Web interface configuration
     - Enable/disable periodic reboot
     - Configurable interval (12h, 24h, 48h, never)
@@ -89,9 +89,12 @@
 
 - [ ] **Emergency Memory Protection**
   - [ ] Critical memory threshold monitoring (TaskScheduler)
-    - Critical threshold: 20KB (immediate reboot)
+    - Critical threshold: 20KB (reboot after sustained low memory)
     - Warning threshold: 50KB (log warnings)
     - Check interval: 5 seconds
+    - Sustained low memory detection: must be below threshold for 30+ seconds
+    - Prevents false triggers on temporary allocation spikes
+    - Save memory statistics to RTC before emergency reboot
   - [ ] Memory statistics enhancement
     - Heap fragmentation tracking
     - Largest free block monitoring
