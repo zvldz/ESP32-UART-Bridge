@@ -224,21 +224,6 @@ String crashlog_get_reset_reason_string(esp_reset_reason_t reason) {
     }
 }
 
-// Format uptime in human readable form
-String crashlog_format_uptime(uint32_t seconds) {
-    char buf[16];
-    if (seconds < 60) {
-        snprintf(buf, sizeof(buf), "%us", seconds);
-    } else if (seconds < 3600) {
-        snprintf(buf, sizeof(buf), "%um", seconds / 60);
-    } else {
-        uint32_t hours = seconds / 3600;
-        uint32_t minutes = (seconds % 3600) / 60;
-        snprintf(buf, sizeof(buf), "%uh %um", hours, minutes);
-    }
-    return String(buf);
-}
-
 // Update RTC variables periodically
 void crashlog_update_variables() {
     g_last_heap = ESP.getFreeHeap();

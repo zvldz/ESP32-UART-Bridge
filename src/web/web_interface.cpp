@@ -51,8 +51,7 @@ void webserver_init(Config* config, SystemState* state) {
 
     state->networkActive = true;
     state->networkStartTime = millis();
-    state->isTemporaryNetwork = true;  // Setup AP is temporary
-
+    
     // Create async web server
     server = new AsyncWebServer(HTTP_PORT);
 
@@ -95,7 +94,7 @@ void webserver_init(Config* config, SystemState* state) {
                 }
 
                 // Allocate PSRAM buffer
-                g_importBuf = (char*) heap_caps_malloc(MAX_IMPORT + 1, MALLOC_CAP_SPIRAM);
+                g_importBuf = static_cast<char*>(heap_caps_malloc(MAX_IMPORT + 1, MALLOC_CAP_SPIRAM));
                 if (!g_importBuf) {
                     request->send(507, "application/json", "{\"status\":\"error\",\"message\":\"PSRAM allocation failed\"}");
                     return;
@@ -187,26 +186,6 @@ void webserver_init(Config* config, SystemState* state) {
     webServerInitialized = true;
 }
 
-// Cleanup resources
-void webserver_cleanup() {
-    if (server != nullptr) {
-        server->end();
-        delete server;
-        server = nullptr;
-    }
-    // DNS server is now managed through wifi_manager
-}
-
-// Check WiFi timeout
-bool checkWiFiTimeout() {
-    if (systemState.networkActive &&
-        systemState.isTemporaryNetwork &&
-        (millis() - systemState.networkStartTime > WIFI_TIMEOUT)) {
-        return true;
-    }
-    return false;
-}
-
 // Handle help page with gzip compression
 void handleHelp(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_HELP_GZ, HTML_HELP_GZ_LEN);
@@ -237,9 +216,4 @@ void handleReboot(AsyncWebServerRequest *request) {
     request->send(200, "text/html", "<h1>Rebooting...</h1>");
     vTaskDelay(pdMS_TO_TICKS(1000));
     ESP.restart();
-}
-
-// Make server available to other modules
-AsyncWebServer* getWebServer() {
-    return server;
 }

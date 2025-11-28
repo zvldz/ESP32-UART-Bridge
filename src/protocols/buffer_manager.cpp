@@ -29,10 +29,10 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     }
     
     // Input buffers for bidirectional pipeline
-    size_t inputBufferSize = INPUT_BUFFER_SIZE;  // Use defined constant (4096)
 
     // USB input buffer
     if (config->device2.role == D2_USB) {
+        size_t inputBufferSize = INPUT_BUFFER_SIZE;  // Use defined constant (4096)
         ctx->buffers.usbInputBuffer = new CircularBuffer();
         ctx->buffers.usbInputBuffer->init(inputBufferSize);
         log_msg(LOG_INFO, "USB input buffer allocated: %zu bytes", inputBufferSize);

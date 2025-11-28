@@ -125,7 +125,7 @@ void UsbHost::flushHardware() {
 }
 // USB Host task implementation
 void UsbHost::usbHostTask(void* parameter) {
-    UsbHost* usb_host = (UsbHost*)parameter;
+    UsbHost* usb_host = static_cast<UsbHost*>(parameter);
 
     log_msg(LOG_INFO, "USB Host task started on core %d", xPortGetCoreID());
 
@@ -148,7 +148,7 @@ void UsbHost::usbHostTask(void* parameter) {
 }
 // USB Host client event callback
 void UsbHost::clientEventCallback(const usb_host_client_event_msg_t* event_msg, void* arg) {
-    UsbHost* usb_host = (UsbHost*)arg;
+    UsbHost* usb_host = static_cast<UsbHost*>(arg);
 
     switch (event_msg->event) {
         case USB_HOST_CLIENT_EVENT_NEW_DEV:
@@ -375,7 +375,7 @@ bool UsbHost::findBulkEndpoints(const usb_config_desc_t* config_desc, const uint
 }
 // IN transfer callback - handles received data
 void UsbHost::inTransferCallback(usb_transfer_t* transfer) {
-  UsbHost* usb_host = (UsbHost*)transfer->context;
+  UsbHost* usb_host = static_cast<UsbHost*>(transfer->context);
 
   if (transfer->status == USB_TRANSFER_STATUS_COMPLETED) {
     if (!usb_host->addToRxBuffer(transfer->data_buffer, transfer->actual_num_bytes)) {
