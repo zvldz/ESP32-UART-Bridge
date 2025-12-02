@@ -26,7 +26,7 @@ struct CircularBufferStats {
     uint32_t wrapLinearizations;
     uint32_t partialWrites;   // Number of partial write operations
     uint32_t maxDepth;
-    // TODO v2: add p95/p99 latency metrics
+    // [COMMENT CANDIDATE FOR REMOVAL] p95/p99 latency metrics - over-engineering for this project
 };
 
 // Contiguous view for parser (zero-copy access)

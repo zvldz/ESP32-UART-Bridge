@@ -70,12 +70,8 @@ public:
         result.packets[0].size = lineLen;
         result.packets[0].allocSize = lineLen;
         result.packets[0].format = DataFormat::FORMAT_RAW;
-        result.packets[0].timestamp = currentTime;
         result.packets[0].hints.keepWhole = true;
         
-        // Initialize MAVLink fields to prevent garbage in diagnostics
-        result.packets[0].mavlinkMsgId = 0;
-        result.packets[0].seqNum = 0;
         result.packets[0].parseTimeMicros = micros();
         
         memcpy(result.packets[0].data, view.ptr, lineLen);

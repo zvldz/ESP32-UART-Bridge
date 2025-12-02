@@ -17,7 +17,6 @@
 #include <string.h>
 #include <DNSServer.h>
 
-
 // External objects
 extern Config config;
 extern SystemState systemState;
@@ -150,7 +149,6 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             case WIFI_EVENT_STA_DISCONNECTED:
                 {
                     wifi_event_sta_disconnected_t* event = static_cast<wifi_event_sta_disconnected_t*>(event_data);
-                    // Removed unused String concatenation
                     log_msg(LOG_WARNING, "WiFi disconnected: Disconnect reason: %d", event->reason);
 
                     // Check if this is an authentication failure
@@ -561,7 +559,6 @@ int wifiGetRSSI() {
 
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
-        //log_msg(LOG_DEBUG, "WiFi RSSI: %d", ap.rssi);
         return ap.rssi;
     }
     return 0;

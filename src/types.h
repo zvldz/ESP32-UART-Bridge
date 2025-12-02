@@ -89,15 +89,13 @@ struct BridgeContext {
     
     // Protocol buffers - separated by purpose
     struct {
-        CircularBuffer* telemetryBuffer;   // Existing: FC→GCS
-        CircularBuffer* logBuffer;          // Existing: Logger mode
-        CircularBuffer* udpRxBuffer;       // Existing: UDP receive (keep for AsyncUDP)
-        
-        // NEW: Input buffers for each source
-        CircularBuffer* usbInputBuffer;    // USB→FC commands
-        CircularBuffer* udpInputBuffer;    // UDP→FC commands (after udpRxBuffer)
-        CircularBuffer* uart2InputBuffer;  // UART2→FC commands
-        CircularBuffer* uart3InputBuffer;  // UART3→FC commands
+        CircularBuffer* uart1InputBuffer;  // UART1 input (Device1)
+        CircularBuffer* logBuffer;         // Logger mode
+        CircularBuffer* udpRxBuffer;       // UDP receive (keep for AsyncUDP)
+        CircularBuffer* usbInputBuffer;    // USB input
+        CircularBuffer* udpInputBuffer;    // UDP input (after udpRxBuffer)
+        CircularBuffer* uart2InputBuffer;  // UART2 input
+        CircularBuffer* uart3InputBuffer;  // UART3 input
     } buffers;
     
     // Cached device flags (for performance)
@@ -126,7 +124,7 @@ struct BridgeContext {
         UartInterface* device3Serial;
     } interfaces;
     
-    // Timing controls - LED timing removed (handled by LED monitor task)
+    // Timing controls
     struct {
         unsigned long* lastWifiYield;
         unsigned long* lastDropLog;
@@ -193,7 +191,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->adaptive.bufferStartTime = bufferStartTime;
     
     // Initialize buffers - will be allocated by buffer manager
-    ctx->buffers.telemetryBuffer = nullptr;
+    ctx->buffers.uart1InputBuffer = nullptr;
     ctx->buffers.logBuffer = nullptr;
     ctx->buffers.udpRxBuffer = nullptr;
     
