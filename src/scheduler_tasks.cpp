@@ -12,9 +12,9 @@
 #include "wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
 #include "circular_buffer.h"
-#include "leds.h"  // For LED notifications
+#include "leds.h"
 #include "protocols/sbus_router.h"
-#include "device_init.h"  // For hasSbusDevice()
+#include "device_init.h"
 
 // External objects
 extern Config config;
@@ -27,7 +27,7 @@ Scheduler taskScheduler;
 static Task tSystemDiagnostics(10000, TASK_FOREVER, nullptr);
 static Task tCrashlogUpdate(5000, TASK_FOREVER, nullptr);
 static Task tBridgeActivity(30000, TASK_FOREVER, nullptr);
-static Task tAllStacksDiagnostics(5000, TASK_FOREVER, nullptr);  // Renamed - shows all stacks
+static Task tAllStacksDiagnostics(5000, TASK_FOREVER, nullptr);
 static Task tDroppedDataStats(5000, TASK_FOREVER, nullptr);
 static Task tWiFiTimeout(WIFI_TIMEOUT, TASK_ONCE, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
@@ -186,11 +186,7 @@ void initializeScheduler() {
         
         uint32_t now = millis();
         bool shouldFlush = false;
-        
-        // Flush if:
-        // - 10 complete lines OR  
-        // - any complete lines AND 100ms passed
-        if (lineCount >= 10 || 
+        if (lineCount >= 10 ||
             (lineCount > 0 && (now - lastFlushMs) >= 100)) {
             shouldFlush = true;
         }
@@ -225,9 +221,8 @@ void initializeScheduler() {
                 lineLen = 0;
             }
             
-            // Keep partial line for next iteration - DON'T send incomplete lines
-            // lineLen will be preserved as static variable
-            
+            // Partial line kept for next iteration
+
             xSemaphoreGive(udpLogMutex);
             lastFlushMs = now;
         }

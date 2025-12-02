@@ -200,8 +200,6 @@ void setup() {
     // Mode-specific initialization
     if (bridgeMode == BRIDGE_STANDALONE) {
         log_msg(LOG_INFO, "Starting standalone mode - UART bridge active");
-//  log_msg(LOG_INFO, "Use triple-click BOOT to enter network setup mode");
-//  log_msg(LOG_INFO, "Blue LED will flash on data activity");
         initStandaloneMode();
         // Enable mode-specific tasks
         enableStandaloneTasks();
@@ -593,8 +591,6 @@ void handleButtonInput() {
             preferences.putString("temp_net_mode", "AP");  // Max 15 chars!
             log_msg(LOG_INFO, "*** Will start in WiFi AP mode ***");
           }
-          
-          // TEMPORARY DEBUG HACK - Move after preferences.end() for proper verification
         } else {
           // From active Client mode → force temporary AP mode
           log_msg(LOG_INFO, "*** TRIPLE CLICK: Client Mode -> Force AP Mode ***");
@@ -639,8 +635,6 @@ void createMutexes() {
         // Cannot use log_msg here as logging system not initialized
         return;
     }
-
-    // UDP log mutex is now created in logging_init()
 }
 
 void createTasks() {
@@ -667,7 +661,6 @@ void createTasks() {
         config.device2.role == D2_SBUS_OUT ||       // SBUS output
         config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
         config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
-        // D3_SBUS_IN removed - not supported
         config.device3.role == D3_SBUS_OUT ||       // SBUS output
         config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
         config.device4.role == D4_LOG_NETWORK) {    // UDP logger

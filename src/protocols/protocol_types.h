@@ -53,22 +53,16 @@ enum class DataFormat : uint8_t {
 
 // Packet source identification for routing
 enum PacketSource {
-    SOURCE_TELEMETRY = 0,  // Default: UART telemetry data
+    SOURCE_DATA = 0,       // Default: data flow (telemetry, commands, SBUS, etc.)
     SOURCE_LOGS = 1,       // Log data from logging system
     SOURCE_DEVICE4 = 2     // UDP incoming data (legacy)
 };
-
-// === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-// Global sequence counter for packet tracking
-static uint32_t globalSeqNum = 0;
-// === DIAGNOSTIC END ===
 
 // Parsed packet structure
 struct ParsedPacket {
     uint8_t* data;           // Pointer to packet data
     size_t size;             // Packet size
     size_t allocSize;        // Allocated size (for pool)
-    uint32_t timestamp;      // LEGACY: Not currently used, consider removing during cleanup
     TransmitHints hints;     // Transmission optimization hints
     PacketMemoryPool* pool;  // Pool to return memory to
     PacketSource source;     // Source of packet data for routing
@@ -77,9 +71,8 @@ struct ParsedPacket {
     PacketProtocol protocol;        // Set by parser
     DataFormat format;              // Data format for protocol-specific handling
     
-    // Permanent protocol fields (outside diagnostic block)
+    // Protocol fields
     uint16_t protocolMsgId;         // Message ID for routing (HEARTBEAT=0 is valid)
-    uint32_t seqNum;                // Packet sequence number
     uint8_t physicalInterface;      // Source interface (UART1/USB/UDP index)
     
     // Protocol-specific routing data
@@ -92,19 +85,15 @@ struct ParsedPacket {
         } mavlink;
         // Future protocols can add their structures here
     } routing;
-    
-    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
+
+    // Diagnostic field (useful for latency analysis on new platforms)
     uint32_t parseTimeMicros;     // When packet was parsed
-    uint16_t mavlinkMsgId;        // DEPRECATED - use protocolMsgId instead
-    // === DIAGNOSTIC END ===
-    
-    ParsedPacket() : data(nullptr), size(0), allocSize(0), 
-                    timestamp(0), pool(nullptr), source(SOURCE_TELEMETRY),
-                    protocol(PacketProtocol::UNKNOWN), format(DataFormat::FORMAT_UNKNOWN), 
-                    protocolMsgId(0), seqNum(0), physicalInterface(0xFF)
-    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-                    , parseTimeMicros(0), mavlinkMsgId(0)
-    // === DIAGNOSTIC END ===
+
+    ParsedPacket() : data(nullptr), size(0), allocSize(0),
+                    pool(nullptr), source(SOURCE_DATA),
+                    protocol(PacketProtocol::UNKNOWN), format(DataFormat::FORMAT_UNKNOWN),
+                    protocolMsgId(0), physicalInterface(0xFF),
+                    parseTimeMicros(0)
     {
         // Initialize routing union
         routing.mavlink.sysId = 0;

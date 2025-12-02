@@ -42,10 +42,6 @@ public:
     void reset() override;
     void getStats(uint32_t& hits, uint32_t& broadcasts) override;
     
-    // TEMPORARY: Learn address for input gateway
-    // TODO: Remove when bidirectional pipeline implemented
-    void learnAddress(uint8_t sysid, uint8_t physicalInterface);
-    
-    // Debug: dump address book contents
+    // Debug: dump address book contents (LOG_DEBUG level)
     void dumpAddressBook();
 };

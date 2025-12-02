@@ -31,15 +31,12 @@ struct DataFlow {
     uint8_t senderMask;            // Which senders should receive packets from this flow
     bool isInputFlow;              // NEW: Explicit marker for device→FC flows
     
-    DataFlow() : name(nullptr), parser(nullptr), router(nullptr), inputBuffer(nullptr), 
-                 source(SOURCE_TELEMETRY), physInterface(PHYS_NONE), senderMask(0xFF), isInputFlow(false) {}
+    DataFlow() : name(nullptr), parser(nullptr), router(nullptr), inputBuffer(nullptr),
+                 source(SOURCE_DATA), physInterface(PHYS_NONE), senderMask(0xFF), isInputFlow(false) {}
 };
 
 class ProtocolPipeline {
 private:
-    // Use SenderIndex from protocol_types.h
-    // MAX_SENDERS is now defined in protocol_types.h
-    
     // Sender mask constants (bit positions)
     enum SenderMask {
         SENDER_USB = (1 << IDX_DEVICE2_USB),

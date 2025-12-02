@@ -95,7 +95,6 @@ const char* getDevice3RoleName(uint8_t role) {
     case D3_UART3_MIRROR: return "UART3 Mirror";
     case D3_UART3_BRIDGE: return "UART3 Bridge";
     case D3_UART3_LOG: return "UART3 Logger";
-    // case D3_SBUS_IN: return "SBUS Input";    // REMOVED - not supported
     case D3_SBUS_OUT: return "SBUS Output";
     default: return "Unknown";
   }

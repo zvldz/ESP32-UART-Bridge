@@ -42,19 +42,17 @@ static inline void initAdaptiveBuffer(BridgeContext* ctx, size_t size) {
 // Process single byte - write to telemetry buffer
 static inline void processAdaptiveBufferByte(BridgeContext* ctx, uint8_t data, 
                                             unsigned long currentMicros) {
-    // Protection against nullptr in Logger mode
-    if (!ctx->buffers.telemetryBuffer) {
-        return;  // No buffer - nothing to do
+    if (!ctx->buffers.uart1InputBuffer) {
+        return;
     }
-    
-    CircularBuffer* circBuf = ctx->buffers.telemetryBuffer;
+
+    CircularBuffer* circBuf = ctx->buffers.uart1InputBuffer;
     
     // Write byte to buffer
     size_t written = circBuf->write(&data, 1);
     
     if (written == 0) {
         // Buffer full - data lost
-        // Could increment overflow counter here if needed
         return;
     }
     

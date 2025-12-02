@@ -44,15 +44,15 @@ void ProtocolPipeline::setupFlows(Config* config) {
     activeFlows = 0;
 
     // Device1 SBUS_IN flow (CRITICAL - new feature!)
-    if (config->device1.role == D1_SBUS_IN && ctx->buffers.telemetryBuffer) {
+    if (config->device1.role == D1_SBUS_IN && ctx->buffers.uart1InputBuffer) {
         DataFlow f;
         f.name = "Device1_SBUS_IN";
-        f.inputBuffer = ctx->buffers.telemetryBuffer;  // Device1 uses telemetryBuffer
+        f.inputBuffer = ctx->buffers.uart1InputBuffer;
         f.physInterface = PHYS_UART1;
-        f.source = SOURCE_TELEMETRY;
+        f.source = SOURCE_DATA;
         f.senderMask = calculateSbusInputRouting(config);
         f.isInputFlow = true;
-        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);  // Device1 SBUS_IN
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);
         f.router = nullptr;
 
 
@@ -64,12 +64,12 @@ void ProtocolPipeline::setupFlows(Config* config) {
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         DataFlow f;
         f.name = "Device2_SBUS_IN";
-        f.inputBuffer = ctx->buffers.uart2InputBuffer;  // Device2 uses uart2InputBuffer
+        f.inputBuffer = ctx->buffers.uart2InputBuffer;
         f.physInterface = PHYS_UART2;
-        f.source = SOURCE_TELEMETRY;
+        f.source = SOURCE_DATA;
         f.senderMask = calculateSbusInputRouting(config);
         f.isInputFlow = true;
-        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);  // Device2 SBUS_IN
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);
         f.router = nullptr;
 
         flows[activeFlows++] = f;
@@ -89,7 +89,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
     if (config->device2.role == D2_USB) {
         telemetryMask |= SENDER_USB;
     } else if (config->device2.role == D2_UART2) {
-        telemetryMask |= SENDER_UART2;  // NEW!
+        telemetryMask |= SENDER_UART2;
     }
     
     // Device3 routing
@@ -108,16 +108,14 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
     }
     
-    // EXISTING Telemetry flow - only for D1_UART1 mode
-    // D1_SBUS_IN has its own dedicated flow above
-    if (telemetryMask && ctx->buffers.telemetryBuffer && config->device1.role != D1_SBUS_IN) {
+    if (telemetryMask && ctx->buffers.uart1InputBuffer && config->device1.role != D1_SBUS_IN) {
         DataFlow f;
         f.name = "Telemetry";
-        f.inputBuffer = ctx->buffers.telemetryBuffer;
-        f.source = SOURCE_TELEMETRY;
-        f.physInterface = PHYS_UART1;  // Telemetry comes from FC
+        f.inputBuffer = ctx->buffers.uart1InputBuffer;
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_UART1;
         f.senderMask = telemetryMask;
-        f.isInputFlow = false;  // FC→devices flow
+        f.isInputFlow = false;
         
         // Create parser based on protocol type
         switch (config->protocolOptimization) {
@@ -165,7 +163,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.name = "Logger";
         f.inputBuffer = ctx->buffers.logBuffer;
         f.source = SOURCE_LOGS;
-        f.senderMask = SENDER_UDP;  // Logs only go to UDP
+        f.senderMask = SENDER_UDP;
         f.parser = new LineBasedParser();
         
         // Link statistics
@@ -179,15 +177,15 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_ERROR, "Log buffer not allocated for Logger mode!");
     }
     
-    // NEW: USB Input flow (USB → UART1)
+    // USB Input flow (USB → UART1)
     if (config->device2.role == D2_USB && ctx->buffers.usbInputBuffer) {
         DataFlow f;
         f.name = "USB_Input";
         f.inputBuffer = ctx->buffers.usbInputBuffer;
-        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
-        f.physInterface = PHYS_USB;   // Physical: from USB
-        f.senderMask = (1 << IDX_UART1);  // Only to UART1
-        f.isInputFlow = true;  // device→FC flow
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_USB;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
         
         // Create parser based on protocol
         switch (config->protocolOptimization) {
@@ -213,16 +211,16 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
     
-    // NEW: UDP Input flow (UDP → UART1)
+    // UDP Input flow (UDP → UART1)
     if (config->device4.role == D4_NETWORK_BRIDGE && ctx->buffers.udpInputBuffer &&
         !hasSbusDevice) {
         DataFlow f;
         f.name = "UDP_Input";
         f.inputBuffer = ctx->buffers.udpInputBuffer;
-        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
-        f.physInterface = PHYS_UDP;   // Physical: from UDP
-        f.senderMask = (1 << IDX_UART1);  // Only to UART1
-        f.isInputFlow = true;  // device→FC flow
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_UDP;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
         
         // Create parser based on protocol
         switch (config->protocolOptimization) {
@@ -248,16 +246,16 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
     
-    // NEW: UART2 Input flow (UART2 → UART1)
+    // UART2 Input flow (UART2 → UART1)
     if (config->device2.role == D2_UART2 && ctx->buffers.uart2InputBuffer &&
         !hasSbusDevice) {
         DataFlow f;
         f.name = "UART2_Input";
         f.inputBuffer = ctx->buffers.uart2InputBuffer;
-        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
-        f.physInterface = PHYS_UART2;  // Physical: from UART2
-        f.senderMask = (1 << IDX_UART1);  // Only to UART1
-        f.isInputFlow = true;  // device→FC flow
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_UART2;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
         
         // Create parser based on protocol
         switch (config->protocolOptimization) {
@@ -283,16 +281,16 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
     
-    // NEW: UART3 Input flow (UART3 → UART1)
+    // UART3 Input flow (UART3 → UART1)
     if (config->device3.role == D3_UART3_BRIDGE && ctx->buffers.uart3InputBuffer &&
         !hasSbusDevice) {
         DataFlow f;
         f.name = "UART3_Input";
         f.inputBuffer = ctx->buffers.uart3InputBuffer;
-        f.source = SOURCE_TELEMETRY;  // TODO: Migration - create SOURCE_INPUT later
-        f.physInterface = PHYS_UART3;  // Physical: from UART3
-        f.senderMask = (1 << IDX_UART1);  // Only to UART1
-        f.isInputFlow = true;  // device→FC flow
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_UART3;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
         
         // Create parser based on protocol
         switch (config->protocolOptimization) {
@@ -327,28 +325,27 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.inputBuffer = ctx->buffers.uart2InputBuffer;
         f.physInterface = PHYS_UART2;
         
-        f.source = SOURCE_TELEMETRY;
+        f.source = SOURCE_DATA;
         f.senderMask = calculateSbusInputRouting(config);  // Dynamic routing calculation
         f.isInputFlow = true;
-        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);  // Device2 SBUS_IN
-        f.router = nullptr;  // No routing for SBUS
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE2);
+        f.router = nullptr;
         
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "SBUS Input flow created with routing mask: 0x%02X", f.senderMask);
     }
 
-    // SBUS Output flow (UART1 → SBUS)
-    // SBUS_OUTPUT via legacy pipeline (only when no Fast Path SBUS input)
-    // Fast Path handles SBUS_OUT directly, legacy path needs telemetryBuffer
-    bool hasLegacySbusOut = (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT);
-    bool hasFastPathSbusIn = (config->device1.role == D1_SBUS_IN || config->device2.role == D2_SBUS_IN);
+    // POSSIBLY DEAD CODE - needs analysis
+    // This expects SBUS frames on UART1, but unclear when this would happen without SBUS_IN
+    bool hasSbusOut = (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT);
+    bool hasSbusIn = (config->device1.role == D1_SBUS_IN || config->device2.role == D2_SBUS_IN);
 
-    if (hasLegacySbusOut && !hasFastPathSbusIn && ctx->buffers.telemetryBuffer) {
+    if (hasSbusOut && !hasSbusIn && ctx->buffers.uart1InputBuffer) {
         
         DataFlow f;
         f.name = "SBUS_Output";
-        f.inputBuffer = ctx->buffers.telemetryBuffer;  // From UART1
-        f.source = SOURCE_TELEMETRY;
+        f.inputBuffer = ctx->buffers.uart1InputBuffer;
+        f.source = SOURCE_DATA;
         f.physInterface = PHYS_UART1;
         f.isInputFlow = false;
         f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);
@@ -365,8 +362,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_INFO, "SBUS Output flow created");
     }
 
-    // TODO: UART→SBUS conversion not implemented in Phase 2
-    // Legacy SBUS Hub architecture removed - need new implementation
+    // TODO: UART→SBUS conversion not implemented
     // Planned combinations:
     //   - D2_UART2 + D3_SBUS_OUT (UART2 transport → SBUS OUT)
     //   - D3_UART3_BRIDGE + D2_SBUS_OUT (UART3 transport → SBUS OUT)
@@ -374,7 +370,6 @@ void ProtocolPipeline::setupFlows(Config* config) {
     //           Integration with SbusRouter singleton
 
     // Context-aware Device4 handling
-    // Use the hasSbusDevice variable already defined above
 
     if (hasSbusDevice && config->device4.role == D4_NETWORK_BRIDGE) {
         // Split into separate TX/RX for SBUS
@@ -389,7 +384,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         DataFlow f;
         f.name = "UDP_SBUS_Input";
         f.inputBuffer = ctx->buffers.udpInputBuffer;
-        f.source = SOURCE_TELEMETRY;
+        f.source = SOURCE_DATA;
         f.physInterface = PHYS_UDP;
         f.isInputFlow = true;
         f.parser = new SbusFastParser(SBUS_SOURCE_UDP);  // UDP source
@@ -406,8 +401,8 @@ void ProtocolPipeline::setupFlows(Config* config) {
         CircularBuffer* sbusInputBuffer = nullptr;
         const char* sourceDesc = "Unknown";
 
-        if (config->device1.role == D1_SBUS_IN && ctx->buffers.telemetryBuffer) {
-            sbusInputBuffer = ctx->buffers.telemetryBuffer;
+        if (config->device1.role == D1_SBUS_IN && ctx->buffers.uart1InputBuffer) {
+            sbusInputBuffer = ctx->buffers.uart1InputBuffer;
             sourceDesc = "Device1_SBUS";
         } else if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
             sbusInputBuffer = ctx->buffers.uart2InputBuffer;
@@ -418,7 +413,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
             DataFlow f;
             f.name = "SBUS_UDP_Output";
             f.inputBuffer = sbusInputBuffer;  // From SBUS input buffer
-            f.source = SOURCE_TELEMETRY;
+            f.source = SOURCE_DATA;
             f.physInterface = PHYS_UART1;  // SBUS source
         f.isInputFlow = false;  // Output flow
         f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE1);  // Process for UDP send
@@ -430,43 +425,34 @@ void ProtocolPipeline::setupFlows(Config* config) {
         }
     }
     
-    // TODO Phase 8: Remove when multi-source support implemented
-    // Check for conflicting SBUS inputs (only one source allowed currently)
-    int sbusSourceCount = 0;
-    const char* sources[4] = {nullptr};
-    int sourceIdx = 0;
-
-    // Check physical SBUS inputs
-    if (config->device2.role == D2_SBUS_IN) {
-        sources[sourceIdx++] = "Device2 SBUS_IN";
-        sbusSourceCount++;
-    }
-    // D3_SBUS_IN removed - no longer supported
-
-    // Check UART→SBUS bridges
-    if (config->device2.role == D2_UART2 && config->device3.role == D3_SBUS_OUT) {
-        sources[sourceIdx++] = "UART2→SBUS bridge";
-        sbusSourceCount++;
-    }
-    if (config->device3.role == D3_UART3_BRIDGE && config->device2.role == D2_SBUS_OUT) {
-        sources[sourceIdx++] = "UART3→SBUS bridge";
-        sbusSourceCount++;
-    }
-
-    // Check UDP→SBUS input
-    if (config->device4.role == D4_NETWORK_BRIDGE && 
-        (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT)) {
-        sources[sourceIdx++] = "UDP→SBUS input";
-        sbusSourceCount++;
-    }
-
-    if (sbusSourceCount > 1) {
-        log_msg(LOG_ERROR, "SBUS: Multiple input sources detected (%d):", sbusSourceCount);
-        for (int i = 0; i < sourceIdx; i++) {
-            if (sources[i]) log_msg(LOG_ERROR, "  - %s", sources[i]);
-        }
-        log_msg(LOG_INFO, "Only one SBUS source supported currently (Phase 8 will add multi-source)");
-    }
+    // OBSOLETE CODE - multi-source implemented in SbusRouter, marked for removal
+    // int sbusSourceCount = 0;
+    // const char* sources[4] = {nullptr};
+    // int sourceIdx = 0;
+    // if (config->device2.role == D2_SBUS_IN) {
+    //     sources[sourceIdx++] = "Device2 SBUS_IN";
+    //     sbusSourceCount++;
+    // }
+    // if (config->device2.role == D2_UART2 && config->device3.role == D3_SBUS_OUT) {
+    //     sources[sourceIdx++] = "UART2→SBUS bridge";
+    //     sbusSourceCount++;
+    // }
+    // if (config->device3.role == D3_UART3_BRIDGE && config->device2.role == D2_SBUS_OUT) {
+    //     sources[sourceIdx++] = "UART3→SBUS bridge";
+    //     sbusSourceCount++;
+    // }
+    // if (config->device4.role == D4_NETWORK_BRIDGE &&
+    //     (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT)) {
+    //     sources[sourceIdx++] = "UDP→SBUS input";
+    //     sbusSourceCount++;
+    // }
+    // if (sbusSourceCount > 1) {
+    //     log_msg(LOG_ERROR, "SBUS: Multiple input sources detected (%d):", sbusSourceCount);
+    //     for (int i = 0; i < sourceIdx; i++) {
+    //         if (sources[i]) log_msg(LOG_ERROR, "  - %s", sources[i]);
+    //     }
+    //     log_msg(LOG_INFO, "Multi-source now supported via SbusRouter");
+    // }
 }
 
 uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
@@ -475,14 +461,7 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
     // Device1 (UART1) always receives SBUS data for SBUS→UART conversion
     // This allows transporting SBUS over regular UART at different baudrates
     mask |= (1 << IDX_UART1);
-    
-    // Device2 routing based on its role
-    if (config->device2.role == D2_UART2) {
-        // D3_SBUS_IN no longer supported
-    } else if (config->device2.role == D2_SBUS_OUT) {
-        // D3_SBUS_IN no longer supported
-    }
-    
+
     // Device3 routing based on its role
     if (config->device3.role == D3_UART3_BRIDGE || 
         config->device3.role == D3_UART3_MIRROR) {
@@ -563,7 +542,7 @@ void ProtocolPipeline::createSenders(Config* config) {
         }
     }
     
-    // UART1 sender (NEW)
+    // UART1 sender
     extern UartInterface* uartBridgeSerial;
     if (uartBridgeSerial) {
         // Initialize TX service with correct buffer size
@@ -576,33 +555,6 @@ void ProtocolPipeline::createSenders(Config* config) {
         log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
     }
 }
-
-// LEGACY: Old unified process() method - no longer used
-// TODO: Remove after verification that processInputFlows() + processSendQueues() split works correctly
-/*
-void ProtocolPipeline::process() {
-    // Process all data flows
-    for (size_t i = 0; i < activeFlows; i++) {
-        processFlow(flows[i]);
-    }
-
-    // Calculate bulk mode from ALL active flows (not just first!)
-    bool bulkMode = false;
-    for (size_t i = 0; i < activeFlows; i++) {
-        if (flows[i].parser && flows[i].parser->isBurstActive()) {
-            bulkMode = true;
-            break;
-        }
-    }
-
-    // Process send queues for all senders with bulk mode state
-    for (size_t i = 0; i < MAX_SENDERS; i++) {
-        if (senders[i]) {
-            senders[i]->processSendQueue(bulkMode);
-        }
-    }
-}
-*/
 
 void ProtocolPipeline::processInputFlows() {
     // CRITICAL: Add time limit to prevent blocking main loop during heavy traffic
@@ -730,7 +682,7 @@ void ProtocolPipeline::processTelemetryFlow() {
 void ProtocolPipeline::processFlow(DataFlow& flow) {
     if (!flow.parser || !flow.inputBuffer) return;
 
-    // NEW: Try fast path first
+    // Try fast path first
     if (flow.parser->tryFastProcess(flow.inputBuffer, ctx)) {
         return;  // Processed via fast path, skip normal parsing
     }
@@ -979,8 +931,7 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                         SbusFastParser* sbusParser = static_cast<SbusFastParser*>(flows[i].parser);
                         parserStats["validFrames"] = sbusParser->getValidFrames();
                         parserStats["invalidFrames"] = sbusParser->getInvalidFrames();
-                        // Fast Path doesn't need complex legacy metrics
-                        break;  // Found it, stop searching
+                        break;
                     }
                 }
                 break;
@@ -1104,7 +1055,7 @@ PacketSender* ProtocolPipeline::getSender(size_t index) const {
 void ProtocolPipeline::distributeParsedPackets(ParseResult* result) {
     if (result && result->count > 0) {
         // Default to telemetry source for external calls
-        distributePackets(result->packets, result->count, SOURCE_TELEMETRY, SENDER_ALL);
+        distributePackets(result->packets, result->count, SOURCE_DATA, SENDER_ALL);
     }
 }
 
@@ -1123,8 +1074,7 @@ void ProtocolPipeline::processSenders() {
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (!senders[i]) continue;
 
-        // Skip queue processing for SBUS fast path senders
-        // SBUS uses sendDirect() called from SbusRouter (no queue involved)
+        // SBUS fast path uses sendDirect(), no queue
         if (i == IDX_DEVICE2_UART2 && config.device2.role == D2_SBUS_OUT) continue;
         if (i == IDX_DEVICE3 && config.device3.role == D3_SBUS_OUT) continue;
         if (i == IDX_DEVICE4 && config.device4.role == D4_SBUS_UDP_TX) continue;

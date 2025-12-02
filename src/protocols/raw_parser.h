@@ -125,7 +125,6 @@ public:
             result.packets[0].allocSize = actualAllocSize;  // Allocation size from pool
             result.packets[0].pool = memPool;
             result.packets[0].format = DataFormat::FORMAT_RAW;
-            result.packets[0].timestamp = currentTime;
             
             // Copy actual data (not allocation size)
             size_t copied = 0;

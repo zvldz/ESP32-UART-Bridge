@@ -373,12 +373,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (request->hasParam("device3_role", true)) {
         const AsyncWebParameter* p = request->getParam("device3_role", true);
         int role = p->value().toInt();
-        // Skip value 4 (old SBUS_IN)
-        if (role == 4) {
-            log_msg(LOG_WARNING, "D3_SBUS_IN no longer supported, ignoring");
-            role = D3_NONE;
-        }
-        if (role >= D3_NONE && role <= D3_SBUS_OUT) {
+        if (role >= D3_NONE && role <= D3_SBUS_OUT && role != 4) {
             if (role != config.device3.role) {
                 config.device3.role = role;
                 configChanged = true;

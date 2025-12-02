@@ -73,12 +73,6 @@ uart_stop_bits_t string_to_stop_bits(uint8_t bits) {
     }
 }
 
-// Helper function to finalize migration
-static void finalizeMigration(Config* config, int version) {
-    log_msg(LOG_INFO, "Migrating config from version %d to %d", config->config_version, version);
-    config->config_version = version;
-}
-
 // Helper function to set device role defaults
 static void setDeviceDefaults(Config* config) {
     config->device1.role = D1_UART1;
@@ -138,76 +132,16 @@ void config_init(Config* config) {
 }
 
 // Migrate configuration from old versions
+// Note: Versions 1-8 were alpha/internal, first public release was v2.18.7 with config v9
 void config_migrate(Config* config) {
-    if (config->config_version < 2) {
-        finalizeMigration(config, 2);
-
-        // Set defaults for new fields
-        setDeviceDefaults(config);
-
-        // Keep existing usb_mode or default
-        if (config->usb_mode != USB_MODE_DEVICE &&
-            config->usb_mode != USB_MODE_HOST) {
-            config->usb_mode = USB_MODE_DEVICE;
-        }
-
-        // Default log levels
-        config->log_level_web = LOG_WARNING;
-        config->log_level_uart = LOG_WARNING;
-        config->log_level_network = LOG_OFF;
-    }
-
-    if (config->config_version < 3) {
-        finalizeMigration(config, 3);
-
-        // Version 2 had string/uint8_t types, convert to ESP-IDF enums
-        // These will be set from loaded values in config_load
-        // Just update version here
-    }
-
-    if (config->config_version < 4) {
-        finalizeMigration(config, 4);
-        config->permanent_network_mode = false;
-    }
-
-    if (config->config_version < 5) {
-        finalizeMigration(config, 5);
-
-        // Set Device 4 defaults
-        config->device4.role = D4_NONE;
-        strcpy(config->device4_config.target_ip, "");
-        config->device4_config.port = DEFAULT_UDP_PORT;
-        config->device4_config.role = D4_NONE;
-    }
-
-    if (config->config_version < 6) {
-        finalizeMigration(config, 6);
-
-        // Add WiFi Client mode fields
-        config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
-        config->wifi_client_ssid = "";      // Empty by default
-        config->wifi_client_password = "";  // Empty by default
-    }
-
-    if (config->config_version < 7) {
-        finalizeMigration(config, 7);
-
-        // Add Protocol Optimization field
-        config->protocolOptimization = PROTOCOL_NONE;
-    }
-
-    if (config->config_version < 8) {
-        finalizeMigration(config, 8);
-
-        // Add UDP batching control (default enabled)
-        config->udpBatchingEnabled = true;
-    }
-
+    // Pre-release configs (v1-8): reset to defaults
     if (config->config_version < 9) {
-        finalizeMigration(config, 9);
-        config->mavlinkRouting = false;  // Default disabled
+        log_msg(LOG_WARNING, "Pre-release config v%d detected, resetting to defaults", config->config_version);
+        config_init(config);
+        return;
     }
 
+    // Future migrations go here (v9 → v10, etc.)
 }
 
 // Load configuration from LittleFS
@@ -244,9 +178,9 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
     log_msg(LOG_DEBUG, "JSON parsed successfully");
 
-    // Check if this is old format (no config_version field)
+    // Missing config_version means version 1 (before versioning was added)
     if (!doc["config_version"].is<int>()) {
-        config->config_version = 1;  // Old format
+        config->config_version = 1;
     } else {
         config->config_version = doc["config_version"] | CURRENT_CONFIG_VERSION;
     }

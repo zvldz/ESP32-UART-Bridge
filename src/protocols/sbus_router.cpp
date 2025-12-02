@@ -31,8 +31,7 @@ SbusRouter::SbusRouter() :
 }
 
 bool SbusRouter::routeFrame(const uint8_t* frame, uint8_t sourceId) {
-    // FAST PATH: This is called directly from SbusFastParser::tryFastProcess()
-    // bypassing normal packet queue/distribution system used by other protocols
+    // Called directly from SbusFastParser, bypasses packet queue
 
     // Validation
     if (!frame || sourceId >= 3) return false;
@@ -126,8 +125,7 @@ void SbusRouter::writeToOutputs(const uint8_t* frame) {
         return;
     }
 
-    // FAST PATH: Send via sendDirect() - unified interface for all sender types
-    // Statistics are updated inside each sender's sendDirect() method
+    // sendDirect() bypasses queue, stats updated inside sender
     for (auto* sender : outputs) {
         sender->sendDirect(frame, 25);
     }

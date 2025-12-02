@@ -46,8 +46,8 @@ enum Device3Role {
     D3_UART3_MIRROR = 1,
     D3_UART3_BRIDGE = 2,
     D3_UART3_LOG = 3,
-    // D3_SBUS_IN = 4,  // REMOVED - not supported
-    D3_SBUS_OUT = 5     // Keep output role
+    // 4 reserved
+    D3_SBUS_OUT = 5
 };
 
 // Device 4 role
