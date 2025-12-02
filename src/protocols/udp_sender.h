@@ -26,9 +26,9 @@ private:
     size_t atomicBatchPackets = 0;
     uint32_t atomicBatchStartMs = 0;
 
-    // RAW batch state (renamed from existing)
-    uint8_t rawBatchBuffer[MTU_SIZE];  // Renamed from batchBuffer
-    size_t rawBatchSize = 0;           // Renamed from batchSize
+    // RAW batch state
+    uint8_t rawBatchBuffer[MTU_SIZE];
+    size_t rawBatchSize = 0;
     uint32_t lastBatchTime;
     uint32_t lastStatsLog;   // For periodic statistics logging
 
@@ -157,7 +157,6 @@ private:
     }
     
     void processRawPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
-        // RAW batching logic (existing, but renamed variables)
         if (rawBatchSize + item->packet.size > MTU_SIZE) {
             flushRawBatch();
         }
@@ -286,23 +285,26 @@ public:
         
         // Existing processing code continues here...
         uint32_t now = millis();
-        
-        // === DIAGNOSTIC START === (Remove after batching validation)
+
+        // Flush batches on bulk mode transition (functional, not diagnostic)
         if (bulkMode != lastBulkMode) {
+            // === DIAGNOSTIC START === (Remove after batching validation)
+            static uint32_t bulkStartMs = 0;
             if (bulkMode) {
-                static uint32_t bulkStartMs = 0;
                 bulkStartMs = now;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode ON (queue=%zu)", packetQueue.size());
             } else {
-                static uint32_t bulkStartMs = 0;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode OFF after %ums", now - bulkStartMs);
-                // Force flush on mode change (always true here: !bulkMode && lastBulkMode)
+            }
+            // === DIAGNOSTIC END ===
+
+            // Force flush on bulk mode exit
+            if (!bulkMode) {
                 flushAllBatches();
             }
             lastBulkMode = bulkMode;
         }
-        // === DIAGNOSTIC END ===
-        
+
         // Process queue
         while (!packetQueue.empty()) {
             QueuedPacket* item = &packetQueue.front();
@@ -344,31 +346,27 @@ public:
         return "UDP";
     }
     
-    // Get batching statistics for display
+    // Get batching statistics for web interface display
     void getBatchingStats(JsonObject& stats) {
-        // === DIAGNOSTIC START === (Remove after batching validation)
-        stats["batching"] = enableAtomicBatching;  // Always show batching status
-        
+        stats["batching"] = enableAtomicBatching;
+
         if (batchDiag.totalBatches > 0) {
             stats["totalBatches"] = batchDiag.totalBatches;
             float avg = batchDiag.atomicPacketsInBatches / (float)batchDiag.totalBatches;
             stats["avgPacketsPerBatch"] = serialized(String(avg, 1));
             stats["maxPacketsInBatch"] = batchDiag.maxPacketsInBatch;
-            
+
             float efficiency = (batchDiag.atomicPacketsInBatches * 100.0f) /
                               (totalSent > 0 ? totalSent : 1);
-            // Use char buffer to avoid String concatenation
             char effBuf[16];
             snprintf(effBuf, sizeof(effBuf), "%.0f%%", efficiency);
             stats["batchEfficiency"] = effBuf;
         } else {
-            // No batches yet - show waiting status
             stats["totalBatches"] = 0;
             stats["avgPacketsPerBatch"] = "0.0";
             stats["maxPacketsInBatch"] = 0;
             stats["batchEfficiency"] = "0%";
         }
-        // === DIAGNOSTIC END ===
     }
     
     void sendUdpDatagram(uint8_t* data, size_t size) {

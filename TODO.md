@@ -100,27 +100,24 @@
     - Largest free block monitoring
     - Historical memory usage trends
 
-#### USB Boot Message Issue 🔴 HIGH PRIORITY
+#### USB Boot Message Issue 🟡 NEEDS VERIFICATION
 
-- [ ] **Suppress ESP32 boot messages over USB**
-  - Problem: ESP32-S3 outputs bootloader messages on USB-CDC at startup
-  - Mission Planner interprets these as garbage data and resets the device
-  - This creates infinite reboot loop: boot → garbage → MP reset → boot...
-  - [ ] Research ESP-IDF options to suppress boot output on USB
-  - [ ] Check `CONFIG_ESP_CONSOLE_*` options in sdkconfig
-  - [ ] Consider `CONFIG_BOOTLOADER_LOG_LEVEL_NONE`
-  - [ ] Test `ARDUINO_USB_CDC_ON_BOOT` behavior
-  - [ ] Document workaround for Mission Planner users if not fixable
+- [ ] **Verify boot messages in production build**
+  - Debug build outputs boot messages (expected - `CORE_DEBUG_LEVEL=2`)
+  - Production build should be silent (`CORE_DEBUG_LEVEL=0`, `CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y`)
+  - Test with Mission Planner using production firmware
+  - Workarounds documented in README.md if still needed
 
 #### Final Code Cleanup
 
-- [ ] **Release Package Requirements** 📦
-  - [ ] Each release archive must contain both firmware.bin AND firmware.elf
-  - [ ] firmware.bin - for flashing to device
-  - [ ] firmware.elf - for crash debugging with addr2line (debug symbols)
-  - [ ] Both files must match exactly (same build)
-  - [ ] Recommended structure: `release_vX.Y.Z_<board>_<variant>.zip` containing both files
-  - [ ] Consider adding CHANGELOG.md and debug instructions to release archive
+- [x] **Release Package Requirements** 📦 ✅ COMPLETED (GitHub Actions)
+  - [x] Each release archive contains both firmware.bin AND firmware.elf
+  - [x] firmware.bin - for flashing to device
+  - [x] firmware.elf - for crash debugging with addr2line (debug symbols)
+  - [x] Both files from same build (guaranteed by workflow)
+  - [x] Archive structure: `firmware-<tag>.zip` with all board variants
+  - [x] Changelog extracted from CHANGELOG.md to GitHub release notes
+  - **Boards included**: zero, supermini, xiao (production builds)
 
 - [ ] **Add WiFi AP name uniqueness** - Before final cleanup
   - [ ] Add unique suffix to WiFi AP name (like mDNS naming)
@@ -204,6 +201,25 @@
     - Authentication options for secure access
     - Connection timeout and cleanup handling
 
+  - **BLE Telemetry Transport** - Bluetooth Low Energy for MAVLink
+    - Alternative to WiFi for phone connectivity (no WiFi AP needed on phone)
+    - Lower power consumption in BLE-only mode
+    - **Library**: ESP-IDF NimBLE (native API, not Arduino wrapper)
+      - Lighter than Bluedroid (~50KB RAM vs ~100KB)
+      - Direct ESP-IDF API since we use mixed framework
+    - **Wireless Modes** (user selectable in web UI):
+      - WiFi Only - current behavior, maximum throughput
+      - BLE Only - minimal power, phone connects directly via BLE
+      - WiFi + BLE - both active with coexistence (shared radio, time-division)
+    - **Implementation**:
+      - GATT server with write + notify characteristics
+      - `BLESender` class following existing sender pattern
+      - MTU negotiation and automatic packet fragmentation
+      - Integration into protocol pipeline
+      - Triple Boot press always enables WiFi AP (emergency config access)
+    - **Scope**: Initial implementation for MAVLink only, other protocols later
+    - **Note**: BLE latency higher than UDP (~20-50ms vs ~5-10ms), acceptable for telemetry
+
 - [ ] **High-Speed Testing**
   - Test operation at 921600 and 1000000 baud
   - Profile CPU usage and latency
@@ -216,10 +232,10 @@
 ```ini
 lib_deps =
     bblanchon/ArduinoJson@^7.4.2      # JSON parsing and generation
-    fastled/FastLED@^3.10.2           # WS2812 LED control
-    arkhipenko/TaskScheduler@^3.8.5   # Task scheduling
-    ESP32Async/ESPAsyncWebServer@^3.8.1  # Async web server
-    ESP32Async/AsyncTCP@^3.4.8        # TCP support for async server
+    fastled/FastLED@^3.10.3           # WS2812 LED control
+    arkhipenko/TaskScheduler@^4.0.3   # Task scheduling
+    ESP32Async/ESPAsyncWebServer@^3.9.1  # Async web server
+    ESP32Async/AsyncTCP@^3.4.9        # TCP support for async server
 ```
 
 

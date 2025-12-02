@@ -141,11 +141,11 @@ void MavlinkRouter::process(ParsedPacket* packets, size_t count) {
         cleanupExpiredEntries(now);
     }
     
-    // Periodic address book dump (every 5 seconds)
+    // Periodic address book dump (every 5 seconds) - debug level only
     static uint32_t lastDumpMs = 0;
-    if (millis() - lastDumpMs > 5000) {  // Every 5 seconds
+    if (millis() - lastDumpMs > 5000) {
         dumpAddressBook();
-        log_msg(LOG_INFO, "[ROUTER] Stats: hits=%u broadcasts=%u", 
+        log_msg(LOG_DEBUG, "[ROUTER] Stats: hits=%u broadcasts=%u",
                 routingHits, routingBroadcasts);
         lastDumpMs = millis();
     }
@@ -170,19 +170,12 @@ void MavlinkRouter::getStats(uint32_t& hits, uint32_t& broadcasts) {
     broadcasts = routingBroadcasts;
 }
 
-void MavlinkRouter::learnAddress(uint8_t sysid, uint8_t physicalInterface) {
-    // TEMPORARY: Public wrapper for input gateway
-    // TODO: Remove when bidirectional pipeline implemented
-    uint32_t now = millis();
-    updateAddressBook(sysid, physicalInterface, now);
-}
-
 void MavlinkRouter::dumpAddressBook() {
-    log_msg(LOG_INFO, "[ROUTER] Address book dump:");
+    log_msg(LOG_DEBUG, "[ROUTER] Address book dump:");
     for (size_t i = 0; i < MAX_ADDRESSES; i++) {
         if (addressBook[i].active) {
-            log_msg(LOG_INFO, "[ROUTER] [%zu] sysid=%u mask=0x%02X lastSeen=%u", 
-                    i, addressBook[i].sysId, addressBook[i].interfaceMask, 
+            log_msg(LOG_DEBUG, "[ROUTER] [%zu] sysid=%u mask=0x%02X lastSeen=%u",
+                    i, addressBook[i].sysId, addressBook[i].interfaceMask,
                     addressBook[i].lastSeenMs);
         }
     }

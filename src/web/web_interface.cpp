@@ -165,7 +165,6 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
     });
-    // sbus-source.js removed - functionality integrated into device-config.js
 
     // Setup OTA update with async handlers
     server->on("/update", HTTP_POST,

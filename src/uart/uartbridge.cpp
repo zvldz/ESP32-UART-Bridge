@@ -66,11 +66,8 @@ void senderTask(void* parameter) {
             g_protocolPipeline->processSenders();
         }
         
-        // Run at ~200Hz (5ms delay)
-        //vTaskDelay(pdMS_TO_TICKS(5));
-        // Run at ~250Hz (4ms delay) | TEMP
+        // 4ms (250Hz) - optimized for SBUS timing, benefits all protocols
         vTaskDelay(pdMS_TO_TICKS(4));
-        //taskYIELD();
     }
 }
 

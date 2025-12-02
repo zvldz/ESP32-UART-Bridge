@@ -32,7 +32,7 @@ void logging_init_uart();
 // Helper function to get level name
 const char* getLogLevelName(LogLevel level);
 
-// UDP log buffer (was device4)
+// UDP log buffer
 #define UDP_LOG_BUFFER_SIZE 2048
 
 extern uint8_t udpLogBuffer[];

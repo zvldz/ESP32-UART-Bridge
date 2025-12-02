@@ -31,12 +31,9 @@ static inline void processDevice1Input(BridgeContext* ctx) {
     // CRITICAL: Check Device1 role first!
     extern Config config;
 
-    // Note: Device1 SBUS_IN must still read data from UART!
-    // Old code that skipped reading was from when only Device2/3 could be SBUS
-    // Now Device1 can be SBUS source, so it must read its own data
+    // Device1 SBUS_IN must read data from UART (SBUS source reads its own data)
 
     // Poll Device1 DMA events first (for both UART and SBUS modes)
-    // TODO: Simplify architecture - add typed DMA pointers to BridgeContext to avoid static_cast
     if (ctx->interfaces.uartBridgeSerial) {
         static_cast<UartDMA*>(ctx->interfaces.uartBridgeSerial)->pollEvents();
     }
@@ -56,9 +53,8 @@ static inline void processDevice1Input(BridgeContext* ctx) {
             break;
         }
         
-        // Write to telemetryBuffer (always exists for Device1)
-        if (ctx->buffers.telemetryBuffer) {
-            size_t written = ctx->buffers.telemetryBuffer->write(buffer, bytesRead);
+        if (ctx->buffers.uart1InputBuffer) {
+            ctx->buffers.uart1InputBuffer->write(buffer, bytesRead);
         }
         
         // Update statistics once per batch (not per byte)
@@ -98,7 +94,7 @@ static inline void processDevice3UART(BridgeContext* ctx) {
             if (free < actual) {
                 // Drop oldest data to make room
                 ctx->buffers.uart3InputBuffer->consume(actual - free);
-                // TODO: Add dropped bytes counter
+                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.uart3InputBuffer->write(buffer, actual);
@@ -147,7 +143,7 @@ static inline void processDevice2USB(BridgeContext* ctx) {
             if (free < (size_t)actual) {
                 // Drop oldest data to make room
                 ctx->buffers.usbInputBuffer->consume(actual - free);
-                // TODO: Add dropped bytes counter
+                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.usbInputBuffer->write(buffer, actual);
@@ -207,7 +203,7 @@ static inline void processDevice2UART(BridgeContext* ctx) {
             if (free < actualRead) {
                 // Drop oldest data to make room
                 ctx->buffers.uart2InputBuffer->consume(actualRead - free);
-                // TODO: Add dropped bytes counter
+                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.uart2InputBuffer->write(buffer, actualRead);
@@ -238,9 +234,9 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         if (free < toWrite) {
             // Drop oldest data to make room
             ctx->buffers.udpInputBuffer->consume(toWrite - free);
-            // TODO: Add dropped bytes counter
+            // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
         }
-        
+
         ctx->buffers.udpInputBuffer->write(segments.first.data, toWrite);
         ctx->buffers.udpRxBuffer->consume(toWrite);
         
@@ -256,9 +252,9 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         if (free < toWrite) {
             // Drop oldest data to make room
             ctx->buffers.udpInputBuffer->consume(toWrite - free);
-            // TODO: Add dropped bytes counter
+            // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
         }
-        
+
         ctx->buffers.udpInputBuffer->write(segments.second.data, toWrite);
         ctx->buffers.udpRxBuffer->consume(toWrite);
         // Update statistics

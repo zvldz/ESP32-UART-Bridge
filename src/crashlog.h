@@ -19,7 +19,7 @@ void crashlog_clear();            // Called from web_api.cpp to clear history
 // Helper functions
 String crashlog_get_reset_reason_string(esp_reset_reason_t reason);
 
-// Update RTC variables periodically (moved from main.cpp)
+// Update RTC variables periodically
 void crashlog_update_variables();
 
 #endif // CRASHLOG_H
