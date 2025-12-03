@@ -1,5 +1,6 @@
 // Project headers
 #include "wifi_manager.h"
+#include "config.h"
 #include "logging.h"
 #include "defines.h"
 #include "leds.h"
@@ -100,6 +101,28 @@ String generateMdnsHostname() {
     hostname += macSuffix;  // Direct append, no need for String()
 
     return hostname;
+}
+
+// Apply unique suffix to default AP SSID (called once on first AP start)
+static void applyUniqueSSIDSuffix() {
+    // Only modify default SSID, not user-configured ones
+    if (config.ssid != DEFAULT_AP_SSID) {
+        return;
+    }
+
+    // Get MAC address for unique suffix
+    uint8_t mac[6];
+    esp_wifi_get_mac(WIFI_IF_AP, mac);
+
+    // Create unique SSID with last 2 bytes of MAC
+    char uniqueSSID[WIFI_SSID_MAX_LEN + 1];
+    snprintf(uniqueSSID, sizeof(uniqueSSID), "%s-%02X%02X", DEFAULT_AP_SSID, mac[4], mac[5]);
+
+    // Update config and save
+    config.ssid = uniqueSSID;
+    config_save(&config);
+
+    log_msg(LOG_INFO, "AP SSID set to unique name: %s", uniqueSSID);
 }
 
 // Initialize mDNS service with hostname and HTTP service registration
@@ -438,10 +461,14 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    log_msg(LOG_INFO, "Starting WiFi AP mode: %s", ssid.c_str());
+    // Apply unique suffix to default SSID if needed
+    applyUniqueSSIDSuffix();
+
+    // Use config.ssid which may have been updated with unique suffix
+    log_msg(LOG_INFO, "Starting WiFi AP mode: %s", config.ssid.c_str());
 
     wifi_config_t wifi_config = {};
-    setWifiCredentials(&wifi_config, true, ssid, password);
+    setWifiCredentials(&wifi_config, true, config.ssid, password);
     wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     wifi_config.ap.max_connection = 4;
     wifi_config.ap.channel = 1;
