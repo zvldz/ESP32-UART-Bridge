@@ -23,6 +23,7 @@ void handleResetStats(AsyncWebServerRequest *request);
 void handleCrashLogJson(AsyncWebServerRequest *request);
 void handleClearCrashLog(AsyncWebServerRequest *request);
 void handleExportConfig(AsyncWebServerRequest *request);
+void handleFactoryReset(AsyncWebServerRequest *request);
 void handleImportConfig(AsyncWebServerRequest *request);
 void handleClientIP(AsyncWebServerRequest *request);
 void handleSbusSetSource(AsyncWebServerRequest *request);

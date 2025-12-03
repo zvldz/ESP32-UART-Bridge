@@ -98,6 +98,7 @@ static void populateConfigJson(JsonDocument& doc) {
     doc["wifiClientSsid"] = config.wifi_client_ssid;
     doc["wifiClientPassword"] = config.wifi_client_password;
     doc["wifiTxPower"] = config.wifi_tx_power;
+    doc["mdnsHostname"] = config.mdns_hostname;
 
     // Client mode status
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
@@ -632,6 +633,44 @@ void handleSave(AsyncWebServerRequest *request) {
         }
     }
 
+    // mDNS Hostname
+    if (request->hasParam("mdns_hostname", true)) {
+        const AsyncWebParameter* p = request->getParam("mdns_hostname", true);
+        String newHostname = p->value();
+        newHostname.toLowerCase();
+        newHostname.trim();
+
+        // Validate hostname (DNS rules: a-z, 0-9, -, max 63 chars, no start/end with -)
+        bool valid = true;
+        if (newHostname.length() > 63) {
+            valid = false;
+        } else if (newHostname.length() > 0) {
+            // Check first and last characters
+            if (newHostname.charAt(0) == '-' || newHostname.charAt(newHostname.length() - 1) == '-') {
+                valid = false;
+            }
+            // Check all characters
+            for (size_t i = 0; i < newHostname.length() && valid; i++) {
+                char c = newHostname.charAt(i);
+                if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+                    valid = false;
+                }
+            }
+        }
+
+        if (!valid) {
+            log_msg(LOG_ERROR, "Invalid mDNS hostname: must be lowercase, a-z/0-9/-, max 63 chars");
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid hostname: use a-z, 0-9, - only, max 63 chars\"}");
+            return;
+        }
+
+        if (newHostname != config.mdns_hostname) {
+            config.mdns_hostname = newHostname;
+            configChanged = true;
+            log_msg(LOG_INFO, "mDNS hostname updated to: %s", newHostname.c_str());
+        }
+    }
+
     if (configChanged) {
         // Cancel WiFi timeout when settings are saved successfully
         cancelWiFiTimeout();
@@ -696,10 +735,9 @@ void handleTestCrash(AsyncWebServerRequest *request) {
 void handleExportConfig(AsyncWebServerRequest *request) {
     log_msg(LOG_INFO, "Configuration export requested");
 
-    // Generate random ID for filename uniqueness - use char buffer
-    char filename[64];
-    snprintf(filename, sizeof(filename), "esp32-bridge-config-%06X.json",
-             (unsigned int)(millis() & 0xFFFFFF));
+    // Use mDNS hostname for filename (identifies device)
+    char filename[80];
+    snprintf(filename, sizeof(filename), "%s-config.json", config.mdns_hostname.c_str());
 
     // Stream JSON response to avoid large String allocation
     auto* res = request->beginResponseStream("application/json");
@@ -713,6 +751,24 @@ void handleExportConfig(AsyncWebServerRequest *request) {
 
     config_to_json_stream(*res, &config);
     request->send(res);
+}
+
+// Factory reset - restore all settings to defaults
+void handleFactoryReset(AsyncWebServerRequest *request) {
+    log_msg(LOG_WARNING, "Factory reset requested via web interface");
+
+    // Reset config to defaults
+    config_init(&config);
+    config_save(&config);
+
+    log_msg(LOG_INFO, "Configuration reset to factory defaults");
+
+    // Send response before reboot
+    request->send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Factory reset complete\"}");
+
+    // Schedule reboot
+    delay(500);
+    ESP.restart();
 }
 
 // Import configuration from uploaded JSON file

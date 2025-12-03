@@ -129,9 +129,13 @@ const FormUtils = {
         const clientSsid = document.getElementById('wifi_client_ssid');
         const clientPassword = document.getElementById('wifi_client_password');
         const wifiTxPower = document.getElementById('wifi_tx_power');
+        const mdnsHostname = document.getElementById('mdns_hostname');
+        const mdnsUrl = document.getElementById('mdns_url');
         if (clientSsid) clientSsid.value = this.config.wifiClientSsid || '';
         if (clientPassword) clientPassword.value = this.config.wifiClientPassword || '';
         if (wifiTxPower) wifiTxPower.value = this.config.wifiTxPower || 20;
+        if (mdnsHostname) mdnsHostname.value = this.config.mdnsHostname || '';
+        if (mdnsUrl) mdnsUrl.textContent = this.config.mdnsHostname || 'hostname';
         
         // Show correct settings based on mode
         this.updateWiFiModeDisplay();
@@ -158,7 +162,18 @@ const FormUtils = {
         if (wifiMode) {
             wifiMode.addEventListener('change', () => this.updateWiFiModeDisplay());
         }
-        
+
+        // mDNS hostname change listener - update preview URL
+        const mdnsHostname = document.getElementById('mdns_hostname');
+        if (mdnsHostname) {
+            mdnsHostname.addEventListener('input', () => {
+                const mdnsUrl = document.getElementById('mdns_url');
+                if (mdnsUrl) {
+                    mdnsUrl.textContent = mdnsHostname.value || 'hostname';
+                }
+            });
+        }
+
         // Protocol optimization change listener
         const protocolOpt = document.getElementById('protocol_optimization');
         if (protocolOpt) {
@@ -186,6 +201,9 @@ const FormUtils = {
         
         // Firmware update handler
         window.handleFirmwareUpdate = () => this.handleFirmwareUpdate();
+
+        // Factory reset handler
+        window.factoryReset = () => this.factoryReset();
     },
     
     handleSubmit(e) {
@@ -468,7 +486,25 @@ const FormUtils = {
         // Reset file input
         input.value = '';
     },
-    
+
+    factoryReset() {
+        if (!confirm('Reset all settings to factory defaults?\n\nThis will erase all configuration including WiFi credentials.\nDevice will reboot after reset.')) {
+            return;
+        }
+
+        fetch('/config/reset', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    alert('Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ESP-Bridge-xxxx');
+                }
+            })
+            .catch(error => {
+                alert('Factory reset failed: ' + error.message);
+                console.error('Factory reset error:', error);
+            });
+    },
+
     handleFirmwareUpdate() {
         const fileInput = document.getElementById('firmwareFile');
         const updateButton = document.getElementById('updateButton');

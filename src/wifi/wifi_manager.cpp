@@ -78,45 +78,42 @@ static void setWifiCredentials(wifi_config_t* config, bool isAP, const String& s
     strncpy(passPtr, password.c_str(), WIFI_PASSWORD_MAX_LEN);
 }
 
-// Helper function to create valid mDNS hostname with MAC suffix
-String generateMdnsHostname() {
-    String hostname = config.device_name;
-    hostname.toLowerCase();
-    hostname.replace(" ", "-");
-    hostname.replace("_", "-");
-    // Ensure it starts with a letter and contains only valid characters
-    int hostnameLen = hostname.length();
-    for (int i = 0; i < hostnameLen; i++) {
-        char c = hostname.charAt(i);
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
-            hostname.setCharAt(i, '-');
-        }
+// Generate unique device hostname (lowercase, DNS-compatible)
+// Used for both mDNS and AP SSID. Saves to config on first generation.
+// Format: esp-bridge-XXXX (short and memorable)
+String generateDeviceHostname() {
+    // Use configured hostname if already set
+    if (!config.mdns_hostname.isEmpty()) {
+        return config.mdns_hostname;
     }
 
-    // Add last 2 bytes of MAC address for uniqueness
+    // Generate short hostname: esp-bridge-XXXX
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_STA, mac);
-    char macSuffix[WIFI_MAC_SUFFIX_BUFFER_SIZE];
-    sprintf(macSuffix, "-%02x%02x", mac[4], mac[5]);
-    hostname += macSuffix;  // Direct append, no need for String()
+    char hostname[20];
+    sprintf(hostname, "esp-bridge-%02x%02x", mac[4], mac[5]);
 
-    return hostname;
+    // Save generated hostname to config
+    config.mdns_hostname = hostname;
+    config_save(&config);
+    log_msg(LOG_INFO, "Device hostname generated and saved: %s", hostname);
+
+    return String(hostname);
 }
 
 // Apply unique suffix to default AP SSID (called once on first AP start)
+// Format: ESP-Bridge-XXXX (mixed case, matching hostname pattern)
 static void applyUniqueSSIDSuffix() {
-    // Only modify default SSID, not user-configured ones
-    if (config.ssid != DEFAULT_AP_SSID) {
+    // Only modify default or empty SSID, not user-configured ones
+    if (config.ssid != DEFAULT_AP_SSID && !config.ssid.isEmpty()) {
         return;
     }
 
-    // Get MAC address for unique suffix
+    // Generate SSID from MAC (same suffix as hostname)
     uint8_t mac[6];
-    esp_wifi_get_mac(WIFI_IF_AP, mac);
-
-    // Create unique SSID with last 2 bytes of MAC
-    char uniqueSSID[WIFI_SSID_MAX_LEN + 1];
-    snprintf(uniqueSSID, sizeof(uniqueSSID), "%s-%02X%02X", DEFAULT_AP_SSID, mac[4], mac[5]);
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    char uniqueSSID[20];
+    sprintf(uniqueSSID, "ESP-Bridge-%02x%02x", mac[4], mac[5]);
 
     // Update config and save
     config.ssid = uniqueSSID;
@@ -125,13 +122,24 @@ static void applyUniqueSSIDSuffix() {
     log_msg(LOG_INFO, "AP SSID set to unique name: %s", uniqueSSID);
 }
 
+// Track if mDNS is already initialized
+static bool mdnsInitialized = false;
+
 // Initialize mDNS service with hostname and HTTP service registration
-static void initMdnsService() {
-    if (!mdnsInitNeeded) return;
+// Can be called directly (AP mode) or via flag (Client mode from event handler)
+static void initMdnsService(bool force = false) {
+    // Skip if called via flag but flag not set
+    if (!force && !mdnsInitNeeded) return;
+
+    // Skip if already initialized
+    if (mdnsInitialized) {
+        mdnsInitNeeded = false;
+        return;
+    }
 
     esp_err_t mdns_ret = mdns_init();
     if (mdns_ret == ESP_OK) {
-        String hostname = generateMdnsHostname();
+        String hostname = generateDeviceHostname();
 
         // Follow ESP-IDF documentation pattern exactly
         esp_err_t hostname_ret = mdns_hostname_set(hostname.c_str());
@@ -143,6 +151,8 @@ static void initMdnsService() {
         logMdnsError(hostname_ret, "hostname set");
         logMdnsError(instance_ret, "instance set");
         logMdnsError(service_ret, "service add");
+
+        mdnsInitialized = true;
     } else {
         logMdnsError(mdns_ret, "initialization");
     }
@@ -425,7 +435,7 @@ esp_err_t wifiStartClient(const String& ssid, const String& password) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
     // CRITICAL: Set DHCP hostname BEFORE starting WiFi
-    String hostname = generateMdnsHostname();
+    String hostname = generateDeviceHostname();
     esp_err_t hostname_ret = esp_netif_set_hostname(sta_netif, hostname.c_str());
     log_msg(LOG_INFO, "DHCP hostname set to: %s (%s)", hostname.c_str(), esp_err_to_name(hostname_ret));
 
@@ -486,6 +496,9 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
         dnsServer->start(53, "*", IPAddress(192, 168, 4, 1));
         log_msg(LOG_INFO, "DNS Server started for captive portal (Arduino DNSServer)");
     }
+
+    // Initialize mDNS for AP mode (allows hostname.local access)
+    initMdnsService(true);
 
     led_set_mode(LED_MODE_WIFI_ON);
 
