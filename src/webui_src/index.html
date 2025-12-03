@@ -268,23 +268,20 @@
                         <span id="wifiArrow" style="float: right; font-size: 18px;">▶</span>
                     </h4>
                     <div id="wifiConfigContent" style="display: none;">
-                        <!-- Permanent mode checkbox (keep existing) -->
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; width: auto;"
-                                   title="Applies to both AP and Client modes">
-                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1" style="width: auto; margin: 0;"
-                                       title="Applies to both AP and Client modes">
-                                <span style="cursor: help;">Permanent Network Mode</span>
+                        <!-- WiFi Mode Selection with Permanent checkbox -->
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="wifi_mode" style="margin: 0; white-space: nowrap;">WiFi Mode:</label>
+                                <select name="wifi_mode" id="wifi_mode" style="width: 200px;">
+                                    <option value="0">Access Point</option>
+                                    <option value="1">Client (Connect to Network)</option>
+                                </select>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;"
+                                   title="Keep WiFi always on (applies to both AP and Client modes)">
+                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1" style="width: auto; margin: 0;">
+                                <span>Permanent</span>
                             </label>
-                        </div>
-                        
-                        <!-- WiFi Mode Selection -->
-                        <h5 style="margin-top: 15px;">WiFi Mode</h5>
-                        <div style="margin: 10px 0 15px 0;">
-                            <select name="wifi_mode" id="wifi_mode" style="width: 200px;">
-                                <option value="0">Access Point</option>
-                                <option value="1">Client (Connect to Network)</option>
-                            </select>
                         </div>
                         
                         <!-- AP Mode settings -->
@@ -334,9 +331,20 @@
                             </select>
                             <small class="form-text">ℹ️ Lower power = less interference, shorter range</small>
                         </div>
+
+                        <!-- mDNS Hostname -->
+                        <div style="margin-top: 15px;">
+                            <label for="mdns_hostname">mDNS Hostname:</label>
+                            <input type="text" name="mdns_hostname" id="mdns_hostname" maxlength="63"
+                                   pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+                                   style="text-transform: lowercase;"
+                                   placeholder="esp-bridge-xxxx">
+                            <small class="form-text" style="display: block;">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
+                            <small class="form-text" style="display: block;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
+                        </div>
                     </div>
                 </div>
-                
+
                 <div style="text-align: center; margin-top: 20px;">
                     <button id="saveButton" type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
                 </div>
@@ -352,12 +360,16 @@
             <div id="configBackupContent" style="display: none;">
                 <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                     <div>
-                        <a href="/config/export" style="background-color: #2196F3; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block;">💾 Export Config</a>
+                        <button type="button" onclick="window.location.href='/config/export'" style="background-color: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">💾 Export Config</button>
                         <br><small style="color: #666; font-size: 12px;">Download current configuration</small>
                     </div>
                     <div>
                         <button type="button" onclick="document.getElementById('configFile').click()" style="background-color: #FF9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📁 Import Config</button>
                         <br><small style="color: #666; font-size: 12px;">Upload configuration file</small>
+                    </div>
+                    <div>
+                        <button type="button" onclick="factoryReset()" style="background-color: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">🔄 Factory Reset</button>
+                        <br><small style="color: #666; font-size: 12px;">Reset all settings to defaults</small>
                     </div>
                 </div>
                 <form id="importForm" action="/config/import" method="POST" enctype="multipart/form-data" style="display: none;">

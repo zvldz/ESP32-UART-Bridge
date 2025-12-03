@@ -100,7 +100,8 @@ void config_init(Config* config) {
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
     config->wifi_client_ssid = "";
     config->wifi_client_password = "";
-    config->wifi_tx_power = 20;  // Default 5dBm (20 * 0.25dBm = 5dBm)
+    config->wifi_tx_power = DEFAULT_WIFI_TX_POWER;
+    config->mdns_hostname = "";  // Empty = auto-generate on startup
     config->device_version = DEVICE_VERSION;
     config->device_name = DEVICE_NAME;
     config->usb_mode = USB_MODE_DEVICE;  // Default to Device mode for compatibility
@@ -129,6 +130,18 @@ void config_init(Config* config) {
 
     // SBUS settings defaults
     config->sbusTimingKeeper = false;  // Disabled by default
+}
+
+// Reset WiFi settings to defaults (AP mode, empty credentials)
+// On next boot, unique SSID and hostname will be auto-generated
+void config_reset_wifi(Config* config) {
+    config->wifi_mode = BRIDGE_WIFI_MODE_AP;
+    config->ssid = "";  // Empty = auto-generate unique SSID on startup
+    config->password = DEFAULT_AP_PASSWORD;
+    config->wifi_client_ssid = "";
+    config->wifi_client_password = "";
+    config->mdns_hostname = "";  // Empty = auto-generate on startup
+    config->wifi_tx_power = DEFAULT_WIFI_TX_POWER;
 }
 
 // Migrate configuration from old versions
@@ -212,7 +225,8 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->wifi_mode = (BridgeWiFiMode)(doc["wifi"]["mode"] | BRIDGE_WIFI_MODE_AP);
         config->wifi_client_ssid = doc["wifi"]["client_ssid"] | "";
         config->wifi_client_password = doc["wifi"]["client_password"] | "";
-        config->wifi_tx_power = doc["wifi"]["tx_power"] | 20;  // Default 20 (5dBm) if not present
+        config->wifi_tx_power = doc["wifi"]["tx_power"] | DEFAULT_WIFI_TX_POWER;
+        config->mdns_hostname = doc["wifi"]["mdns_hostname"] | "";
     }
 
     // Load USB settings
@@ -290,6 +304,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["wifi"]["client_ssid"] = config->wifi_client_ssid;
     doc["wifi"]["client_password"] = config->wifi_client_password;
     doc["wifi"]["tx_power"] = config->wifi_tx_power;
+    doc["wifi"]["mdns_hostname"] = config->mdns_hostname;
 
     // USB settings
     switch(config->usb_mode) {

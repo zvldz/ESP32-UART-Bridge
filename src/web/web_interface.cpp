@@ -74,7 +74,7 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/clear_crashlog", HTTP_GET, handleClearCrashLog);
     server->on("/test_crash", HTTP_GET, handleTestCrash);
     server->on("/config/export", HTTP_GET, handleExportConfig);
-
+    server->on("/config/reset", HTTP_POST, handleFactoryReset);
 
     server->on("/config/import", HTTP_POST,
         [](AsyncWebServerRequest *request) {

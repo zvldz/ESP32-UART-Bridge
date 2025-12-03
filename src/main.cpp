@@ -542,15 +542,13 @@ void handleButtonInput() {
       buttonHoldDetected = true;
       log_msg(LOG_INFO, "Button held for 5 seconds - resetting WiFi to defaults");
 
-      // Reset to default WiFi settings
-      config.ssid = DEFAULT_AP_SSID;
-      config.password = DEFAULT_AP_PASSWORD;
+      config_reset_wifi(&config);
       config_save(&config);
 
       // Visual feedback
       led_rapid_blink(10, LED_WIFI_RESET_BLINK_MS);
 
-      log_msg(LOG_INFO, "WiFi AP settings reset to defaults, restarting...");
+      log_msg(LOG_INFO, "WiFi settings reset to defaults (AP mode), restarting...");
       vTaskDelay(pdMS_TO_TICKS(2000));  // Wait for LED blink to complete
       ESP.restart();
     }

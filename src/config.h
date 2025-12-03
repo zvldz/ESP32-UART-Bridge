@@ -6,11 +6,15 @@
 // Current configuration version
 #define CURRENT_CONFIG_VERSION 9  // Increased from 8 to 9 for MAVLink routing
 
+// Default values
+#define DEFAULT_WIFI_TX_POWER   20      // 5dBm (20 * 0.25dBm)
+
 // Configuration management interface
 void config_init(Config* config);
 void config_load(Config* config);
 void config_save(Config* config);
 void config_migrate(Config* config);
+void config_reset_wifi(Config* config);  // Reset WiFi settings to defaults (AP mode)
 bool config_load_from_json(Config* config, const String& jsonString);
 String config_to_json(Config* config);
 void config_to_json_stream(Print& output, const Config* config);

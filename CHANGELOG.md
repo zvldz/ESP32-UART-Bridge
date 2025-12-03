@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## v2.18.9 (WiFi & Configuration Improvements)
+
+### WiFi Enhancements
+- **Unique WiFi AP Name**: Auto-generated AP SSID with MAC suffix (e.g., `ESP-Bridge-11fc`)
+  - Prevents AP name conflicts in multi-device environments
+  - Generated on first boot, saved to config
+- **Configurable mDNS Hostname**: User can set custom `.local` address
+  - Works in both AP and Client modes
+  - Auto-generated on first boot (e.g., `esp-bridge-11fc`)
+  - Web UI field with validation (a-z, 0-9, hyphen only)
+- **mDNS in AP Mode**: Added mDNS support for Access Point mode (was Client-only)
+
+### Configuration Management
+- **Factory Reset**: New web UI button to reset all settings to defaults
+- **WiFi Reset via BOOT Button**: 5-second hold resets WiFi settings only (not full config)
+  - Resets: mode, SSID, password, client credentials, mDNS hostname, TX power
+  - Preserves: UART settings, device roles, protocol settings
+- **Config Export Filename**: Now uses mDNS hostname (e.g., `esp-bridge-11fc-config.json`)
+
+### Code Quality
+- **WiFi TX Power Constant**: Added `DEFAULT_WIFI_TX_POWER` define (was magic number)
+- **WiFi Reset Function**: Extracted `config_reset_wifi()` for code reuse
+
 ## v2.18.8 (Build Automation & Code Cleanup)
 
 ### CI/CD Improvements
