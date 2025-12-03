@@ -246,22 +246,27 @@ const StatusUpdates = {
                 this.elements.lastActivity.textContent = data.lastActivity || "Never";
             }
 
-            // Update UDP Batching info
+            // Update UDP Batching info (only show when Device 4 is active)
             const udpBatchingInfo = document.getElementById('udpBatchingInfo');
             if (udpBatchingInfo) {
-                // Check if we have detailed batching stats from protocol statistics
-                const batchingStats = data.protocolStats?.udpBatching;
+                const device4Role = parseInt(data.device4Role) || 0;
 
-                if (data.udpBatchingEnabled) {
-                    if (batchingStats && batchingStats.batching && batchingStats.totalBatches > 0) {
-                        // Show detailed stats
-                        udpBatchingInfo.innerHTML = `ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - ${batchingStats.avgPacketsPerBatch} pkts/batch avg, ${batchingStats.maxPacketsInBatch} max, ${batchingStats.batchEfficiency} efficiency`;
-                    } else {
-                        // Enabled but no traffic yet
-                        udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - Ready (no MAVLink traffic yet)';
-                    }
+                // Only show UDP Batching info when Device 4 is enabled (not D4_NONE=0)
+                if (device4Role === 0) {
+                    udpBatchingInfo.style.display = 'none';
                 } else {
-                    udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #6c757d;">DISABLED</span> - Single packet per datagram';
+                    udpBatchingInfo.style.display = '';
+                    const batchingStats = data.protocolStats?.udpBatching;
+
+                    if (data.udpBatchingEnabled) {
+                        if (batchingStats && batchingStats.batching && batchingStats.totalBatches > 0) {
+                            udpBatchingInfo.innerHTML = `ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - ${batchingStats.avgPacketsPerBatch} pkts/batch avg, ${batchingStats.maxPacketsInBatch} max, ${batchingStats.batchEfficiency} efficiency`;
+                        } else {
+                            udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #2e7d2e;">ENABLED</span> - Ready (no traffic yet)';
+                        }
+                    } else {
+                        udpBatchingInfo.innerHTML = 'ℹ️ UDP Batching: <span style="color: #6c757d;">DISABLED</span> - Single packet per datagram';
+                    }
                 }
             }
 
