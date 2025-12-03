@@ -119,11 +119,11 @@
   - [x] Changelog extracted from CHANGELOG.md to GitHub release notes
   - **Boards included**: zero, supermini, xiao (production builds)
 
-- [ ] **Add WiFi AP name uniqueness** - Before final cleanup
-  - [ ] Add unique suffix to WiFi AP name (like mDNS naming)
-  - [ ] Use MAC address last bytes or random suffix
-  - [ ] Prevent AP name conflicts in multi-device environments
-  - [ ] Update web interface to show unique AP name
+- [x] **Add WiFi AP name uniqueness** ✅ COMPLETED
+  - [x] Add unique suffix to WiFi AP name (like mDNS naming)
+  - [x] Use MAC address last 2 bytes (e.g., ESP-Bridge-A1B2)
+  - [x] Prevent AP name conflicts in multi-device environments
+  - [x] Web interface shows unique AP name (config.ssid updated and saved)
 
 
 - [x] **PSRAM memory optimization** ✅ COMPLETED - Buffer and JSON optimization
