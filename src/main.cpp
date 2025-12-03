@@ -550,8 +550,7 @@ void handleButtonInput() {
       // Visual feedback
       led_rapid_blink(10, LED_WIFI_RESET_BLINK_MS);
 
-      log_msg(LOG_INFO, "WiFi reset to defaults: SSID=%s, Password=%s", DEFAULT_AP_SSID, DEFAULT_AP_PASSWORD);
-      log_msg(LOG_INFO, "Restarting...");
+      log_msg(LOG_INFO, "WiFi AP settings reset to defaults, restarting...");
       vTaskDelay(pdMS_TO_TICKS(2000));  // Wait for LED blink to complete
       ESP.restart();
     }
