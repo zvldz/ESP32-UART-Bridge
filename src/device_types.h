@@ -71,6 +71,12 @@ struct Device4Config {
     uint8_t role;
 };
 
+// WiFi network credentials for Client mode
+struct WiFiNetwork {
+    String ssid;
+    String password;
+};
+
 
 // Configuration structure (moved here from types.h)
 typedef struct {
@@ -90,8 +96,7 @@ typedef struct {
     
     // WiFi mode selection
     BridgeWiFiMode wifi_mode;
-    String wifi_client_ssid;
-    String wifi_client_password;
+    WiFiNetwork wifi_networks[5];  // Client mode networks (index 0 = primary/highest priority)
     uint8_t wifi_tx_power;  // WiFi TX power level (8-80, in 0.25dBm steps: 8=2dBm, 80=20dBm)
     String mdns_hostname;   // Custom mDNS hostname (empty = auto-generate on startup)
     

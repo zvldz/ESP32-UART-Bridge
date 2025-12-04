@@ -30,13 +30,13 @@
             <div class="success">
                 <strong>The bridge supports dual WiFi modes with flexible operation:</strong><br><br>
                 <strong>📡 WiFi Access Point (AP) Mode:</strong><br>
-                - Creates WiFi hotspot "ESP-Bridge" (password: 12345678)<br>
+                - Creates WiFi hotspot "ESP-Bridge-xxxx" with unique MAC suffix (password: 12345678)<br>
                 - Direct device configuration without existing WiFi<br>
-                - Access web interface at 192.168.4.1<br><br>
+                - Access via 192.168.4.1 or mDNS (esp-bridge-xxxx.local)<br><br>
                 <strong>🔗 WiFi Client Mode:</strong><br>
-                - Connects to existing WiFi networks<br>
-                - Remote access using assigned IP address<br>
-                - Configure SSID/password via web interface<br>
+                - Connects to existing WiFi networks (up to 5 with priority)<br>
+                - Remote access using assigned IP or mDNS hostname<br>
+                - Automatic fallback to next network on connection failure<br>
                 - <strong>Smart Connection:</strong> Scans every 15s, tries 5x when found<br>
                 - Unlimited reconnection after successful initial connection<br><br>
                 <strong>Operation Duration:</strong><br>
@@ -227,7 +227,7 @@
                 <tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
                 <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
                 <tr><td>No WiFi mode</td><td>Triple-click BOOT button, check LED indicators</td></tr>
-                <tr><td>LED purple solid</td><td>WiFi AP mode active - connect to "ESP-Bridge"</td></tr>
+                <tr><td>LED purple solid</td><td>WiFi AP mode active - connect to "ESP-Bridge-xxxx"</td></tr>
                 <tr><td>LED orange blinking</td><td>WiFi Client searching - check network availability</td></tr>
                 <tr><td>LED orange solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
                 <tr><td>LED red blinking</td><td>WiFi Client error - wrong password (restart required)</td></tr>
@@ -247,7 +247,7 @@
                 <strong>📤 Export Configuration:</strong><br>
                 - Click "Export Config" button on main page<br>
                 - Downloads JSON file with all current settings<br>
-                - Filename: esp32-bridge-config-[unique-ID].json<br>
+                - Filename: [hostname]-config.json (e.g., esp-bridge-11fc-config.json)<br>
                 - Includes UART, WiFi, device roles, and logging settings<br>
                 <br>
                 <strong>📥 Import Configuration:</strong><br>
@@ -273,8 +273,8 @@
                 - LED shows white blinks indicating click count<br>
                 - Useful when WiFi password changed or red LED error state<br><br>
                 <strong>🔄 Long Press (5+ seconds):</strong><br>
-                - Resets WiFi credentials to factory defaults<br>
-                - SSID: "ESP-Bridge", Password: "12345678"<br>
+                - Resets WiFi settings to defaults (preserves UART and device roles)<br>
+                - SSID: "ESP-Bridge-xxxx" (unique), Password: "12345678"<br>
                 - LED flashes purple rapidly to confirm reset<br>
                 - Device automatically restarts<br><br>
                 <strong>⚡ Power-On Hold:</strong><br>
