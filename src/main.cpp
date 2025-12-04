@@ -24,7 +24,7 @@
 
 // Global objects
 Config config;
-SystemState systemState = {0};  // All fields initialized to 0/false
+SystemState systemState = {0};
 BridgeMode bridgeMode = BRIDGE_STANDALONE;
 Preferences preferences;
 
@@ -210,8 +210,6 @@ void setup() {
         // Enable mode-specific tasks
         enableNetworkTasks(systemState.isTemporaryNetwork);
     }
-
-    // NOTE: registerSbusOutputs() now called in uartBridgeTask after pipeline init
 
     // Create FreeRTOS tasks
     createTasks();
@@ -648,7 +646,7 @@ void createTasks() {
 
     log_msg(LOG_INFO, "UART Bridge task created on core %d (priority %d)", UART_TASK_CORE, UART_TASK_PRIORITY);
 
-    // ADD: Check if we need sender task
+    // Check if we need sender task
     bool needSenderTask = false;
 
     // Check all possible sender configurations

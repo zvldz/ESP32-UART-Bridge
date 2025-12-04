@@ -110,36 +110,6 @@
 
 #### Final Code Cleanup
 
-- [x] **Release Package Requirements** 📦 ✅ COMPLETED (GitHub Actions)
-  - [x] Each release archive contains both firmware.bin AND firmware.elf
-  - [x] firmware.bin - for flashing to device
-  - [x] firmware.elf - for crash debugging with addr2line (debug symbols)
-  - [x] Both files from same build (guaranteed by workflow)
-  - [x] Archive structure: `firmware-<tag>.zip` with all board variants
-  - [x] Changelog extracted from CHANGELOG.md to GitHub release notes
-  - **Boards included**: zero, supermini, xiao (production builds)
-
-- [x] **Add WiFi AP name uniqueness** ✅ COMPLETED
-  - [x] Add unique suffix to WiFi AP name (like mDNS naming)
-  - [x] Use MAC address last 2 bytes (e.g., ESP-Bridge-A1B2)
-  - [x] Prevent AP name conflicts in multi-device environments
-  - [x] Web interface shows unique AP name (config.ssid updated and saved)
-
-
-- [x] **PSRAM memory optimization** ✅ COMPLETED - Buffer and JSON optimization
-  - [x] Move large JsonDocument allocations to PSRAM for config/web operations
-  - [x] Move non-critical log buffer to PSRAM when available
-  - [x] Add PSRAM fallback to internal RAM when PSRAM unavailable
-  - [x] Optimize buffer sizes based on device role and protocol type
-  - [x] Add PSRAM status reporting to all diagnostic functions
-
-- [ ] **Additional Memory Optimizations** - Future improvements
-  - [x] String class optimization - Eliminated String concatenation in hot paths (replaced with snprintf/char buffers)
-  - [ ] Evaluate feasibility of moving more non-critical data to PSRAM
-  - [ ] Static analysis of memory usage patterns
-  - [ ] Consider compile-time protocol selection to reduce unused code
-  - [ ] Evaluate template-based buffer management for type safety
-
 - [ ] **Final Code Cleanup** - After all features are implemented
   - [x] Standardize code indentation to 4 spaces across all files ✅ COMPLETED
   - [ ] Remove unnecessary diagnostic code and debug prints

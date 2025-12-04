@@ -162,7 +162,7 @@ struct BridgeContext {
         size_t skipBytes;               // Bytes to skip before packet (from detector to TX)
     } protocol;
     
-    // NEW: Protocol pipeline for Parser + Sender architecture
+    // Protocol pipeline for Parser + Sender architecture
     class ProtocolPipeline* protocolPipeline;
 };
 
@@ -195,7 +195,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->buffers.logBuffer = nullptr;
     ctx->buffers.udpRxBuffer = nullptr;
     
-    // NEW: Initialize input buffers
+    // Initialize input buffers
     ctx->buffers.usbInputBuffer = nullptr;
     ctx->buffers.udpInputBuffer = nullptr;
     ctx->buffers.uart2InputBuffer = nullptr;
@@ -247,6 +247,6 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->protocol.packetFound = false;
     ctx->protocol.skipBytes = 0;
     
-    // NEW: Initialize protocol pipeline
-    ctx->protocolPipeline = nullptr;  // Will be initialized later
+    // Initialize protocol pipeline
+    ctx->protocolPipeline = nullptr;
 }

@@ -29,7 +29,7 @@ extern UartInterface* uartBridgeSerial;
 // External functions from device_init.cpp
 extern void registerSbusOutputs();
 
-// ADD: Global pipeline pointer for sender task
+// Global pipeline pointer for sender task
 static ProtocolPipeline* g_protocolPipeline = nullptr;
 
 // Function to get protocol pipeline instance
@@ -56,7 +56,6 @@ void senderTask(void* parameter) {
     }
     
     log_msg(LOG_INFO, "Sender task: Pipeline ready, starting processing");
-    
     
     // Main sender loop
     while (1) {
@@ -149,7 +148,7 @@ void uartBridgeTask(void* parameter) {
     ctx.protocolPipeline = new ProtocolPipeline(&ctx);
     ctx.protocolPipeline->init(&config);
 
-    // ADD: Save pipeline pointer for sender task
+    // Save pipeline pointer for sender task
     g_protocolPipeline = ctx.protocolPipeline;
 
     // Register SBUS outputs with router (after pipeline is ready)
@@ -290,4 +289,3 @@ void uartBridgeTask(void* parameter) {
     // Cleanup adaptive buffer timing
     cleanupAdaptiveBuffer(&ctx);
 }
-

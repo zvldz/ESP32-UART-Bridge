@@ -19,19 +19,19 @@ private:
     static constexpr size_t MAX_BATCH_PACKETS = 8;
     uint8_t batchBuffer[BATCH_BUFFER_SIZE];
     
-    // NEW: Batch window timing
+    // Batch window timing
     uint32_t batchWindowStart = 0;
-    
-    // NEW: Thresholds
+
+    // Thresholds
     static constexpr size_t BATCH_N_PACKETS = 4;
     static constexpr size_t BATCH_X_BYTES = 448;
     static constexpr uint32_t BATCH_T_MS = 5;        // Normal mode
     static constexpr uint32_t BATCH_T_MS_BULK = 20;  // Bulk mode - optimal batching
     
-    // NEW: Track bulk mode transitions
+    // Track bulk mode transitions
     bool lastBulkMode = false;
-    
-    // NEW: USB block detection
+
+    // USB block detection
     static constexpr uint32_t USB_BLOCKED_TIMEOUT_MS = 1000;  // Increased from 500ms
     size_t lastAvailableForWrite = 0;
     uint32_t availableNotChangedSince = 0;
@@ -52,8 +52,7 @@ private:
     bool inBackoff() const {
         return backoffDelay > 0 && (micros() - lastSendAttempt) < backoffDelay;
     }
-    
-    
+     
     // Helper: Commit packets from queue (after successful send)
     void commitPackets(size_t count) {
         for (size_t i = 0; i < count; i++) {
@@ -64,8 +63,7 @@ private:
             packetQueue.pop_front();  // Note: pop_front() for deque
         }
     }
-    
-    // NEW: Helper to clear all queues
+
     void clearAllQueues() {
         // Clear main queue with proper memory deallocation
         while (!packetQueue.empty()) {
@@ -131,7 +129,7 @@ public:
     void processSendQueue(bool bulkMode = false) override {
         uint32_t now = millis();
         
-        // NEW: USB block detection - only check if we have data to send in not bulk mode
+        // USB block detection - only check if we have data to send in not bulk mode
         if (!bulkMode && !packetQueue.empty()) {
             size_t currentAvailable = usbInterface->availableForWrite();
             
@@ -258,7 +256,7 @@ public:
                 offset += item.packet.size;
             }
             
-            // NEW: Check if entire batch fits
+            // Check if entire batch fits
             if (avail < (int)offset) {
                 // Batch doesn't fit entirely
                 if (windowAge >= batchTimeout) {
@@ -323,7 +321,7 @@ public:
     }
     
     bool enqueue(const ParsedPacket& packet) override {
-        // NEW: When USB is blocked, keep only 1 packet for testing
+        // When USB is blocked, keep only 1 packet for testing
         if (usbBlocked) {
             if (packetQueue.empty()) {
                 // Accept this packet as test packet

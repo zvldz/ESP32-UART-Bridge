@@ -45,8 +45,9 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ github.ref_name }}"
-          # Extract section between current version and next version header (or EOF)
-          BODY=$(awk "/^## ${VERSION}/,/^## v[0-9]/" CHANGELOG.md | sed '$d' | tail -n +2)
+          # Extract section for current version until next version header
+          # awk state machine: start printing after version header, stop at next version
+          BODY=$(awk "/^## ${VERSION}[ (]/{found=1; next} /^## v[0-9]/{found=0} found" CHANGELOG.md)
           if [ -z "$BODY" ]; then
             BODY="Release ${VERSION}"
           fi

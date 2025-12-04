@@ -94,7 +94,6 @@ static inline void processDevice3UART(BridgeContext* ctx) {
             if (free < actual) {
                 // Drop oldest data to make room
                 ctx->buffers.uart3InputBuffer->consume(actual - free);
-                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.uart3InputBuffer->write(buffer, actual);
@@ -143,7 +142,6 @@ static inline void processDevice2USB(BridgeContext* ctx) {
             if (free < (size_t)actual) {
                 // Drop oldest data to make room
                 ctx->buffers.usbInputBuffer->consume(actual - free);
-                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.usbInputBuffer->write(buffer, actual);
@@ -153,11 +151,6 @@ static inline void processDevice2USB(BridgeContext* ctx) {
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             
             totalProcessed += actual;
-            
-            // Device3 mirror (commented for review)
-            // if (ctx->devices.device3IsBridge && ctx->interfaces.device3Serial) {
-            //     size_t d3written = ctx->interfaces.device3Serial->write(buffer, actual);
-            // }
         } else {
             break;
         }
@@ -203,7 +196,6 @@ static inline void processDevice2UART(BridgeContext* ctx) {
             if (free < actualRead) {
                 // Drop oldest data to make room
                 ctx->buffers.uart2InputBuffer->consume(actualRead - free);
-                // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
             }
             
             ctx->buffers.uart2InputBuffer->write(buffer, actualRead);
@@ -234,7 +226,6 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         if (free < toWrite) {
             // Drop oldest data to make room
             ctx->buffers.udpInputBuffer->consume(toWrite - free);
-            // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
         }
 
         ctx->buffers.udpInputBuffer->write(segments.first.data, toWrite);
@@ -252,7 +243,6 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         if (free < toWrite) {
             // Drop oldest data to make room
             ctx->buffers.udpInputBuffer->consume(toWrite - free);
-            // [COMMENT CANDIDATE FOR REMOVAL] eviction counter - edge case, buffer stats sufficient
         }
 
         ctx->buffers.udpInputBuffer->write(segments.second.data, toWrite);
@@ -261,6 +251,5 @@ static inline void processDevice4UDP(BridgeContext* ctx) {
         g_deviceStats.device4.rxBytes.fetch_add(toWrite, std::memory_order_relaxed);
     }
 }
-
 
 #endif // BRIDGE_PROCESSING_H
