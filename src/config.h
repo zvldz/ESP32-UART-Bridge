@@ -4,10 +4,11 @@
 #include "types.h"
 
 // Current configuration version
-#define CURRENT_CONFIG_VERSION 9  // Increased from 8 to 9 for MAVLink routing
+#define CURRENT_CONFIG_VERSION 10  // Increased from 9 to 10 for multi-WiFi networks
 
 // Default values
 #define DEFAULT_WIFI_TX_POWER   20      // 5dBm (20 * 0.25dBm)
+#define MAX_WIFI_NETWORKS       5       // Maximum WiFi networks for Client mode
 
 // Configuration management interface
 void config_init(Config* config);

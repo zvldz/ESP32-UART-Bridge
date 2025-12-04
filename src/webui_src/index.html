@@ -89,9 +89,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p style="margin-top: 10px; margin-bottom: 0; font-size: 11px; color: #666;">
-                    <small>💡 Click on a row with 🔍 to view detailed backtrace information</small>
-                </p>
+                <small class="form-text" style="display: block; margin-top: 10px;">💡 Click on a row with 🔍 to view detailed backtrace information</small>
             </div>
         </div>
 
@@ -303,18 +301,81 @@
                         
                         <!-- Client Mode settings -->
                         <div id="clientModeSettings" style="display: none;">
-                            <!--<h5>Connect to Network</h5>-->
-                            <label for="wifi_client_ssid">Network Name (SSID):</label>
-                            <input type="text" name="wifi_client_ssid" id="wifi_client_ssid" maxlength="32">
-                            <label for="wifi_client_password">Network Password:</label>
-                            <div style="position: relative;">
-                                <input type="password" name="wifi_client_password" id="wifi_client_password" maxlength="64" style="padding-right: 40px;">
-                                <span id="toggleClientPasswordIcon" onclick="toggleClientPassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
-                                        <circle cx="10" cy="10" r="3"></circle>
-                                    </svg>
-                                </span>
+                            <!-- Primary Network (always visible) -->
+                            <div style="margin-bottom: 15px;">
+                                <label for="wifi_network_ssid_0">Primary Network (SSID):</label>
+                                <input type="text" name="wifi_network_ssid_0" id="wifi_network_ssid_0" maxlength="32">
+                                <label for="wifi_network_pass_0">Password:</label>
+                                <div style="position: relative;">
+                                    <input type="password" name="wifi_network_pass_0" id="wifi_network_pass_0" maxlength="64" style="padding-right: 40px;">
+                                    <span onclick="toggleNetworkPassword(0)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
+                                            <circle cx="10" cy="10" r="3"></circle>
+                                        </svg>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Additional Networks (collapsible) -->
+                            <div style="margin-top: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                                <div style="padding: 10px 15px; cursor: pointer; user-select: none;" onclick="toggleAdditionalNetworks()">
+                                    <span style="font-weight: 500;">➕ Additional Networks</span>
+                                    <span id="additionalNetworksArrow" style="float: right; font-size: 14px;">▶</span>
+                                </div>
+                                <div id="additionalNetworksContent" style="display: none; padding: 0 15px 15px 15px;">
+                                    <small style="display: block; margin-bottom: 15px; color: #666;">
+                                        ℹ️ Priority order: Primary &gt; Network 2 &gt; Network 3... Device will connect to first available.
+                                    </small>
+
+                                    <!-- Network 2 -->
+                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
+                                        <label for="wifi_network_ssid_1" style="font-weight: 500;">Network 2:</label>
+                                        <input type="text" name="wifi_network_ssid_1" id="wifi_network_ssid_1" maxlength="32" placeholder="SSID (leave empty to skip)">
+                                        <div style="position: relative;">
+                                            <input type="password" name="wifi_network_pass_1" id="wifi_network_pass_1" maxlength="64" placeholder="Password" style="padding-right: 40px;">
+                                            <span onclick="toggleNetworkPassword(1)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Network 3 -->
+                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
+                                        <label for="wifi_network_ssid_2" style="font-weight: 500;">Network 3:</label>
+                                        <input type="text" name="wifi_network_ssid_2" id="wifi_network_ssid_2" maxlength="32" placeholder="SSID (leave empty to skip)">
+                                        <div style="position: relative;">
+                                            <input type="password" name="wifi_network_pass_2" id="wifi_network_pass_2" maxlength="64" placeholder="Password" style="padding-right: 40px;">
+                                            <span onclick="toggleNetworkPassword(2)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Network 4 -->
+                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
+                                        <label for="wifi_network_ssid_3" style="font-weight: 500;">Network 4:</label>
+                                        <input type="text" name="wifi_network_ssid_3" id="wifi_network_ssid_3" maxlength="32" placeholder="SSID (leave empty to skip)">
+                                        <div style="position: relative;">
+                                            <input type="password" name="wifi_network_pass_3" id="wifi_network_pass_3" maxlength="64" placeholder="Password" style="padding-right: 40px;">
+                                            <span onclick="toggleNetworkPassword(3)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Network 5 -->
+                                    <div style="padding: 10px; background: #fff; border-radius: 4px;">
+                                        <label for="wifi_network_ssid_4" style="font-weight: 500;">Network 5:</label>
+                                        <input type="text" name="wifi_network_ssid_4" id="wifi_network_ssid_4" maxlength="32" placeholder="SSID (leave empty to skip)">
+                                        <div style="position: relative;">
+                                            <input type="password" name="wifi_network_pass_4" id="wifi_network_pass_4" maxlength="64" placeholder="Password" style="padding-right: 40px;">
+                                            <span onclick="toggleNetworkPassword(4)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
+                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -358,16 +419,16 @@
                 <span id="configArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
             <div id="configBackupContent" style="display: none;">
-                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                    <div>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center;">
+                    <div style="text-align: center;">
                         <button type="button" onclick="window.location.href='/config/export'" style="background-color: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">💾 Export Config</button>
                         <br><small style="color: #666; font-size: 12px;">Download current configuration</small>
                     </div>
-                    <div>
+                    <div style="text-align: center;">
                         <button type="button" onclick="document.getElementById('configFile').click()" style="background-color: #FF9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📁 Import Config</button>
                         <br><small style="color: #666; font-size: 12px;">Upload configuration file</small>
                     </div>
-                    <div>
+                    <div style="text-align: center;">
                         <button type="button" onclick="factoryReset()" style="background-color: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">🔄 Factory Reset</button>
                         <br><small style="color: #666; font-size: 12px;">Reset all settings to defaults</small>
                     </div>
@@ -390,18 +451,18 @@
                 🔄 Firmware Update
                 <span id="firmwareArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="firmwareUpdateContent" style="display: none;">
+            <div id="firmwareUpdateContent" style="display: none; text-align: center;">
                 <div style="margin-bottom: 15px;">
                     <label for="firmwareFile">Select Firmware File (.bin):</label><br>
                     <input type="file" id="firmwareFile" accept=".bin" style="margin: 5px 0;">
                 </div>
                 <div style="margin-bottom: 15px;">
-                    <button type="button" id="updateButton" onclick="handleFirmwareUpdate()" 
+                    <button type="button" id="updateButton" onclick="handleFirmwareUpdate()"
                             style="padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
                         Update Firmware
                     </button>
                 </div>
-                
+
                 <!-- Progress indication -->
                 <div id="updateProgress" style="display: none; margin-top: 15px;">
                     <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
@@ -409,7 +470,7 @@
                     </div>
                     <p id="updateStatus" style="margin: 5px 0; font-weight: bold;">Uploading firmware...</p>
                 </div>
-                
+
                 <p><small>Select .bin firmware file. Device will restart automatically after update.</small></p>
             </div>
         </div>

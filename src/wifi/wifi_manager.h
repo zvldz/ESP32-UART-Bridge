@@ -25,7 +25,7 @@
 
 // WiFi manager interface with ESP-IDF error handling
 esp_err_t wifiInit();
-esp_err_t wifiStartClient(const String& ssid, const String& password);
+esp_err_t wifiStartClient();
 esp_err_t wifiStartAP(const String& ssid, const String& password);
 void wifiProcess();  // Called from main loop
 
@@ -33,6 +33,7 @@ void wifiProcess();  // Called from main loop
 bool wifiIsReady();  // Universal check for data transmission
 int wifiGetRSSI();
 String wifiGetIP();
+String wifiGetConnectedSSID();  // Get current connected network SSID
 
 // Utility functions
 int rssiToPercent(int rssi);
@@ -40,6 +41,9 @@ int rssiToPercent(int rssi);
 // Event callbacks (implemented in main.cpp)
 extern void on_wifi_connected();
 extern void on_wifi_disconnected();
+
+// Reset auth failure flags (call when config changes)
+void wifiResetAuthFlags();
 
 // Network event group for task synchronization
 extern EventGroupHandle_t networkEventGroup;

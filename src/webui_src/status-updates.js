@@ -75,10 +75,13 @@ const StatusUpdates = {
             if (this.config.wifiClientConnected) {
                 const rssiPercent = this.config.rssiPercent || 0;
                 const wifiSignal = Utils.getWifiSignalBars(rssiPercent);
-                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (${this.config.wifiClientSsid} ${wifiSignal} ${rssiPercent}%)</td></tr>`;
+                const connectedNetwork = this.config.connectedSSID || 'Unknown';
+                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (${connectedNetwork} ${wifiSignal} ${rssiPercent}%)</td></tr>`;
                 wifiInfo += `<tr><td><strong>IP Address:</strong></td><td>${this.config.ipAddress || 'N/A'}</td></tr>`;
             } else {
-                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (Searching: ${this.config.wifiClientSsid})</td></tr>`;
+                // Show primary network name when searching
+                const primaryNetwork = this.config.wifiNetworks?.[0]?.ssid || 'N/A';
+                wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Client (Searching: ${primaryNetwork})</td></tr>`;
             }
         }
         

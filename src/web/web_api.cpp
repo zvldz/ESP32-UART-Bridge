@@ -95,15 +95,22 @@ static void populateConfigJson(JsonDocument& doc) {
 
     // WiFi mode and client settings
     doc["wifiMode"] = config.wifi_mode;
-    doc["wifiClientSsid"] = config.wifi_client_ssid;
-    doc["wifiClientPassword"] = config.wifi_client_password;
     doc["wifiTxPower"] = config.wifi_tx_power;
     doc["mdnsHostname"] = config.mdns_hostname;
+
+    // WiFi networks array for Client mode
+    JsonArray networks = doc["wifiNetworks"].to<JsonArray>();
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        JsonObject net = networks.add<JsonObject>();
+        net["ssid"] = config.wifi_networks[i].ssid;
+        net["password"] = config.wifi_networks[i].password;
+    }
 
     // Client mode status
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         doc["wifiClientConnected"] = systemState.wifiClientConnected;
         if (systemState.wifiClientConnected) {
+            doc["connectedSSID"] = wifiGetConnectedSSID();
             doc["ipAddress"] = wifiGetIP();
             doc["rssiPercent"] = rssiToPercent(wifiGetRSSI());
         }
@@ -573,45 +580,57 @@ void handleSave(AsyncWebServerRequest *request) {
         }
     }
 
-    // Client SSID
-    if (request->hasParam("wifi_client_ssid", true)) {
-        const AsyncWebParameter* p = request->getParam("wifi_client_ssid", true);
-        String newSSID = p->value();
+    // WiFi networks array for Client mode
+    bool wifiNetworksChanged = false;
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        char ssidParam[32], passParam[32];
+        snprintf(ssidParam, sizeof(ssidParam), "wifi_network_ssid_%d", i);
+        snprintf(passParam, sizeof(passParam), "wifi_network_pass_%d", i);
 
-        // Validate SSID
-        newSSID.trim();  // Remove whitespace
-        if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && newSSID.isEmpty()) {
-            log_msg(LOG_ERROR, "Client SSID cannot be empty");
-            request->send(400, "application/json",
-                "{\"status\":\"error\",\"message\":\"Client SSID cannot be empty\"}");
-            return;
+        if (request->hasParam(ssidParam, true)) {
+            String newSSID = request->getParam(ssidParam, true)->value();
+            newSSID.trim();
+
+            // Validate primary network (index 0) when in Client mode
+            if (i == 0 && config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT && newSSID.isEmpty()) {
+                log_msg(LOG_ERROR, "Primary network SSID cannot be empty in Client mode");
+                request->send(400, "application/json",
+                    "{\"status\":\"error\",\"message\":\"Primary network SSID cannot be empty\"}");
+                return;
+            }
+
+            if (newSSID != config.wifi_networks[i].ssid) {
+                config.wifi_networks[i].ssid = newSSID;
+                wifiNetworksChanged = true;
+                if (!newSSID.isEmpty()) {
+                    log_msg(LOG_INFO, "WiFi network %d SSID changed to %s", i + 1, newSSID.c_str());
+                }
+            }
         }
 
-        if (newSSID != config.wifi_client_ssid) {
-            config.wifi_client_ssid = newSSID;
-            configChanged = true;
-            log_msg(LOG_INFO, "WiFi Client SSID changed to %s", newSSID.c_str());
+        if (request->hasParam(passParam, true)) {
+            String newPassword = request->getParam(passParam, true)->value();
+
+            // Validate password (empty allowed for open networks, otherwise min 8 chars)
+            if (newPassword.length() > 0 && newPassword.length() < 8) {
+                log_msg(LOG_ERROR, "Network %d password must be at least 8 characters or empty", i + 1);
+                request->send(400, "application/json",
+                    "{\"status\":\"error\",\"message\":\"WiFi password must be at least 8 characters or empty\"}");
+                return;
+            }
+
+            if (newPassword != config.wifi_networks[i].password) {
+                config.wifi_networks[i].password = newPassword;
+                wifiNetworksChanged = true;
+                log_msg(LOG_INFO, "WiFi network %d password updated", i + 1);
+            }
         }
     }
 
-    // Client Password
-    if (request->hasParam("wifi_client_password", true)) {
-        const AsyncWebParameter* p = request->getParam("wifi_client_password", true);
-        String newPassword = p->value();
-
-        // Validate password (empty allowed for open networks, otherwise min 8 chars)
-        if (newPassword.length() > 0 && newPassword.length() < 8) {
-            log_msg(LOG_ERROR, "Client password must be at least 8 characters or empty");
-            request->send(400, "application/json",
-                "{\"status\":\"error\",\"message\":\"WiFi password must be at least 8 characters or empty for open network\"}");
-            return;
-        }
-
-        if (newPassword != config.wifi_client_password) {
-            config.wifi_client_password = newPassword;
-            configChanged = true;
-            log_msg(LOG_INFO, "WiFi Client password updated");
-        }
+    if (wifiNetworksChanged) {
+        configChanged = true;
+        // Reset auth failure flags when networks are changed
+        wifiResetAuthFlags();
     }
 
     // WiFi TX Power

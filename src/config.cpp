@@ -98,8 +98,10 @@ void config_init(Config* config) {
 
     // WiFi Client mode defaults
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
-    config->wifi_client_ssid = "";
-    config->wifi_client_password = "";
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        config->wifi_networks[i].ssid = "";
+        config->wifi_networks[i].password = "";
+    }
     config->wifi_tx_power = DEFAULT_WIFI_TX_POWER;
     config->mdns_hostname = "";  // Empty = auto-generate on startup
     config->device_version = DEVICE_VERSION;
@@ -138,8 +140,10 @@ void config_reset_wifi(Config* config) {
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;
     config->ssid = "";  // Empty = auto-generate unique SSID on startup
     config->password = DEFAULT_AP_PASSWORD;
-    config->wifi_client_ssid = "";
-    config->wifi_client_password = "";
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        config->wifi_networks[i].ssid = "";
+        config->wifi_networks[i].password = "";
+    }
     config->mdns_hostname = "";  // Empty = auto-generate on startup
     config->wifi_tx_power = DEFAULT_WIFI_TX_POWER;
 }
@@ -154,7 +158,13 @@ void config_migrate(Config* config) {
         return;
     }
 
-    // Future migrations go here (v9 → v10, etc.)
+    // v9 → v10: Multi-WiFi networks
+    // Migration handled in config_load_from_json() via fallback:
+    // old client_ssid/client_password → wifi_networks[0]
+    if (config->config_version == 9) {
+        log_msg(LOG_INFO, "Migrating config v9 → v10 (multi-WiFi networks)");
+        config->config_version = CURRENT_CONFIG_VERSION;
+    }
 }
 
 // Load configuration from LittleFS
@@ -172,7 +182,14 @@ void config_load(Config* config) {
     String jsonString = file.readString();
     file.close();
 
+    uint16_t oldVersion = config->config_version;
     config_load_from_json(config, jsonString);
+
+    // Save config if migration occurred (version changed)
+    if (config->config_version != oldVersion) {
+        log_msg(LOG_INFO, "Config migrated from v%d to v%d, saving...", oldVersion, config->config_version);
+        config_save(config);
+    }
 }
 
 // Load configuration from JSON string
@@ -221,10 +238,35 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
         config->permanent_network_mode = doc["wifi"]["permanent"] | false;
 
-        // Load WiFi mode and client settings
+        // Load WiFi mode
         config->wifi_mode = (BridgeWiFiMode)(doc["wifi"]["mode"] | BRIDGE_WIFI_MODE_AP);
-        config->wifi_client_ssid = doc["wifi"]["client_ssid"] | "";
-        config->wifi_client_password = doc["wifi"]["client_password"] | "";
+
+        // Load WiFi networks array (new format) or migrate from old format
+        if (doc["wifi"]["networks"].is<JsonArray>()) {
+            // New format: array of networks
+            JsonArray networks = doc["wifi"]["networks"];
+            int i = 0;
+            for (JsonObject net : networks) {
+                if (i >= MAX_WIFI_NETWORKS) break;
+                config->wifi_networks[i].ssid = net["ssid"] | "";
+                config->wifi_networks[i].password = net["password"] | "";
+                i++;
+            }
+            // Clear remaining slots
+            for (; i < MAX_WIFI_NETWORKS; i++) {
+                config->wifi_networks[i].ssid = "";
+                config->wifi_networks[i].password = "";
+            }
+        } else {
+            // Migration from old format: client_ssid/client_password → networks[0]
+            config->wifi_networks[0].ssid = doc["wifi"]["client_ssid"] | "";
+            config->wifi_networks[0].password = doc["wifi"]["client_password"] | "";
+            for (int i = 1; i < MAX_WIFI_NETWORKS; i++) {
+                config->wifi_networks[i].ssid = "";
+                config->wifi_networks[i].password = "";
+            }
+        }
+
         config->wifi_tx_power = doc["wifi"]["tx_power"] | DEFAULT_WIFI_TX_POWER;
         config->mdns_hostname = doc["wifi"]["mdns_hostname"] | "";
     }
@@ -299,10 +341,16 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["wifi"]["password"] = config->password;
     doc["wifi"]["permanent"] = config->permanent_network_mode;
 
-    // WiFi mode and client settings
+    // WiFi mode and client networks
     doc["wifi"]["mode"] = config->wifi_mode;
-    doc["wifi"]["client_ssid"] = config->wifi_client_ssid;
-    doc["wifi"]["client_password"] = config->wifi_client_password;
+    JsonArray networks = doc["wifi"]["networks"].to<JsonArray>();
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        if (!config->wifi_networks[i].ssid.isEmpty()) {
+            JsonObject net = networks.add<JsonObject>();
+            net["ssid"] = config->wifi_networks[i].ssid;
+            net["password"] = config->wifi_networks[i].password;
+        }
+    }
     doc["wifi"]["tx_power"] = config->wifi_tx_power;
     doc["wifi"]["mdns_hostname"] = config->mdns_hostname;
 

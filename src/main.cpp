@@ -406,7 +406,7 @@ void initNetworkMode() {
         systemState.tempForceApMode = false;
     } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         log_msg(LOG_INFO, "Starting WiFi Client mode");
-        wifiStartClient(config.wifi_client_ssid, config.wifi_client_password);
+        wifiStartClient();
     } else {
         log_msg(LOG_INFO, "Starting WiFi AP mode");
         wifiStartAP(config.ssid, config.password);

@@ -38,11 +38,45 @@ static bool wasConnectedBefore = false;
 static bool targetNetworkFound = false;
 static int scanFailureCount = 0;
 
+// Multi-network support
+static int currentNetworkIndex = -1;                      // Which network we're trying (-1 = none)
+static bool networkAuthFailed[MAX_WIFI_NETWORKS] = {};    // Auth failed flags (session only)
+static int perNetworkRetryCount[MAX_WIFI_NETWORKS] = {};  // Retry count per network
+
 // Internal state for client mode
 static String targetSSID;
 static String targetPassword;
 static bool mdnsInitNeeded = false;
 static String clientIP;
+
+// Helper: Reset auth failed flags (called on config change)
+void wifiResetAuthFlags() {
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        networkAuthFailed[i] = false;
+        perNetworkRetryCount[i] = 0;
+    }
+    currentNetworkIndex = -1;
+}
+
+// Helper: Check if all configured networks have auth failures
+static bool allNetworksAuthFailed() {
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        if (!config.wifi_networks[i].ssid.isEmpty() && !networkAuthFailed[i]) {
+            return false;  // At least one network hasn't failed yet
+        }
+    }
+    return true;  // All configured networks have failed
+}
+
+// Helper: Find next network to try after auth failure
+static int findNextNetworkToTry(int afterIndex) {
+    for (int i = afterIndex + 1; i < MAX_WIFI_NETWORKS; i++) {
+        if (!config.wifi_networks[i].ssid.isEmpty() && !networkAuthFailed[i]) {
+            return i;
+        }
+    }
+    return -1;  // No more networks to try
+}
 
 // Event group for network status
 EventGroupHandle_t networkEventGroup = NULL;
@@ -191,8 +225,8 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
                     // Handle based on current state and history
                     if (systemState.wifiClientState == CLIENT_CONNECTED) {
-                        // We were connected - try to reconnect
-                        log_msg(LOG_INFO, "Was connected, will attempt reconnection");
+                        // We were connected - immediately scan for any available network
+                        log_msg(LOG_INFO, "Was connected, will scan for available networks");
                         systemState.wifiClientState = CLIENT_SCANNING;
                         systemState.wifiRetryCount = 0;
                         lastScanTime = 0;
@@ -202,40 +236,63 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     }
                     else if (connectInProgress && systemState.wifiClientState != CLIENT_WRONG_PASSWORD) {
                         connectInProgress = false;
-                        systemState.wifiRetryCount++;
 
-                        log_msg(LOG_DEBUG, "Connection attempt #%d failed", systemState.wifiRetryCount);
+                        // Track retries per network
+                        if (currentNetworkIndex >= 0 && currentNetworkIndex < MAX_WIFI_NETWORKS) {
+                            perNetworkRetryCount[currentNetworkIndex]++;
+                            log_msg(LOG_DEBUG, "Network #%d '%s' connection attempt #%d failed",
+                                    currentNetworkIndex + 1, targetSSID.c_str(),
+                                    perNetworkRetryCount[currentNetworkIndex]);
 
-                        // Check if we should stop trying - ONLY for authentication failures
-                        if (!wasConnectedBefore && isAuthError &&
-                            systemState.wifiRetryCount >= WIFI_CLIENT_MAX_RETRIES) {
-                            // Authentication error on initial connection - wrong password
-                            log_msg(LOG_WARNING, "Max authentication failures reached - wrong password");
-                            systemState.wifiClientState = CLIENT_WRONG_PASSWORD;
-                            led_set_mode(LED_MODE_WIFI_CLIENT_ERROR);
+                            // Check if this network has reached max retries for auth errors
+                            if (isAuthError && perNetworkRetryCount[currentNetworkIndex] >= WIFI_CLIENT_MAX_RETRIES) {
+                                // Mark this network as auth failed
+                                networkAuthFailed[currentNetworkIndex] = true;
+                                log_msg(LOG_WARNING, "Network #%d '%s' marked as auth failed",
+                                        currentNetworkIndex + 1, targetSSID.c_str());
 
-                            // Enable LED task for error animation
-                            tLedMonitor.enable();
-                            targetNetworkFound = false;
-                        }
-                        else if (targetNetworkFound && systemState.wifiRetryCount < WIFI_CLIENT_MAX_RETRIES) {
-                            // Network is still available, try again after a short delay
-                            log_msg(LOG_DEBUG, "Retrying connection in %dms...", WIFI_RECONNECT_DELAY_MS);
+                                // Check if ALL networks have failed
+                                if (allNetworksAuthFailed()) {
+                                    log_msg(LOG_WARNING, "All configured networks have auth failures - stopping");
+                                    systemState.wifiClientState = CLIENT_WRONG_PASSWORD;
+                                    led_set_mode(LED_MODE_WIFI_CLIENT_ERROR);
+                                    tLedMonitor.enable();
+                                    targetNetworkFound = false;
+                                }
+                                else {
+                                    // Try next network via scan
+                                    log_msg(LOG_INFO, "Will try other configured networks");
+                                    systemState.wifiClientState = CLIENT_SCANNING;
+                                    tLedMonitor.enable();
+                                    lastScanTime = 0;
+                                    scanInProgress = false;
+                                }
+                            }
+                            else if (targetNetworkFound && perNetworkRetryCount[currentNetworkIndex] < WIFI_CLIENT_MAX_RETRIES) {
+                                // Network is still available, retry same network
+                                log_msg(LOG_DEBUG, "Retrying connection in %dms...", WIFI_RECONNECT_DELAY_MS);
 
-                            vTaskDelay(pdMS_TO_TICKS(WIFI_RECONNECT_DELAY_MS));
+                                vTaskDelay(pdMS_TO_TICKS(WIFI_RECONNECT_DELAY_MS));
 
-                            systemState.wifiClientState = CLIENT_CONNECTING;
-                            connectInProgress = true;
-                            lastConnectAttempt = millis();
+                                systemState.wifiClientState = CLIENT_CONNECTING;
+                                connectInProgress = true;
+                                lastConnectAttempt = millis();
 
-                            esp_wifi_connect();
-                            log_msg(LOG_INFO, "Retry attempt #%d to %s", systemState.wifiRetryCount + 1, targetSSID.c_str());
+                                esp_wifi_connect();
+                                log_msg(LOG_INFO, "Retry attempt #%d to %s",
+                                        perNetworkRetryCount[currentNetworkIndex] + 1, targetSSID.c_str());
+                            }
+                            else {
+                                // Network not found or other error - scan for alternatives
+                                systemState.wifiClientState = CLIENT_SCANNING;
+                                tLedMonitor.enable();
+                                lastScanTime = 0;
+                                scanInProgress = false;
+                            }
                         }
                         else {
-                            // Network not found or too many retries - need to scan
+                            // No current network index - just scan
                             systemState.wifiClientState = CLIENT_SCANNING;
-
-                            // Enable LED task when going back to scanning
                             tLedMonitor.enable();
                             lastScanTime = 0;
                             scanInProgress = false;
@@ -247,6 +304,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
                     // Clean up mDNS when disconnected
                     mdns_free();
+                    mdnsInitialized = false;
                     log_msg(LOG_DEBUG, "mDNS freed on disconnect");
                 }
                 break;
@@ -258,18 +316,25 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     esp_wifi_scan_get_ap_num(&networksFound);
                     log_msg(LOG_DEBUG, "WiFi scan complete, found %d networks", networksFound);
 
-                    // Check if target SSID was found
-                    bool networkFoundNow = false;
+                    // Find first available network from our list (by priority)
+                    int foundNetworkIndex = -1;
                     if (networksFound > 0) {
                         wifi_ap_record_t* ap_records = static_cast<wifi_ap_record_t*>(malloc(networksFound * sizeof(wifi_ap_record_t)));
                         if (ap_records) {
                             esp_wifi_scan_get_ap_records(&networksFound, ap_records);
 
-                            for (int i = 0; i < networksFound; i++) {
-                                if (strcmp(reinterpret_cast<char*>(ap_records[i].ssid), targetSSID.c_str()) == 0) {
-                                    networkFoundNow = true;
-                                    targetNetworkFound = true;
-                                    break;
+                            // Check each configured network in priority order
+                            for (int cfgIdx = 0; cfgIdx < MAX_WIFI_NETWORKS && foundNetworkIndex < 0; cfgIdx++) {
+                                if (config.wifi_networks[cfgIdx].ssid.isEmpty()) continue;
+                                if (networkAuthFailed[cfgIdx]) continue;  // Skip networks with auth failures
+
+                                // Check if this network is in scan results
+                                for (int scanIdx = 0; scanIdx < networksFound; scanIdx++) {
+                                    if (strcmp(reinterpret_cast<char*>(ap_records[scanIdx].ssid),
+                                               config.wifi_networks[cfgIdx].ssid.c_str()) == 0) {
+                                        foundNetworkIndex = cfgIdx;
+                                        break;
+                                    }
                                 }
                             }
 
@@ -277,26 +342,37 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         }
                     }
 
-                    if (networkFoundNow && !connectInProgress &&
+                    if (foundNetworkIndex >= 0 && !connectInProgress &&
                         systemState.wifiClientState != CLIENT_WRONG_PASSWORD) {
-                        // Network found, try to connect
+                        // Network found, configure and connect
+                        currentNetworkIndex = foundNetworkIndex;
+                        targetSSID = config.wifi_networks[foundNetworkIndex].ssid;
+                        targetPassword = config.wifi_networks[foundNetworkIndex].password;
+                        targetNetworkFound = true;
+
+                        // Update WiFi config with new credentials
+                        wifi_config_t wifi_config = {};
+                        setWifiCredentials(&wifi_config, false, targetSSID, targetPassword);
+                        esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+
                         systemState.wifiClientState = CLIENT_CONNECTING;
                         connectInProgress = true;
                         lastConnectAttempt = millis();
 
-                        log_msg(LOG_INFO, "Target network found, attempting connection #%d", systemState.wifiRetryCount + 1);
+                        log_msg(LOG_INFO, "Network #%d '%s' found, attempting connection",
+                                foundNetworkIndex + 1, targetSSID.c_str());
 
                         esp_wifi_connect();
                     }
-                    else if (!networkFoundNow) {
-                        // Network not found
+                    else if (foundNetworkIndex < 0) {
+                        // No configured network found in scan
                         targetNetworkFound = false;
                         systemState.wifiClientState = CLIENT_NO_SSID;
                         led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
 
                         // Enable LED task for searching animation
                         tLedMonitor.enable();
-                        log_msg(LOG_DEBUG, "Target network '%s' not found", targetSSID.c_str());
+                        log_msg(LOG_DEBUG, "No configured networks found in scan");
                     }
                 }
                 break;
@@ -412,23 +488,39 @@ esp_err_t wifiInit() {
     return ESP_OK;
 }
 
-esp_err_t wifiStartClient(const String& ssid, const String& password) {
+esp_err_t wifiStartClient() {
     if (!wifi_initialized) {
         log_msg(LOG_ERROR, "WiFi not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
-    log_msg(LOG_INFO, "Starting WiFi Client mode for SSID: %s", ssid.c_str());
+    // Count configured networks
+    int networkCount = 0;
+    for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+        if (!config.wifi_networks[i].ssid.isEmpty()) {
+            networkCount++;
+            log_msg(LOG_DEBUG, "Configured network #%d: %s", i + 1, config.wifi_networks[i].ssid.c_str());
+        }
+    }
 
-    targetSSID = ssid;
-    targetPassword = password;
+    if (networkCount == 0) {
+        log_msg(LOG_WARNING, "No WiFi networks configured for Client mode");
+        return ESP_ERR_INVALID_ARG;
+    }
 
-    // Reset connection tracking
+    log_msg(LOG_INFO, "Starting WiFi Client mode with %d configured networks", networkCount);
+
+    // Reset multi-network state
+    wifiResetAuthFlags();
     wasConnectedBefore = false;
+
+    // Use first network for initial config (will be updated on scan)
+    targetSSID = config.wifi_networks[0].ssid;
+    targetPassword = config.wifi_networks[0].password;
 
     // Convert String to char*
     wifi_config_t wifi_config = {};
-    setWifiCredentials(&wifi_config, false, ssid, password);
+    setWifiCredentials(&wifi_config, false, targetSSID, targetPassword);
 
     // CRITICAL: Set STA mode only
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -444,7 +536,7 @@ esp_err_t wifiStartClient(const String& ssid, const String& password) {
     // Set power parameters
     esp_wifi_set_max_tx_power(config.wifi_tx_power);
 
-    // Start with a scan
+    // Start with a scan to find available networks
     systemState.wifiClientState = CLIENT_SCANNING;
     led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
 
@@ -457,9 +549,7 @@ esp_err_t wifiStartClient(const String& ssid, const String& password) {
         lastScanTime = millis();
         log_msg(LOG_DEBUG, "Initial WiFi scan started");
     } else {
-        if (scan_ret != ESP_OK) {
-            log_msg(LOG_WARNING, "Failed to start initial scan: %s", esp_err_to_name(scan_ret));
-        }
+        log_msg(LOG_WARNING, "Failed to start initial scan: %s", esp_err_to_name(scan_ret));
     }
 
     return ESP_OK;
@@ -608,4 +698,11 @@ int rssiToPercent(int rssi) {
     if (rssi >= WIFI_RSSI_EXCELLENT) return 100;
     if (rssi <= WIFI_RSSI_POOR) return 0;
     return (rssi - WIFI_RSSI_POOR) * 100 / (WIFI_RSSI_EXCELLENT - WIFI_RSSI_POOR);
+}
+
+String wifiGetConnectedSSID() {
+    if (!wifi_initialized || !systemState.wifiClientConnected) {
+        return "";
+    }
+    return targetSSID;
 }
