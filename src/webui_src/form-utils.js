@@ -125,14 +125,19 @@ const FormUtils = {
         if (ssid) ssid.value = this.config.ssid;
         if (password) password.value = this.config.password;
         
-        // Set client WiFi settings
-        const clientSsid = document.getElementById('wifi_client_ssid');
-        const clientPassword = document.getElementById('wifi_client_password');
+        // Set client WiFi networks
+        const networks = this.config.wifiNetworks || [];
+        for (let i = 0; i < 5; i++) {
+            const ssidInput = document.getElementById(`wifi_network_ssid_${i}`);
+            const passInput = document.getElementById(`wifi_network_pass_${i}`);
+            if (ssidInput) ssidInput.value = networks[i]?.ssid || '';
+            if (passInput) passInput.value = networks[i]?.password || '';
+        }
+
+        // WiFi TX Power and mDNS
         const wifiTxPower = document.getElementById('wifi_tx_power');
         const mdnsHostname = document.getElementById('mdns_hostname');
         const mdnsUrl = document.getElementById('mdns_url');
-        if (clientSsid) clientSsid.value = this.config.wifiClientSsid || '';
-        if (clientPassword) clientPassword.value = this.config.wifiClientPassword || '';
         if (wifiTxPower) wifiTxPower.value = this.config.wifiTxPower || 20;
         if (mdnsHostname) mdnsHostname.value = this.config.mdnsHostname || '';
         if (mdnsUrl) mdnsUrl.textContent = this.config.mdnsHostname || 'hostname';
@@ -185,7 +190,8 @@ const FormUtils = {
         
         // Password toggle - attach to global function
         window.togglePassword = () => this.togglePassword();
-        window.toggleClientPassword = () => this.toggleClientPassword();
+        window.toggleNetworkPassword = (index) => this.toggleNetworkPassword(index);
+        window.toggleAdditionalNetworks = () => this.toggleAdditionalNetworks();
         
         // WiFi config toggle
         window.toggleWifiConfig = () => this.toggleWifiConfig();
@@ -242,17 +248,12 @@ const FormUtils = {
         .then(data => {
             if (data.status === 'ok') {
                 if (submitButton) {
-                    submitButton.disabled = false;
-                    submitButton.textContent = data.message;
-                    submitButton.style.backgroundColor = '#4CAF50';
+                    submitButton.disabled = true;
+                    submitButton.style.backgroundColor = '#2196F3';  // Blue for waiting
                 }
-                
-                // Add instruction after 2 seconds
-                setTimeout(() => {
-                    if (submitButton) {
-                        submitButton.textContent += ' Please refresh the page manually.';
-                    }
-                }, 2000);
+
+                // Start reconnection countdown
+                this.startReconnectCountdown(submitButton);
             } else if (data.status === 'unchanged') {
                 if (submitButton) {
                     submitButton.textContent = 'No Changes';
@@ -301,7 +302,67 @@ const FormUtils = {
         
         return false;
     },
-    
+
+    // Countdown and auto-reconnect after save
+    startReconnectCountdown(button) {
+        const REBOOT_WAIT_SECONDS = 8;
+        const MAX_RECONNECT_ATTEMPTS = 30;
+        let countdown = REBOOT_WAIT_SECONDS;
+        let attempts = 0;
+
+        // Phase 1: Countdown while device reboots
+        const countdownInterval = setInterval(() => {
+            if (button) {
+                button.textContent = `Rebooting... ${countdown}s`;
+            }
+            countdown--;
+
+            if (countdown < 0) {
+                clearInterval(countdownInterval);
+                // Phase 2: Start reconnection attempts
+                this.attemptReconnect(button, attempts, MAX_RECONNECT_ATTEMPTS);
+            }
+        }, 1000);
+    },
+
+    attemptReconnect(button, attempt, maxAttempts) {
+        if (attempt >= maxAttempts) {
+            // Give up, show manual refresh message
+            if (button) {
+                button.textContent = 'Please refresh manually';
+                button.style.backgroundColor = '#ff9800';  // Orange
+                button.disabled = false;
+                button.onclick = () => window.location.reload();
+            }
+            return;
+        }
+
+        if (button) {
+            button.textContent = `Reconnecting... (${attempt + 1}/${maxAttempts})`;
+        }
+
+        // Try to fetch status
+        fetch('/status', { cache: 'no-store' })
+            .then(response => {
+                if (response.ok) {
+                    // Device is back online - reload page
+                    if (button) {
+                        button.textContent = 'Connected! Reloading...';
+                        button.style.backgroundColor = '#4CAF50';
+                    }
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    throw new Error('Not ready');
+                }
+            })
+            .catch(() => {
+                // Device not ready yet, retry after 1 second
+                setTimeout(() => {
+                    this.attemptReconnect(button, attempt + 1, maxAttempts);
+                }, 1000);
+            });
+    },
+
     togglePassword() {
         const passwordInput = document.getElementById('password');
         const icon = document.getElementById('toggleIcon');
@@ -328,12 +389,14 @@ const FormUtils = {
         }
     },
     
-    toggleClientPassword() {
-        const passwordInput = document.getElementById('wifi_client_password');
-        const icon = document.getElementById('toggleClientPasswordIcon');
-        
-        if (!passwordInput || !icon) return;
-        
+    toggleNetworkPassword(index) {
+        const passwordInput = document.getElementById(`wifi_network_pass_${index}`);
+        if (!passwordInput) return;
+
+        // Find the icon span next to the input
+        const icon = passwordInput.parentElement.querySelector('span');
+        if (!icon) return;
+
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
             icon.innerHTML = `
@@ -350,6 +413,10 @@ const FormUtils = {
                 </svg>
             `;
         }
+    },
+
+    toggleAdditionalNetworks() {
+        Utils.toggleElement('additionalNetworksContent', 'additionalNetworksArrow');
     },
     
     updateWiFiModeDisplay() {
@@ -395,18 +462,21 @@ const FormUtils = {
                 return false;
             }
         } else if (wifiMode && wifiMode.value === '1') {
-            // Client mode validation
-            const clientSsid = document.getElementById('wifi_client_ssid');
-            const clientPassword = document.getElementById('wifi_client_password');
-            
-            if (clientSsid && clientSsid.value.trim() === '') {
-                alert('WiFi network name (SSID) cannot be empty in Client mode');
+            // Client mode validation - check primary network
+            const primarySsid = document.getElementById('wifi_network_ssid_0');
+
+            if (primarySsid && primarySsid.value.trim() === '') {
+                alert('Primary network SSID cannot be empty in Client mode');
                 return false;
             }
-            
-            if (clientPassword && clientPassword.value.length > 0 && clientPassword.value.length < 8) {
-                alert('WiFi network password must be at least 8 characters or empty for open network');
-                return false;
+
+            // Validate all network passwords
+            for (let i = 0; i < 5; i++) {
+                const password = document.getElementById(`wifi_network_pass_${i}`);
+                if (password && password.value.length > 0 && password.value.length < 8) {
+                    alert(`Network ${i + 1} password must be at least 8 characters or empty for open network`);
+                    return false;
+                }
             }
         }
         

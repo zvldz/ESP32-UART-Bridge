@@ -3,6 +3,12 @@
 ## v2.18.9 (WiFi & Configuration Improvements)
 
 ### WiFi Enhancements
+- **Multi-WiFi Networks Support**: Configure up to 5 WiFi networks with priority order
+  - Automatic fallback to next network when connection fails
+  - Priority-based scanning (tries networks in configured order)
+  - Web UI with dynamic network list management (Add/Remove buttons)
+  - Backward compatible: existing single-network configs auto-migrate to new format
+  - Config version upgraded to v10 with automatic migration
 - **Unique WiFi AP Name**: Auto-generated AP SSID with MAC suffix (e.g., `ESP-Bridge-11fc`)
   - Prevents AP name conflicts in multi-device environments
   - Generated on first boot, saved to config
@@ -11,6 +17,15 @@
   - Auto-generated on first boot (e.g., `esp-bridge-11fc`)
   - Web UI field with validation (a-z, 0-9, hyphen only)
 - **mDNS in AP Mode**: Added mDNS support for Access Point mode (was Client-only)
+- **Connected Network Display**: System status now shows actual connected network name in Client mode
+
+### Web UI Improvements
+- **Auto-Reconnect after Save & Reboot**: Page automatically reconnects after device reboot
+  - 8-second countdown during reboot
+  - Up to 30 reconnection attempts with progress indicator
+  - Automatic page reload when device comes back online
+- **Button Alignment**: Centered Configuration Backup and Firmware Update buttons
+- **Consistent Hint Styling**: Standardized hint text formatting across all sections
 
 ### Configuration Management
 - **Factory Reset**: New web UI button to reset all settings to defaults

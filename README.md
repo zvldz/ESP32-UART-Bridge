@@ -135,16 +135,19 @@ Universal UART to USB bridge with web configuration interface for any serial com
 The device supports two WiFi connection modes that can operate in temporary or permanent configurations:
 
 ### WiFi Access Point (AP) Mode
-- **Default Mode**: Creates WiFi hotspot "ESP-Bridge" (password: 12345678)
+- **Default Mode**: Creates WiFi hotspot "ESP-Bridge-xxxx" with unique MAC-based suffix (password: 12345678)
 - **Direct Configuration**: Connect devices directly to ESP32 for setup
 - **No Internet Required**: Works independently without existing WiFi infrastructure
-- **Access**: Web interface at 192.168.4.1
+- **Access**: Web interface at 192.168.4.1 or via mDNS (e.g., `esp-bridge-xxxx.local`)
 
-### WiFi Client Mode  
+### WiFi Client Mode
 - **Network Integration**: Connects ESP32 to existing WiFi network
-- **Remote Access**: Access web interface using assigned IP address
+- **Multi-Network Support**: Configure up to 5 WiFi networks with priority order
+  - Automatic fallback to next network when connection fails
+  - Priority-based scanning (tries networks in configured order)
+- **Remote Access**: Access web interface using assigned IP address or mDNS hostname
 - **Internet Connectivity**: Enables cloud features and remote monitoring
-- **Configuration**: Set SSID and password via web interface
+- **Configuration**: Set networks via web interface (primary + 4 additional in collapsible section)
 - **Intelligent Connection Logic**: 
   - Scans for configured network every 15 seconds when not found
   - Attempts connection up to 5 times when network is available
@@ -173,6 +176,12 @@ The device supports two WiFi connection modes that can operate in temporary or p
 - **WiFi Client → AP**: Triple-click BOOT button (temporary AP for reconfiguration)
 - **Enable Permanent**: Check box in web interface WiFi configuration
 - **Disable Network**: Uncheck permanent mode via web interface
+
+### mDNS (Local Network Discovery)
+- **Easy Access**: Connect to device using `hostname.local` instead of IP address
+- **Auto-Generated**: Unique hostname created on first boot (e.g., `esp-bridge-11fc.local`)
+- **Customizable**: Set custom hostname via web interface
+- **Both Modes**: Works in AP and Client modes
 
 ### WiFi Client Connection Logic
 
@@ -213,17 +222,18 @@ The device implements intelligent connection management with different behaviors
 ### Configuration Backup & Restore
 - **Export Configuration**: Download your current device settings as a JSON file
   - Access via web interface → "Configuration Backup" section → "Export Config"
-  - Creates unique filename: `esp32-bridge-config-[ID].json`
+  - Creates unique filename using mDNS hostname (e.g., `esp-bridge-11fc-config.json`)
   - Includes all UART, WiFi, device roles, and logging settings
 - **Import Configuration**: Upload and apply saved configuration
   - Select JSON file via "Import Config" button
   - Validates configuration structure and version compatibility
   - Automatically reboots device with new settings
-- **Use Cases**: 
+- **Use Cases**:
   - Quick provisioning of multiple devices
   - Backup before firmware updates
   - Share working configurations between team members
   - Restore after device reset or configuration errors
+- **Factory Reset**: Reset all settings to defaults via web interface button
 
 ## Common Use Cases
 
@@ -288,7 +298,8 @@ The web interface allows configuration of:
 - **Stop Bits**: 1 or 2
 - **Parity**: None, Even, Odd
 - **Flow Control**: None or RTS/CTS
-- **WiFi Settings**: Choose AP or Client mode, configure credentials
+- **WiFi Settings**: Choose AP or Client mode, configure up to 5 networks for Client mode
+- **WiFi TX Power**: Adjustable transmit power (2-20 dBm) for range/power optimization
 - **USB Mode**: Device (default) or Host mode
 - **Network Mode**: Temporary setup or permanent Wi-Fi operation
 - **Device Roles**: Configure Device 1, 2, 3, and 4 functionality (including SBUS modes)
@@ -406,8 +417,8 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
   - Bypasses wrong password error state
 
 ### Long Press (5+ seconds)
-- **WiFi Reset**: Resets WiFi credentials to factory defaults
-  - SSID: "ESP-Bridge" 
+- **WiFi Reset**: Resets WiFi settings to defaults (preserves UART and device roles)
+  - SSID: "ESP-Bridge-xxxx" (unique, auto-generated)
   - Password: "12345678"
   - LED feedback: Purple rapid blink confirms reset
   - Device automatically restarts
