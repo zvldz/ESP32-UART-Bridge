@@ -10,7 +10,7 @@ class ProtocolPipeline;
 
 // Task functions
 void uartBridgeTask(void* parameter);  // FreeRTOS task function
-void senderTask(void* parameter);      // ADD: Sender task function
+void senderTask(void* parameter);      // Sender task function
 
 // Device 3 task
 void device3Task(void* parameter);     // FreeRTOS task for Device 3 operations

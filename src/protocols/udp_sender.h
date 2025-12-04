@@ -153,7 +153,6 @@ private:
         if (shouldFlush) {
             flushBatch();
         }
-        // NON-BLOCKING: No else with waiting
     }
     
     void processRawPacket(QueuedPacket* item, bool bulkMode, uint32_t now) {
@@ -181,7 +180,6 @@ private:
             if ((now - atomicBatchStartMs) >= timeout) {
                 flushBatch();
             }
-            // NON-BLOCKING: No else with waiting
         }
         
         // Check RAW batch timeout
@@ -189,7 +187,6 @@ private:
             if ((now - lastBatchTime) >= RAW_BATCH_TIMEOUT_MS) {
                 flushRawBatch();
             }
-            // NON-BLOCKING: No else with waiting
         }
     }
     

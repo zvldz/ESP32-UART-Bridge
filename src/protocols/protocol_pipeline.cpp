@@ -316,7 +316,6 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
     
-    
     // SBUS Input flow (SBUS → UART1)
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         
@@ -792,7 +791,6 @@ void ProtocolPipeline::distributePackets(ParsedPacket* packets, size_t count, Pa
                 senders[j]->enqueue(packets[i]);
             }
         }
-        
     }
 }
 

@@ -13,7 +13,7 @@ class UartDMA : public UartInterface {
 public:
     // DMA-specific configuration structure
     struct DmaConfig {
-        bool useEventTask = true;          // Create event task for interrupt-driven operation
+        bool useEventTask = true;         // Create event task for interrupt-driven operation
         size_t dmaRxBufSize = 8192;       // DMA RX buffer size
         size_t dmaTxBufSize = 8192;       // DMA TX buffer size  
         size_t ringBufSize = 16384;       // Application ring buffer size

@@ -87,8 +87,7 @@ public:
         int space = uartInterface->availableForWrite();
         return space > 0;
     }
-    
-    // getName() is pure virtual - implemented in derived classes
+
     const char* getName() const override = 0;
 };
 

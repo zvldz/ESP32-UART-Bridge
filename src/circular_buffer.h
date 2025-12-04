@@ -26,7 +26,6 @@ struct CircularBufferStats {
     uint32_t wrapLinearizations;
     uint32_t partialWrites;   // Number of partial write operations
     uint32_t maxDepth;
-    // [COMMENT CANDIDATE FOR REMOVAL] p95/p99 latency metrics - over-engineering for this project
 };
 
 // Contiguous view for parser (zero-copy access)
@@ -47,11 +46,6 @@ private:
     
     // Temporary buffer for linearizing wrapped data in getContiguousForParser()
     // Size: 296 bytes = MAVLink v2 max frame (280) + margin (16)
-    // 
-    // IMPORTANT: This buffer is used when data wraps around main buffer boundary.
-    // If future parsers need larger contiguous views:
-    // 1. Increase this buffer size, OR  
-    // 2. Use getReadSegments() for manual wrap handling
     uint8_t tempLinearBuffer[296];
     
     // Synchronization
