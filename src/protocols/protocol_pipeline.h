@@ -27,9 +27,9 @@ struct DataFlow {
     ProtocolRouter* router;         // Will point to sharedRouter for MAVLink
     CircularBuffer* inputBuffer;    // Input buffer for this flow
     PacketSource source;            // Semantic source
-    PhysicalInterface physInterface;// NEW: Physical source
+    PhysicalInterface physInterface;// Physical source
     uint8_t senderMask;            // Which senders should receive packets from this flow
-    bool isInputFlow;              // NEW: Explicit marker for device→FC flows
+    bool isInputFlow;              // Explicit marker for device→FC flows
     
     DataFlow() : name(nullptr), parser(nullptr), router(nullptr), inputBuffer(nullptr),
                  source(SOURCE_DATA), physInterface(PHYS_NONE), senderMask(0xFF), isInputFlow(false) {}

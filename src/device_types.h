@@ -28,7 +28,7 @@ enum LogLevel {
 // Device 1 role
 enum Device1Role {
     D1_UART1 = 0,       // Default: Normal UART bridge at configured baudrate
-    D1_SBUS_IN = 1      // NEW: SBUS input from RC receiver (100000 8E2 inverted)
+    D1_SBUS_IN = 1      // SBUS input from RC receiver (100000 8E2 inverted)
 };
 
 // Device 2 role
@@ -36,8 +36,8 @@ enum Device2Role {
     D2_NONE = 0,
     D2_UART2 = 1,
     D2_USB = 2,
-    D2_SBUS_IN = 3,   // NEW: SBUS input from RC receiver
-    D2_SBUS_OUT = 4   // NEW: SBUS output to servos
+    D2_SBUS_IN = 3,   // SBUS input from RC receiver
+    D2_SBUS_OUT = 4   // SBUS output to servos
 };
 
 // Device 3 role
@@ -55,8 +55,8 @@ enum Device4Role {
     D4_NONE = 0,
     D4_NETWORK_BRIDGE = 1,  // Full bridge (MAVLink/Raw)
     D4_LOG_NETWORK = 2,     // Logger
-    D4_SBUS_UDP_TX = 3,     // NEW: SBUS→UDP only
-    D4_SBUS_UDP_RX = 4      // NEW: UDP→SBUS only
+    D4_SBUS_UDP_TX = 3,     // SBUS→UDP only
+    D4_SBUS_UDP_RX = 4      // UDP→SBUS only
 };
 
 // Device configuration

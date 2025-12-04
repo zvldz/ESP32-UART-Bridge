@@ -97,7 +97,6 @@ public:
     }
     
     // Direct send without queue (for fast path protocols like SBUS)
-    // Must be implemented by all senders
     // Returns number of bytes sent (may be 0 on error)
     virtual size_t sendDirect(const uint8_t* data, size_t size) = 0;
 

@@ -104,7 +104,7 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
     if (config->device2.role == D2_UART2) {
         initDevice2UART();
     } else if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
-        initDevice2SBUS();  // NEW: Initialize SBUS for Device 2
+        initDevice2SBUS();
     }
 
     // Initialize Device 3 if configured
@@ -352,13 +352,6 @@ void initDevices() {
     // Device 4
     log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Future feature");
 
-    // Initialize UART logger if Device 3 is configured for logging
-    /*
-    if (config.device3.role == D3_UART3_LOG) {
-        logging_init_uart();
-    }
-    */
-
     // Log logging configuration
     log_msg(LOG_INFO, "Logging configuration:");
     log_msg(LOG_INFO, "- Web logs: %s", getLogLevelName(config.log_level_web));
@@ -385,9 +378,6 @@ void initDevices() {
             router->registerSource(SBUS_SOURCE_UDP, 2);      // Lowest priority
             log_msg(LOG_INFO, "SBUS source registered: UDP (priority 2)");
         }
-
-        // Note: SBUS outputs will be registered later in registerSbusOutputs()
-        // after UART interfaces are created in initMainUART()
 
         // Set Timing Keeper from config
         router->setTimingKeeper(config.sbusTimingKeeper);
