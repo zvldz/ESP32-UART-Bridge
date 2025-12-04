@@ -119,7 +119,6 @@
     - [ ] Remove commented-out diagnostic blocks that are no longer needed
   - [ ] Clean up commented-out code blocks
   - [ ] Run cppcheck static analysis to find unused functions and variables
-  - [ ] Create script to remove trailing whitespace and convert tabs to 4 spaces in all source files
   - [ ] Optimize memory usage and reduce code duplication
   - [ ] Simplify overly complex functions
   - [ ] Remove experimental/unused features
