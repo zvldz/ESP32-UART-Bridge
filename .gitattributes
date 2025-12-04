@@ -1,0 +1,10 @@
+# Normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Binary files
+*.bin binary
+*.elf binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary
