@@ -105,6 +105,7 @@ CONFIG_SPI_MASTER_ISR_IN_IRAM=y
 
 # Enable mDNS for Client mode device discovery
 CONFIG_MDNS_ENABLED=y
+CONFIG_MDNS_TASK_PRIORITY=5                 # EXPERIMENTAL: default=1 too low, mDNS misses queries under load
 
 # LWIP - Memory optimization for web interface
 # IPv6 not needed

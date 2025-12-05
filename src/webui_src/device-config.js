@@ -166,6 +166,13 @@ const DeviceConfig = {
         if (udpBatching) {
             udpBatching.checked = this.config.udpBatchingEnabled !== false;  // Default true
         }
+
+        // Set auto broadcast checkbox and attach handler
+        const autoBroadcast = document.getElementById('device4_auto_broadcast');
+        if (autoBroadcast) {
+            autoBroadcast.checked = this.config.device4AutoBroadcast === true;
+            autoBroadcast.addEventListener('change', () => this.updateAutoBroadcastState());
+        }
         
         // Update device displays
         this.updateDevice1Pins();
@@ -222,6 +229,14 @@ const DeviceConfig = {
                     console.log('Error in device4 pins update:', e);
                 }
                 this.updateDevice4Config(true);
+            });
+        }
+
+        // Listen for WiFi mode changes to update auto broadcast visibility
+        const wifiMode = document.getElementById('wifi_mode');
+        if (wifiMode) {
+            wifiMode.addEventListener('change', () => {
+                this.updateAutoBroadcastState();
             });
         }
     },
@@ -530,6 +545,9 @@ const DeviceConfig = {
                 networkLogLevel.value = '-1'; // Set to OFF
             }
         }
+
+        // Update auto broadcast state (visibility and target IP state)
+        this.updateAutoBroadcastState();
     },
 
     updateNetworkLogLevel() {
@@ -665,5 +683,56 @@ const DeviceConfig = {
         option.value = value;
         option.textContent = text;
         select.appendChild(option);
+    },
+
+    // Update auto broadcast checkbox visibility and target IP state
+    updateAutoBroadcastState() {
+        const autoBroadcast = document.getElementById('device4_auto_broadcast');
+        const autoBroadcastGroup = document.getElementById('device4_auto_broadcast_group');
+        const targetIpInput = document.getElementById('device4_target_ip');
+        const targetIpGroup = document.getElementById('device4_target_ip_group');
+        const wifiMode = document.getElementById('wifi_mode');
+        const device4Role = document.getElementById('device4_role');
+
+        if (!autoBroadcast || !targetIpInput) return;
+
+        // Auto broadcast only available in Client mode (wifi_mode == 1)
+        // and only for TX roles (Network Bridge=1, SBUS UDP TX=3)
+        const isClientMode = wifiMode && wifiMode.value === '1';
+        const isTxRole = device4Role && (device4Role.value === '1' || device4Role.value === '3');
+        const showAutoBroadcast = isClientMode && isTxRole;
+
+        // Show/hide auto broadcast checkbox (using visibility to keep layout stable)
+        if (autoBroadcastGroup) {
+            autoBroadcastGroup.style.visibility = showAutoBroadcast ? 'visible' : 'hidden';
+        }
+
+        // If not visible, uncheck auto broadcast
+        if (!showAutoBroadcast && autoBroadcast.checked) {
+            autoBroadcast.checked = false;
+        }
+
+        // Disable target IP when auto broadcast is checked
+        if (autoBroadcast.checked) {
+            targetIpInput.disabled = true;
+            targetIpInput.style.opacity = '0.5';
+            targetIpInput.removeAttribute('required');
+            targetIpInput.removeAttribute('pattern');
+            if (targetIpGroup) {
+                targetIpGroup.style.opacity = '0.5';
+            }
+        } else {
+            // Re-enable unless in RX mode (role 4)
+            const device4Role = document.getElementById('device4_role');
+            if (device4Role && device4Role.value !== '4') {
+                targetIpInput.disabled = false;
+                targetIpInput.style.opacity = '1';
+                targetIpInput.setAttribute('required', 'required');
+                targetIpInput.setAttribute('pattern', '^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:,\\s*(?:[0-9]{1,3}\\.){3}[0-9]{1,3})*$');
+                if (targetIpGroup) {
+                    targetIpGroup.style.opacity = '1';
+                }
+            }
+        }
     }
 };
