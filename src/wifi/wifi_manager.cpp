@@ -684,6 +684,20 @@ String wifiGetIP() {
     return "0.0.0.0";
 }
 
+String wifiGetBroadcastIP() {
+    if (!wifi_initialized) return "0.0.0.0";
+
+    esp_netif_ip_info_t ip_info;
+    if (esp_netif_get_ip_info(sta_netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+        // Take local IP and set last octet to 255
+        char ip_str[16];
+        uint8_t* ip = (uint8_t*)&ip_info.ip.addr;
+        sprintf(ip_str, "%d.%d.%d.255", ip[0], ip[1], ip[2]);
+        return String(ip_str);
+    }
+    return "0.0.0.0";
+}
+
 int wifiGetRSSI() {
     if (!wifi_initialized) return 0;
 

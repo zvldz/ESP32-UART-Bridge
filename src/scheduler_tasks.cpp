@@ -11,6 +11,7 @@
 #include "web/web_interface.h"
 #include "wifi/wifi_manager.h"
 #include "protocols/protocol_pipeline.h"
+#include "protocols/udp_sender.h"
 #include "circular_buffer.h"
 #include "leds.h"
 #include "protocols/sbus_router.h"
@@ -35,6 +36,7 @@ static Task tRebootDevice(TASK_IMMEDIATE, TASK_ONCE, nullptr);
 static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
 Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring - exported for external control
 Task tSbusRouterTick(10, TASK_FOREVER, nullptr);  // Every 10ms - exported for external control
+static Task tBroadcastUpdate(3000, TASK_FOREVER, nullptr);  // Update broadcast IP every 3s
 
 // Simple snapshot for LED comparison (not atomic)
 struct LedSnapshot {
@@ -144,6 +146,24 @@ void initializeScheduler() {
         SbusRouter::getInstance()->tick();
     });
 
+    tBroadcastUpdate.set(3000, TASK_FOREVER, []{
+        // Task is only enabled in Client mode with auto_broadcast and TX role
+        extern ProtocolPipeline* getProtocolPipeline();
+        ProtocolPipeline* pipeline = getProtocolPipeline();
+        if (!pipeline) return;
+
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE4);
+        if (!sender) return;
+
+        String broadcastStr = wifiGetBroadcastIP();
+        if (broadcastStr.isEmpty() || broadcastStr == "0.0.0.0") return;
+
+        IPAddress broadcastIP;
+        if (broadcastIP.fromString(broadcastStr)) {
+            ((UdpSender*)sender)->setBroadcastIP(broadcastIP);
+        }
+    });
+
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
         
@@ -243,6 +263,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tUdpLoggerTask);
     taskScheduler.addTask(tLedMonitor);
     taskScheduler.addTask(tSbusRouterTick);
+    taskScheduler.addTask(tBroadcastUpdate);
 
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
@@ -300,6 +321,12 @@ void enableNetworkTasks(bool temporaryNetwork) {
         tUdpLoggerTask.enable();
     }
 
+    // Enable broadcast IP update task (Client mode + auto_broadcast + TX role)
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT &&
+        config.device4_config.auto_broadcast &&
+        (config.device4.role == D4_NETWORK_BRIDGE || config.device4.role == D4_SBUS_UDP_TX)) {
+        tBroadcastUpdate.enable();
+    }
 }
 
 void disableAllTasks() {
