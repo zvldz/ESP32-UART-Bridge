@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v2.18.10
+
+### New Features
+- **UDP Auto Broadcast**: Automatic broadcast IP detection from DHCP subnet (Client mode only)
+- **Multiple UDP Targets**: Support up to 4 comma-separated target IPs
+
+### Web UI
+- Cleanup and fixes
+- Unified checkbox styling with CSS class
+
+### Fixes
+- **mDNS Task Priority**: Increased from 1 to 5 for better reliability
+
+### Code Quality
+- EditorConfig added
+- Release changelog extraction fix
+- Code comments cleanup
+
 ## v2.18.9 (WiFi & Configuration Improvements)
 
 ### WiFi Enhancements

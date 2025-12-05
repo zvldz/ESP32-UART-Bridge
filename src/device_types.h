@@ -66,9 +66,10 @@ typedef struct {
 
 // Device 4 Configuration
 struct Device4Config {
-    char target_ip[16];
+    char target_ip[96];     // Multiple IPs comma-separated (ignored if auto_broadcast=true)
     uint16_t port;
     uint8_t role;
+    bool auto_broadcast;    // Use dynamic broadcast from DHCP subnet (Client mode only)
 };
 
 // WiFi network credentials for Client mode

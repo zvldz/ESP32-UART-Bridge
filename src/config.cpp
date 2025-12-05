@@ -9,7 +9,7 @@
 #define DEFAULT_BAUDRATE        115200
 #define DEFAULT_UDP_PORT        14560
 #define JSON_PREVIEW_SIZE       200
-#define IP_BUFFER_SIZE          15
+#define IP_BUFFER_SIZE          95  // Multiple IPs comma-separated
 
 // Helper function to create optimized JsonDocument for config operations
 static JsonDocument createConfigJsonDocument() {
@@ -115,6 +115,7 @@ void config_init(Config* config) {
     strcpy(config->device4_config.target_ip, "");
     config->device4_config.port = DEFAULT_UDP_PORT;
     config->device4_config.role = D4_NONE;
+    config->device4_config.auto_broadcast = false;
 
     // Log levels defaults
     config->log_level_web = LOG_WARNING;
@@ -296,6 +297,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->device4_config.target_ip[IP_BUFFER_SIZE] = '\0';
         config->device4_config.port = doc["device4"]["port"] | DEFAULT_UDP_PORT;
         config->device4_config.role = doc["device4"]["role"] | D4_NONE;
+        config->device4_config.auto_broadcast = doc["device4"]["auto_broadcast"] | false;
     }
 
     // Load log levels (new in v2)
@@ -375,6 +377,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["device4"]["target_ip"] = config->device4_config.target_ip;
     doc["device4"]["port"] = config->device4_config.port;
     doc["device4"]["role"] = config->device4_config.role;
+    doc["device4"]["auto_broadcast"] = config->device4_config.auto_broadcast;
 
     // Log levels
     doc["logging"]["web"] = config->log_level_web;

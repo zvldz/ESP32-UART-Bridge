@@ -144,7 +144,12 @@ const FormUtils = {
         
         // Show correct settings based on mode
         this.updateWiFiModeDisplay();
-        
+
+        // Update auto broadcast checkbox visibility (depends on wifi_mode being set)
+        if (typeof DeviceConfig !== 'undefined') {
+            DeviceConfig.updateAutoBroadcastState();
+        }
+
         // Update log count display
         const logCount = document.getElementById('logCount');
         if (logCount) logCount.textContent = this.config.logDisplayCount;

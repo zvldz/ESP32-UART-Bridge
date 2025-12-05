@@ -5,16 +5,20 @@
 #include "protocol_types.h"  // For DataFormat::FORMAT_SBUS
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
-#include "../wifi/wifi_manager.h"
 #include "../types.h"  // For g_deviceStats
+#include "../wifi/wifi_manager.h"  // For wifiIsReady()
 
 class UdpSender : public PacketSender {
 private:
-    
+
     // Direct UDP transport
     AsyncUDP* udpTransport;  // Passed from outside
-    IPAddress targetIP;      // Parsed target IP
-    bool isBroadcast;        // Broadcast flag
+
+    // Multiple target IPs support (manual or auto-broadcast from scheduler)
+    static constexpr size_t MAX_UDP_TARGETS = 4;
+    IPAddress targetIPs[MAX_UDP_TARGETS];
+    uint8_t targetCount = 0;
+
     // Batch buffer constants
     static constexpr size_t MTU_SIZE = 1400;
     static constexpr size_t MAX_BATCH_PACKETS = 10;
@@ -236,6 +240,33 @@ public:
         log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
     }
 
+    // Parse comma-separated IP list into targetIPs array
+    void parseTargetIPs(const char* ipList) {
+        targetCount = 0;
+        if (!ipList || ipList[0] == '\0') return;
+
+        char buffer[96];
+        strncpy(buffer, ipList, sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
+
+        char* token = strtok(buffer, ",");
+        while (token && targetCount < MAX_UDP_TARGETS) {
+            // Skip leading spaces
+            while (*token == ' ') token++;
+            // Remove trailing spaces
+            char* end = token + strlen(token) - 1;
+            while (end > token && *end == ' ') *end-- = '\0';
+
+            if (strlen(token) > 0) {
+                if (targetIPs[targetCount].fromString(token)) {
+                    log_msg(LOG_DEBUG, "UDP target[%d]: %s", targetCount, token);
+                    targetCount++;
+                }
+            }
+            token = strtok(nullptr, ",");
+        }
+    }
+
     explicit UdpSender(AsyncUDP* udp) :
         PacketSender(DEFAULT_MAX_PACKETS, DEFAULT_MAX_BYTES),
         udpTransport(udp),
@@ -243,17 +274,27 @@ public:
         lastBatchTime(0),
         lastStatsLog(0) {
 
-        // Parse target IP
         extern Config config;
-        Config& cfg = config;
-        isBroadcast = (strcmp(cfg.device4_config.target_ip, "192.168.4.255") == 0) ||
-                      (strstr(cfg.device4_config.target_ip, ".255") != nullptr);
-
-        if (!isBroadcast) {
-            targetIP.fromString(cfg.device4_config.target_ip);
+        if (config.device4_config.auto_broadcast) {
+            // Scheduler will set broadcast IP, no need to parse manual targets
+            log_msg(LOG_INFO, "UdpSender: auto-broadcast mode");
+        } else {
+            parseTargetIPs(config.device4_config.target_ip);
+            log_msg(LOG_INFO, "UdpSender: %d target(s)", targetCount);
         }
-        
-        log_msg(LOG_DEBUG, "UdpSender initialized");
+    }
+
+    // Set broadcast IP directly (called by scheduler for auto-broadcast mode)
+    void setBroadcastIP(const IPAddress& ip) {
+        targetIPs[0] = ip;
+        targetCount = 1;
+    }
+
+    // Reload targets from config (called by scheduler when IP changes)
+    void reloadTargets() {
+        extern Config config;
+        parseTargetIPs(config.device4_config.target_ip);
+        log_msg(LOG_DEBUG, "UDP targets reloaded: %d", targetCount);
     }
     
     ~UdpSender() {
@@ -367,29 +408,31 @@ public:
     }
     
     void sendUdpDatagram(uint8_t* data, size_t size) {
-        // Early exit checks
-        if (!udpTransport || size == 0) return;
+        if (!udpTransport || size == 0 || targetCount == 0) return;
 
         extern Config config;
-        size_t sent = 0;
+        uint16_t port = config.device4_config.port;
+        size_t totalSentBytes = 0;
+        uint8_t sentCount = 0;
 
-        if (isBroadcast) {
-            sent = udpTransport->broadcastTo(data, size, config.device4_config.port);
-        } else {
-            sent = udpTransport->writeTo(data, size, targetIP, config.device4_config.port);
+        // Send to all configured targets (manual IPs or broadcast from scheduler)
+        for (uint8_t i = 0; i < targetCount; i++) {
+            size_t sent = udpTransport->writeTo(data, size, targetIPs[i], port);
+            if (sent > 0) {
+                totalSentBytes += sent;
+                sentCount++;
+            }
         }
 
-        if (sent == 0) {
-            // Rate-limited warning for UDP failures
+        if (sentCount == 0) {
             static uint32_t lastFailLog = 0;
             if (millis() - lastFailLog > 5000) {
-                log_msg(LOG_WARNING, "[UDP] Send failed");
+                log_msg(LOG_WARNING, "[UDP] Send failed (no targets or all failed)");
                 lastFailLog = millis();
             }
         } else {
-            // Update Device4 TX statistics
-            g_deviceStats.device4.txBytes.fetch_add(sent, std::memory_order_relaxed);
-            g_deviceStats.device4.txPackets.fetch_add(1, std::memory_order_relaxed);
+            g_deviceStats.device4.txBytes.fetch_add(totalSentBytes, std::memory_order_relaxed);
+            g_deviceStats.device4.txPackets.fetch_add(sentCount, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         }
     }

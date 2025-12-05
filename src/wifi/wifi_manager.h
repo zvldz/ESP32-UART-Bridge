@@ -33,6 +33,7 @@ void wifiProcess();  // Called from main loop
 bool wifiIsReady();  // Universal check for data transmission
 int wifiGetRSSI();
 String wifiGetIP();
+String wifiGetBroadcastIP();  // Get broadcast IP for current subnet (Client mode)
 String wifiGetConnectedSSID();  // Get current connected network SSID
 
 // Utility functions

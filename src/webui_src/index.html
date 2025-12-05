@@ -11,7 +11,7 @@
 <body>
     <div class="container">
         <h1>🔗 ESP32 UART Bridge</h1>
-        
+
         <!-- Quick Guide -->
         <div class="section" style="padding: 10px 15px;">
             <p style="margin: 5px 0; text-align: center;"><a href='/help' target='_blank' style="font-size: 16px;">📋 Connection Guide & Troubleshooting</a></p>
@@ -39,18 +39,6 @@
                     </div>
                 </div>
                 <p style="margin-top: 10px; margin-bottom: 0;"><small>Showing last <span id="logCount">50</span> entries. Auto-updates every 5 seconds.</small></p>
-            </div>
-        </div>
-
-        <!-- System Status -->
-        <div class="section">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleSystemStatus()">
-                📊 System Status
-                <span id="systemStatusToggle" style="float: right; font-size: 18px;">▶</span>
-            </h4>
-            <div id="systemStatusBlock" style="display: none;">
-                <div id="systemInfo"></div>
-                <div id="deviceStats"></div>
             </div>
         </div>
 
@@ -89,7 +77,19 @@
                         </tbody>
                     </table>
                 </div>
-                <small class="form-text" style="display: block; margin-top: 10px;">💡 Click on a row with 🔍 to view detailed backtrace information</small>
+                <small class="hint">💡 Click on a row with 🔍 to view detailed backtrace information</small>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="section">
+            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleSystemStatus()">
+                📊 System Status
+                <span id="systemStatusToggle" style="float: right; font-size: 18px;">▶</span>
+            </h4>
+            <div id="systemStatusBlock" style="display: none;">
+                <div id="systemInfo"></div>
+                <div id="deviceStats"></div>
             </div>
         </div>
 
@@ -105,7 +105,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Settings Form -->
         <form id="settingsForm" action="/save" method="POST">
             <div class="section">
@@ -124,28 +124,31 @@
                         <!-- Device 4 Network Configuration (moved from device-config.js) -->
                         <div id="device4AdvancedConfig" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
                             <h5 style="margin: 0 0 10px 0; color: #333;">🌐 Device 4 Network Configuration</h5>
-                            <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-                                <div>
+                            <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                                <div id="device4_target_ip_group">
                                     <label for="device4_target_ip">Target IP:</label>
                                     <input type="text" name="device4_target_ip" id="device4_target_ip"
-                                           style="width: 150px;" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
-                                           placeholder="192.168.x.x">
+                                           style="width: 180px;"
+                                           placeholder="192.168.x.x, 10.0.0.5">
                                 </div>
                                 <div>
                                     <label for="device4_port">Port:</label>
                                     <input type="number" name="device4_port" id="device4_port"
                                            style="width: 80px;" min="1" max="65535">
                                 </div>
-                                <div style="display: flex; align-items: center;">
-                                    <input type="checkbox" name="udp_batching" id="udp_batching" checked
-                                           title="Disable UDP Batching only if your GCS doesn't support it (reduces performance)">
-                                    <label for="udp_batching" style="margin-left: 5px; cursor: help;"
-                                           title="Disable UDP Batching only if your GCS doesn't support it (reduces performance)">Batching</label>
+                                <div style="display: flex; flex-direction: column; gap: 2px; align-self: flex-end; align-items: flex-start; margin-bottom: 5px;">
+                                    <label class="checkbox-label" title="Disable only if your GCS doesn't support batched packets">
+                                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
+                                        <span>Batching</span>
+                                    </label>
+                                    <label id="device4_auto_broadcast_group" class="checkbox-label" style="visibility: hidden;"
+                                           title="Use broadcast IP from DHCP subnet (Client mode only)">
+                                        <input type="checkbox" name="device4_auto_broadcast" id="device4_auto_broadcast">
+                                        <span>Auto Broadcast</span>
+                                    </label>
                                 </div>
                             </div>
-                            <small style="display: block; margin-top: 10px; color: #666;">
-                                ℹ️ Use x.x.x.255 for broadcast
-                            </small>
+                            <small class="hint">ℹ️ Multiple IPs: comma-separated (max 4). Use .255 suffix for subnet broadcast.</small>
                         </div>
 
                         <!-- Protocol Optimization -->
@@ -157,25 +160,19 @@
                                     <option value="1">MAVLink</option>
                                 </select>
                                 <div id="mavlink-routing-section" style="display: none;">
-                                    <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;"
-                                           title="Routes messages by target System ID. Fallback: broadcast">
-                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing"
-                                               title="Routes messages by target System ID. Fallback: broadcast">
-                                        <span style="cursor: help;">Target-only Routing</span>
+                                    <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">
+                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
+                                        <span>Target-only Routing</span>
                                     </label>
                                 </div>
                                 <div id="sbus-timing-keeper-section" style="display: none;">
-                                    <label style="display: flex; align-items: center; gap: 5px; white-space: nowrap;"
-                                           title="Repeats last valid SBUS frame every 20ms for WiFi stability">
-                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper"
-                                               title="Repeats last valid SBUS frame every 20ms for WiFi stability">
-                                        <span style="cursor: help;">SBUS WiFi Timing Keeper</span>
+                                    <label class="checkbox-label" title="Repeats last valid SBUS frame every 20ms for WiFi stability">
+                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper">
+                                        <span>SBUS WiFi Timing Keeper</span>
                                     </label>
                                 </div>
                             </div>
-                            <small style="display: block; margin-top: 5px; color: #666;">
-                                ℹ️ Reduces latency by detecting packet boundaries.
-                            </small>
+                            <small class="hint">ℹ️ Reduces latency by detecting packet boundaries.</small>
                         </div>
 
                         <!-- UART Configuration -->
@@ -198,12 +195,9 @@
                                     <label for="stopbits">Stop:</label>
                                     <select name="stopbits" id="stopbits" style="width: 60px;"></select>
                                 </div>
-                                <div>
-                                    <label title="Requires 4-wire connection (TX, RX, RTS, CTS)">
-                                        <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1"
-                                               title="Requires 4-wire connection (TX, RX, RTS, CTS)">
-                                        <span style="cursor: help;">Flow Control</span>
-                                    </label>
+                                <div title="Requires 4-wire connection (TX, RX, RTS, CTS)">
+                                    <label for="flowcontrol">Flow Control:</label>
+                                    <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1" style="width: auto; height: 34px;">
                                 </div>
                             </div>
                         </div>
@@ -216,7 +210,7 @@
                                     <option value="device">Device</option>
                                     <option value="host">Host</option>
                                 </select>
-                                <small class="text-warning" style="display: block; margin-top: 5px;">Used for Device 2 in USB role</small>
+                                <small class="hint">ℹ️ Used for Device 2 in USB role</small>
                             </div>
                         </div>
 
@@ -258,7 +252,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- WiFi Configuration -->
                 <div class="section" style="margin-top: 20px; padding: 15px;">
                     <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleWifiConfig()">
@@ -275,13 +269,12 @@
                                     <option value="1">Client (Connect to Network)</option>
                                 </select>
                             </div>
-                            <label style="display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;"
-                                   title="Keep WiFi always on (applies to both AP and Client modes)">
-                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1" style="width: auto; margin: 0;">
+                            <label class="checkbox-label" title="Keep WiFi always on (applies to both AP and Client modes)">
+                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1">
                                 <span>Permanent</span>
                             </label>
                         </div>
-                        
+
                         <!-- AP Mode settings -->
                         <div id="apModeSettings" style="display: none;">
                             <!--<h5>Access Point Settings</h5>-->
@@ -298,7 +291,7 @@
                                 </span>
                             </div>
                         </div>
-                        
+
                         <!-- Client Mode settings -->
                         <div id="clientModeSettings" style="display: none;">
                             <!-- Primary Network (always visible) -->
@@ -390,7 +383,7 @@
                                 <option value="68">High (17dBm)</option>
                                 <option value="80">Maximum (20dBm)</option>
                             </select>
-                            <small class="form-text">ℹ️ Lower power = less interference, shorter range</small>
+                            <small class="hint">ℹ️ Lower power = less interference, shorter range</small>
                         </div>
 
                         <!-- mDNS Hostname -->
@@ -400,8 +393,8 @@
                                    pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
                                    style="text-transform: lowercase;"
                                    placeholder="esp-bridge-xxxx">
-                            <small class="form-text" style="display: block;">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
-                            <small class="form-text" style="display: block;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
+                            <small class="hint">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
+                            <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
                         </div>
                     </div>
                 </div>
@@ -411,7 +404,7 @@
                 </div>
             </div>
         </form>
-        
+
         <!-- Configuration Backup -->
         <div class="section" style="margin-top: 20px;">
             <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleConfigBackup()">
@@ -444,7 +437,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Firmware Update -->
         <div class="section">
             <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleFirmwareUpdate()">
@@ -475,7 +468,7 @@
             </div>
         </div>
     </div>
-    
+
     <script src="/utils.js"></script>
     <script src="/device-config.js"></script>
     <script src="/form-utils.js"></script>

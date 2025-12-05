@@ -134,6 +134,7 @@ static void populateConfigJson(JsonDocument& doc) {
     // Device 4 configuration
     doc["device4TargetIp"] = config.device4_config.target_ip;
     doc["device4Port"] = config.device4_config.port;
+    doc["device4AutoBroadcast"] = config.device4_config.auto_broadcast;
 
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
@@ -417,6 +418,15 @@ void handleSave(AsyncWebServerRequest *request) {
         configChanged = true;
         log_msg(LOG_INFO, "Device 4 port changed to %s", portStr.c_str());
     }
+
+    // Device 4 auto broadcast (checkbox)
+    bool newAutoBroadcast = request->hasParam("device4_auto_broadcast", true);
+    if (newAutoBroadcast != config.device4_config.auto_broadcast) {
+        config.device4_config.auto_broadcast = newAutoBroadcast;
+        configChanged = true;
+        log_msg(LOG_INFO, "Device 4 auto broadcast %s", newAutoBroadcast ? "enabled" : "disabled");
+    }
+
     // Copy role to configuration
     config.device4_config.role = config.device4.role;
 
