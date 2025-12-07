@@ -133,9 +133,19 @@ void SbusRouter::writeToOutputs(const uint8_t* frame) {
     framesRouted++;
 }
 
+// Timeout for UDP source before stopping frame repeat (let FC detect signal loss)
+// TODO: Make configurable via Web UI
+static constexpr uint32_t UDP_SOURCE_TIMEOUT_MS = 1000;
+
 void SbusRouter::tick() {
     // Only repeat for UDP source with Timing Keeper enabled
     if (activeSource != SBUS_SOURCE_UDP || !timingKeeperEnabled) {
+        return;
+    }
+
+    // Stop repeating if UDP source lost - let FC detect signal loss and activate failsafe
+    uint32_t age = millis() - sources[SBUS_SOURCE_UDP].lastFrameTime;
+    if (age > UDP_SOURCE_TIMEOUT_MS) {
         return;
     }
 

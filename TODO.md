@@ -150,6 +150,7 @@
     - [ ] Parse SBUS frames from UART stream and feed to SbusRouter
     - [ ] Planned combinations: D2_UART2+D3_SBUS_OUT, D3_UART3_BRIDGE+D2_SBUS_OUT
   - [x] SBUS over WiFi/UDP with frame filtering and validation (implemented)
+  - [ ] Configurable UDP source timeout for Timing Keeper (currently hardcoded 1000ms in sbus_router.cpp)
   - [ ] Modbus↔JSON conversion
   - [ ] NMEA→Binary conversion
   - Per-device protocol configuration
