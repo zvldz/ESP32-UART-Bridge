@@ -232,10 +232,19 @@ const DeviceConfig = {
             });
         }
 
-        // Listen for WiFi mode changes to update auto broadcast visibility
+        // Listen for WiFi mode changes to update auto broadcast visibility and AP default IP
         const wifiMode = document.getElementById('wifi_mode');
         if (wifiMode) {
             wifiMode.addEventListener('change', () => {
+                // When switching to AP mode, set default broadcast IP
+                if (wifiMode.value === '0') {
+                    const targetIpInput = document.getElementById('device4_target_ip');
+                    const device4Role = document.getElementById('device4_role');
+                    const isTxRole = device4Role && (device4Role.value === '1' || device4Role.value === '3');
+                    if (targetIpInput && isTxRole) {
+                        targetIpInput.value = '192.168.4.255';
+                    }
+                }
                 this.updateAutoBroadcastState();
             });
         }
@@ -699,8 +708,14 @@ const DeviceConfig = {
         // Auto broadcast only available in Client mode (wifi_mode == 1)
         // and only for TX roles (Network Bridge=1, SBUS UDP TX=3)
         const isClientMode = wifiMode && wifiMode.value === '1';
+        const isApMode = wifiMode && wifiMode.value === '0';
         const isTxRole = device4Role && (device4Role.value === '1' || device4Role.value === '3');
         const showAutoBroadcast = isClientMode && isTxRole;
+
+        // In AP mode, set default broadcast IP if target is empty
+        if (isApMode && isTxRole && (!targetIpInput.value || targetIpInput.value === '')) {
+            targetIpInput.value = '192.168.4.255';
+        }
 
         // Show/hide auto broadcast checkbox (using visibility to keep layout stable)
         if (autoBroadcastGroup) {
