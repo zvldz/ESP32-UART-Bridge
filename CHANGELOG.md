@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v2.18.11
+
+### New Features
+- **WiFi AP Channel**: Configurable WiFi channel (1-13) for AP mode via Web UI
+
+### Fixes
+- **SSID Generation**: Fixed logic - empty SSID triggers auto-generation, user-set "ESP-Bridge" is now respected
+
 ## v2.18.10
 
 ### New Features
