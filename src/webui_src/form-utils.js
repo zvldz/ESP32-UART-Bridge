@@ -134,11 +134,13 @@ const FormUtils = {
             if (passInput) passInput.value = networks[i]?.password || '';
         }
 
-        // WiFi TX Power and mDNS
+        // WiFi TX Power, AP Channel and mDNS
         const wifiTxPower = document.getElementById('wifi_tx_power');
+        const wifiApChannel = document.getElementById('wifi_ap_channel');
         const mdnsHostname = document.getElementById('mdns_hostname');
         const mdnsUrl = document.getElementById('mdns_url');
         if (wifiTxPower) wifiTxPower.value = this.config.wifiTxPower || 20;
+        if (wifiApChannel) wifiApChannel.value = this.config.wifiApChannel || 1;
         if (mdnsHostname) mdnsHostname.value = this.config.mdnsHostname || '';
         if (mdnsUrl) mdnsUrl.textContent = this.config.mdnsHostname || 'hostname';
         
@@ -428,15 +430,18 @@ const FormUtils = {
         const wifiMode = document.getElementById('wifi_mode');
         const apSettings = document.getElementById('apModeSettings');
         const clientSettings = document.getElementById('clientModeSettings');
-        
+        const apChannelGroup = document.getElementById('ap_channel_group');
+
         if (!wifiMode || !apSettings || !clientSettings) return;
-        
+
         if (wifiMode.value === '0') {  // AP Mode
             apSettings.style.display = 'block';
             clientSettings.style.display = 'none';
+            if (apChannelGroup) apChannelGroup.style.display = 'block';
         } else {  // Client Mode
             apSettings.style.display = 'none';
             clientSettings.style.display = 'block';
+            if (apChannelGroup) apChannelGroup.style.display = 'none';
         }
     },
     

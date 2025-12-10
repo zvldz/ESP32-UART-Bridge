@@ -96,6 +96,7 @@ static void populateConfigJson(JsonDocument& doc) {
     // WiFi mode and client settings
     doc["wifiMode"] = config.wifi_mode;
     doc["wifiTxPower"] = config.wifi_tx_power;
+    doc["wifiApChannel"] = config.wifi_ap_channel;
     doc["mdnsHostname"] = config.mdns_hostname;
 
     // WiFi networks array for Client mode
@@ -659,6 +660,25 @@ void handleSave(AsyncWebServerRequest *request) {
             config.wifi_tx_power = newTxPower;
             configChanged = true;
             log_msg(LOG_INFO, "WiFi TX Power updated to %d (%.1fdBm)", newTxPower, newTxPower * 0.25);
+        }
+    }
+
+    // WiFi AP Channel
+    if (request->hasParam("wifi_ap_channel", true)) {
+        const AsyncWebParameter* p = request->getParam("wifi_ap_channel", true);
+        uint8_t newChannel = p->value().toInt();
+
+        // Validate range (1-13)
+        if (newChannel < 1 || newChannel > 13) {
+            log_msg(LOG_ERROR, "WiFi AP Channel must be between 1 and 13");
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"WiFi AP Channel must be between 1 and 13\"}");
+            return;
+        }
+
+        if (newChannel != config.wifi_ap_channel) {
+            config.wifi_ap_channel = newChannel;
+            configChanged = true;
+            log_msg(LOG_INFO, "WiFi AP Channel updated to %d", newChannel);
         }
     }
 

@@ -92,7 +92,7 @@ void config_init(Config* config) {
     config->parity = UART_PARITY_DISABLE;
     config->stopbits = UART_STOP_BITS_1;
     config->flowcontrol = false;
-    config->ssid = DEFAULT_AP_SSID;
+    config->ssid = "";  // Empty = auto-generate unique SSID on first AP start
     config->password = DEFAULT_AP_PASSWORD;
     config->permanent_network_mode = false;
 
@@ -103,6 +103,7 @@ void config_init(Config* config) {
         config->wifi_networks[i].password = "";
     }
     config->wifi_tx_power = DEFAULT_WIFI_TX_POWER;
+    config->wifi_ap_channel = 1;  // Default AP channel
     config->mdns_hostname = "";  // Empty = auto-generate on startup
     config->device_version = DEVICE_VERSION;
     config->device_name = DEVICE_NAME;
@@ -235,7 +236,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
     // Load WiFi settings
     if (doc["wifi"].is<JsonObject>()) {
-        config->ssid = doc["wifi"]["ssid"] | DEFAULT_AP_SSID;
+        config->ssid = doc["wifi"]["ssid"] | "";  // Empty = auto-generate unique SSID
         config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
         config->permanent_network_mode = doc["wifi"]["permanent"] | false;
 
@@ -269,6 +270,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         }
 
         config->wifi_tx_power = doc["wifi"]["tx_power"] | DEFAULT_WIFI_TX_POWER;
+        config->wifi_ap_channel = doc["wifi"]["ap_channel"] | 1;
         config->mdns_hostname = doc["wifi"]["mdns_hostname"] | "";
     }
 
@@ -354,6 +356,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
         }
     }
     doc["wifi"]["tx_power"] = config->wifi_tx_power;
+    doc["wifi"]["ap_channel"] = config->wifi_ap_channel;
     doc["wifi"]["mdns_hostname"] = config->mdns_hostname;
 
     // USB settings
