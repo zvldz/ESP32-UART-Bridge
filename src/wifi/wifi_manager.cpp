@@ -135,11 +135,11 @@ String generateDeviceHostname() {
     return String(hostname);
 }
 
-// Apply unique suffix to default AP SSID (called once on first AP start)
+// Apply unique suffix to AP SSID (called once on first AP start when SSID is empty)
 // Format: ESP-Bridge-XXXX (mixed case, matching hostname pattern)
 static void applyUniqueSSIDSuffix() {
-    // Only modify default or empty SSID, not user-configured ones
-    if (config.ssid != DEFAULT_AP_SSID && !config.ssid.isEmpty()) {
+    // Only generate unique SSID if empty - respect any user-configured value including "ESP-Bridge"
+    if (!config.ssid.isEmpty()) {
         return;
     }
 
@@ -571,7 +571,12 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     setWifiCredentials(&wifi_config, true, config.ssid, password);
     wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     wifi_config.ap.max_connection = 4;
-    wifi_config.ap.channel = 1;
+
+    // Use configured channel (1-13), default to 1 if invalid
+    uint8_t channel = config.wifi_ap_channel;
+    if (channel < 1 || channel > 13) channel = 1;
+    wifi_config.ap.channel = channel;
+    log_msg(LOG_INFO, "AP channel: %d", channel);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
