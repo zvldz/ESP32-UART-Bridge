@@ -65,6 +65,47 @@
 
 **Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols.
 
+### Device 3 SBUS_IN Role 🔵
+
+- [ ] **Add D3_SBUS_IN role to Device 3**
+  - Enables SBUS input on Device 3 UART pins
+  - Needed for ESP32 MiniKit compatibility (Device 2 = USB only)
+  - Symmetric with existing D3_SBUS_OUT role
+
+  **⚠️ Critical implementation notes:**
+  - [ ] **SBUS Router integration**
+    - Add SBUS_SOURCE_DEVICE3 to SbusRouter sources
+    - Verify failsafe flag handling from Device 3 input
+    - Test frame timing with Timing Keeper
+  - [ ] **Output validation**
+    - SBUS_IN requires at least one output configured (D1_SBUS_OUT, D3_SBUS_OUT, or UDP)
+    - Web UI should warn if SBUS_IN enabled without outputs
+    - Prevent invalid config: D3_SBUS_IN + D3_SBUS_OUT on same device (conflict)
+  - [ ] **Role conflict checks**
+    - D3_SBUS_IN conflicts with D3_SBUS_OUT (same UART pins)
+    - D3_SBUS_IN conflicts with D3_UART3_* roles
+    - Add validation in config save and Web UI
+
+### ESP32 MiniKit Support 🔵
+
+- [ ] **Port to ESP32-WROOM-32 (MiniKit/D1 Mini ESP32)**
+  - [ ] Hardware differences:
+    - 2x UART available (UART0 occupied by USB-UART chip)
+    - No USB-OTG (USB via CH340/CP2104)
+    - Bluetooth Classic + BLE (unlike S3 which has BLE only)
+  - [ ] Device mapping:
+    - Device 1: UART1 (D1_UART1, D1_SBUS_IN)
+    - Device 2: USB-CDC only (D2_USB)
+    - Device 3: UART2 (D3_UART3_*, D3_SBUS_IN, D3_SBUS_OUT)
+    - Device 4: UDP (unchanged)
+  - [ ] Pin configuration for MiniKit board
+  - [ ] Platformio environment (minikit_production, minikit_debug)
+  - [ ] Web UI role filtering for this board
+  - [ ] **Bluetooth Classic SPP for telemetry**
+    - Alternative to WiFi for GCS connection
+    - Serial Port Profile for MAVLink/telemetry
+    - Useful when WiFi is problematic
+
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
 #### Protocol-driven Optimizations
