@@ -3,10 +3,32 @@
 ## v2.18.11
 
 ### New Features
-- **WiFi AP Channel**: Configurable WiFi channel (1-13) for AP mode via Web UI
+- **WiFi AP Channel**: Configurable WiFi channel (1-11) for AP mode via Web UI
 
 ### Fixes
 - **SSID Generation**: Fixed logic - empty SSID triggers auto-generation, user-set "ESP-Bridge" is now respected
+
+### ESP32 MiniKit (WROOM-32) Support
+- **New board support**: ESP32 MiniKit (ESP32-WROOM-32 based development board)
+  - PlatformIO environments: `minikit_production`, `minikit_debug`
+  - GPIO mapping: RTS/CTS on GPIO18/19, Device 3 UART on GPIO16/17, LED on GPIO2
+  - No USB Host support (WROOM lacks USB OTG peripheral)
+- **Quick Reset Detection**: Triple RESET for WiFi activation (replaces BOOT button)
+  - NVS-based detection (RTC cleared on RESET)
+  - Boot loop protection (crashes clear counter)
+- **Memory Optimizations** for ~160KB usable heap (no PSRAM):
+  - Reduced WiFi buffers in sdkconfig
+  - Reduced LWIP TCP buffers (IPv6 disabled)
+  - LOG_BUFFER_SIZE: 30 (vs 100 on S3)
+  - UART1_TX_RING_SIZE: 4KB (vs 8KB on S3)
+  - UDP log buffer: dynamic allocation only when needed
+- **Single-color LED support**: Active HIGH logic for GPIO2
+- **Web UI**: MiniKit board detection, Device 2 options filtered
+- **Help page**: MiniKit pinout and documentation added
+
+### Web UI
+- **Utils refactoring**: JSON parse error handling moved to utils.js
+- **Form utils**: Improved radio button and select initialization
 
 ## v2.18.10
 

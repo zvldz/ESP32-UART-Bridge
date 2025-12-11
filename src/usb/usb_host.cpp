@@ -1,3 +1,6 @@
+// USB Host is only available on ESP32-S3 (not on WROOM/MiniKit)
+#if !defined(BOARD_MINIKIT_ESP32)
+
 #include "usb_host.h"
 #include "logging.h"
 #include "types.h"
@@ -457,4 +460,6 @@ void UsbHost::cleanup() {
 UsbInterface* createUsbHost(uint32_t baudrate) {
   return new UsbHost(baudrate);
 }
+
+#endif // !defined(BOARD_MINIKIT_ESP32)
 

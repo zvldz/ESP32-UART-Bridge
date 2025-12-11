@@ -100,12 +100,15 @@ void uartBridgeTask(void* parameter) {
     int timeoutDropIndex = 0;
 
     // Cache device roles at start to avoid repeated checks
-    bool device3Active = (config.device3.role == D3_UART3_MIRROR || config.device3.role == D3_UART3_BRIDGE);
+    bool device3Active = (config.device3.role == D3_UART3_MIRROR ||
+                          config.device3.role == D3_UART3_BRIDGE ||
+                          config.device3.role == D3_SBUS_IN);
     bool device2IsUSB = (config.device2.role == D2_USB && g_usbInterface);
     bool device2IsUART2 = ((config.device2.role == D2_UART2 ||
                             config.device2.role == D2_SBUS_IN ||
                             config.device2.role == D2_SBUS_OUT) && device2Serial);
-    bool device3IsBridge = (config.device3.role == D3_UART3_BRIDGE);
+    bool device3IsBridge = (config.device3.role == D3_UART3_BRIDGE ||
+                            config.device3.role == D3_SBUS_IN);
 
     // Initialize BridgeContext
     BridgeContext ctx;

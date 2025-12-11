@@ -147,10 +147,8 @@ const FormUtils = {
         // Show correct settings based on mode
         this.updateWiFiModeDisplay();
 
-        // Update auto broadcast checkbox visibility (depends on wifi_mode being set)
-        if (typeof DeviceConfig !== 'undefined') {
-            DeviceConfig.updateAutoBroadcastState();
-        }
+        // Note: updateAutoBroadcastState() is called from DeviceConfig.setFormValues()
+        // after device4_role is properly set
 
         // Update log count display
         const logCount = document.getElementById('logCount');
@@ -172,7 +170,13 @@ const FormUtils = {
         // WiFi mode change listener
         const wifiMode = document.getElementById('wifi_mode');
         if (wifiMode) {
-            wifiMode.addEventListener('change', () => this.updateWiFiModeDisplay());
+            wifiMode.addEventListener('change', () => {
+                this.updateWiFiModeDisplay();
+                // Update auto broadcast state when WiFi mode changes
+                if (typeof DeviceConfig !== 'undefined') {
+                    DeviceConfig.updateAutoBroadcastState();
+                }
+            });
         }
 
         // mDNS hostname change listener - update preview URL
@@ -244,6 +248,12 @@ const FormUtils = {
             body: formData
         })
         .then(response => {
+            // Check if response is JSON before parsing
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                // Device likely rebooting or disconnected - start reconnect
+                throw new Error('DEVICE_REBOOTING');
+            }
             if (!response.ok) {
                 // Handle HTTP errors (like 400)
                 return response.json().then(data => {
@@ -290,9 +300,20 @@ const FormUtils = {
         })
         .catch(error => {
             console.error('Save error:', error);
-            // Show error message
+
+            // If device is rebooting (non-JSON response), start reconnect
+            if (error.message === 'DEVICE_REBOOTING' || error.name === 'TypeError') {
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.style.backgroundColor = '#2196F3';
+                }
+                this.startReconnectCountdown(submitButton);
+                return;
+            }
+
+            // Show error message for other errors
             alert(error.message || 'Failed to save configuration');
-            
+
             if (submitButton) {
                 submitButton.textContent = 'Save Failed';
                 submitButton.disabled = false;
@@ -330,6 +351,62 @@ const FormUtils = {
                 this.attemptReconnect(button, attempts, MAX_RECONNECT_ATTEMPTS);
             }
         }, 1000);
+    },
+
+    // Firmware update reconnect (longer wait for flash write)
+    startFirmwareReconnect(button, statusText) {
+        const REBOOT_WAIT_SECONDS = 12;  // Longer wait for firmware flash
+        const MAX_RECONNECT_ATTEMPTS = 30;
+        let countdown = REBOOT_WAIT_SECONDS;
+
+        const countdownInterval = setInterval(() => {
+            if (statusText) {
+                statusText.textContent = `Device rebooting... ${countdown}s`;
+            }
+            countdown--;
+
+            if (countdown < 0) {
+                clearInterval(countdownInterval);
+                this.attemptFirmwareReconnect(button, statusText, 0, MAX_RECONNECT_ATTEMPTS);
+            }
+        }, 1000);
+    },
+
+    attemptFirmwareReconnect(button, statusText, attempt, maxAttempts) {
+        if (attempt >= maxAttempts) {
+            if (statusText) {
+                statusText.textContent = 'Please refresh page manually';
+                statusText.style.color = '#ff9800';
+            }
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Refresh Page';
+                button.onclick = () => window.location.reload();
+            }
+            return;
+        }
+
+        if (statusText) {
+            statusText.textContent = `Reconnecting... (${attempt + 1}/${maxAttempts})`;
+        }
+
+        fetch('/status', { cache: 'no-store' })
+            .then(response => {
+                if (response.ok) {
+                    if (statusText) {
+                        statusText.textContent = 'Connected! Reloading...';
+                        statusText.style.color = 'green';
+                    }
+                    setTimeout(() => window.location.reload(), 500);
+                } else {
+                    throw new Error('Not ready');
+                }
+            })
+            .catch(() => {
+                setTimeout(() => {
+                    this.attemptFirmwareReconnect(button, statusText, attempt + 1, maxAttempts);
+                }, 1000);
+            });
     },
 
     attemptReconnect(button, attempt, maxAttempts) {
@@ -572,16 +649,32 @@ const FormUtils = {
             return;
         }
 
-        fetch('/config/reset', { method: 'POST' })
-            .then(response => response.json())
+        const resetButton = document.querySelector('button[onclick="factoryReset()"]');
+        if (resetButton) {
+            resetButton.disabled = true;
+            resetButton.textContent = 'Resetting...';
+        }
+
+        Utils.fetchWithReboot('/config/reset', { method: 'POST' })
             .then(data => {
                 if (data.status === 'ok') {
                     alert('Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ESP-Bridge-xxxx');
+                    Utils.startReconnect({ button: resetButton, waitSeconds: 8 });
                 }
             })
             .catch(error => {
+                if (error.isReboot) {
+                    // Device rebooted during reset - expected behavior
+                    alert('Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ESP-Bridge-xxxx');
+                    Utils.startReconnect({ button: resetButton, waitSeconds: 8 });
+                    return;
+                }
                 alert('Factory reset failed: ' + error.message);
                 console.error('Factory reset error:', error);
+                if (resetButton) {
+                    resetButton.disabled = false;
+                    resetButton.textContent = 'Factory Reset';
+                }
             });
     },
 
@@ -637,25 +730,38 @@ const FormUtils = {
         // Handle response
         xhr.addEventListener('load', () => {
             if (progressBar) progressBar.style.width = '100%';
-            
+
+            // Check content-type to detect device reboot
+            const contentType = xhr.getResponseHeader('content-type');
+            const isJson = contentType && contentType.includes('application/json');
+
+            // If not JSON, device likely rebooted - show success and start reconnect
+            if (!isJson || xhr.responseText.startsWith('<')) {
+                if (statusText) {
+                    statusText.textContent = 'Firmware uploaded! Device is rebooting...';
+                    statusText.style.color = 'green';
+                }
+                if (updateButton) {
+                    updateButton.textContent = 'Rebooting...';
+                }
+                // Start reconnect countdown
+                this.startFirmwareReconnect(updateButton, statusText);
+                return;
+            }
+
             try {
                 const response = JSON.parse(xhr.responseText);
-                
+
                 if (xhr.status === 200 && response.status === 'ok') {
                     if (statusText) {
                         statusText.textContent = response.message;
                         statusText.style.color = 'green';
                     }
                     if (updateButton) {
-                        updateButton.disabled = false;
+                        updateButton.textContent = 'Rebooting...';
                     }
-                    
-                    // Add instruction after 2 seconds
-                    setTimeout(() => {
-                        if (statusText) {
-                            statusText.textContent += ' Please refresh the page manually.';
-                        }
-                    }, 2000);
+                    // Start reconnect countdown
+                    this.startFirmwareReconnect(updateButton, statusText);
                 } else {
                     throw new Error(response.message || 'Update failed');
                 }

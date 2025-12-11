@@ -22,10 +22,11 @@ SbusRouter::SbusRouter() :
     memset(lastValidFrame, 0, sizeof(lastValidFrame));
     memset(sourceConfigured, 0, sizeof(sourceConfigured));
 
-    // Fixed priorities: Device1 > Device2 > UDP
+    // Fixed priorities: Device1 > Device2 > Device3 > UDP
     priorities[0] = SBUS_SOURCE_DEVICE1;
     priorities[1] = SBUS_SOURCE_DEVICE2;
-    priorities[2] = SBUS_SOURCE_UDP;
+    priorities[2] = SBUS_SOURCE_DEVICE3;
+    priorities[3] = SBUS_SOURCE_UDP;
 
     log_msg(LOG_INFO, "SbusRouter singleton created");
 }
@@ -34,7 +35,7 @@ bool SbusRouter::routeFrame(const uint8_t* frame, uint8_t sourceId) {
     // Called directly from SbusFastParser, bypasses packet queue
 
     // Validation
-    if (!frame || sourceId >= 3) return false;
+    if (!frame || sourceId >= 4) return false;
     if (frame[0] != 0x0F) return false;
     if (!sourceConfigured[sourceId]) return false;
 
@@ -57,7 +58,7 @@ bool SbusRouter::routeFrame(const uint8_t* frame, uint8_t sourceId) {
 
     // Count configured sources for single-source optimization
     int configuredCount = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (sourceConfigured[i]) configuredCount++;
     }
 
@@ -110,7 +111,7 @@ void SbusRouter::registerOutput(PacketSender* sender) {
 }
 
 void SbusRouter::registerSource(uint8_t sourceId, uint8_t priority) {
-    if (sourceId >= 3) {
+    if (sourceId >= 4) {
         log_msg(LOG_ERROR, "Invalid source ID: %d", sourceId);
         return;
     }
@@ -158,7 +159,7 @@ void SbusRouter::tick() {
 }
 
 uint8_t SbusRouter::getSourceQuality(uint8_t sourceId) const {
-    if (sourceId >= 3 || !sourceConfigured[sourceId]) return 0;
+    if (sourceId >= 4 || !sourceConfigured[sourceId]) return 0;
 
     uint32_t age = millis() - sources[sourceId].lastFrameTime;
 
@@ -170,7 +171,7 @@ uint8_t SbusRouter::getSourceQuality(uint8_t sourceId) const {
 }
 
 uint8_t SbusRouter::getSourcePriority(uint8_t sourceId) const {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (priorities[i] == sourceId) return i;
     }
     return 255;  // Not found
@@ -239,7 +240,7 @@ uint8_t SbusRouter::selectBestSource() {
     uint8_t bestQuality = 0;
 
     // Find best source by priority, then quality
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         uint8_t src = priorities[i];
         if (!sourceConfigured[src]) continue;
 

@@ -64,6 +64,10 @@ static void populateConfigJson(JsonDocument& doc) {
 #elif defined(BOARD_XIAO_ESP32_S3)
     doc["boardType"] = "xiao";
     doc["usbHostSupported"] = true;
+#elif defined(BOARD_MINIKIT_ESP32)
+    doc["boardType"] = "minikit";
+    doc["usbHostSupported"] = false;
+    doc["uart2Available"] = false;  // D2_UART2 not available (GPIO 8/9 conflict)
 #elif defined(BOARD_ESP32_S3_ZERO)
     doc["boardType"] = "s3zero";
     doc["usbHostSupported"] = true;
@@ -332,6 +336,12 @@ void handleSave(AsyncWebServerRequest *request) {
         // Block USB Host mode on Super Mini
         if (mode == "host") {
             log_msg(LOG_WARNING, "USB Host mode not supported on Super Mini, using Device mode");
+            newMode = USB_MODE_DEVICE;
+        }
+        #elif defined(BOARD_MINIKIT_ESP32)
+        // Block USB Host mode on MiniKit (no native USB peripheral)
+        if (mode == "host") {
+            log_msg(LOG_WARNING, "USB Host mode not supported on MiniKit, using Device mode");
             newMode = USB_MODE_DEVICE;
         }
         #elif defined(BOARD_ESP32_S3_ZERO)

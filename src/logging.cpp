@@ -15,8 +15,8 @@ extern SystemState systemState;
 // Device 3 UART interface (for D3_UART3_LOG mode)
 extern UartInterface* device3Serial;
 
-// UDP log buffer definitions
-uint8_t udpLogBuffer[UDP_LOG_BUFFER_SIZE];
+// UDP log buffer definitions - allocated only when Device 4 is in logger role
+uint8_t* udpLogBuffer = nullptr;
 int udpLogHead = 0;
 int udpLogTail = 0;
 SemaphoreHandle_t udpLogMutex = nullptr;
@@ -57,13 +57,18 @@ void logging_init() {
     logIndex = 0;
     logCount = 0;
 
-    // Create UDP log mutex if not created yet
-    if (!udpLogMutex) {
-        udpLogMutex = xSemaphoreCreateMutex();
+    // Allocate UDP log buffer only when Device 4 is in logger role
+    if (config.device4.role == D4_LOG_NETWORK) {
+        if (!udpLogBuffer) {
+            udpLogBuffer = (uint8_t*)malloc(UDP_LOG_BUFFER_SIZE);
+            if (udpLogBuffer) {
+                memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
+            }
+        }
+        if (!udpLogMutex) {
+            udpLogMutex = xSemaphoreCreateMutex();
+        }
     }
-
-    // Initialize UDP log buffer to prevent garbage
-    memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
     udpLogHead = 0;
     udpLogTail = 0;
 }
@@ -158,7 +163,7 @@ void log_msg(LogLevel level, const char* fmt, ...) {
         config.device4.role == D4_LOG_NETWORK &&
         config.log_level_network != LOG_OFF &&
         level <= config.log_level_network &&
-        udpLogMutex) {
+        udpLogBuffer && udpLogMutex) {
 
         // Format for network
         char netBuf[320];

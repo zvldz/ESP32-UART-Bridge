@@ -26,6 +26,7 @@ const StatusUpdates = {
         const boardType = this.config.boardType || 's3zero';
         if (boardType === 'xiao') return 'XIAO ESP32-S3';
         if (boardType === 's3supermini') return 'ESP32-S3 Super Mini';
+        if (boardType === 'minikit') return 'ESP32 MiniKit';
         return 'ESP32-S3-Zero';
     },
 

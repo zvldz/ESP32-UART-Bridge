@@ -1,6 +1,9 @@
 #ifndef USB_HOST_H
 #define USB_HOST_H
 
+// USB Host is only available on ESP32-S3 (not on WROOM/MiniKit)
+#if !defined(BOARD_MINIKIT_ESP32)
+
 #include "usb_base.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -80,5 +83,7 @@ private:
 
 // Factory function declaration
 UsbInterface* createUsbHost(uint32_t baudrate);
+
+#endif // !defined(BOARD_MINIKIT_ESP32)
 
 #endif // USB_HOST_H

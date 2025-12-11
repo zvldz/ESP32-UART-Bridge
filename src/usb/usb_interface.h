@@ -30,6 +30,10 @@ public:
 
 // Factory functions
 UsbInterface* createUsbDevice(uint32_t baudrate);
+
+// USB Host only available on ESP32-S3 (not on WROOM/MiniKit)
+#if !defined(BOARD_MINIKIT_ESP32)
 UsbInterface* createUsbHost(uint32_t baudrate);
+#endif
 
 #endif // USB_INTERFACE_H

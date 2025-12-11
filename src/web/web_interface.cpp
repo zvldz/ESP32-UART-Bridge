@@ -89,14 +89,18 @@ void webserver_init(Config* config, SystemState* state) {
             if (index == 0) {
                 // Clean up any previous buffer
                 if (g_importBuf) {
-                    heap_caps_free(g_importBuf);
+                    free(g_importBuf);
                     g_importBuf = nullptr;
                 }
 
-                // Allocate PSRAM buffer
+                // Try PSRAM first, fallback to internal RAM
                 g_importBuf = static_cast<char*>(heap_caps_malloc(MAX_IMPORT + 1, MALLOC_CAP_SPIRAM));
                 if (!g_importBuf) {
-                    request->send(507, "application/json", "{\"status\":\"error\",\"message\":\"PSRAM allocation failed\"}");
+                    // PSRAM not available (e.g., MiniKit), try internal RAM
+                    g_importBuf = static_cast<char*>(malloc(MAX_IMPORT + 1));
+                }
+                if (!g_importBuf) {
+                    request->send(507, "application/json", "{\"status\":\"error\",\"message\":\"Memory allocation failed\"}");
                     return;
                 }
                 g_importLen = 0;
@@ -117,7 +121,7 @@ void webserver_init(Config* config, SystemState* state) {
 
             // Hard limit check
             if (g_importLen >= MAX_IMPORT) {
-                heap_caps_free(g_importBuf);
+                free(g_importBuf);
                 g_importBuf = nullptr;
                 request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"config too large\"}");
                 return;

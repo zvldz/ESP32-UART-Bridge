@@ -32,10 +32,10 @@ void logging_init_uart();
 // Helper function to get level name
 const char* getLogLevelName(LogLevel level);
 
-// UDP log buffer
+// UDP log buffer - allocated dynamically only when Device 4 is in logger role
 #define UDP_LOG_BUFFER_SIZE 2048
 
-extern uint8_t udpLogBuffer[];
+extern uint8_t* udpLogBuffer;       // nullptr if Device 4 not in logger role
 extern int udpLogHead;
 extern int udpLogTail;
 extern SemaphoreHandle_t udpLogMutex;

@@ -176,6 +176,104 @@ const Utils = {
         }
     },
 
+    // Fetch with reboot handling - for endpoints that trigger device restart
+    // Returns Promise that resolves with JSON data or starts reconnect on reboot
+    fetchWithReboot(url, options = {}) {
+        return fetch(url, options)
+            .then(response => {
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Device likely rebooting - throw special error
+                    const err = new Error('DEVICE_REBOOTING');
+                    err.isReboot = true;
+                    throw err;
+                }
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Server error');
+                    });
+                }
+                return response.json();
+            });
+    },
+
+    // Start reconnect countdown and attempts
+    startReconnect(options = {}) {
+        const {
+            waitSeconds = 8,
+            maxAttempts = 30,
+            button = null,
+            statusText = null,
+            onConnected = () => window.location.reload()
+        } = options;
+
+        let countdown = waitSeconds;
+
+        const countdownInterval = setInterval(() => {
+            if (button) {
+                button.disabled = true;
+                button.textContent = `Rebooting... ${countdown}s`;
+                button.style.backgroundColor = '#2196F3';
+            }
+            if (statusText) {
+                statusText.textContent = `Device rebooting... ${countdown}s`;
+            }
+            countdown--;
+
+            if (countdown < 0) {
+                clearInterval(countdownInterval);
+                this.attemptReconnect({ maxAttempts, button, statusText, onConnected, attempt: 0 });
+            }
+        }, 1000);
+    },
+
+    attemptReconnect(options) {
+        const { maxAttempts, button, statusText, onConnected, attempt } = options;
+
+        if (attempt >= maxAttempts) {
+            if (button) {
+                button.textContent = 'Please refresh manually';
+                button.style.backgroundColor = '#ff9800';
+                button.disabled = false;
+                button.onclick = () => window.location.reload();
+            }
+            if (statusText) {
+                statusText.textContent = 'Please refresh page manually';
+                statusText.style.color = '#ff9800';
+            }
+            return;
+        }
+
+        if (button) {
+            button.textContent = `Reconnecting... (${attempt + 1}/${maxAttempts})`;
+        }
+        if (statusText) {
+            statusText.textContent = `Reconnecting... (${attempt + 1}/${maxAttempts})`;
+        }
+
+        fetch('/status', { cache: 'no-store' })
+            .then(response => {
+                if (response.ok) {
+                    if (button) {
+                        button.textContent = 'Connected! Reloading...';
+                        button.style.backgroundColor = '#4CAF50';
+                    }
+                    if (statusText) {
+                        statusText.textContent = 'Connected! Reloading...';
+                        statusText.style.color = 'green';
+                    }
+                    setTimeout(onConnected, 500);
+                } else {
+                    throw new Error('Not ready');
+                }
+            })
+            .catch(() => {
+                setTimeout(() => {
+                    this.attemptReconnect({ ...options, attempt: attempt + 1 });
+                }, 1000);
+            });
+    },
+
     // Format traffic statistics with visual indicators and alignment
     formatTraffic(rxBytes, txBytes, rxPrevious = 0, txPrevious = 0) {
         const rxFormatted = this.formatBytes(rxBytes);

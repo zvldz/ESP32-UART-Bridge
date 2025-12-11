@@ -114,145 +114,6 @@
                 <!-- Device Configuration -->
                 <div id="deviceConfig"></div>
 
-                <!-- Advanced Configuration -->
-                <div class="section" style="margin-top: 20px; padding: 15px;">
-                    <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleAdvancedConfig()">
-                        ⚙️ Advanced Configuration
-                        <span id="advancedConfigArrow" style="float: right; font-size: 18px;">▶</span>
-                    </h4>
-                    <div id="advancedConfigContent" style="display: none;">
-                        <!-- Device 4 Network Configuration (moved from device-config.js) -->
-                        <div id="device4AdvancedConfig" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">🌐 Device 4 Network Configuration</h5>
-                            <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                                <div id="device4_target_ip_group">
-                                    <label for="device4_target_ip">Target IP:</label>
-                                    <input type="text" name="device4_target_ip" id="device4_target_ip"
-                                           style="width: 180px;"
-                                           placeholder="192.168.x.x, 10.0.0.5">
-                                </div>
-                                <div>
-                                    <label for="device4_port">Port:</label>
-                                    <input type="number" name="device4_port" id="device4_port"
-                                           style="width: 80px;" min="1" max="65535">
-                                </div>
-                                <div style="display: flex; flex-direction: column; gap: 2px; align-self: flex-end; align-items: flex-start; margin-bottom: 5px;">
-                                    <label class="checkbox-label" title="Disable only if your GCS doesn't support batched packets">
-                                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
-                                        <span>Batching</span>
-                                    </label>
-                                    <label id="device4_auto_broadcast_group" class="checkbox-label" style="visibility: hidden;"
-                                           title="Use broadcast IP from DHCP subnet (Client mode only)">
-                                        <input type="checkbox" name="device4_auto_broadcast" id="device4_auto_broadcast">
-                                        <span>Auto Broadcast</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <small class="hint">ℹ️ Multiple IPs: comma-separated (max 4). Use .255 suffix for subnet broadcast.</small>
-                        </div>
-
-                        <!-- Protocol Optimization -->
-                        <div id="protocolOptimizationBlock" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">📡 Protocol Optimization</h5>
-                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                                <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;">
-                                    <option value="0">None</option>
-                                    <option value="1">MAVLink</option>
-                                </select>
-                                <div id="mavlink-routing-section" style="display: none;">
-                                    <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">
-                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
-                                        <span>Target-only Routing</span>
-                                    </label>
-                                </div>
-                                <div id="sbus-timing-keeper-section" style="display: none;">
-                                    <label class="checkbox-label" title="Repeats last valid SBUS frame every 20ms for WiFi stability">
-                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper">
-                                        <span>SBUS WiFi Timing Keeper</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <small class="hint">ℹ️ Reduces latency by detecting packet boundaries.</small>
-                        </div>
-
-                        <!-- UART Configuration -->
-                        <div id="uartConfigBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 id="uartConfigTitle" style="margin: 0 0 10px 0; color: #333;">🔌 UART Configuration</h5>
-                            <div id="uartConfigContent" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
-                                <div>
-                                    <label for="baudrate">Baud Rate:</label>
-                                    <select name="baudrate" id="baudrate" style="width: 100px;"></select>
-                                </div>
-                                <div>
-                                    <label for="databits">Data:</label>
-                                    <select name="databits" id="databits" style="width: 60px;"></select>
-                                </div>
-                                <div>
-                                    <label for="parity">Parity:</label>
-                                    <select name="parity" id="parity" style="width: 80px;"></select>
-                                </div>
-                                <div>
-                                    <label for="stopbits">Stop:</label>
-                                    <select name="stopbits" id="stopbits" style="width: 60px;"></select>
-                                </div>
-                                <div title="Requires 4-wire connection (TX, RX, RTS, CTS)">
-                                    <label for="flowcontrol">Flow Control:</label>
-                                    <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1" style="width: auto; height: 34px;">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- USB Mode -->
-                        <div id="usbModeBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">🔗 USB Mode</h5>
-                            <div style="margin: 0;">
-                                <select name="usbmode" id="usbmode" style="width: 200px;">
-                                    <option value="device">Device</option>
-                                    <option value="host">Host</option>
-                                </select>
-                                <small class="hint">ℹ️ Used for Device 2 in USB role</small>
-                            </div>
-                        </div>
-
-                        <!-- Logging Configuration (moved from device-config.js) -->
-                        <div id="loggingConfigBlock" style="padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">📝 Logging Configuration</h5>
-                            <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-                                <div>
-                                    <label>Web Logs:</label>
-                                    <select name="log_level_web" id="log_level_web" style="width: 120px;">
-                                        <option value="-1">OFF</option>
-                                        <option value="0">ERROR</option>
-                                        <option value="1">WARNING</option>
-                                        <option value="2">INFO</option>
-                                        <option value="3">DEBUG</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label>UART Logs:</label>
-                                    <select name="log_level_uart" id="log_level_uart" style="width: 120px;">
-                                        <option value="-1">OFF</option>
-                                        <option value="0">ERROR</option>
-                                        <option value="1">WARNING</option>
-                                        <option value="2">INFO</option>
-                                        <option value="3">DEBUG</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label>Network Logs:</label>
-                                    <select name="log_level_network" id="log_level_network" disabled style="width: 120px;">
-                                        <option value="-1">OFF</option>
-                                        <option value="0">ERROR</option>
-                                        <option value="1">WARNING</option>
-                                        <option value="2">INFO</option>
-                                        <option value="3">DEBUG</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- WiFi Configuration -->
                 <div class="section" style="margin-top: 20px; padding: 15px;">
                     <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleWifiConfig()">
@@ -419,6 +280,145 @@
                                    placeholder="esp-bridge-xxxx">
                             <small class="hint">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
                             <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Configuration -->
+                <div class="section" style="margin-top: 20px; padding: 15px;">
+                    <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleAdvancedConfig()">
+                        ⚙️ Advanced Configuration
+                        <span id="advancedConfigArrow" style="float: right; font-size: 18px;">▶</span>
+                    </h4>
+                    <div id="advancedConfigContent" style="display: none;">
+                        <!-- Device 4 Network Configuration (moved from device-config.js) -->
+                        <div id="device4AdvancedConfig" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                            <h5 style="margin: 0 0 10px 0; color: #333;">🌐 Device 4 Network Configuration</h5>
+                            <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                                <div id="device4_target_ip_group">
+                                    <label for="device4_target_ip">Target IP:</label>
+                                    <input type="text" name="device4_target_ip" id="device4_target_ip"
+                                           style="width: 180px;"
+                                           placeholder="192.168.x.x, 10.0.0.5">
+                                </div>
+                                <div>
+                                    <label for="device4_port">Port:</label>
+                                    <input type="number" name="device4_port" id="device4_port"
+                                           style="width: 80px;" min="1" max="65535">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 2px; align-self: flex-end; align-items: flex-start; margin-bottom: 5px;">
+                                    <label class="checkbox-label" title="Disable only if your GCS doesn't support batched packets">
+                                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
+                                        <span>Batching</span>
+                                    </label>
+                                    <label id="device4_auto_broadcast_group" class="checkbox-label" style="visibility: hidden;"
+                                           title="Use broadcast IP from DHCP subnet (Client mode only)">
+                                        <input type="checkbox" name="device4_auto_broadcast" id="device4_auto_broadcast">
+                                        <span>Auto Broadcast</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <small class="hint">ℹ️ Multiple IPs: comma-separated (max 4). Use .255 suffix for subnet broadcast.</small>
+                        </div>
+
+                        <!-- Protocol Optimization -->
+                        <div id="protocolOptimizationBlock" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                            <h5 style="margin: 0 0 10px 0; color: #333;">📡 Protocol Optimization</h5>
+                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                                <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;">
+                                    <option value="0">None</option>
+                                    <option value="1">MAVLink</option>
+                                </select>
+                                <div id="mavlink-routing-section" style="display: none;">
+                                    <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">
+                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
+                                        <span>Target-only Routing</span>
+                                    </label>
+                                </div>
+                                <div id="sbus-timing-keeper-section" style="display: none;">
+                                    <label class="checkbox-label" title="Repeats last valid SBUS frame every 20ms for WiFi stability">
+                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper">
+                                        <span>SBUS WiFi Timing Keeper</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <small class="hint">ℹ️ Reduces latency by detecting packet boundaries.</small>
+                        </div>
+
+                        <!-- UART Configuration -->
+                        <div id="uartConfigBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                            <h5 id="uartConfigTitle" style="margin: 0 0 10px 0; color: #333;">🔌 UART Configuration</h5>
+                            <div id="uartConfigContent" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                                <div>
+                                    <label for="baudrate">Baud Rate:</label>
+                                    <select name="baudrate" id="baudrate" style="width: 100px;"></select>
+                                </div>
+                                <div>
+                                    <label for="databits">Data:</label>
+                                    <select name="databits" id="databits" style="width: 60px;"></select>
+                                </div>
+                                <div>
+                                    <label for="parity">Parity:</label>
+                                    <select name="parity" id="parity" style="width: 80px;"></select>
+                                </div>
+                                <div>
+                                    <label for="stopbits">Stop:</label>
+                                    <select name="stopbits" id="stopbits" style="width: 60px;"></select>
+                                </div>
+                                <div title="Requires 4-wire connection (TX, RX, RTS, CTS)">
+                                    <label for="flowcontrol">Flow Control:</label>
+                                    <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1" style="width: auto; height: 34px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- USB Mode -->
+                        <div id="usbModeBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                            <h5 style="margin: 0 0 10px 0; color: #333;">🔗 USB Mode</h5>
+                            <div style="margin: 0;">
+                                <select name="usbmode" id="usbmode" style="width: 200px;">
+                                    <option value="device">Device</option>
+                                    <option value="host">Host</option>
+                                </select>
+                                <small class="hint">ℹ️ Used for Device 2 in USB role</small>
+                            </div>
+                        </div>
+
+                        <!-- Logging Configuration (moved from device-config.js) -->
+                        <div id="loggingConfigBlock" style="padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+                            <h5 style="margin: 0 0 10px 0; color: #333;">📝 Logging Configuration</h5>
+                            <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+                                <div>
+                                    <label>Web Logs:</label>
+                                    <select name="log_level_web" id="log_level_web" style="width: 120px;">
+                                        <option value="-1">OFF</option>
+                                        <option value="0">ERROR</option>
+                                        <option value="1">WARNING</option>
+                                        <option value="2">INFO</option>
+                                        <option value="3">DEBUG</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>UART Logs:</label>
+                                    <select name="log_level_uart" id="log_level_uart" style="width: 120px;">
+                                        <option value="-1">OFF</option>
+                                        <option value="0">ERROR</option>
+                                        <option value="1">WARNING</option>
+                                        <option value="2">INFO</option>
+                                        <option value="3">DEBUG</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Network Logs:</label>
+                                    <select name="log_level_network" id="log_level_network" disabled style="width: 120px;">
+                                        <option value="-1">OFF</option>
+                                        <option value="0">ERROR</option>
+                                        <option value="1">WARNING</option>
+                                        <option value="2">INFO</option>
+                                        <option value="3">DEBUG</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

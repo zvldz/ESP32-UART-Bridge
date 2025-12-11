@@ -67,20 +67,29 @@ static inline void processDevice1Input(BridgeContext* ctx) {
 static inline void processDevice3UART(BridgeContext* ctx) {
     // Poll Device3 DMA events
     static_cast<UartDMA*>(ctx->interfaces.device3Serial)->pollEvents();
-    
-    // Transfer data from Device3 to Device1 (UART bridge)
+
+    extern Config config;
+
+    // Transfer data from Device3 to buffer
     uint8_t buffer[256];
     size_t totalTransferred = 0;
-    
+
     while (ctx->interfaces.device3Serial->available() > 0 && totalTransferred < 256) {
-        size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
-        if (canWrite == 0) break;
-        
-        size_t toRead = min((size_t)ctx->interfaces.device3Serial->available(), 
-                           min(canWrite, sizeof(buffer)));
-        
+        // For SBUS_IN, don't check UART1 canWrite - data goes to buffer, not UART1
+        size_t toRead;
+        if (config.device3.role == D3_SBUS_IN) {
+            // SBUS_IN: read all available data (up to buffer size)
+            toRead = min((size_t)ctx->interfaces.device3Serial->available(), sizeof(buffer));
+        } else {
+            // UART3/SBUS_OUT: check UART1 write space
+            size_t canWrite = ctx->interfaces.uartBridgeSerial->availableForWrite();
+            if (canWrite == 0) break;
+            toRead = min((size_t)ctx->interfaces.device3Serial->available(),
+                        min(canWrite, sizeof(buffer)));
+        }
+
         size_t actual = 0;
-        for (int i = 0; i < toRead; i++) {
+        for (size_t i = 0; i < toRead; i++) {
             int byte = ctx->interfaces.device3Serial->read();
             if (byte >= 0) {
                 buffer[actual++] = (uint8_t)byte;
@@ -95,14 +104,14 @@ static inline void processDevice3UART(BridgeContext* ctx) {
                 // Drop oldest data to make room
                 ctx->buffers.uart3InputBuffer->consume(actual - free);
             }
-            
+
             ctx->buffers.uart3InputBuffer->write(buffer, actual);
             totalTransferred += actual;
         } else {
             break;
         }
     }
-    
+
     if (totalTransferred > 0) {
         g_deviceStats.device3.rxBytes.fetch_add(totalTransferred, std::memory_order_relaxed);
         g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);

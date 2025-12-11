@@ -86,7 +86,11 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
         if (blink.isOn) {
             // Turn off
 #if defined(LED_TYPE_SINGLE_COLOR)
+  #if defined(LED_ACTIVE_HIGH)
+            digitalWrite(LED_PIN1, LOW);   // OFF (normal logic)
+  #else
             digitalWrite(LED_PIN1, HIGH);  // OFF (inverted)
+  #endif
 #else
             leds[0] = CRGB::Black;
             FastLED.show();
@@ -104,7 +108,11 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
         } else {
             // Turn on with stored color
 #if defined(LED_TYPE_SINGLE_COLOR)
-            digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+  #if defined(LED_ACTIVE_HIGH)
+            digitalWrite(LED_PIN1, HIGH);  // ON (normal logic)
+  #else
+            digitalWrite(LED_PIN1, LOW);   // ON (inverted)
+  #endif
 #else
             leds[0] = CRGB(blink.colorValue);
             FastLED.show();
@@ -206,7 +214,11 @@ static void processDataActivityUnderMutex() {
 
         // Set LED color and schedule auto-off
 #if defined(LED_TYPE_SINGLE_COLOR)
-        digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+  #if defined(LED_ACTIVE_HIGH)
+        digitalWrite(LED_PIN1, HIGH);  // ON (normal logic)
+  #else
+        digitalWrite(LED_PIN1, LOW);   // ON (inverted)
+  #endif
 #else
         leds[0] = CRGB(pendingColor);
         FastLED.show();
@@ -218,7 +230,11 @@ static void processDataActivityUnderMutex() {
     // Handle automatic LED off
     if (ledOffTime > 0 && time_reached(millis(), ledOffTime)) {
 #if defined(LED_TYPE_SINGLE_COLOR)
+  #if defined(LED_ACTIVE_HIGH)
+        digitalWrite(LED_PIN1, LOW);   // OFF (normal logic)
+  #else
         digitalWrite(LED_PIN1, HIGH);  // OFF (inverted)
+  #endif
 #else
         leds[0] = CRGB::Black;
         FastLED.show();
@@ -247,11 +263,25 @@ void leds_init() {
     }
 
 #if defined(LED_TYPE_SINGLE_COLOR)
-    // XIAO: Simple GPIO LED (inverted: LOW=ON, HIGH=OFF)
+    // Single color GPIO LED
     pinMode(LED_PIN1, OUTPUT);
+  #if defined(LED_ACTIVE_HIGH)
+    // MiniKit: Normal logic (HIGH=ON, LOW=OFF)
+    digitalWrite(LED_PIN1, LOW);   // OFF initially
+
+    log_msg(LOG_DEBUG, "Starting LED test...");
+    for(int i = 0; i < 3; i++) {
+        digitalWrite(LED_PIN1, HIGH);  // ON
+        vTaskDelay(pdMS_TO_TICKS(100));
+        digitalWrite(LED_PIN1, LOW);   // OFF
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    log_msg(LOG_INFO, "Single color LED initialized on GPIO%d (normal)", LED_PIN1);
+  #else
+    // XIAO: Inverted logic (LOW=ON, HIGH=OFF)
     digitalWrite(LED_PIN1, HIGH);  // OFF initially
 
-    // Simple blink test instead of rainbow
     log_msg(LOG_DEBUG, "Starting LED test...");
     for(int i = 0; i < 3; i++) {
         digitalWrite(LED_PIN1, LOW);   // ON
@@ -261,6 +291,7 @@ void leds_init() {
     }
 
     log_msg(LOG_INFO, "Single color LED initialized on GPIO%d (inverted)", LED_PIN1);
+  #endif
 #else
     // Zero/SuperMini: FastLED for RGB LED
     FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
@@ -335,7 +366,11 @@ static void clearOtherBlinks(BlinkType keepActive) {
 static void setStaticLED(CRGB color) {
     if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
 #if defined(LED_TYPE_SINGLE_COLOR)
-        digitalWrite(LED_PIN1, (color == CRGB::Black) ? HIGH : LOW);  // inverted
+  #if defined(LED_ACTIVE_HIGH)
+        digitalWrite(LED_PIN1, (color == CRGB::Black) ? LOW : HIGH);   // normal logic
+  #else
+        digitalWrite(LED_PIN1, (color == CRGB::Black) ? HIGH : LOW);   // inverted
+  #endif
 #else
         leds[0] = color;
         FastLED.show();
@@ -424,7 +459,11 @@ void led_process_updates() {
         if (!rapidActive && !blinkStates[BLINK_RAPID].active) {
             // Keep LED constant (purple for RGB, just ON for single color)
 #if defined(LED_TYPE_SINGLE_COLOR)
-            digitalWrite(LED_PIN1, LOW);  // ON (inverted)
+  #if defined(LED_ACTIVE_HIGH)
+            digitalWrite(LED_PIN1, HIGH);  // ON (normal logic)
+  #else
+            digitalWrite(LED_PIN1, LOW);   // ON (inverted)
+  #endif
 #else
             leds[0] = CRGB::Purple;
             FastLED.show();

@@ -100,6 +100,7 @@ const DeviceConfig = {
                             <option value="1">UART3 Mirror</option>
                             <option value="2">UART3 Bridge</option>
                             <option value="3">UART3 Logger</option>
+                            <option value="4">SBUS Input</option>
                             <option value="5">SBUS Output</option>
                         </select>
                     </td>
@@ -132,7 +133,17 @@ const DeviceConfig = {
             device1Role.value = this.config.device1Role || '0';
             this.onDevice1RoleChange();
         }
-        if (device2Role) device2Role.value = this.config.device2Role;
+        if (device2Role) {
+            // Disable D2_UART2 option on boards where it's not available (e.g., MiniKit)
+            if (this.config.uart2Available === false) {
+                const uart2Option = device2Role.querySelector('option[value="1"]');
+                if (uart2Option) {
+                    uart2Option.disabled = true;
+                    uart2Option.text = 'UART2 (not available)';
+                }
+            }
+            device2Role.value = this.config.device2Role;
+        }
         if (device3Role) {
             device3Role.value = this.config.device3Role;
             this.updateDevice3Pins();
@@ -186,8 +197,11 @@ const DeviceConfig = {
         }
         this.updateDevice4Config();
         this.updateNetworkLogLevel();
+
+        // Update auto broadcast visibility after device4_role is set
+        this.updateAutoBroadcastState();
     },
-    
+
     attachListeners() {
         const device2Role = document.getElementById('device2_role');
         if (device2Role) {
@@ -303,7 +317,9 @@ const DeviceConfig = {
             pinsCell.textContent = isXiao ? this.formatGpioPinPair(43, 44) : 'GPIO 11/12';
         } else if (role === '3') { // UART3 Logger
             pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX only)' : 'GPIO 12 (TX only)';
-        } else if (role === '5') { // SBUS OUT (role 4 removed - was SBUS IN)
+        } else if (role === '4') { // SBUS IN
+            pinsCell.textContent = isXiao ? this.formatGpioPin(44) + ' (RX)' : 'GPIO 11 (RX)';
+        } else if (role === '5') { // SBUS OUT
             pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX)' : 'GPIO 12 (TX)';
         } else {
             pinsCell.textContent = 'N/A';
@@ -372,6 +388,7 @@ const DeviceConfig = {
     
     updateProtocolFieldState() {
         // Check if any device has SBUS role active
+        // D2: 3=SBUS_IN, 4=SBUS_OUT; D3: 4=SBUS_IN, 5=SBUS_OUT
         const isSbusActive = (this.config.device2Role === '3' || this.config.device2Role === '4' ||
                              this.config.device3Role === '4' || this.config.device3Role === '5');
         
@@ -527,15 +544,23 @@ const DeviceConfig = {
 
             // Set IP defaults only if field is empty (and not RX role)
             if (role !== '4' && (!targetIpInput.value || targetIpInput.value === '')) {
-                // Try to get client IP first, fallback to broadcast
-                fetch('/client-ip')
-                    .then(response => response.text())
-                    .then(clientIP => {
-                        targetIpInput.value = clientIP;
-                    })
-                    .catch(() => {
-                        targetIpInput.value = '192.168.4.255'; // Fallback to broadcast
-                    });
+                const wifiMode = document.getElementById('wifi_mode');
+                const isApMode = wifiMode && wifiMode.value === '0';
+
+                if (isApMode) {
+                    // AP mode: use broadcast by default
+                    targetIpInput.value = '192.168.4.255';
+                } else {
+                    // Client mode: try to get client IP, fallback to broadcast
+                    fetch('/client-ip')
+                        .then(response => response.text())
+                        .then(clientIP => {
+                            targetIpInput.value = clientIP;
+                        })
+                        .catch(() => {
+                            targetIpInput.value = '192.168.4.255';
+                        });
+                }
             }
         } else {
             device4AdvancedConfig.style.display = 'none';
@@ -660,7 +685,7 @@ const DeviceConfig = {
 
         const hasSbus = (device1Role === '1' ||  // D1_SBUS_IN
                          device2Role === '3' || device2Role === '4' ||  // D2_SBUS_IN/OUT
-                         device3Role === '5');   // D3_SBUS_OUT
+                         device3Role === '4' || device3Role === '5');   // D3_SBUS_IN/OUT
 
         const select = document.getElementById('device4_role');
         if (!select) return;
