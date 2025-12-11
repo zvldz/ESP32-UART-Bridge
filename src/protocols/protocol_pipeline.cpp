@@ -76,10 +76,27 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_INFO, "Device2 SBUS_IN flow created");
     }
 
+    // Device3 SBUS_IN flow
+    if (config->device3.role == D3_SBUS_IN && ctx->buffers.uart3InputBuffer) {
+        DataFlow f;
+        f.name = "Device3_SBUS_IN";
+        f.inputBuffer = ctx->buffers.uart3InputBuffer;
+        f.physInterface = PHYS_UART3;
+        f.source = SOURCE_DATA;
+        f.senderMask = calculateSbusInputRouting(config);
+        f.isInputFlow = true;
+        f.parser = new SbusFastParser(SBUS_SOURCE_DEVICE3);
+        f.router = nullptr;
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "Device3 SBUS_IN flow created");
+    }
+
     // Check if any SBUS device is configured
     bool hasSbusDevice = (config->device1.role == D1_SBUS_IN ||
                           config->device2.role == D2_SBUS_IN ||
                           config->device2.role == D2_SBUS_OUT ||
+                          config->device3.role == D3_SBUS_IN ||
                           config->device3.role == D3_SBUS_OUT);
     
     // Flow 1: Telemetry
@@ -337,7 +354,9 @@ void ProtocolPipeline::setupFlows(Config* config) {
     // POSSIBLY DEAD CODE - needs analysis
     // This expects SBUS frames on UART1, but unclear when this would happen without SBUS_IN
     bool hasSbusOut = (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT);
-    bool hasSbusIn = (config->device1.role == D1_SBUS_IN || config->device2.role == D2_SBUS_IN);
+    bool hasSbusIn = (config->device1.role == D1_SBUS_IN ||
+                      config->device2.role == D2_SBUS_IN ||
+                      config->device3.role == D3_SBUS_IN);
 
     if (hasSbusOut && !hasSbusIn && ctx->buffers.uart1InputBuffer) {
         
@@ -406,6 +425,9 @@ void ProtocolPipeline::setupFlows(Config* config) {
         } else if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
             sbusInputBuffer = ctx->buffers.uart2InputBuffer;
             sourceDesc = "Device2_SBUS";
+        } else if (config->device3.role == D3_SBUS_IN && ctx->buffers.uart3InputBuffer) {
+            sbusInputBuffer = ctx->buffers.uart3InputBuffer;
+            sourceDesc = "Device3_SBUS";
         }
 
         if (sbusInputBuffer) {

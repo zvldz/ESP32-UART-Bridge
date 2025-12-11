@@ -53,9 +53,14 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     }
     
     // UART3 input buffer
-    if (config->device3.role == D3_UART3_BRIDGE) {
+    if (config->device3.role == D3_UART3_BRIDGE || config->device3.role == D3_SBUS_IN) {
         ctx->buffers.uart3InputBuffer = new CircularBuffer();
-        size_t bufferSize = 4096;  // UART3
+        size_t bufferSize;
+        if (config->device3.role == D3_SBUS_IN) {
+            bufferSize = 256;  // Physical SBUS
+        } else {
+            bufferSize = 4096;  // UART3
+        }
         ctx->buffers.uart3InputBuffer->init(bufferSize);
         log_msg(LOG_INFO, "UART3 buffer allocated: %zu bytes", bufferSize);
     } else {

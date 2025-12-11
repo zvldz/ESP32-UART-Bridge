@@ -65,48 +65,75 @@
 
 **Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols.
 
-### Device 3 SBUS_IN Role 🔵
+#### ESP32 MiniKit Support 🟡 BASIC TESTING COMPLETED
 
-- [ ] **Add D3_SBUS_IN role to Device 3**
+- [x] **Hardware Adaptation** ✅ COMPLETED
+  - [x] Pin mapping for ESP32 MiniKit board (ESP32-WROOM-32)
+  - [ ] GPIO mapping documented (Device1: GPIO4/5, Device3: GPIO16/17, RTS/CTS: GPIO18/19)
+  - [x] LED functionality (single color LED on GPIO2, normal logic HIGH=ON)
+  - [x] Adjust for different GPIO availability (GPIO6-11 unavailable - SPI flash)
+  - [x] No PSRAM - fallback to internal RAM for all operations
+
+- [x] **Build Configuration** ✅ COMPLETED
+  - [x] Add platformio environment for ESP32 MiniKit (minikit_production, minikit_debug)
+  - [x] Conditional compilation with board flags (BOARD_MINIKIT_ESP32)
+  - [x] Web interface board type detection ("minikit")
+  - [x] SDK configuration for MiniKit variant (sdkconfig.minikit_*.defaults)
+  - [x] USB Host excluded (#if !defined for WROOM)
+
+- [x] **Quick Reset Detection** ✅ COMPLETED (MiniKit has no BOOT button)
+  - [x] NVS-based detection (RESET clears RTC memory on this board)
+  - [x] 3 quick resets within 3 seconds activates network mode
+  - [x] Boot loop protection (crashes/WDT clear counter)
+  - [x] 4 uptime write points in main.cpp for reliable detection
+
+- [ ] **Testing on ESP32 MiniKit** 🟡 WIFI TESTED
+  - [x] Basic ESP32 operation verified ✅
+  - [x] WiFi and web interface functionality ✅
+  - [x] Quick reset detection working ✅
+  - [ ] LED control functional
+  - [ ] Memory optimization — OOM crash on first HTTP request (58KB free)
+  - [ ] Remove DEBUG diagnostics from quick_reset.cpp after verification
+  - [ ] UDP logging operational
+  - [ ] Verify Device 1 UART interface (GPIO4/5 pins)
+  - [ ] Verify Device 3 UART interface (GPIO16/17 pins)
+  - [ ] Test SBUS with hardware inverter
+  - [ ] Check power consumption
+  - [ ] Full protocol testing (MAVLink, SBUS, etc.)
+
+**Status**: ESP32 MiniKit (WROOM-32) support implemented. WiFi and web interface working. Quick reset detection working (3 quick resets = network mode). Device 2 limited to USB via CH340 (no native UART2). Need memory optimization - OOM crash occurs on first HTTP request with only 58KB free RAM.
+
+**Note**: ESP32 MiniKit uses classic WROOM-32 chip without PSRAM, resulting in significantly less available RAM compared to S3 variants. WiFi buffer optimization may be needed. Future consideration: Bluetooth Classic SPP support (available on WROOM, not on S3).
+
+### Device 3 SBUS_IN Role ✅ COMPLETED
+
+- [x] **Add D3_SBUS_IN role to Device 3**
   - Enables SBUS input on Device 3 UART pins
   - Needed for ESP32 MiniKit compatibility (Device 2 = USB only)
   - Symmetric with existing D3_SBUS_OUT role
 
-  **⚠️ Critical implementation notes:**
-  - [ ] **SBUS Router integration**
-    - Add SBUS_SOURCE_DEVICE3 to SbusRouter sources
-    - Verify failsafe flag handling from Device 3 input
-    - Test frame timing with Timing Keeper
-  - [ ] **Output validation**
+  **Implementation completed:**
+  - [x] **SBUS Router integration**
+    - Added SBUS_SOURCE_DEVICE3 to SbusRouter sources
+    - Failsafe flag handling from Device 3 input
+    - Frame timing with Timing Keeper
+  - [x] **Output validation**
     - SBUS_IN requires at least one output configured (D1_SBUS_OUT, D3_SBUS_OUT, or UDP)
-    - Web UI should warn if SBUS_IN enabled without outputs
-    - Prevent invalid config: D3_SBUS_IN + D3_SBUS_OUT on same device (conflict)
-  - [ ] **Role conflict checks**
+    - Web UI warns if SBUS_IN enabled without outputs
+    - Prevents invalid config: D3_SBUS_IN + D3_SBUS_OUT on same device (conflict)
+  - [x] **Role conflict checks**
     - D3_SBUS_IN conflicts with D3_SBUS_OUT (same UART pins)
     - D3_SBUS_IN conflicts with D3_UART3_* roles
-    - Add validation in config save and Web UI
-
-### ESP32 MiniKit Support 🔵
-
-- [ ] **Port to ESP32-WROOM-32 (MiniKit/D1 Mini ESP32)**
-  - [ ] Hardware differences:
-    - 2x UART available (UART0 occupied by USB-UART chip)
-    - No USB-OTG (USB via CH340/CP2104)
-    - Bluetooth Classic + BLE (unlike S3 which has BLE only)
-  - [ ] Device mapping:
-    - Device 1: UART1 (D1_UART1, D1_SBUS_IN)
-    - Device 2: USB-CDC only (D2_USB)
-    - Device 3: UART2 (D3_UART3_*, D3_SBUS_IN, D3_SBUS_OUT)
-    - Device 4: UDP (unchanged)
-  - [ ] Pin configuration for MiniKit board
-  - [ ] Platformio environment (minikit_production, minikit_debug)
-  - [ ] Web UI role filtering for this board
-  - [ ] **Bluetooth Classic SPP for telemetry**
-    - Alternative to WiFi for GCS connection
-    - Serial Port Profile for MAVLink/telemetry
-    - Useful when WiFi is problematic
+    - Validation in config save and Web UI
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
+
+#### Web Interface Improvements
+
+- [ ] **Show connected clients info in AP mode**
+  - Number of connected stations
+  - List of client IP addresses
+  - IP of current web interface user
 
 #### Protocol-driven Optimizations
 - [ ] CRSF (future): Minimal latency requirements
@@ -140,6 +167,14 @@
     - Heap fragmentation tracking
     - Largest free block monitoring
     - Historical memory usage trends
+
+- [ ] **FreeRTOS Stack Optimization**
+  - [ ] Test stack usage under load (MAVLink, FTP transfers, parameters download)
+  - [ ] Monitor `Stack free:` logs during peak activity
+  - [ ] Current allocations: UART=16KB, Sender=4KB (potentially oversized)
+  - [ ] Idle state shows UART=13KB free (only ~3KB used)
+  - [ ] Target: reduce after verification under load
+  - [ ] Rule: keep 2× margin from peak usage
 
 #### USB Boot Message Issue 🟡 NEEDS VERIFICATION
 

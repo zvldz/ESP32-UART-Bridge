@@ -14,8 +14,9 @@ class PacketSender;
 enum SbusSourceType {
     SBUS_SOURCE_DEVICE1 = 0, // Device1 SBUS input (GPIO4)
     SBUS_SOURCE_DEVICE2 = 1, // Device2 SBUS input (GPIO8)
-    SBUS_SOURCE_UDP = 2,     // UDP/WiFi from network (Device4)
-    SBUS_SOURCE_NONE = 3     // No source/invalid
+    SBUS_SOURCE_DEVICE3 = 2, // Device3 SBUS input (GPIO6/7)
+    SBUS_SOURCE_UDP = 3,     // UDP/WiFi from network (Device4)
+    SBUS_SOURCE_NONE = 4     // No source/invalid
 };
 
 class SbusRouter {
@@ -42,12 +43,12 @@ private:
         }
     };
 
-    SourceState sources[3];      // DEVICE1, DEVICE2, UDP
+    SourceState sources[4];      // DEVICE1, DEVICE2, DEVICE3, UDP
     uint8_t activeSource;        // Current active source
     uint8_t lastValidFrame[25];  // Last valid frame for repeating
 
     // Auto-failover config
-    uint8_t priorities[3];       // Source priorities for auto mode
+    uint8_t priorities[4];       // Source priorities for auto mode
     uint32_t switchDelayMs;      // Delay before switching sources
 
     bool timingKeeperEnabled;
@@ -69,7 +70,7 @@ private:
     std::vector<PacketSender*> outputs;
 
     // Source configuration
-    bool sourceConfigured[3] = {false, false, false};
+    bool sourceConfigured[4] = {false, false, false, false};
 
     // Mode control
     Mode currentMode = MODE_AUTO;
@@ -109,7 +110,7 @@ public:
 
     // Manual source control
     void setManualSource(uint8_t source) {
-        if (source >= 3) {
+        if (source >= 4) {
             log_msg(LOG_ERROR, "Invalid manual source: %d", source);
             return;
         }
@@ -130,7 +131,7 @@ public:
 
     // State queries for Web UI
     bool isSourceConfigured(uint8_t sourceId) const {
-        return (sourceId < 3) ? sourceConfigured[sourceId] : false;
+        return (sourceId < 4) ? sourceConfigured[sourceId] : false;
     }
     uint8_t getSourceQuality(uint8_t sourceId) const;
     uint8_t getSourcePriority(uint8_t sourceId) const;
@@ -138,13 +139,13 @@ public:
 
     // Source state queries for Web UI
     bool getSourceHasData(uint8_t sourceId) const {
-        return (sourceId < 3) ? sources[sourceId].hasData : false;
+        return (sourceId < 4) ? sources[sourceId].hasData : false;
     }
     bool getSourceIsValid(uint8_t sourceId) const {
-        return (sourceId < 3) ? sources[sourceId].isValid() : false;
+        return (sourceId < 4) ? sources[sourceId].isValid() : false;
     }
     bool getSourceHasFailsafe(uint8_t sourceId) const {
-        return (sourceId < 3) ? sources[sourceId].hasFailsafe : false;
+        return (sourceId < 4) ? sources[sourceId].hasFailsafe : false;
     }
 
     // Statistics
