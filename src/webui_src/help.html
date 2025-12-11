@@ -159,7 +159,7 @@
             </h3>
             <div id="pinsContent">
                 <div class="warning" style="margin-bottom: 10px;">
-                    <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED), ESP32 MiniKit (WROOM-32, no USB Host, no Device 2, triple RESET for WiFi).
+                    <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED), ESP32 MiniKit (WROOM-32, no USB Host, Device 2 USB only via CP2102/CH340, triple RESET for WiFi).
                 </div>
 
                 <!-- ESP32-S3-Zero / Super Mini subsection -->
@@ -233,7 +233,7 @@
                     </h4>
                     <div id="minikitPinsContent">
                         <div class="warning" style="margin-bottom: 10px;">
-                            <strong>⚠️ MiniKit Limitations:</strong> No USB peripheral (serial via CP2102/CH340), no PSRAM (~160KB heap), no Device 2 (GPIO8/9 used by flash). WiFi activation via triple RESET (no BOOT button).
+                            <strong>⚠️ MiniKit Limitations:</strong> No native USB (serial via CP2102/CH340), no PSRAM (~160KB heap), no UART2 option for Device 2 (GPIO8/9 used by flash). Device 2 is USB only. WiFi activation via triple RESET (no BOOT button).
                         </div>
                         <table>
                             <tr><th>GPIO Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
