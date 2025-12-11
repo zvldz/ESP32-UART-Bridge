@@ -148,9 +148,9 @@ The device supports two WiFi connection modes that can operate in temporary or p
 - **Remote Access**: Access web interface using assigned IP address or mDNS hostname
 - **Internet Connectivity**: Enables cloud features and remote monitoring
 - **Configuration**: Set networks via web interface (primary + 4 additional in collapsible section)
-- **Intelligent Connection Logic**: 
-  - Scans for configured network every 15 seconds when not found
-  - Attempts connection up to 5 times when network is available
+- **Intelligent Connection Logic**:
+  - Scans for configured networks every 15 seconds when not found
+  - Up to 5 password retries, then tries next SSID (if configured)
   - Distinguishes between authentication failures and network unavailability
   - Unlimited reconnection attempts after successful initial connection
   - Automatic recovery from temporary network outages
@@ -191,16 +191,16 @@ The device implements intelligent connection management with different behaviors
 1. **Network Scanning**: Scans for configured SSID every 15 seconds
    - **LED**: Orange slow blink (2 second intervals)
    - Continues until network is found or mode is changed
-2. **Connection Attempts**: When network found, attempts connection up to 5 times
+2. **Connection Attempts**: When network found, up to 5 password retries
    - **LED**: Orange solid during connection attempts
-   - Brief pause between attempts for WiFi stack recovery
+   - On failure, tries next configured SSID (if available)
 3. **Success**: Connection established and IP address obtained
    - **LED**: Orange solid (connected)
    - Device ready for remote access
-4. **Authentication Failure**: Wrong password detected after 5 attempts
-   - **LED**: Red fast blink (500ms intervals) 
+4. **Authentication Failure**: Wrong password on all configured networks
+   - **LED**: Red fast blink (500ms intervals)
    - **Recovery**: Requires device restart or mode change
-   - Device stops attempting connections to prevent router lockout
+   - Only occurs after trying all SSIDs (5 retries each)
 
 #### Network Loss Recovery
 1. **Connection Monitoring**: Detects when established connection is lost
@@ -312,7 +312,7 @@ The bridge supports multiple configurable devices:
 ### Device 1 - Main UART (Always Active)
 Primary UART interface on GPIO 4/5. Can be configured as:
 - **Standard UART**: Full range of baud rates and configurations
-- **SBUS Input**: Read SBUS frames from RC receiver (100000 baud, 8E2, inverted - requires hardware inverter)
+- **SBUS Input**: Read SBUS frames from RC receiver (100000 baud, 8E2, inverted signal)
 
 ### Device 2 - Secondary Channel
 Can be configured as:
@@ -320,7 +320,7 @@ Can be configured as:
 - **UART2**: Additional UART on GPIO 8/9
 - **USB**: USB device or host mode
 - **SBUS Input**: Second SBUS source for failover
-- **SBUS Output**: Send SBUS to flight controller (requires hardware inverter)
+- **SBUS Output**: Send SBUS to flight controller
 
 ### Device 3 - Auxiliary UART
 Can be configured as:
@@ -328,7 +328,8 @@ Can be configured as:
 - **Mirror**: One-way copy of Device 1 data (TX only)
 - **Bridge**: Full bidirectional UART bridge with Device 1 and protocol-aware processing
 - **Logger**: Dedicated UART log output at 115200 baud
-- **SBUS Output**: Send SBUS to flight controller (requires hardware inverter)
+- **SBUS Input**: Third SBUS source for failover
+- **SBUS Output**: Send SBUS to flight controller
 
 ### Device 4 - Network Channel
 Requires active Wi-Fi connection. Can be configured as:
@@ -344,6 +345,7 @@ When Device 4 is enabled, additional settings appear:
   - Use x.x.x.255 for broadcast (reaches all devices on network)
   - Use specific IP for unicast (single destination)
 - **Port**: UDP port number (1-65535)
+- **Auto Broadcast**: Automatically discover UDP targets on network (Client mode + UDP TX only)
 - **Network Log Level**: Only visible when Device 4 is active
 
 ## SBUS Protocol Support
@@ -351,12 +353,12 @@ When Device 4 is enabled, additional settings appear:
 SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. Standard configuration: 100000 baud, 8E2, inverted signal.
 
 ### Hardware Requirements
-- **Signal Inverter**: SBUS uses inverted UART - requires hardware inverter between ESP32 and SBUS device
-- **Common Solutions**: Dedicated SBUS inverter boards, simple transistor circuit, or FrSky uninverted pads (where available)
+- **No external inverter needed**: ESP32 UART supports software signal inversion
+- **Direct connection**: Connect SBUS signal directly to ESP32 GPIO pins
 
 ### SBUS Features
-- **Multi-source Failover**: Automatic switching between up to 3 SBUS sources (Device1, Device2, UDP)
-- **Priority System**: Device1 > Device2 > UDP (configurable to Auto or Manual mode)
+- **Multi-source Failover**: Automatic switching between up to 4 SBUS sources (Device1, Device2, Device3, UDP)
+- **Priority System**: Device1 > Device2 > Device3 > UDP (configurable to Auto or Manual mode)
 - **WiFi Transport**: Send/receive SBUS over UDP with 3-frame batching (~85% packet reduction)
 - **Timing Keeper**: Repeats last frame every 20ms when WiFi source lags (configurable)
 - **Web Monitoring**: Real-time source quality, failsafe state, and switching statistics
@@ -375,9 +377,10 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 **Multi-source Failover** (Redundant SBUS inputs):
 - Device 1: SBUS Input (primary source)
-- Device 2: SBUS Input (backup source)
-- Device 4: SBUS UDP RX (tertiary WiFi source)
-- Automatic failover based on signal quality
+- Device 2: SBUS Input (secondary source)
+- Device 3: SBUS Input (tertiary source)
+- Device 4: SBUS UDP RX (WiFi backup)
+- Automatic failover based on signal quality and priority
 
 ## LED Indicators
 
@@ -467,7 +470,7 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
 
 ### Protocol-Specific Considerations
 - **SBUS devices**: Enable Protocol Optimization → SBUS for native frame parsing
-  - 100000 baud, 8E2, inverted signal (requires hardware inverter)
+  - 100000 baud, 8E2, inverted signal (handled by ESP32 UART)
   - Multi-source failover with automatic quality-based switching
   - WiFi transport with 3-frame UDP batching for efficiency
 - **MAVLink devices**: Enable Protocol Optimization → MAVLink for zero-latency packet forwarding

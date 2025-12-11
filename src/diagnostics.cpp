@@ -28,20 +28,36 @@ void printBootInfo() {
     esp_reset_reason_t reason = esp_reset_reason();
 
     // Only output to Serial for critical reset reasons
-    if (reason == ESP_RST_PANIC || reason == ESP_RST_INT_WDT || 
+    if (reason == ESP_RST_PANIC || reason == ESP_RST_INT_WDT ||
         reason == ESP_RST_TASK_WDT || reason == ESP_RST_BROWNOUT) {
-        
+
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+        // S3 boards with USB CDC - output to USB Serial (original behavior)
         Serial.begin(115200);
         vTaskDelay(pdMS_TO_TICKS(100));
-        
+
         Serial.println("\n\n=== BOOT INFO ===");
         Serial.print("CRASH DETECTED! Reset reason: ");
         Serial.println(crashlog_get_reset_reason_string(reason));
         Serial.println("===================\n");
         Serial.flush();
-        
+
         Serial.end();
         vTaskDelay(pdMS_TO_TICKS(50));
+#else
+        // MiniKit/WROOM - output to UART0 (CH340 USB-Serial)
+        Serial0.begin(115200);
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        Serial0.println("\n\n=== BOOT INFO ===");
+        Serial0.print("CRASH DETECTED! Reset reason: ");
+        Serial0.println(crashlog_get_reset_reason_string(reason));
+        Serial0.println("===================\n");
+        Serial0.flush();
+
+        Serial0.end();
+        vTaskDelay(pdMS_TO_TICKS(50));
+#endif
     }
 }
 
@@ -95,6 +111,7 @@ const char* getDevice3RoleName(uint8_t role) {
     case D3_UART3_MIRROR: return "UART3 Mirror";
     case D3_UART3_BRIDGE: return "UART3 Bridge";
     case D3_UART3_LOG: return "UART3 Logger";
+    case D3_SBUS_IN: return "SBUS Input";
     case D3_SBUS_OUT: return "SBUS Output";
     default: return "Unknown";
   }

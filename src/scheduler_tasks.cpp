@@ -167,7 +167,7 @@ void initializeScheduler() {
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
         
-        extern uint8_t udpLogBuffer[];
+        extern uint8_t* udpLogBuffer;
         extern int udpLogHead;
         extern int udpLogTail;
         extern SemaphoreHandle_t udpLogMutex;
@@ -179,7 +179,7 @@ void initializeScheduler() {
         static size_t lineLen = 0;
         static uint32_t lastFlushMs = 0;
         
-        if (!g_bridgeContext || !udpLogMutex) return;
+        if (!g_bridgeContext || !udpLogBuffer || !udpLogMutex) return;
         
         // Check WiFi readiness for data transmission
         if (!wifiIsReady()) {

@@ -17,6 +17,9 @@
 #include "device_init.h"
 #include "wifi/wifi_manager.h"
 #include "uart/uart_interface.h"
+#if defined(BOARD_MINIKIT_ESP32)
+#include "quick_reset.h"
+#endif
 #include "uart/uart_dma.h"
 #include "protocols/udp_sender.h"
 #include "circular_buffer.h"
@@ -81,6 +84,12 @@ void setup() {
     // Print boot info
     printBootInfo();
 
+#if defined(BOARD_MINIKIT_ESP32)
+    // Quick Reset Detection - must be very early!
+    // Detects 3 quick resets to enter network mode (replaces triple-click on BOOT button)
+    quickResetInit();
+#endif
+
     // Initialize configuration
     config_init(&config);
 
@@ -136,6 +145,11 @@ void setup() {
     config_load(&config);
     log_msg(LOG_INFO, "Configuration loaded");
 
+#if defined(BOARD_MINIKIT_ESP32)
+    // Update uptime early - after config load (~500ms from boot)
+    quickResetUpdateUptime();
+#endif
+
     // Validate SBUS configuration (block incompatible combinations)
     if (config.device1.role == D1_SBUS_IN) {
         // Block D1_SBUS_IN + D2_USB (requires SBUS→UART converter not implemented)
@@ -161,7 +175,7 @@ void setup() {
     // Auto-detect protocol optimization based on device roles
     bool hasSBUSDevice = (config.device1.role == D1_SBUS_IN ||
                          config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
-                         config.device3.role == D3_SBUS_OUT);
+                         config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
 
     if (hasSBUSDevice) {
         if (config.protocolOptimization != PROTOCOL_SBUS) {
@@ -189,6 +203,11 @@ void setup() {
     leds_init();
     log_msg(LOG_INFO, "Hardware initialized");
 
+#if defined(BOARD_MINIKIT_ESP32)
+    // Update uptime after LED init (user sees LED = can press RESET)
+    quickResetUpdateUptime();
+#endif
+
     // Detect boot mode
     log_msg(LOG_INFO, "Detecting boot mode...");
     detectMode();
@@ -215,9 +234,24 @@ void setup() {
     createTasks();
 
     log_msg(LOG_INFO, "Setup complete!");
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Write initial uptime so quick reset detection works immediately
+    // (loop() may not run if user presses RESET right after setup)
+    quickResetUpdateUptime();
+#endif
 }
 
 void loop() {
+#if defined(BOARD_MINIKIT_ESP32)
+    // Update NVS uptime for quick reset detection
+    static unsigned long lastNvsUpdate = 0;
+    if (millis() - lastNvsUpdate > 100) {
+        quickResetUpdateUptime();
+        lastNvsUpdate = millis();
+    }
+#endif
+
     // Process LED updates from main thread - MUST be first
     led_process_updates();
 
@@ -250,6 +284,16 @@ void initPins() {
 }
 
 void detectMode() {
+#if defined(BOARD_MINIKIT_ESP32)
+    // MiniKit: check for quick reset activation (replaces triple-click on BOOT button)
+    if (quickResetDetected()) {
+        log_msg(LOG_INFO, "Quick reset detected - entering network mode");
+        bridgeMode = BRIDGE_NET;
+        systemState.isTemporaryNetwork = true;
+        return;
+    }
+#endif
+
     // Check for temporary network mode flag in preferences
     preferences.begin("uartbridge", false);
     bool tempNetworkRequested = preferences.getBool("temp_net", false);
@@ -343,10 +387,12 @@ void initCommonDevices() {
     // Create USB interface based on configuration (only if Device 2 is USB)
     if (config.device2.role == D2_USB) {
         switch(config.usb_mode) {
+#if !defined(BOARD_MINIKIT_ESP32)
             case USB_MODE_HOST:
                 log_msg(LOG_INFO, "Creating USB Host interface");
                 usbInterface = createUsbHost(config.baudrate);
                 break;
+#endif
             case USB_MODE_DEVICE:
             default:
                 log_msg(LOG_INFO, "Creating USB Device interface");
@@ -656,6 +702,7 @@ void createTasks() {
         config.device2.role == D2_SBUS_OUT ||       // SBUS output
         config.device3.role == D3_UART3_MIRROR ||   // UART3 mirror
         config.device3.role == D3_UART3_BRIDGE ||   // UART3 bridge
+        config.device3.role == D3_SBUS_IN ||        // SBUS input
         config.device3.role == D3_SBUS_OUT ||       // SBUS output
         config.device4.role == D4_NETWORK_BRIDGE || // UDP bridge
         config.device4.role == D4_LOG_NETWORK) {    // UDP logger

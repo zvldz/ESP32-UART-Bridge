@@ -24,6 +24,11 @@ async function initializeUI() {
         Utils.restoreToggle('advancedConfigContent', 'advancedConfigArrow', 'collapse:advancedConfig');
         CrashLog.restoreState();
 
+        // Update auto broadcast state after all sections restored
+        if (typeof DeviceConfig !== 'undefined') {
+            DeviceConfig.updateAutoBroadcastState();
+        }
+
         // Start periodic updates
         startPeriodicUpdates();
     } catch (error) {
@@ -66,6 +71,10 @@ function toggleProtocolStats() {
 // Toggle advanced configuration visibility
 function toggleAdvancedConfig() {
     Utils.rememberedToggle('advancedConfigContent', 'advancedConfigArrow', 'collapse:advancedConfig');
+    // Update auto broadcast state when section becomes visible
+    if (typeof DeviceConfig !== 'undefined') {
+        DeviceConfig.updateAutoBroadcastState();
+    }
 }
 
 

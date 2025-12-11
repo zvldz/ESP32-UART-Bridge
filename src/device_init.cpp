@@ -61,7 +61,7 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
         }
 
         if (config->device3.role != D3_NONE) {
-            if (config->device3.role == D3_SBUS_OUT) {
+            if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
                 initDevice3SBUS();
             } else {
                 initDevice3(config->device3.role);
@@ -109,7 +109,7 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
 
     // Initialize Device 3 if configured
     if (config->device3.role != D3_NONE) {
-        if (config->device3.role == D3_SBUS_OUT) {
+        if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
             initDevice3SBUS();  // Initialize SBUS for Device 3
         } else {
             initDevice3(config->device3.role);  // Existing UART modes
@@ -265,7 +265,7 @@ void initDevice3SBUS() {
         // Enable signal inversion for SBUS
         uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
 
-        const char* modeStr = "SBUS OUT";
+        const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
         log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (100000 8E2 INV, UART0)",
                 modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
     } else {
@@ -278,6 +278,7 @@ bool hasSbusDevice() {
     return (config.device1.role == D1_SBUS_IN ||
             config.device2.role == D2_SBUS_IN ||
             config.device2.role == D2_SBUS_OUT ||
+            config.device3.role == D3_SBUS_IN ||
             config.device3.role == D3_SBUS_OUT ||
             config.device4.role == D4_SBUS_UDP_RX ||
             config.device4.role == D4_SBUS_UDP_TX);
@@ -370,13 +371,18 @@ void initDevices() {
         }
 
         if (config.device2.role == D2_SBUS_IN) {
-            router->registerSource(SBUS_SOURCE_DEVICE2, 1);  // Medium priority
+            router->registerSource(SBUS_SOURCE_DEVICE2, 1);
             log_msg(LOG_INFO, "SBUS source registered: Device2 (priority 1)");
         }
 
+        if (config.device3.role == D3_SBUS_IN) {
+            router->registerSource(SBUS_SOURCE_DEVICE3, 2);
+            log_msg(LOG_INFO, "SBUS source registered: Device3 (priority 2)");
+        }
+
         if (config.device4.role == D4_SBUS_UDP_RX) {
-            router->registerSource(SBUS_SOURCE_UDP, 2);      // Lowest priority
-            log_msg(LOG_INFO, "SBUS source registered: UDP (priority 2)");
+            router->registerSource(SBUS_SOURCE_UDP, 3);      // Lowest priority
+            log_msg(LOG_INFO, "SBUS source registered: UDP (priority 3)");
         }
 
         // Set Timing Keeper from config

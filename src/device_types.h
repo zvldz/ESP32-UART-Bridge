@@ -46,8 +46,8 @@ enum Device3Role {
     D3_UART3_MIRROR = 1,
     D3_UART3_BRIDGE = 2,
     D3_UART3_LOG = 3,
-    // 4 reserved
-    D3_SBUS_OUT = 5
+    D3_SBUS_IN = 4,    // SBUS input from RC receiver
+    D3_SBUS_OUT = 5    // SBUS output to servos
 };
 
 // Device 4 role

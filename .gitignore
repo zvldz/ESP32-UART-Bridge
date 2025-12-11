@@ -43,6 +43,8 @@ sdkconfig.zero_debug
 sdkconfig.zero_production
 sdkconfig.xiao_debug
 sdkconfig.xiao_production
+sdkconfig.minikit_debug
+sdkconfig.minikit_production
 managed_components
 src/CMakeLists.txt
 src/webui_gen/

@@ -277,11 +277,19 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     // Load USB settings
     if (doc["usb"].is<JsonObject>()) {
         String mode = doc["usb"]["mode"] | "device";
+#if defined(BOARD_MINIKIT_ESP32)
+        // MiniKit has no USB Host support (no native USB peripheral)
+        config->usb_mode = USB_MODE_DEVICE;
+        if (mode == "host") {
+            log_msg(LOG_WARNING, "USB Host mode not supported on MiniKit, using Device mode");
+        }
+#else
         if (mode == "host") {
             config->usb_mode = USB_MODE_HOST;
         } else {
             config->usb_mode = USB_MODE_DEVICE;  // Default to device mode
         }
+#endif
     }
 
     // Load device roles (new in v2)
@@ -324,6 +332,14 @@ bool config_load_from_json(Config* config, const String& jsonString) {
 
     // Migrate if needed
     config_migrate(config);
+
+    // Board-specific role validation
+#ifdef DEVICE2_UART_NOT_AVAILABLE
+    if (config->device2.role == D2_UART2) {
+        log_msg(LOG_WARNING, "D2_UART2 not available on this board, switching to D2_USB");
+        config->device2.role = D2_USB;
+    }
+#endif
 
     return true;
 }
