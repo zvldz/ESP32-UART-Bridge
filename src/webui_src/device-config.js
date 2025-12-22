@@ -62,11 +62,12 @@ const DeviceConfig = {
         return `
             <h3>Device Configuration</h3>
             <div id="device-warnings" style="margin-bottom: 15px;"></div>
-            <table style="width: 100%;">
+            <table class="device-table">
                 <tr>
                     <th>Device</th>
                     <th>Pins</th>
                     <th>Role</th>
+                    <th>Options</th>
                 </tr>
                 <tr>
                     <td><strong>Device 1</strong></td>
@@ -77,12 +78,13 @@ const DeviceConfig = {
                             <option value="1">SBUS Input</option>
                         </select>
                     </td>
+                    <td></td>
                 </tr>
                 <tr>
                     <td><strong>Device 2</strong></td>
                     <td id="device2_pins">Variable</td>
                     <td>
-                        <select name="device2_role" id="device2_role" onchange="DeviceConfig.updateDevice4Options()" style="width: 100%;">
+                        <select name="device2_role" id="device2_role" onchange="DeviceConfig.onDeviceRoleChange()" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">UART2</option>
                             <option value="2">USB</option>
@@ -90,12 +92,17 @@ const DeviceConfig = {
                             <option value="4">SBUS Output</option>
                         </select>
                     </td>
+                    <td id="device2_options">
+                        <label id="device2_sbus_text_label" class="checkbox-label" style="display:none;">
+                            <input type="checkbox" name="device2_sbus_text" id="device2_sbus_text"> Text format
+                        </label>
+                    </td>
                 </tr>
                 <tr>
                     <td><strong>Device 3</strong></td>
                     <td id="device3_pins">N/A</td>
                     <td>
-                        <select name="device3_role" id="device3_role" style="width: 100%;">
+                        <select name="device3_role" id="device3_role" onchange="DeviceConfig.onDeviceRoleChange()" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">UART3 Mirror</option>
                             <option value="2">UART3 Bridge</option>
@@ -104,12 +111,17 @@ const DeviceConfig = {
                             <option value="5">SBUS Output</option>
                         </select>
                     </td>
+                    <td id="device3_options">
+                        <label id="device3_sbus_text_label" class="checkbox-label" style="display:none;">
+                            <input type="checkbox" name="device3_sbus_text" id="device3_sbus_text"> Text format
+                        </label>
+                    </td>
                 </tr>
                 <tr>
                     <td><strong>Device 4</strong></td>
                     <td id="device4_pins">Network</td>
                     <td>
-                        <select name="device4_role" id="device4_role" style="width: 100%;">
+                        <select name="device4_role" id="device4_role" onchange="DeviceConfig.onDeviceRoleChange()" style="width: 100%;">
                             <option value="0">Disabled</option>
                             <option value="1">Network Bridge</option>
                             <option value="2">Network Logger</option>
@@ -117,8 +129,16 @@ const DeviceConfig = {
                             <option value="4">UDP→SBUS RX</option>
                         </select>
                     </td>
+                    <td id="device4_options">
+                        <label id="device4_sbus_text_label" class="checkbox-label" style="display:none;">
+                            <input type="checkbox" name="device4_sbus_text" id="device4_sbus_text"> Text format
+                        </label>
+                    </td>
                 </tr>
             </table>
+            <div id="sbus-config-warning" style="display:none; background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-top:10px; font-size:13px;">
+                ⚠️ SBUS Output configured but no SBUS Input source detected
+            </div>
         `;
     },
     
@@ -200,6 +220,17 @@ const DeviceConfig = {
 
         // Update auto broadcast visibility after device4_role is set
         this.updateAutoBroadcastState();
+
+        // Set SBUS text format checkboxes
+        const d2SbusText = document.getElementById('device2_sbus_text');
+        const d3SbusText = document.getElementById('device3_sbus_text');
+        const d4SbusText = document.getElementById('device4_sbus_text');
+        if (d2SbusText) d2SbusText.checked = this.config.device2SbusText === true;
+        if (d3SbusText) d3SbusText.checked = this.config.device3SbusText === true;
+        if (d4SbusText) d4SbusText.checked = this.config.device4SbusText === true;
+
+        // Update SBUS text option visibility
+        this.updateSbusTextOptions();
     },
 
     attachListeners() {
@@ -388,10 +419,14 @@ const DeviceConfig = {
     
     updateProtocolFieldState() {
         // Check if any device has SBUS role active
-        // D2: 3=SBUS_IN, 4=SBUS_OUT; D3: 4=SBUS_IN, 5=SBUS_OUT
-        const isSbusActive = (this.config.device2Role === '3' || this.config.device2Role === '4' ||
-                             this.config.device3Role === '4' || this.config.device3Role === '5');
-        
+        // D1: 1=SBUS_IN; D2: 3=SBUS_IN, 4=SBUS_OUT; D3: 4=SBUS_IN, 5=SBUS_OUT; D4: 3=SBUS_TX, 4=SBUS_RX
+        const isSbusActive = (
+            this.config.device1Role === '1' ||
+            this.config.device2Role === '3' || this.config.device2Role === '4' ||
+            this.config.device3Role === '4' || this.config.device3Role === '5' ||
+            this.config.device4Role === '3' || this.config.device4Role === '4'
+        );
+
         // Protocol optimization field should be blocked when SBUS is active
         const protocolField = document.getElementById('protocol_optimization');
         if (protocolField) {
@@ -399,18 +434,25 @@ const DeviceConfig = {
             // Add visual indication
             protocolField.style.opacity = isSbusActive ? '0.5' : '1';
             protocolField.style.cursor = isSbusActive ? 'not-allowed' : 'default';
-            
-            // Set to SBUS protocol when SBUS is active
-            if (isSbusActive && protocolField.value !== '2') {
-                // Add SBUS option if it doesn't exist
-                let sbusOption = protocolField.querySelector('option[value="2"]');
-                if (!sbusOption) {
-                    sbusOption = document.createElement('option');
-                    sbusOption.value = '2';
-                    sbusOption.textContent = 'SBUS';
-                    protocolField.appendChild(sbusOption);
+
+            if (isSbusActive) {
+                // Set to SBUS protocol when SBUS is active
+                if (protocolField.value !== '2') {
+                    // Add SBUS option if it doesn't exist
+                    let sbusOption = protocolField.querySelector('option[value="2"]');
+                    if (!sbusOption) {
+                        sbusOption = document.createElement('option');
+                        sbusOption.value = '2';
+                        sbusOption.textContent = 'SBUS';
+                        protocolField.appendChild(sbusOption);
+                    }
+                    protocolField.value = '2';  // Set to SBUS protocol
                 }
-                protocolField.value = '2';  // Set to SBUS protocol
+            } else {
+                // Reset to None when no SBUS devices active (if was SBUS)
+                if (protocolField.value === '2') {
+                    protocolField.value = '0';  // Reset to None
+                }
             }
         }
         
@@ -613,6 +655,7 @@ const DeviceConfig = {
         this.updateDevice1Pins();  // Update pin display
         this.updateUartConfigVisibility();  // Update UART config visibility
         this.updateDevice4Options();  // Update Device4 context
+        this.updateSbusConfigWarning();  // Check SBUS config validity
     },
 
     updateDevice1Pins() {
@@ -710,6 +753,70 @@ const DeviceConfig = {
         if (select.querySelector(`option[value="${currentValue}"]`)) {
             select.value = currentValue;
         }
+    },
+
+    // Called when any device role changes
+    onDeviceRoleChange() {
+        this.updateDevice4Options();
+        this.updateSbusTextOptions();
+    },
+
+    // Show/hide SBUS text format checkboxes based on role
+    updateSbusTextOptions() {
+        const device2Role = document.getElementById('device2_role');
+        const device3Role = document.getElementById('device3_role');
+        const device4Role = document.getElementById('device4_role');
+
+        const d2Label = document.getElementById('device2_sbus_text_label');
+        const d3Label = document.getElementById('device3_sbus_text_label');
+        const d4Label = document.getElementById('device4_sbus_text_label');
+
+        // Device 2: show for SBUS Output (value 4)
+        if (d2Label) {
+            d2Label.style.display = (device2Role && device2Role.value === '4') ? 'inline' : 'none';
+        }
+
+        // Device 3: show for SBUS Output (value 5)
+        if (d3Label) {
+            d3Label.style.display = (device3Role && device3Role.value === '5') ? 'inline' : 'none';
+        }
+
+        // Device 4: show for SBUS UDP TX (value 3)
+        if (d4Label) {
+            d4Label.style.display = (device4Role && device4Role.value === '3') ? 'inline' : 'none';
+        }
+
+        // Update SBUS configuration warning
+        this.updateSbusConfigWarning();
+    },
+
+    // Check if SBUS Output is configured without SBUS Input
+    updateSbusConfigWarning() {
+        const device1Role = document.getElementById('device1_role');
+        const device2Role = document.getElementById('device2_role');
+        const device3Role = document.getElementById('device3_role');
+        const device4Role = document.getElementById('device4_role');
+        const warning = document.getElementById('sbus-config-warning');
+
+        if (!warning) return;
+
+        // Check for SBUS Input sources
+        const hasSbusInput = (
+            (device1Role && device1Role.value === '1') ||  // D1_SBUS_IN
+            (device2Role && device2Role.value === '3') ||  // D2_SBUS_IN
+            (device3Role && device3Role.value === '4') ||  // D3_SBUS_IN
+            (device4Role && device4Role.value === '4')     // D4_UDP_SBUS_RX (also a source)
+        );
+
+        // Check for SBUS Output destinations
+        const hasSbusOutput = (
+            (device2Role && device2Role.value === '4') ||  // D2_SBUS_OUT
+            (device3Role && device3Role.value === '5') ||  // D3_SBUS_OUT
+            (device4Role && device4Role.value === '3')     // D4_SBUS_UDP_TX
+        );
+
+        // Show warning if output without input
+        warning.style.display = (hasSbusOutput && !hasSbusInput) ? 'block' : 'none';
     },
 
     addOption(select, value, text) {

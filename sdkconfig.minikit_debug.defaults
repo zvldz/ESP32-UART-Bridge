@@ -21,6 +21,12 @@ CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
 CONFIG_ESP_COREDUMP_MAX_TASKS_NUM=64
 
+# Heap debugging (MiniKit is primary test board for heap corruption)
+# Light poisoning: fills freed memory with 0xFE to detect use-after-free
+CONFIG_HEAP_POISONING_LIGHT=y
+# Track which task allocated each block (useful for debugging leaks)
+CONFIG_HEAP_TASK_TRACKING=y
+
 # UART DMA support
 CONFIG_UART_ISR_IN_IRAM=y
 

@@ -62,6 +62,7 @@ enum Device4Role {
 // Device configuration
 typedef struct {
     uint8_t role;
+    bool sbusTextFormat;  // SBUS output as text "RC 1500,1500,...\r\n" (only for SBUS_OUT roles)
 } DeviceConfig;
 
 // Device 4 Configuration
@@ -70,6 +71,7 @@ struct Device4Config {
     uint16_t port;
     uint8_t role;
     bool auto_broadcast;    // Use dynamic broadcast from DHCP subnet (Client mode only)
+    bool sbusTextFormat;    // SBUS output as text "RC 1500,1500,...\r\n" (only for D4_SBUS_UDP_TX)
 };
 
 // WiFi network credentials for Client mode

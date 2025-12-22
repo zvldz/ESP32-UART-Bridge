@@ -4,9 +4,18 @@
 
 ### New Features
 - **WiFi AP Channel**: Configurable WiFi channel (1-11) for AP mode via Web UI
+- **SBUS Text Format Output**: Optional text format `RC 1500,1500,...\r\n` for SBUS output roles
+  - Checkbox "Text format" in Web UI for Device 2/3/4 SBUS outputs
+  - Use case: TX16S-RC plugin compatibility, debugging
+- **Device 3 SBUS Input**: New D3_SBUS_IN role for SBUS input on Device 3 UART pins
+  - Needed for MiniKit where Device 2 = USB only
 
 ### Fixes
 - **SSID Generation**: Fixed logic - empty SSID triggers auto-generation, user-set "ESP-Bridge" is now respected
+- **AP SSID Safety Check**: Prevents AP SSID from matching client network names
+
+### Web UI
+- **SBUS Config Warning**: Shows warning when SBUS Output configured without SBUS Input source
 
 ### ESP32 MiniKit (WROOM-32) Support
 - **New board support**: ESP32 MiniKit (ESP32-WROOM-32 based development board)

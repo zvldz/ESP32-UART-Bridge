@@ -56,7 +56,8 @@ Hardware: ESP32-WROOM-32 based development board
 - S3 Zero: USB Host support, WS2812 LED on GPIO21
 - S3 Super Mini: No USB Host, WS2815 LED on GPIO48
 - XIAO ESP32-S3: USB Host support, single-color LED on GPIO21, compact pinout
-- MiniKit: USB Device only (no Host), no UART2 option, no PSRAM, single-color LED on GPIO2, triple RESET
+- MiniKit: USB Device only (no Host), no UART2 option, no PSRAM,
+  single-color LED on GPIO2, triple RESET
 
 ===============================================================================
 
@@ -168,10 +169,7 @@ Hardware: ESP32-WROOM-32 based development board
 #define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
 
 // TX ring buffer for UART1 (single-writer: all inputs → one buffer → UART1 TX)
-#if defined(BOARD_MINIKIT_ESP32)
-#define UART1_TX_RING_SIZE 4096 // 4KB - MiniKit has fewer input sources (no USB Host, no UART2)
-#else
-#define UART1_TX_RING_SIZE 8192 // 8KB - S3 boards support USB/UDP/UART2/UART3 inputs
-#endif
+// TODO: Test if 4KB is enough for MiniKit (RAW mode issue suspected)
+#define UART1_TX_RING_SIZE 8192 // 8KB - single-writer architecture buffer
 
 #endif // DEFINES_H

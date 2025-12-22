@@ -141,6 +141,11 @@ static void populateConfigJson(JsonDocument& doc) {
     doc["device4Port"] = config.device4_config.port;
     doc["device4AutoBroadcast"] = config.device4_config.auto_broadcast;
 
+    // SBUS text format options (for SBUS_OUT roles)
+    doc["device2SbusText"] = config.device2.sbusTextFormat;
+    doc["device3SbusText"] = config.device3.sbusTextFormat;
+    doc["device4SbusText"] = config.device4_config.sbusTextFormat;
+
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
     doc["logLevelUart"] = (int)config.log_level_uart;
@@ -440,6 +445,26 @@ void handleSave(AsyncWebServerRequest *request) {
 
     // Copy role to configuration
     config.device4_config.role = config.device4.role;
+
+    // SBUS text format options (checkboxes)
+    bool newD2SbusText = request->hasParam("device2_sbus_text", true);
+    if (newD2SbusText != config.device2.sbusTextFormat) {
+        config.device2.sbusTextFormat = newD2SbusText;
+        configChanged = true;
+        log_msg(LOG_INFO, "Device 2 SBUS text format %s", newD2SbusText ? "enabled" : "disabled");
+    }
+    bool newD3SbusText = request->hasParam("device3_sbus_text", true);
+    if (newD3SbusText != config.device3.sbusTextFormat) {
+        config.device3.sbusTextFormat = newD3SbusText;
+        configChanged = true;
+        log_msg(LOG_INFO, "Device 3 SBUS text format %s", newD3SbusText ? "enabled" : "disabled");
+    }
+    bool newD4SbusText = request->hasParam("device4_sbus_text", true);
+    if (newD4SbusText != config.device4_config.sbusTextFormat) {
+        config.device4_config.sbusTextFormat = newD4SbusText;
+        configChanged = true;
+        log_msg(LOG_INFO, "Device 4 SBUS text format %s", newD4SbusText ? "enabled" : "disabled");
+    }
 
     // Validate SBUS configuration before saving
     if (!validateSbusConfig(config)) {
