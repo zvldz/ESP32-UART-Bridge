@@ -19,10 +19,21 @@ public:
         log_msg(LOG_DEBUG, "UartSender initialized");
     }
 
-    // Direct send without queue (for fast path)
+    // Direct send without queue (for fast path - SBUS)
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!uartInterface) return 0;
-        return uartInterface->write(data, size);
+
+        const uint8_t* sendData = data;
+        size_t sendSize = size;
+
+        // Convert SBUS binary to text if enabled
+        if (sbusTextFormat && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
+            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_TEXT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;  // Conversion failed
+            sendData = (const uint8_t*)sbusTextBuffer;
+        }
+
+        return uartInterface->write(sendData, sendSize);
     }
 
     void processSendQueue(bool bulkMode = false) override {

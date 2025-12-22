@@ -145,6 +145,11 @@ void setup() {
     config_load(&config);
     log_msg(LOG_INFO, "Configuration loaded");
 
+    // Free UDP log buffer if Device 4 is not in logger role
+    // Buffer was allocated at startup to capture early logs before config was loaded
+    // Now we know the actual role, so we can free memory if logger is not needed
+    logging_free_udp_if_unused();
+
 #if defined(BOARD_MINIKIT_ESP32)
     // Update uptime early - after config load (~500ms from boot)
     quickResetUpdateUptime();

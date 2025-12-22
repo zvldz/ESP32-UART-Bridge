@@ -152,14 +152,30 @@ void initDevice2UART() {
 
 // Initialize Device 2 as SBUS
 void initDevice2SBUS() {
-    // SBUS uses fixed configuration
-    UartConfig sbusCfg = {
-        .baudrate = SBUS_BAUDRATE,        // 100000
-        .databits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stopbits = UART_STOP_BITS_2,
-        .flowcontrol = false               // SBUS never uses flow control
-    };
+    // Text format mode: SBUS_OUT with sbusTextFormat uses standard UART (115200 8N1)
+    // Binary mode: standard SBUS settings (100000 8E2 with inversion)
+    bool textMode = (config.device2.role == D2_SBUS_OUT && config.device2.sbusTextFormat);
+
+    UartConfig uartCfg;
+    if (textMode) {
+        // Text format: standard UART 115200 8N1 (like TX16S-RC)
+        uartCfg = {
+            .baudrate = 115200,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_DISABLE,
+            .stopbits = UART_STOP_BITS_1,
+            .flowcontrol = false
+        };
+    } else {
+        // Binary SBUS: 100000 8E2
+        uartCfg = {
+            .baudrate = SBUS_BAUDRATE,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_EVEN,
+            .stopbits = UART_STOP_BITS_2,
+            .flowcontrol = false
+        };
+    }
 
     // Use UartDMA with polling mode for Device 2
     UartDMA::DmaConfig dmaCfg = {
@@ -172,14 +188,17 @@ void initDevice2SBUS() {
     device2Serial = new UartDMA(UART_NUM_2, dmaCfg);
 
     if (device2Serial) {
-        // Initialize with SBUS configuration
-        device2Serial->begin(sbusCfg, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
+        // Initialize with selected configuration
+        device2Serial->begin(uartCfg, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
 
-        // Enable signal inversion for SBUS
-        uart_set_line_inverse(UART_NUM_2, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+        // Enable signal inversion only for binary SBUS mode
+        if (!textMode) {
+            uart_set_line_inverse(UART_NUM_2, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+        }
 
-        const char* modeStr = (config.device2.role == D2_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
-        log_msg(LOG_INFO, "Device 2 %s initialized on GPIO%d/%d (100000 8E2 INV)",
+        const char* modeStr = (config.device2.role == D2_SBUS_IN) ? "SBUS IN" :
+                              textMode ? "SBUS OUT Text (115200 8N1)" : "SBUS OUT (100000 8E2 INV)";
+        log_msg(LOG_INFO, "Device 2 %s initialized on GPIO%d/%d",
                 modeStr, DEVICE2_UART_RX_PIN, DEVICE2_UART_TX_PIN);
     } else {
         log_msg(LOG_ERROR, "Failed to create Device 2 SBUS interface");
@@ -239,14 +258,30 @@ void initDevice3(uint8_t role) {
 
 // Initialize Device 3 as SBUS
 void initDevice3SBUS() {
-    // SBUS uses fixed configuration
-    UartConfig sbusCfg = {
-        .baudrate = SBUS_BAUDRATE,        // 100000
-        .databits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_EVEN,
-        .stopbits = UART_STOP_BITS_2,
-        .flowcontrol = false               // SBUS never uses flow control
-    };
+    // Text format mode: SBUS_OUT with sbusTextFormat uses standard UART (115200 8N1)
+    // Binary mode: standard SBUS settings (100000 8E2 with inversion)
+    bool textMode = (config.device3.role == D3_SBUS_OUT && config.device3.sbusTextFormat);
+
+    UartConfig uartCfg;
+    if (textMode) {
+        // Text format: standard UART 115200 8N1 (like TX16S-RC)
+        uartCfg = {
+            .baudrate = 115200,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_DISABLE,
+            .stopbits = UART_STOP_BITS_1,
+            .flowcontrol = false
+        };
+    } else {
+        // Binary SBUS: 100000 8E2
+        uartCfg = {
+            .baudrate = SBUS_BAUDRATE,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_EVEN,
+            .stopbits = UART_STOP_BITS_2,
+            .flowcontrol = false
+        };
+    }
 
     // Use UartDMA with polling mode for Device 3
     UartDMA::DmaConfig dmaCfg = {
@@ -259,14 +294,17 @@ void initDevice3SBUS() {
     device3Serial = new UartDMA(UART_NUM_0, dmaCfg);
 
     if (device3Serial) {
-        // Initialize with SBUS configuration
-        device3Serial->begin(sbusCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+        // Initialize with selected configuration
+        device3Serial->begin(uartCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
 
-        // Enable signal inversion for SBUS
-        uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+        // Enable signal inversion only for binary SBUS mode
+        if (!textMode) {
+            uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+        }
 
-        const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" : "SBUS OUT";
-        log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (100000 8E2 INV, UART0)",
+        const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" :
+                              textMode ? "SBUS OUT Text (115200 8N1)" : "SBUS OUT (100000 8E2 INV)";
+        log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (UART0)",
                 modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
     } else {
         log_msg(LOG_ERROR, "Failed to create Device 3 SBUS interface");
@@ -305,7 +343,9 @@ void registerSbusOutputs() {
     if (config.device2.role == D2_SBUS_OUT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE2_UART2);
         if (sender) {
+            sender->setSbusTextFormat(config.device2.sbusTextFormat);
             router->registerOutput(sender);
+            log_msg(LOG_INFO, "Device2 SBUS output: text=%s", config.device2.sbusTextFormat ? "on" : "off");
         } else {
             log_msg(LOG_ERROR, "Failed to get Device2 sender for SBUS output");
         }
@@ -315,7 +355,9 @@ void registerSbusOutputs() {
     if (config.device3.role == D3_SBUS_OUT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE3);
         if (sender) {
+            sender->setSbusTextFormat(config.device3.sbusTextFormat);
             router->registerOutput(sender);
+            log_msg(LOG_INFO, "Device3 SBUS output: text=%s", config.device3.sbusTextFormat ? "on" : "off");
         } else {
             log_msg(LOG_ERROR, "Failed to get Device3 sender for SBUS output");
         }
@@ -325,7 +367,9 @@ void registerSbusOutputs() {
     if (config.device4.role == D4_SBUS_UDP_TX) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE4);
         if (sender) {
+            sender->setSbusTextFormat(config.device4_config.sbusTextFormat);
             router->registerOutput(sender);
+            log_msg(LOG_INFO, "Device4 SBUS UDP output: text=%s", config.device4_config.sbusTextFormat ? "on" : "off");
         } else {
             log_msg(LOG_ERROR, "Failed to get Device4 sender for SBUS UDP output");
         }

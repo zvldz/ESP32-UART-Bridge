@@ -11,7 +11,8 @@ public:
     void init() override {
         Serial.begin(baudrate);
 
-        // Use common buffer sizes for consistency
+        // TODO: These should be called BEFORE begin() to take effect
+        // Currently using default buffer sizes (ignored after begin)
         Serial.setRxBufferSize(UsbBufferSizes::RX_BUFFER_SIZE);
         Serial.setTxBufferSize(UsbBufferSizes::TX_BUFFER_SIZE);
 
