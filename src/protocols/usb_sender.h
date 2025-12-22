@@ -114,11 +114,21 @@ public:
         log_msg(LOG_DEBUG, "UsbSender initialized");
     }
 
-    // Direct send without queue (for fast path)
+    // Direct send without queue (for fast path - SBUS)
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!usbInterface) return 0;
 
-        size_t sent = usbInterface->write(data, size);
+        const uint8_t* sendData = data;
+        size_t sendSize = size;
+
+        // Convert SBUS binary to text if enabled
+        if (sbusTextFormat && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
+            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_TEXT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;  // Conversion failed
+            sendData = (const uint8_t*)sbusTextBuffer;
+        }
+
+        size_t sent = usbInterface->write(sendData, sendSize);
         if (sent > 0) {
             g_deviceStats.device2.txBytes.fetch_add(sent, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);

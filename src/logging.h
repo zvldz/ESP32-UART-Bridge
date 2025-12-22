@@ -29,6 +29,9 @@ void log_msg(LogLevel level, const char* fmt, ...) __attribute__((format(printf,
 // UART logging initialization
 void logging_init_uart();
 
+// Free UDP buffer if not needed (call after config_load)
+void logging_free_udp_if_unused();
+
 // Helper function to get level name
 const char* getLogLevelName(LogLevel level);
 

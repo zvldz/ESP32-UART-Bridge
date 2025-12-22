@@ -4,6 +4,7 @@
 #include "protocol_types.h"
 #include "../types.h"
 #include "../logging.h"
+#include "sbus_text.h"
 #include <deque>
 #include <Arduino.h>
 
@@ -29,16 +30,20 @@ class PacketSender {
 protected:
     // Single FIFO queue
     std::deque<QueuedPacket> packetQueue;
-    
+
     // Queue limits
     size_t maxQueuePackets;    // Max number of packets
     size_t maxQueueBytes;      // Max total bytes in queue
     size_t currentQueueBytes;  // Current total bytes
-    
+
     // Statistics
     uint32_t totalSent;
     uint32_t totalDropped;
     uint32_t maxQueueDepth;    // Max queue depth seen
+
+    // SBUS text format output (for SBUS_OUT roles)
+    bool sbusTextFormat = false;
+    char sbusTextBuffer[SBUS_TEXT_BUFFER_SIZE];
     
 public:
     PacketSender(size_t maxPackets = DEFAULT_MAX_PACKETS, size_t maxBytes = DEFAULT_MAX_BYTES) : 
@@ -116,6 +121,10 @@ public:
     size_t getQueueDepth() const { return packetQueue.size(); }
     size_t getQueueBytes() const { return currentQueueBytes; }
     size_t getMaxQueueDepth() const { return maxQueueDepth; }
+
+    // SBUS text format configuration
+    void setSbusTextFormat(bool enabled) { sbusTextFormat = enabled; }
+    bool getSbusTextFormat() const { return sbusTextFormat; }
     
     
     void getDetailedStats(char* buffer, size_t bufSize) {

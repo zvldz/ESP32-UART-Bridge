@@ -199,6 +199,16 @@ public:
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!udpTransport || !wifiIsReady()) return 0;
 
+        const uint8_t* sendData = data;
+        size_t sendSize = size;
+
+        // Convert SBUS binary to text if enabled
+        if (sbusTextFormat && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
+            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_TEXT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;  // Conversion failed
+            sendData = (const uint8_t*)sbusTextBuffer;
+        }
+
         uint32_t now = millis();
 
         // Check if batch is stale (no new frames for 50ms) - discard it
@@ -212,14 +222,14 @@ public:
         }
 
         // Check if batch buffer overflows
-        if (atomicBatchSize + size > MTU_SIZE) {
+        if (atomicBatchSize + sendSize > MTU_SIZE) {
             // Flush current batch (incomplete - MTU overflow)
             flushBatch();
         }
 
         // Add to batch
-        memcpy(atomicBatchBuffer + atomicBatchSize, data, size);
-        atomicBatchSize += size;
+        memcpy(atomicBatchBuffer + atomicBatchSize, sendData, sendSize);
+        atomicBatchSize += sendSize;
         atomicBatchPackets++;
 
         if (atomicBatchStartMs == 0) {
@@ -231,7 +241,7 @@ public:
             flushBatch();
         }
 
-        return size;
+        return size;  // Return original size (for caller)
     }
 
     // Configuration method

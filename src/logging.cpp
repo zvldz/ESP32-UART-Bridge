@@ -57,20 +57,33 @@ void logging_init() {
     logIndex = 0;
     logCount = 0;
 
-    // Allocate UDP log buffer only when Device 4 is in logger role
-    if (config.device4.role == D4_LOG_NETWORK) {
-        if (!udpLogBuffer) {
-            udpLogBuffer = (uint8_t*)malloc(UDP_LOG_BUFFER_SIZE);
-            if (udpLogBuffer) {
-                memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
-            }
+    // Always allocate UDP log buffer at startup to capture early logs
+    // Will be freed later if Device 4 is not in logger role
+    if (!udpLogBuffer) {
+        udpLogBuffer = (uint8_t*)malloc(UDP_LOG_BUFFER_SIZE);
+        if (udpLogBuffer) {
+            memset(udpLogBuffer, 0, UDP_LOG_BUFFER_SIZE);
         }
-        if (!udpLogMutex) {
-            udpLogMutex = xSemaphoreCreateMutex();
-        }
+    }
+    if (!udpLogMutex) {
+        udpLogMutex = xSemaphoreCreateMutex();
     }
     udpLogHead = 0;
     udpLogTail = 0;
+}
+
+// Free UDP log buffer if not needed (call after config_load)
+void logging_free_udp_if_unused() {
+    if (config.device4.role != D4_LOG_NETWORK) {
+        if (udpLogBuffer) {
+            free(udpLogBuffer);
+            udpLogBuffer = nullptr;
+        }
+        if (udpLogMutex) {
+            vSemaphoreDelete(udpLogMutex);
+            udpLogMutex = nullptr;
+        }
+    }
 }
 
 // Initialize UART logging on Device 3

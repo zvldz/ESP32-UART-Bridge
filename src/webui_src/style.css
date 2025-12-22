@@ -91,6 +91,15 @@ td:last-child {
     text-align: right;
 }
 
+/* Device configuration table - override 2-column defaults */
+.device-table {
+    table-layout: auto;
+}
+.device-table td {
+    width: auto !important;
+    text-align: left !important;
+}
+
 table tr:nth-child(even) {
     background-color: #f1f3f4;
 }
