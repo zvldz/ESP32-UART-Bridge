@@ -9,12 +9,22 @@ public:
     explicit UsbDevice(uint32_t baudrate) : baudrate(baudrate), initialized(false) {}
 
     void init() override {
-        Serial.begin(baudrate);
-
-        // TODO: These should be called BEFORE begin() to take effect
-        // Currently using default buffer sizes (ignored after begin)
+#if defined(BOARD_MINIKIT_ESP32)
+        // MiniKit: UART to external USB-UART chip (CP2104)
+        // Buffer sizes MUST be set BEFORE begin() to take effect
+        // Default UART TX buffer is 0 (only 128-byte hardware FIFO)
         Serial.setRxBufferSize(UsbBufferSizes::RX_BUFFER_SIZE);
         Serial.setTxBufferSize(UsbBufferSizes::TX_BUFFER_SIZE);
+        Serial.begin(baudrate);
+#else
+        // ESP32-S3: Native USB CDC has large default buffers (~8192)
+        // Keep existing order - changing may affect performance
+        Serial.begin(baudrate);
+
+        // These calls are ignored after begin(), but kept for documentation
+        Serial.setRxBufferSize(UsbBufferSizes::RX_BUFFER_SIZE);
+        Serial.setTxBufferSize(UsbBufferSizes::TX_BUFFER_SIZE);
+#endif
 
         // Wait for USB connection (maximum 2 seconds)
         unsigned long startTime = millis();

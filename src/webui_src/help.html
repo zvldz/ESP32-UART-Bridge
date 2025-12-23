@@ -159,7 +159,7 @@
             </h3>
             <div id="pinsContent">
                 <div class="warning" style="margin-bottom: 10px;">
-                    <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED), ESP32 MiniKit (WROOM-32, no USB Host, Device 2 USB only via CP2102/CH340, triple RESET for WiFi).
+                    <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED), ESP32 MiniKit with CP2104 (WROOM-32, no USB Host, Device 2 USB only, triple RESET for WiFi).
                 </div>
 
                 <!-- ESP32-S3-Zero / Super Mini subsection -->
@@ -225,15 +225,15 @@
                     </div>
                 </div>
 
-                <!-- ESP32 MiniKit (WROOM-32) subsection -->
+                <!-- ESP32 MiniKit with CP2104 subsection -->
                 <div class="subsection">
                     <h4 onclick="toggleSection('minikitPinsContent', 'minikitPinsArrow')">
-                        🔸 ESP32 MiniKit (WROOM-32)
+                        🔸 ESP32 MiniKit with CP2104 (WROOM-32)
                         <span id="minikitPinsArrow" class="collapse-arrow" style="float: right;">▼</span>
                     </h4>
                     <div id="minikitPinsContent">
                         <div class="warning" style="margin-bottom: 10px;">
-                            <strong>⚠️ MiniKit Limitations:</strong> No native USB (serial via CP2102/CH340), no PSRAM (~160KB heap), no UART2 option for Device 2 (GPIO8/9 used by flash). Device 2 is USB only. WiFi activation via triple RESET (no BOOT button).
+                            <strong>⚠️ MiniKit Requirements:</strong> Only boards with CP2104 USB-UART chip are supported (CH340/CH9102 not tested). No native USB, no PSRAM (~160KB heap), no UART2 option for Device 2 (GPIO8/9 used by flash). Device 2 is USB only. WiFi activation via triple RESET (no BOOT button).
                         </div>
                         <table>
                             <tr><th>GPIO Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
@@ -360,9 +360,6 @@
                     <li><strong>Network Mode:</strong> Choose temporary (triple-click) or permanent (web checkbox)</li>
                     <li><strong>USB Connection:</strong> Connect USB cable and select COM port in your application</li>
                 </ol>
-                <p style="margin-top: 15px;">
-                    <strong>📚 Full documentation:</strong> <a href="https://github.com/zvldz/ESP32-UART-Bridge" target="_blank" style="color: #007bff;">https://github.com/zvldz/ESP32-UART-Bridge</a>
-                </p>
             </div>
         </div>
 
@@ -495,6 +492,10 @@
                 </div>
             </div>
         </div>
+
+        <p style="text-align: center; margin: 20px 0;">
+            <strong>📚 Full documentation:</strong> <a href="https://github.com/zvldz/ESP32-UART-Bridge" target="_blank" style="color: #007bff;">https://github.com/zvldz/ESP32-UART-Bridge</a>
+        </p>
 
         <div class="section" style="text-align: center;">
             <button onclick="window.close()">Close Help</button>
