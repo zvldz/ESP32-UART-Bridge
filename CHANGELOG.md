@@ -11,8 +11,17 @@
   - Needed for MiniKit where Device 2 = USB only
 
 ### Fixes
+- **MiniKit USB Packet Loss**: Fixed buffer initialization order — `setTxBufferSize()` must be called BEFORE `Serial.begin()` on UART
+  - Root cause: Default UART TX buffer = 0 (only 128-byte hardware FIFO)
+  - Result: ~13% packet loss during FTP bursts eliminated
+- **MiniKit USB Block Detection**: Disabled for UART (availableForWrite returns constant, causing false positives)
 - **SSID Generation**: Fixed logic - empty SSID triggers auto-generation, user-set "ESP-Bridge" is now respected
 - **AP SSID Safety Check**: Prevents AP SSID from matching client network names
+
+### Documentation
+- **MiniKit CP2104**: All documentation updated to specify CP2104 chip (CH340/CH9102 not tested)
+- **README**: Full MiniKit board documentation added (connections, quick start, LED, button functions)
+- **Help page**: MiniKit pinout table and requirements added
 
 ### Web UI
 - **SBUS Config Warning**: Shows warning when SBUS Output configured without SBUS Input source
