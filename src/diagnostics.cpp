@@ -45,7 +45,7 @@ void printBootInfo() {
         Serial.end();
         vTaskDelay(pdMS_TO_TICKS(50));
 #else
-        // MiniKit/WROOM - output to UART0 (CH340 USB-Serial)
+        // MiniKit/WROOM - output to UART0 (CP2104 USB-Serial)
         Serial0.begin(115200);
         vTaskDelay(pdMS_TO_TICKS(100));
 

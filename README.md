@@ -42,13 +42,13 @@ Universal UART to USB bridge with web configuration interface for any serial com
 ## Hardware
 
 - **Recommended Boards**:
-  - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash, USB Host support
-  - **ESP32-S3 Super Mini**: Ultra-compact, WS2815 RGB LED (GPIO48), USB-C, 4MB Flash, no USB Host (basic testing completed, full hardware validation pending)
-  - **XIAO ESP32-S3**: Ultra-compact (21x17.5mm), single-color LED, USB-C, 8MB Flash/8MB PSRAM, USB Host support, external antenna connector (basic mode tested: UART Bridge + USB)
+  - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash, USB Host support ✅ Fully tested
+  - **ESP32-S3 Super Mini**: Ultra-compact, WS2815 RGB LED (GPIO48), USB-C, 4MB Flash, no USB Host ✅ Fully tested
+  - **XIAO ESP32-S3**: Ultra-compact (21x17.5mm), single-color LED, USB-C, 8MB Flash/8MB PSRAM, USB Host support, external antenna connector ⚠️ Partially tested (basic mode: UART Bridge + USB)
+  - **ESP32 MiniKit with CP2104**: Classic WROOM-32 board, single-color LED (GPIO2), USB via CP2104 chip, 4MB Flash, no PSRAM ⚠️ Partially tested (CH340/CH9102 not supported)
 - **Requirements**:
-  - ESP32-S3 chip with dual-core (single-core not supported)
+  - ESP32 chip with dual-core (single-core not supported)
   - USB-C or micro-USB with data lines connected
-- **Other Boards**: May require code modifications for LED pins or missing components
 - **Connections (ESP32-S3-Zero / Super Mini)**:
   - **Device 1 (Main UART - Always Active)**:
     - GPIO4: UART RX (connect to device TX)
@@ -88,23 +88,46 @@ Universal UART to USB bridge with web configuration interface for any serial com
     - GPIO0: BOOT button (built-in) - triple-click for network mode
     - GPIO21: Single-color LED (blink-only, no RGB)
   - **⚠️ Warning**: ESP32-S3 supports only 3.3V logic levels!
+- **Connections (ESP32 MiniKit with CP2104)**:
+  - **Device 1 (Main UART - Always Active)**:
+    - GPIO4: UART RX (connect to device TX)
+    - GPIO5: UART TX (connect to device RX)
+    - GPIO18: RTS (optional flow control)
+    - GPIO19: CTS (optional flow control)
+  - **Device 2 (USB Device Only)**:
+    - USB via external CP2104 chip (no UART2 option)
+    - UART2 NOT available on MiniKit (GPIO8/9 used by SPI flash)
+  - **Device 3 (Mirror/Bridge/Logger UART)**:
+    - GPIO16: UART RX (used only in Bridge mode)
+    - GPIO17: UART TX (used in all Device 3 modes)
+  - **Device 4 (Network Channel)**:
+    - No physical pins - uses Wi-Fi network
+    - Network Logger: UDP port for log streaming (default: 14560)
+    - Network Bridge: Bidirectional UDP for UART data (default: 14550)
+  - **System**:
+    - RESET button: Triple-press for network mode (no BOOT button)
+    - GPIO2: Single-color LED (built-in, active-high)
+  - **⚠️ Limitations**: No USB Host mode, no PSRAM, no UART2 on Device 2
 
 ## Quick Start
 
 1. **Connect Hardware**:
    - **Zero/SuperMini**: Device TX → GPIO4, Device RX → GPIO5, GND → GND
    - **XIAO**: Device TX → D3, Device RX → D4, GND → GND
-   - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels!
+   - **MiniKit**: Device TX → GPIO4, Device RX → GPIO5, GND → GND
+   - ⚠️ **Warning**: ESP32-S3 supports only 3.3V logic levels! MiniKit (WROOM-32) supports 3.3V only.
 
 2. **Power On**:
-   - Connect USB-C cable to computer
+   - Connect USB cable to computer (USB-C for S3 boards, micro-USB for MiniKit)
    - **Zero/SuperMini**: Rainbow LED effect indicates successful boot
    - **XIAO**: Three quick blinks indicate successful boot (single-color LED)
+   - **MiniKit**: Three quick blinks indicate successful boot (single-color LED on GPIO2)
 
 3. **Configure**:
-   
+
    **Option A: Temporary Setup (traditional method)**
-   - Triple-click BOOT button (LED turns solid purple)
+   - **Zero/SuperMini/XIAO**: Triple-click BOOT button (LED turns solid purple)
+   - **MiniKit**: Triple-press RESET button quickly (LED turns solid)
    - Connect to WiFi network "ESP-Bridge" (password: 12345678)
    - Open web browser to 192.168.4.1
    - Configure settings and click "Save & Reboot"
@@ -384,6 +407,8 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 ## LED Indicators
 
+**Note**: RGB indicators apply to Zero and SuperMini boards. XIAO and MiniKit have single-color LEDs that show blink patterns only.
+
 ### Data Activity (Standalone Mode)
 | Color | Pattern | Meaning |
 |-------|---------|---------|
@@ -391,6 +416,8 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 | Green | Flash | Data from computer (USB RX) |
 | Cyan | Flash | Bidirectional data transfer |
 | Off | - | Idle, no data |
+
+*XIAO/MiniKit: Any data activity shows as LED blink*
 
 ### WiFi Network Status  
 | Color | Pattern | Meaning | Details |
@@ -409,26 +436,30 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 ## Button Functions
 
-### Triple-Click (Mode Switching)
+**Note**: Zero/SuperMini/XIAO use BOOT button (GPIO0). MiniKit uses RESET button (triple-press detection).
+
+### Triple-Click/Press (Mode Switching)
 - **From Standalone Mode**: Activates saved WiFi mode
-  - If WiFi Client configured: Connects to saved network  
+  - If WiFi Client configured: Connects to saved network
   - If no Client configured: Creates AP hotspot
-  - LED feedback: White blinks indicate click count
+  - LED feedback: White blinks indicate click count (RGB boards) or quick blinks (single-color)
 - **From WiFi Client Mode**: Forces temporary AP mode
   - Allows reconfiguration when can't access current network
   - Useful when WiFi password changed or moved to different location
   - Bypasses wrong password error state
 
-### Long Press (5+ seconds)
+### Long Press (5+ seconds) - Zero/SuperMini/XIAO only
 - **WiFi Reset**: Resets WiFi settings to defaults (preserves UART and device roles)
   - SSID: "ESP-Bridge-xxxx" (unique, auto-generated)
   - Password: "12345678"
   - LED feedback: Purple rapid blink confirms reset
   - Device automatically restarts
+- **MiniKit**: Long press not available (RESET button resets the board)
 
-### Power-On Hold
-- **Bootloader Mode**: Hold during power-on for firmware flashing
+### Power-On Hold - Zero/SuperMini/XIAO only
+- **Bootloader Mode**: Hold BOOT during power-on for firmware flashing
   - Used for manual firmware updates via USB
+- **MiniKit**: Use BOOT button on board (if available) or automatic bootloader detection
 
 ## Building from Source
 
@@ -509,7 +540,7 @@ nc -u -l 14560
 | LED orange slow blink | WiFi Client searching - check SSID spelling and network availability |
 | LED solid orange | WiFi Client connected successfully |
 | LED red fast blink | Wrong WiFi password - restart device or triple-click to change mode |
-| Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults |
+| Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults (MiniKit: use web interface or reflash) |
 | Can't connect to WiFi | Check network name, password, and 2.4GHz band (5GHz not supported) |
 | WiFi connects then disconnects | Check router settings, signal strength, or power saving features |
 | Connection drops | Enable flow control if supported by device |
