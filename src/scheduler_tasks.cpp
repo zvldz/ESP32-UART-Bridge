@@ -50,26 +50,26 @@ static LedSnapshot ledPrevSnapshot;
 
 void initializeScheduler() {
     // Set all callbacks
-    tSystemDiagnostics.set(10000, TASK_FOREVER, []{ 
-        systemDiagnostics(); 
+    tSystemDiagnostics.set(10000, TASK_FOREVER, []{
+        systemDiagnostics();
     });
-    
-    tCrashlogUpdate.set(5000, TASK_FOREVER, []{ 
-        crashlog_update_variables(); 
+
+    tCrashlogUpdate.set(5000, TASK_FOREVER, []{
+        crashlog_update_variables();
     });
-    
-    tBridgeActivity.set(30000, TASK_FOREVER, []{ 
-        runBridgeActivityLog(); 
+
+    tBridgeActivity.set(30000, TASK_FOREVER, []{
+        runBridgeActivityLog();
     });
-    
-    tAllStacksDiagnostics.set(5000, TASK_FOREVER, []{ 
+
+    tAllStacksDiagnostics.set(5000, TASK_FOREVER, []{
         runAllStacksDiagnostics();  // Unified function for all stacks
     });
-    
-    tDroppedDataStats.set(5000, TASK_FOREVER, []{ 
-        runDroppedDataStats(); 
+
+    tDroppedDataStats.set(5000, TASK_FOREVER, []{
+        runDroppedDataStats();
     });
-    
+
     tWiFiTimeout.set(WIFI_TIMEOUT, TASK_ONCE, []{
         // Check if firmware update is in progress
         extern SystemState systemState;
@@ -81,33 +81,33 @@ void initializeScheduler() {
         log_msg(LOG_INFO, "WiFi timeout - switching to standalone mode");
         ESP.restart();
     });
-    
-    
-    tDnsProcess.set(150, TASK_FOREVER, []{ 
+
+
+    tDnsProcess.set(150, TASK_FOREVER, []{
         if (dnsServer) {
             dnsServer->processNextRequest();
         }
     });
-    
-    tRebootDevice.set(TASK_IMMEDIATE, TASK_ONCE, []{ 
+
+    tRebootDevice.set(TASK_IMMEDIATE, TASK_ONCE, []{
         log_msg(LOG_INFO, "Executing scheduled reboot");
         ESP.restart();
     });
-    
+
     // UDP Logger task - copies log lines to Pipeline
-    tLedMonitor.set(50, TASK_FOREVER, []{ 
+    tLedMonitor.set(50, TASK_FOREVER, []{
         // Only show data activity LEDs in standalone mode
         if (bridgeMode != BRIDGE_STANDALONE) {
             return;  // Network mode uses WiFi state LEDs
         }
-        
+
         // Device 1 UART RX activity
         const auto d1_rx = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
         if (d1_rx > ledPrevSnapshot.d1_rx) {
             led_notify_uart_rx();  // Blue LED
         }
         ledPrevSnapshot.d1_rx = d1_rx;
-        
+
         // Device 2 activity (USB or UART2)
         if (config.device2.role == D2_USB) {
             const auto d2_rx = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
@@ -122,7 +122,7 @@ void initializeScheduler() {
             }
             ledPrevSnapshot.d2_rx = d2_rx;
         }
-        
+
         // Device 3 TX activity
         if (config.device3.role != D3_NONE) {
             const auto d3_tx = g_deviceStats.device3.txBytes.load(std::memory_order_relaxed);
@@ -130,7 +130,7 @@ void initializeScheduler() {
                 led_notify_device3_tx();  // Magenta LED
             }
             ledPrevSnapshot.d3_tx = d3_tx;
-            
+
             // Device 3 RX activity (Bridge mode only)
             if (config.device3.role == D3_UART3_BRIDGE) {
                 const auto d3_rx = g_deviceStats.device3.rxBytes.load(std::memory_order_relaxed);
@@ -166,21 +166,21 @@ void initializeScheduler() {
 
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
-        
+
         extern uint8_t* udpLogBuffer;
         extern int udpLogHead;
         extern int udpLogTail;
         extern SemaphoreHandle_t udpLogMutex;
         // Get bridge context via diagnostics
         BridgeContext* g_bridgeContext = getBridgeContext();
-        
+
         // Static variables to preserve state between calls
         static uint8_t lineBuffer[256];
         static size_t lineLen = 0;
         static uint32_t lastFlushMs = 0;
-        
+
         if (!g_bridgeContext || !udpLogBuffer || !udpLogMutex) return;
-        
+
         // Check WiFi readiness for data transmission
         if (!wifiIsReady()) {
             // Clear buffers when WiFi is down
@@ -192,7 +192,7 @@ void initializeScheduler() {
             lineLen = 0;  // Reset line buffer
             return;
         }
-        
+
         // Count available lines
         uint32_t lineCount = 0;
         if (xSemaphoreTake(udpLogMutex, 0) == pdTRUE) {
@@ -203,29 +203,29 @@ void initializeScheduler() {
             }
             xSemaphoreGive(udpLogMutex);
         }
-        
+
         uint32_t now = millis();
         bool shouldFlush = false;
         if (lineCount >= 10 ||
             (lineCount > 0 && (now - lastFlushMs) >= 100)) {
             shouldFlush = true;
         }
-        
+
         if (shouldFlush && xSemaphoreTake(udpLogMutex, 10) == pdTRUE) {
             // Get log buffer from context
             CircularBuffer* inputBuffer = g_bridgeContext->buffers.logBuffer;
-            
+
             if (!inputBuffer) {
                 log_msg(LOG_ERROR, "Log buffer not available!");
                 xSemaphoreGive(udpLogMutex);
                 return;
             }
-            
+
             while (udpLogTail != udpLogHead && lineLen < sizeof(lineBuffer)) {
                 uint8_t byte = udpLogBuffer[udpLogTail];
                 lineBuffer[lineLen++] = byte;
                 udpLogTail = (udpLogTail + 1) % UDP_LOG_BUFFER_SIZE;
-                
+
                 if (byte == '\n') {
                     // Write complete line
                     inputBuffer->write(lineBuffer, lineLen);
@@ -233,24 +233,24 @@ void initializeScheduler() {
                     if (--lineCount == 0) break;
                 }
             }
-            
+
             // Handle incomplete line that filled the buffer
             if (lineLen >= sizeof(lineBuffer)) {
                 // Force flush as incomplete/broken line
                 inputBuffer->write(lineBuffer, lineLen);
                 lineLen = 0;
             }
-            
+
             // Partial line kept for next iteration
 
             xSemaphoreGive(udpLogMutex);
             lastFlushMs = now;
         }
     });
-    
+
     // Initialize scheduler
     taskScheduler.init();
-    
+
     // Add all tasks to scheduler
     taskScheduler.addTask(tSystemDiagnostics);
     taskScheduler.addTask(tCrashlogUpdate);
@@ -348,10 +348,10 @@ void cancelWiFiTimeout() {
 
 void scheduleReboot(unsigned long delayMs) {
     log_msg(LOG_INFO, "Device reboot scheduled in %lums", delayMs);
-    
+
     // Cancel WiFi timeout if it was active
     cancelWiFiTimeout();
-    
+
     // Start reboot task with delay
     tRebootDevice.restartDelayed(delayMs);
 }

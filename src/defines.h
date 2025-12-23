@@ -36,14 +36,14 @@ Hardware: ESP32-S3-Zero / ESP32-S3 Super Mini / XIAO ESP32-S3
 ===============================================================================
 Hardware: ESP32-WROOM-32 based development board
 - No BOOT button - use triple RESET for WiFi config (NVS-based detection)
-- No native USB peripheral - USB via external CP2102/CH340 chip
+- No native USB peripheral - USB via external CP2104 chip
 - No USB Host support (WROOM lacks USB OTG peripheral)
 - No PSRAM - limited to ~160KB usable heap
 - Device 1 - Main UART (UART1):
   - GPIO4/5 (RX/TX)
 - RTS/CTS flow control:
   - GPIO18/19 (GPIO6/7 unavailable - used by SPI flash)
-- Device 2 - USB Device only (via CP2102/CH340):
+- Device 2 - USB Device only (via CP2104):
   - No UART2 option (GPIO8/9 used by internal SPI flash)
 - Device 3 - Secondary UART (UART2):
   - GPIO16/17 (RX/TX)
