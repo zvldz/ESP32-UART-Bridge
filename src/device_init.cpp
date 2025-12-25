@@ -152,9 +152,9 @@ void initDevice2UART() {
 
 // Initialize Device 2 as SBUS
 void initDevice2SBUS() {
-    // Text format mode: SBUS_OUT with sbusTextFormat uses standard UART (115200 8N1)
+    // Text/MAVLink format mode: SBUS_OUT with non-binary format uses standard UART (115200 8N1)
     // Binary mode: standard SBUS settings (100000 8E2 with inversion)
-    bool textMode = (config.device2.role == D2_SBUS_OUT && config.device2.sbusTextFormat);
+    bool textMode = (config.device2.role == D2_SBUS_OUT && config.device2.sbusOutputFormat != SBUS_FMT_BINARY);
 
     UartConfig uartCfg;
     if (textMode) {
@@ -258,9 +258,9 @@ void initDevice3(uint8_t role) {
 
 // Initialize Device 3 as SBUS
 void initDevice3SBUS() {
-    // Text format mode: SBUS_OUT with sbusTextFormat uses standard UART (115200 8N1)
+    // Text/MAVLink format mode: SBUS_OUT with non-binary format uses standard UART (115200 8N1)
     // Binary mode: standard SBUS settings (100000 8E2 with inversion)
-    bool textMode = (config.device3.role == D3_SBUS_OUT && config.device3.sbusTextFormat);
+    bool textMode = (config.device3.role == D3_SBUS_OUT && config.device3.sbusOutputFormat != SBUS_FMT_BINARY);
 
     UartConfig uartCfg;
     if (textMode) {
@@ -343,9 +343,10 @@ void registerSbusOutputs() {
     if (config.device2.role == D2_SBUS_OUT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE2_UART2);
         if (sender) {
-            sender->setSbusTextFormat(config.device2.sbusTextFormat);
+            sender->setSbusOutputFormat(config.device2.sbusOutputFormat);
             router->registerOutput(sender);
-            log_msg(LOG_INFO, "Device2 SBUS output: text=%s", config.device2.sbusTextFormat ? "on" : "off");
+            static const char* fmtNames[] = {"binary", "text", "mavlink"};
+            log_msg(LOG_INFO, "Device2 SBUS output: format=%s", fmtNames[config.device2.sbusOutputFormat % 3]);
         } else {
             log_msg(LOG_ERROR, "Failed to get Device2 sender for SBUS output");
         }
@@ -355,9 +356,10 @@ void registerSbusOutputs() {
     if (config.device3.role == D3_SBUS_OUT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE3);
         if (sender) {
-            sender->setSbusTextFormat(config.device3.sbusTextFormat);
+            sender->setSbusOutputFormat(config.device3.sbusOutputFormat);
             router->registerOutput(sender);
-            log_msg(LOG_INFO, "Device3 SBUS output: text=%s", config.device3.sbusTextFormat ? "on" : "off");
+            static const char* fmtNames[] = {"binary", "text", "mavlink"};
+            log_msg(LOG_INFO, "Device3 SBUS output: format=%s", fmtNames[config.device3.sbusOutputFormat % 3]);
         } else {
             log_msg(LOG_ERROR, "Failed to get Device3 sender for SBUS output");
         }
@@ -367,9 +369,10 @@ void registerSbusOutputs() {
     if (config.device4.role == D4_SBUS_UDP_TX) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE4);
         if (sender) {
-            sender->setSbusTextFormat(config.device4_config.sbusTextFormat);
+            sender->setSbusOutputFormat(config.device4_config.sbusOutputFormat);
             router->registerOutput(sender);
-            log_msg(LOG_INFO, "Device4 SBUS UDP output: text=%s", config.device4_config.sbusTextFormat ? "on" : "off");
+            static const char* fmtNames[] = {"binary", "text", "mavlink"};
+            log_msg(LOG_INFO, "Device4 SBUS UDP output: format=%s", fmtNames[config.device4_config.sbusOutputFormat % 3]);
         } else {
             log_msg(LOG_ERROR, "Failed to get Device4 sender for SBUS UDP output");
         }
@@ -434,6 +437,9 @@ void initDevices() {
         if (config.sbusTimingKeeper) {
             log_msg(LOG_INFO, "SBUS Timing Keeper enabled");
         }
+
+        // Set UDP source timeout from config
+        router->setUdpSourceTimeout(config.device4_config.udpSourceTimeout);
 
         log_msg(LOG_INFO, "SBUS Router initialization complete");
     }

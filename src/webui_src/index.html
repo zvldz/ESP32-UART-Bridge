@@ -319,6 +319,25 @@
                                 </div>
                             </div>
                             <small class="hint">ℹ️ Multiple IPs: comma-separated (max 4). Use .255 suffix for subnet broadcast.</small>
+                            <div id="device4_udp_timeout_group" style="display: none; margin-top: 10px;">
+                                <label for="device4_udp_timeout">UDP Timeout:</label>
+                                <input type="number" id="device4_udp_timeout" name="device4_udp_timeout"
+                                       min="100" max="5000" value="1000" style="width: 80px;"> ms
+                                <small class="hint" style="display: block; margin-top: 5px;">⏱️ Time before Timing Keeper stops repeating frames (failsafe trigger)</small>
+                            </div>
+                            <div id="device4_send_rate_group" style="display: none; margin-top: 10px;">
+                                <label for="device4_send_rate">Send Rate:</label>
+                                <select id="device4_send_rate" name="device4_send_rate" style="width: 180px;">
+                                    <option value="10">10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                    <option value="30">30 Hz</option>
+                                    <option value="40">40 Hz</option>
+                                    <option value="50">50 Hz (recommended)</option>
+                                    <option value="60">60 Hz</option>
+                                    <option value="70">70 Hz (native SBUS)</option>
+                                </select>
+                                <small class="hint" style="display: block; margin-top: 5px;">📡 Lower rates improve WiFi/BT stability</small>
+                            </div>
                         </div>
 
                         <!-- Protocol Optimization -->

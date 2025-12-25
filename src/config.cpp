@@ -76,11 +76,11 @@ uart_stop_bits_t string_to_stop_bits(uint8_t bits) {
 // Helper function to set device role defaults
 static void setDeviceDefaults(Config* config) {
     config->device1.role = D1_UART1;
-    config->device1.sbusTextFormat = false;
+    config->device1.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device2.role = D2_USB;
-    config->device2.sbusTextFormat = false;
+    config->device2.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device3.role = D3_NONE;
-    config->device3.sbusTextFormat = false;
+    config->device3.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device4.role = D4_NONE;
 }
 
@@ -120,7 +120,9 @@ void config_init(Config* config) {
     config->device4_config.port = DEFAULT_UDP_PORT;
     config->device4_config.role = D4_NONE;
     config->device4_config.auto_broadcast = false;
-    config->device4_config.sbusTextFormat = false;
+    config->device4_config.sbusOutputFormat = SBUS_FMT_BINARY;
+    config->device4_config.udpSourceTimeout = 1000;  // Default 1 second
+    config->device4_config.udpSendRate = 50;  // Default 50 Hz
 
     // Log levels defaults
     config->log_level_web = LOG_WARNING;
@@ -311,9 +313,19 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     if (doc["devices"].is<JsonObject>()) {
         config->device1.role = doc["devices"]["device1"] | D1_UART1;
         config->device2.role = doc["devices"]["device2"] | D2_USB;
-        config->device2.sbusTextFormat = doc["devices"]["device2_sbus_text"] | false;
+        // Load new format, migrate from old bool format if exists
+        if (doc["devices"]["device2_sbus_format"].is<int>()) {
+            config->device2.sbusOutputFormat = doc["devices"]["device2_sbus_format"] | SBUS_FMT_BINARY;
+        } else {
+            // Migration: old bool format -> new enum (true -> TEXT, false -> BINARY)
+            config->device2.sbusOutputFormat = doc["devices"]["device2_sbus_text"] | false ? SBUS_FMT_TEXT : SBUS_FMT_BINARY;
+        }
         config->device3.role = doc["devices"]["device3"] | D3_NONE;
-        config->device3.sbusTextFormat = doc["devices"]["device3_sbus_text"] | false;
+        if (doc["devices"]["device3_sbus_format"].is<int>()) {
+            config->device3.sbusOutputFormat = doc["devices"]["device3_sbus_format"] | SBUS_FMT_BINARY;
+        } else {
+            config->device3.sbusOutputFormat = doc["devices"]["device3_sbus_text"] | false ? SBUS_FMT_TEXT : SBUS_FMT_BINARY;
+        }
         config->device4.role = doc["devices"]["device4"] | D4_NONE;
     }
 
@@ -325,7 +337,14 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->device4_config.port = doc["device4"]["port"] | DEFAULT_UDP_PORT;
         config->device4_config.role = doc["device4"]["role"] | D4_NONE;
         config->device4_config.auto_broadcast = doc["device4"]["auto_broadcast"] | false;
-        config->device4_config.sbusTextFormat = doc["device4"]["sbus_text"] | false;
+        // Load new format, migrate from old bool format if exists
+        if (doc["device4"]["sbus_format"].is<int>()) {
+            config->device4_config.sbusOutputFormat = doc["device4"]["sbus_format"] | SBUS_FMT_BINARY;
+        } else {
+            config->device4_config.sbusOutputFormat = doc["device4"]["sbus_text"] | false ? SBUS_FMT_TEXT : SBUS_FMT_BINARY;
+        }
+        config->device4_config.udpSourceTimeout = doc["device4"]["udp_timeout"] | 1000;
+        config->device4_config.udpSendRate = doc["device4"]["send_rate"] | 50;
     }
 
     // Load log levels (new in v2)
@@ -407,9 +426,9 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     // Device roles
     doc["devices"]["device1"] = config->device1.role;
     doc["devices"]["device2"] = config->device2.role;
-    doc["devices"]["device2_sbus_text"] = config->device2.sbusTextFormat;
+    doc["devices"]["device2_sbus_format"] = config->device2.sbusOutputFormat;
     doc["devices"]["device3"] = config->device3.role;
-    doc["devices"]["device3_sbus_text"] = config->device3.sbusTextFormat;
+    doc["devices"]["device3_sbus_format"] = config->device3.sbusOutputFormat;
     doc["devices"]["device4"] = config->device4.role;
 
     // Save Device 4 configuration
@@ -417,7 +436,9 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["device4"]["port"] = config->device4_config.port;
     doc["device4"]["role"] = config->device4_config.role;
     doc["device4"]["auto_broadcast"] = config->device4_config.auto_broadcast;
-    doc["device4"]["sbus_text"] = config->device4_config.sbusTextFormat;
+    doc["device4"]["sbus_format"] = config->device4_config.sbusOutputFormat;
+    doc["device4"]["udp_timeout"] = config->device4_config.udpSourceTimeout;
+    doc["device4"]["send_rate"] = config->device4_config.udpSendRate;
 
     // Log levels
     doc["logging"]["web"] = config->log_level_web;

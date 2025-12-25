@@ -3,6 +3,8 @@
 
 #include "packet_sender.h"
 #include "protocol_types.h"  // For DataFormat::FORMAT_SBUS
+#include "sbus_mavlink.h"    // For sbusFrameToMavlink()
+#include "../device_types.h" // For SbusOutputFormat enum
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
 #include "../types.h"  // For g_deviceStats
@@ -65,7 +67,12 @@ private:
     // Batching thresholds for SBUS (fast path via sendDirect)
     static constexpr size_t SBUS_BATCH_FRAMES = 3;
     static constexpr uint32_t SBUS_BATCH_STALE_MS = 50;  // Discard stale batch
-    
+
+    // Rate limiting for SBUS output (configurable via Web UI)
+    // Only active for SBUS Output roles (D4_SBUS_UDP_TX, D4_SBUS_MULTICAST)
+    uint32_t sendRateIntervalMs = 0;  // 0 = disabled (no rate limit)
+    uint32_t lastSendMs = 0;
+
     void flushBatch() {
         if (atomicBatchSize > 0) {
             // === DIAGNOSTIC START === (Remove after batching validation)
@@ -199,14 +206,30 @@ public:
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!udpTransport || !wifiIsReady()) return 0;
 
+        // Rate limiting check (if enabled via setSendRate)
+        if (sendRateIntervalMs > 0) {
+            uint32_t now = millis();
+            if ((now - lastSendMs) < sendRateIntervalMs) {
+                return 0;  // Skip frame (rate limited)
+            }
+            lastSendMs = now;
+        }
+
         const uint8_t* sendData = data;
         size_t sendSize = size;
 
-        // Convert SBUS binary to text if enabled
-        if (sbusTextFormat && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
-            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_TEXT_BUFFER_SIZE);
-            if (sendSize == 0) return 0;  // Conversion failed
-            sendData = (const uint8_t*)sbusTextBuffer;
+        // Convert SBUS binary based on output format setting
+        if (size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
+            if (sbusOutputFormat == SBUS_FMT_TEXT) {
+                sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+                if (sendSize == 0) return 0;  // Conversion failed
+                sendData = (const uint8_t*)sbusTextBuffer;
+            } else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
+                sendSize = sbusFrameToMavlink(data, (uint8_t*)sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+                if (sendSize == 0) return 0;  // Conversion failed
+                sendData = (const uint8_t*)sbusTextBuffer;
+            }
+            // SBUS_FMT_BINARY: sendData/sendSize unchanged (pass-through)
         }
 
         uint32_t now = millis();
@@ -248,6 +271,17 @@ public:
     void setBatchingEnabled(bool enabled) {
         enableAtomicBatching = enabled;
         log_msg(LOG_INFO, "UDP batching %s", enabled ? "enabled" : "disabled");
+    }
+
+    // Set send rate in Hz (10-70). 0 = disabled (no rate limit)
+    void setSendRate(uint8_t rateHz) {
+        if (rateHz == 0) {
+            sendRateIntervalMs = 0;  // Disabled
+            log_msg(LOG_INFO, "UDP send rate: unlimited");
+        } else {
+            sendRateIntervalMs = 1000 / rateHz;
+            log_msg(LOG_INFO, "UDP send rate: %d Hz (%lu ms interval)", rateHz, sendRateIntervalMs);
+        }
     }
 
     // Parse comma-separated IP list into targetIPs array

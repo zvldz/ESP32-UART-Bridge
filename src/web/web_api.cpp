@@ -140,11 +140,13 @@ static void populateConfigJson(JsonDocument& doc) {
     doc["device4TargetIp"] = config.device4_config.target_ip;
     doc["device4Port"] = config.device4_config.port;
     doc["device4AutoBroadcast"] = config.device4_config.auto_broadcast;
+    doc["device4UdpTimeout"] = config.device4_config.udpSourceTimeout;
+    doc["device4SendRate"] = config.device4_config.udpSendRate;
 
-    // SBUS text format options (for SBUS_OUT roles)
-    doc["device2SbusText"] = config.device2.sbusTextFormat;
-    doc["device3SbusText"] = config.device3.sbusTextFormat;
-    doc["device4SbusText"] = config.device4_config.sbusTextFormat;
+    // SBUS output format options (for SBUS_OUT roles)
+    doc["device2SbusFormat"] = config.device2.sbusOutputFormat;
+    doc["device3SbusFormat"] = config.device3.sbusOutputFormat;
+    doc["device4SbusFormat"] = config.device4_config.sbusOutputFormat;
 
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
@@ -443,27 +445,54 @@ void handleSave(AsyncWebServerRequest *request) {
         log_msg(LOG_INFO, "Device 4 auto broadcast %s", newAutoBroadcast ? "enabled" : "disabled");
     }
 
+    // Device 4 UDP source timeout
+    if (request->hasParam("device4_udp_timeout", true)) {
+        uint16_t newTimeout = request->getParam("device4_udp_timeout", true)->value().toInt();
+        if (newTimeout >= 100 && newTimeout <= 5000 && newTimeout != config.device4_config.udpSourceTimeout) {
+            config.device4_config.udpSourceTimeout = newTimeout;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 4 UDP timeout: %u ms", newTimeout);
+        }
+    }
+
+    // Device 4 UDP send rate
+    if (request->hasParam("device4_send_rate", true)) {
+        uint8_t newRate = request->getParam("device4_send_rate", true)->value().toInt();
+        if (newRate >= 10 && newRate <= 70 && newRate != config.device4_config.udpSendRate) {
+            config.device4_config.udpSendRate = newRate;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 4 send rate: %u Hz", newRate);
+        }
+    }
+
     // Copy role to configuration
     config.device4_config.role = config.device4.role;
 
-    // SBUS text format options (checkboxes)
-    bool newD2SbusText = request->hasParam("device2_sbus_text", true);
-    if (newD2SbusText != config.device2.sbusTextFormat) {
-        config.device2.sbusTextFormat = newD2SbusText;
-        configChanged = true;
-        log_msg(LOG_INFO, "Device 2 SBUS text format %s", newD2SbusText ? "enabled" : "disabled");
+    // SBUS output format options (select dropdowns)
+    static const char* fmtNames[] = {"binary", "text", "mavlink"};
+    if (request->hasParam("device2_sbus_format", true)) {
+        uint8_t newFmt = request->getParam("device2_sbus_format", true)->value().toInt();
+        if (newFmt != config.device2.sbusOutputFormat && newFmt <= 2) {
+            config.device2.sbusOutputFormat = newFmt;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 2 SBUS output format: %s", fmtNames[newFmt]);
+        }
     }
-    bool newD3SbusText = request->hasParam("device3_sbus_text", true);
-    if (newD3SbusText != config.device3.sbusTextFormat) {
-        config.device3.sbusTextFormat = newD3SbusText;
-        configChanged = true;
-        log_msg(LOG_INFO, "Device 3 SBUS text format %s", newD3SbusText ? "enabled" : "disabled");
+    if (request->hasParam("device3_sbus_format", true)) {
+        uint8_t newFmt = request->getParam("device3_sbus_format", true)->value().toInt();
+        if (newFmt != config.device3.sbusOutputFormat && newFmt <= 2) {
+            config.device3.sbusOutputFormat = newFmt;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 3 SBUS output format: %s", fmtNames[newFmt]);
+        }
     }
-    bool newD4SbusText = request->hasParam("device4_sbus_text", true);
-    if (newD4SbusText != config.device4_config.sbusTextFormat) {
-        config.device4_config.sbusTextFormat = newD4SbusText;
-        configChanged = true;
-        log_msg(LOG_INFO, "Device 4 SBUS text format %s", newD4SbusText ? "enabled" : "disabled");
+    if (request->hasParam("device4_sbus_format", true)) {
+        uint8_t newFmt = request->getParam("device4_sbus_format", true)->value().toInt();
+        if (newFmt != config.device4_config.sbusOutputFormat && newFmt <= 2) {
+            config.device4_config.sbusOutputFormat = newFmt;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 4 SBUS output format: %s", fmtNames[newFmt]);
+        }
     }
 
     // Validate SBUS configuration before saving

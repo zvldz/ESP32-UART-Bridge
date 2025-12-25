@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.18.11-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.18.12-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -364,9 +364,10 @@ Requires active Wi-Fi connection. Can be configured as:
 
 ### Network Configuration for Device 4
 When Device 4 is enabled, additional settings appear:
-- **Target IP**: Destination for UDP packets
+- **Target IP**: Destination for UDP packets (supports up to 4 comma-separated IPs)
   - Use x.x.x.255 for broadcast (reaches all devices on network)
   - Use specific IP for unicast (single destination)
+  - Multiple targets: `192.168.1.10,192.168.1.20` sends to both
 - **Port**: UDP port number (1-65535)
 - **Auto Broadcast**: Automatically discover UDP targets on network (Client mode + UDP TX only)
 - **Network Log Level**: Only visible when Device 4 is active

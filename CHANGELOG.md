@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## v2.18.12
+
+### New Features
+- **SBUS Output Format Selector**: Replaced checkbox with dropdown for SBUS output format
+  - Binary (SBUS) — standard 25-byte SBUS frame
+  - Text (RC) — `RC 1500,1500,...\r\n` for rcoverride_v2 plugin
+  - MAVLink (RC Override) — RC_CHANNELS_OVERRIDE message (requires plugin for Mission Planner)
+- **MAVLink RC_CHANNELS_OVERRIDE**: New output format for wireless RC control
+  - Converts SBUS frames to MAVLink messages (system_id=255, component_id=190)
+  - Requires ArduPilot RC_OVERRIDE_TIME parameter for failsafe timeout
+- **UDP Send Rate**: Configurable send rate for SBUS UDP Output (10-70 Hz, default 50 Hz)
+  - Reduces WiFi congestion for RC control applications
+  - Setting visible in Web UI for Device 4 SBUS Output role
+- **UDP Source Timeout**: Configurable timeout for SBUS Input role (100-5000 ms, default 1000 ms)
+  - Resets SBUS Timing Keeper when UDP source stops sending
+
+### Mission Planner Plugin
+- **RC Override Plugin v2.0**: Modified TX16S-RC plugin with UDP support
+  - Located in `plugins/rcoverride_v2.cs`
+  - Supports both COM (Bluetooth) and UDP (WiFi) sources
+  - Configurable UDP port, rate limit constant
+  - Compatible with ESP SBUS Text format output
+
+### Web UI
+- **Device 4 roles renamed**: "SBUS→UDP TX" → "SBUS Output", "UDP→SBUS RX" → "SBUS Input"
+- **Device 4 Pins column**: Shows "Network" for SBUS Output/Input roles
+- **MiniKit Device 2**: USB role forced, other options show "(not available)" or "(USB always on)"
+- **Device 2 USB**: Now available when Device 1 is SBUS Input (was incorrectly blocked)
+
 ## v2.18.11
 
 ### New Features
