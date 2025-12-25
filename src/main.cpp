@@ -280,21 +280,24 @@ void loop() {
 //================================================================
 
 void initPins() {
-    pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
-
-    // Attach interrupt for button clicks on correct pin
-    attachInterrupt(digitalPinToInterrupt(BOOT_BUTTON_PIN), bootButtonISR, FALLING);
-
-    log_msg(LOG_DEBUG, "BOOT button configured on GPIO%d", BOOT_BUTTON_PIN);
+    if (BOOT_BUTTON_PIN >= 0) {
+        pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(BOOT_BUTTON_PIN), bootButtonISR, FALLING);
+        log_msg(LOG_DEBUG, "BOOT button configured on GPIO%d", BOOT_BUTTON_PIN);
+    } else {
+        log_msg(LOG_DEBUG, "No BOOT button (using quick reset detection)");
+    }
 }
 
 void detectMode() {
 #if defined(BOARD_MINIKIT_ESP32)
-    // MiniKit: check for quick reset activation (replaces triple-click on BOOT button)
+    // MiniKit: quick reset ALWAYS forces temporary AP mode
+    // (no BOOT button means no other way to regain access if Client mode fails)
     if (quickResetDetected()) {
-        log_msg(LOG_INFO, "Quick reset detected - entering network mode");
+        log_msg(LOG_INFO, "Quick reset detected - forcing temporary AP mode");
         bridgeMode = BRIDGE_NET;
         systemState.isTemporaryNetwork = true;
+        systemState.tempForceApMode = true;
         return;
     }
 #endif
@@ -555,6 +558,8 @@ void bootButtonISR() {
 }
 
 void handleButtonInput() {
+  if (BOOT_BUTTON_PIN < 0) return;  // No button on this board
+
   static unsigned long buttonHoldStart = 0;
   static bool buttonHoldDetected = false;
   static bool clickProcessed = false;

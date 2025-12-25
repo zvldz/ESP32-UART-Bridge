@@ -105,7 +105,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
     - Network Logger: UDP port for log streaming (default: 14560)
     - Network Bridge: Bidirectional UDP for UART data (default: 14550)
   - **System**:
-    - RESET button: Triple-press for network mode (no BOOT button)
+    - RESET button: Triple-press always activates temporary AP mode (no BOOT button)
     - GPIO2: Single-color LED (built-in, active-high)
   - **⚠️ Limitations**: No USB Host mode, no PSRAM, no UART2 on Device 2
 
@@ -127,7 +127,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
    **Option A: Temporary Setup (traditional method)**
    - **Zero/SuperMini/XIAO**: Triple-click BOOT button (LED turns solid purple)
-   - **MiniKit**: Triple-press RESET button quickly (LED turns solid)
+   - **MiniKit**: Triple-press RESET button quickly (always activates AP mode, LED turns solid)
    - Connect to WiFi network "ESP-Bridge" (password: 12345678)
    - Open web browser to 192.168.4.1
    - Configure settings and click "Save & Reboot"
@@ -455,7 +455,7 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
   - Password: "12345678"
   - LED feedback: Purple rapid blink confirms reset
   - Device automatically restarts
-- **MiniKit**: Long press not available (RESET button resets the board)
+- **MiniKit**: Long press not available (use Web UI Settings → Factory Reset)
 
 ### Power-On Hold - Zero/SuperMini/XIAO only
 - **Bootloader Mode**: Hold BOOT during power-on for firmware flashing
@@ -541,7 +541,7 @@ nc -u -l 14560
 | LED orange slow blink | WiFi Client searching - check SSID spelling and network availability |
 | LED solid orange | WiFi Client connected successfully |
 | LED red fast blink | Wrong WiFi password - restart device or triple-click to change mode |
-| Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults (MiniKit: use web interface or reflash) |
+| Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults (MiniKit: triple RESET for AP, then Factory Reset in web UI) |
 | Can't connect to WiFi | Check network name, password, and 2.4GHz band (5GHz not supported) |
 | WiFi connects then disconnects | Check router settings, signal strength, or power saving features |
 | Connection drops | Enable flow control if supported by device |

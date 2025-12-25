@@ -23,6 +23,12 @@
   - Configurable UDP port, rate limit constant
   - Compatible with ESP SBUS Text format output
 
+### MiniKit Fixes
+- **Fix spurious WiFi reset**: Disabled GPIO0 button handling (MiniKit has no BOOT button, floating GPIO0 caused false triggers from EMI)
+- **Quick reset always forces AP**: Triple RESET now always activates temporary AP mode regardless of saved WiFi settings
+  - Guarantees access to Web UI even if saved Client mode can't connect
+  - No WiFi reset via button — use Web UI Settings → Factory Reset
+
 ### Web UI
 - **Device 4 roles renamed**: "SBUS→UDP TX" → "SBUS Output", "UDP→SBUS RX" → "SBUS Input"
 - **Device 4 Pins column**: Shows "Network" for SBUS Output/Input roles

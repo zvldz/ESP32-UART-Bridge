@@ -380,7 +380,7 @@
                     <tr><td>LED orange blinking</td><td>WiFi Client searching - check network availability</td></tr>
                     <tr><td>LED orange solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
                     <tr><td>LED red blinking</td><td>WiFi Client error - wrong password (restart required)</td></tr>
-                    <tr><td>Can't access WiFi Client</td><td>Triple-click BOOT (S3) / triple RESET (MiniKit) for temporary AP</td></tr>
+                    <tr><td>Can't access WiFi Client</td><td>Triple-click BOOT (S3) for temp AP, or triple RESET (MiniKit, always AP)</td></tr>
                     <tr><td>WiFi takes long to connect</td><td>Normal - scans every 15s, tries 5x when network found</td></tr>
                     <tr><td>Forgot WiFi password</td><td>Hold BOOT 5s to reset (S3 only). MiniKit: use Factory Reset in web UI</td></tr>
                     <tr><td>Frequent crashes</td><td>Check Crash History on main page for patterns</td></tr>
@@ -451,12 +451,12 @@
                 </div>
                 <div class="warning" style="margin-top: 15px;">
                     <strong>RESET Button Functions - MiniKit (no BOOT button):</strong><br><br>
-                    <strong>🔘 Triple RESET (Mode Switching):</strong><br>
+                    <strong>🔘 Triple RESET (Temporary AP Mode):</strong><br>
                     - Press RESET button 3 times quickly (within 3 seconds each)<br>
-                    - Same function as triple-click BOOT on S3 boards<br>
-                    - Activates WiFi mode for configuration<br><br>
+                    - <strong>Always activates temporary AP mode</strong> (unlike S3 boards)<br>
+                    - Guarantees access to Web UI regardless of saved WiFi settings<br><br>
                     <strong>⚠️ Notes:</strong><br>
-                    - Long press reset not supported (use web interface for WiFi reset)<br>
+                    - No WiFi reset via button (use Web UI Settings → Factory Reset)<br>
                     - Counter resets if device runs >3 seconds between presses<br>
                     - Crashes do NOT count as resets (boot loop protection)
                 </div>

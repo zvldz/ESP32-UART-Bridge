@@ -60,7 +60,7 @@ namespace RcOverridePlugin
         private Panel _ledPanel;
 
         public override string Name => "RC Override";
-        public override string Author => "ACh / ESP32-UART-Bridge";
+        public override string Author => "ACh / mod";
         public override string Version => "2.0";
 
         private StringBuilder _buffer = new StringBuilder(256);
