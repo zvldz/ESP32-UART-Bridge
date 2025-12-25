@@ -59,10 +59,17 @@ enum Device4Role {
     D4_SBUS_UDP_RX = 4      // UDP→SBUS only
 };
 
+// SBUS output format
+enum SbusOutputFormat : uint8_t {
+    SBUS_FMT_BINARY = 0,   // Standard SBUS (100000 8E2 INV) → FC
+    SBUS_FMT_TEXT = 1,     // "RC 1500,..." (115200 8N1) → PC/App
+    SBUS_FMT_MAVLINK = 2   // RC_CHANNELS_OVERRIDE → MP/FC
+};
+
 // Device configuration
 typedef struct {
     uint8_t role;
-    bool sbusTextFormat;  // SBUS output as text "RC 1500,1500,...\r\n" (only for SBUS_OUT roles)
+    uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK
 } DeviceConfig;
 
 // Device 4 Configuration
@@ -71,7 +78,9 @@ struct Device4Config {
     uint16_t port;
     uint8_t role;
     bool auto_broadcast;    // Use dynamic broadcast from DHCP subnet (Client mode only)
-    bool sbusTextFormat;    // SBUS output as text "RC 1500,1500,...\r\n" (only for D4_SBUS_UDP_TX)
+    uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK (only for D4_SBUS_UDP_TX)
+    uint16_t udpSourceTimeout; // UDP source timeout in ms (100-5000, default 1000) for D4_SBUS_UDP_RX
+    uint8_t udpSendRate;       // Send rate in Hz (10-70, default 50) for D4_SBUS_UDP_TX
 };
 
 // WiFi network credentials for Client mode

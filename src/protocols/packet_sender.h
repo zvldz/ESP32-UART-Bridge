@@ -41,9 +41,11 @@ protected:
     uint32_t totalDropped;
     uint32_t maxQueueDepth;    // Max queue depth seen
 
-    // SBUS text format output (for SBUS_OUT roles)
-    bool sbusTextFormat = false;
-    char sbusTextBuffer[SBUS_TEXT_BUFFER_SIZE];
+    // SBUS output format (for SBUS_OUT roles)
+    // 0 = BINARY, 1 = TEXT, 2 = MAVLINK (see SbusOutputFormat enum)
+    uint8_t sbusOutputFormat = 0;
+    static constexpr size_t SBUS_OUTPUT_BUFFER_SIZE = 64;  // MAVLink RC_OVERRIDE ~50 bytes
+    char sbusTextBuffer[SBUS_OUTPUT_BUFFER_SIZE];
     
 public:
     PacketSender(size_t maxPackets = DEFAULT_MAX_PACKETS, size_t maxBytes = DEFAULT_MAX_BYTES) : 
@@ -122,9 +124,9 @@ public:
     size_t getQueueBytes() const { return currentQueueBytes; }
     size_t getMaxQueueDepth() const { return maxQueueDepth; }
 
-    // SBUS text format configuration
-    void setSbusTextFormat(bool enabled) { sbusTextFormat = enabled; }
-    bool getSbusTextFormat() const { return sbusTextFormat; }
+    // SBUS output format configuration
+    void setSbusOutputFormat(uint8_t format) { sbusOutputFormat = format; }
+    uint8_t getSbusOutputFormat() const { return sbusOutputFormat; }
     
     
     void getDetailedStats(char* buffer, size_t bufSize) {
