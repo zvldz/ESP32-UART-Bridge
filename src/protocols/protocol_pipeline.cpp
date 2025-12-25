@@ -558,6 +558,12 @@ void ProtocolPipeline::createSenders(Config* config) {
                 udpTransport
             );
             udpSender->setBatchingEnabled(config->udpBatchingEnabled);
+
+            // Rate limiting only for SBUS Output roles
+            if (config->device4.role == D4_SBUS_UDP_TX) {
+                udpSender->setSendRate(config->device4_config.udpSendRate);
+            }
+
             senders[IDX_DEVICE4] = udpSender;
             log_msg(LOG_INFO, "Created UDP sender at index %d for role %d", IDX_DEVICE4, config->device4.role);
         }

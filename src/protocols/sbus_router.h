@@ -52,6 +52,7 @@ private:
     uint32_t switchDelayMs;      // Delay before switching sources
 
     bool timingKeeperEnabled;
+    uint32_t udpSourceTimeoutMs;  // Configurable timeout for UDP source
 
     // Statistics
     uint32_t framesRouted;
@@ -122,6 +123,11 @@ public:
     // Timing keeper control
     void setTimingKeeper(bool enabled) {
         timingKeeperEnabled = enabled;
+    }
+
+    // UDP source timeout configuration
+    void setUdpSourceTimeout(uint32_t timeoutMs) {
+        udpSourceTimeoutMs = timeoutMs;
     }
 
     // Active source query

@@ -10,7 +10,7 @@
   - [x] Pin mapping for S3 Super Mini board
   - [x] Adjust for different GPIO availability
   - [x] LED functionality verified (GPIO48 WS2815)
-  - [ ] Verify USB-CDC functionality
+  - [x] Verify USB-CDC functionality
 
 - [x] **Build Configuration**
   - [x] Add platformio environment for S3 Super Mini
@@ -69,7 +69,7 @@
 
 - [x] **Hardware Adaptation** ✅ COMPLETED
   - [x] Pin mapping for ESP32 MiniKit board (ESP32-WROOM-32)
-  - [ ] GPIO mapping documented (Device1: GPIO4/5, Device3: GPIO16/17, RTS/CTS: GPIO18/19)
+  - [x] GPIO mapping documented (Device1: GPIO4/5, Device3: GPIO16/17, RTS/CTS: GPIO18/19)
   - [x] LED functionality (single color LED on GPIO2, normal logic HIGH=ON)
   - [x] Adjust for different GPIO availability (GPIO6-11 unavailable - SPI flash)
   - [x] No PSRAM - fallback to internal RAM for all operations
@@ -171,87 +171,6 @@
   - List of client IP addresses
   - IP of current web interface user
 
-#### Protocol-driven Optimizations
-- [ ] CRSF (future): Minimal latency requirements
-- [ ] Modbus RTU (future): Inter-frame timing preservation
-
-#### System Reliability & Memory Management
-
-- [ ] **Periodic Reboot System**
-  - [ ] Implement daily scheduled reboot (TaskScheduler)
-    - Configurable interval (default: 24 hours)
-    - Scheduled at low-activity time (3:00 AM)
-    - Graceful shutdown with connection cleanup
-    - Pre-reboot statistics logging
-    - 5-second graceful shutdown delay
-    - Save memory statistics to RTC before reboot (heap, fragmentation, uptime)
-    - Display pre-reboot memory state in web interface after restart
-  - [ ] Web interface configuration
-    - Enable/disable periodic reboot
-    - Configurable interval (12h, 24h, 48h, never)
-    - Next reboot countdown display
-
-- [ ] **Emergency Memory Protection**
-  - [ ] Critical memory threshold monitoring (TaskScheduler)
-    - Critical threshold: 20KB (reboot after sustained low memory)
-    - Warning threshold: 50KB (log warnings)
-    - Check interval: 5 seconds
-    - Sustained low memory detection: must be below threshold for 30+ seconds
-    - Prevents false triggers on temporary allocation spikes
-    - Save memory statistics to RTC before emergency reboot
-  - [ ] Memory statistics enhancement
-    - Heap fragmentation tracking
-    - Largest free block monitoring
-    - Historical memory usage trends
-
-- [ ] **FreeRTOS Stack Optimization**
-  - [ ] Test stack usage under load (MAVLink, FTP transfers, parameters download)
-  - [ ] Monitor `Stack free:` logs during peak activity
-  - [ ] Current allocations: UART=16KB, Sender=4KB (potentially oversized)
-  - [ ] Idle state shows UART=13KB free (only ~3KB used)
-  - [ ] Target: reduce after verification under load
-  - [ ] Rule: keep 2× margin from peak usage
-
-#### USB Boot Message Issue ✅ VERIFIED
-
-- [x] **Verify boot messages in production build**
-  - Debug build outputs boot messages (expected - `CORE_DEBUG_LEVEL=2`)
-  - Production build is silent — all 4 sdkconfig files have:
-    - `CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y`
-    - `CONFIG_LOG_DEFAULT_LEVEL_NONE=y`
-  - Verified: zero, supermini, xiao, minikit production configs
-
-#### Final Code Cleanup
-
-- [ ] **Final Code Cleanup** - After all features are implemented
-  - [x] Standardize code indentation to 4 spaces across all files ✅ COMPLETED
-  - [ ] Remove unnecessary diagnostic code and debug prints
-    - [ ] Find and remove temporary diagnostic prints added during development
-    - [ ] Clean up experimental code blocks from testing phases
-    - [ ] Remove "TEMPORARY DIAGNOSTIC" sections (keep permanent diagnostics)
-    - [ ] Remove commented-out diagnostic blocks that are no longer needed
-  - [ ] Clean up commented-out code blocks
-  - [ ] Run cppcheck static analysis to find unused functions and variables
-  - [ ] Optimize memory usage and reduce code duplication
-  - [ ] Simplify overly complex functions
-  - [ ] Remove experimental/unused features
-  - [ ] Update code comments to reflect final implementation
-  - [ ] Ensure consistent code style across all files
-  - [ ] Remove temporary workarounds that are no longer needed
-  - [ ] Finalize production-ready code
-  - **Note**: This should be done as the very last step to avoid breaking in-development features
-
-#### New Protocol Support
-
-- [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
-  - [ ] RC channel monitoring for automated switching (video frequencies, ELRS bands)
-  - [ ] Telemetry data extraction (RSSI, link quality, GPS, voltage, current)
-  - [ ] Integration with VTX control (SmartAudio/IRC Tramp) for video channel/power management
-  - [ ] Support for video RX control (button emulation, SPI direct control)
-  - [ ] Automatic dual-band switching for ELRS setups based on RC channel input
-- [ ] **Modbus RTU** - Inter-frame timing preservation
-- [ ] **NMEA GPS** - GPS data parsing and routing
-
 #### SBUS Text Format Output ✅ IMPLEMENTED
 
 - [x] **SBUS → Text format for USB/UDP**
@@ -268,84 +187,26 @@
 
 #### SBUS Output Format Selector (Future Enhancement)
 
-- [ ] **Replace checkbox with format dropdown**
+- [x] **Replace checkbox with format dropdown** ✅ IMPLEMENTED (v2.18.12)
 
-  **Current**: `sbusTextFormat` (bool) checkbox
-  **Proposed**: `sbusOutputFormat` (enum) dropdown selector
+  Replaced `sbusTextFormat` (bool) with `sbusOutputFormat` (enum) dropdown:
+  - Binary (SBUS) — standard 25-byte SBUS frame
+  - Text (RC) — `RC 1500,...\r\n` for TX16S-RC plugin
+  - MAVLink (RC Override) — RC_CHANNELS_OVERRIDE for direct FC control
 
-  ```cpp
-  enum SbusOutputFormat : uint8_t {
-      SBUS_FMT_BINARY = 0,      // Standard SBUS (100000 8E2 INV) → FC
-      SBUS_FMT_TEXT = 1,        // "RC 1500,..." (115200 8N1) → PC/App
-      SBUS_FMT_UART_RAW = 2,    // Raw 25 bytes (115200 8N1) → ESP bridge
-      SBUS_FMT_MAVLINK = 3      // RC_CHANNELS_OVERRIDE → MP/FC
-  };
-  ```
+- [x] **MAVLink RC_CHANNELS_OVERRIDE output** ✅ IMPLEMENTED (v2.18.12)
 
-  **Device 2/3 (UART) options:**
-  | Format | UART Settings | Data | Use Case |
-  |--------|---------------|------|----------|
-  | Binary (SBUS) | 100000 8E2 INV | 25 bytes | Direct FC connection |
-  | Text (RC) | 115200 8N1 | `RC 1500,...\r\n` | TX16S-RC compatibility |
-  | Binary (UART) | 115200 8N1 | 25 bytes raw | ESP↔ESP wired bridge |
-  | MAVLink | UDP only | RC_OVERRIDE | Wireless RC via MP |
+  Converts SBUS frames to MAVLink RC_CHANNELS_OVERRIDE packets:
+  - system_id=255 (GCS), component_id=190 (UDP_BRIDGE)
+  - target_system=1, target_component=1 (FC)
+  - Works with Mission Planner/QGC on UDP port 14550
+  - ArduPilot RC_OVERRIDE=1 enables automatic failover
 
-  **Device 4 (UDP) options:**
-  | Format | Data | Use Case |
-  |--------|------|----------|
-  | Binary | 25 bytes raw | ESP↔ESP wireless bridge |
-  | Text (RC) | `RC 1500,...\r\n` | PC/App monitoring |
-  | MAVLink | RC_OVERRIDE | Direct FC control via WiFi |
-
-- [ ] **MAVLink RC_CHANNELS_OVERRIDE output**
-
-  **Use case**: Wireless RC control without physical SBUS connection to FC
-  ```
-  [SBUS RX] → ESP (SBUS IN → MAVLink UDP) ~~~WiFi~~~ MP/FC (RC_OVERRIDE)
-  ```
-
-  **Implementation:**
-  - ESP sends MAVLink RC_CHANNELS_OVERRIDE packets via UDP
-  - Target: Mission Planner (port 14550) or FC directly
-  - MP acts as proxy, forwarding RC_OVERRIDE to FC
-  - No additional plugins needed — MP accepts MAVLink from any source
-
-  **MAVLink packet structure:**
-  ```cpp
-  mavlink_rc_channels_override_t rc = {
-      .target_system = 1,       // FC sysid
-      .target_component = 1,    // FC compid
-      .chan1_raw = pwm[0],      // 1000-2000 µs
-      // ... chan2-chan16 ...
-  };
-  // ESP sysid=255, compid=190 (MAV_COMP_ID_UDP_BRIDGE)
-  mavlink_msg_rc_channels_override_encode(255, 190, &msg, &rc);
-  ```
-
-  **Advantages over BT SPP (TX16S-RC):**
-  - Latency: ~5-15ms vs 40-120ms (Bluetooth)
-  - No virtual COM port needed
-  - No additional plugins — MP handles MAVLink natively
-  - Works alongside existing MAVLink telemetry
-
-  **Use case: Wireless RC control with minimal latency**
-  ```
-  [TX16S/TX12] → SBUS → [ESP32] → WiFi UDP → [PC: MP port 14550] → [FC via telemetry]
-  ```
-  - RC receiver outputs SBUS to ESP (D1_SBUS_IN)
-  - ESP converts SBUS frames to MAVLink RC_CHANNELS_OVERRIDE
-  - Packets sent via UDP to Mission Planner (port 14550)
-  - MP forwards RC_OVERRIDE to FC over existing telemetry link
-  - FC uses ArduPilot RC_OVERRIDE_TIME parameter for timeout (default 3 sec)
-  - No strict SBUS timing — FC accepts RC_OVERRIDE when packets arrive
-  - Total latency: SBUS parsing (1-2ms) + WiFi UDP (2-10ms) + MP relay (~1ms) = **~5-15ms**
-  - Compare to Bluetooth SPP: ~40-140ms (connection interval + L2CAP buffering)
-
-  **Config changes:**
-  - Add `sbusOutputFormat` field to DeviceConfig
-  - Migrate from bool `sbusTextFormat` to enum
-  - Web UI: replace checkbox with `<select>` dropdown
-  - MAVLink library already in project (mavlink_helpers.h)
+- [ ] **Testing MAVLink RC_OVERRIDE** 🟡 NEEDS TESTING
+  - [ ] Test with Mission Planner on port 14550
+  - [ ] Verify RC channel values in MP RC Calibration
+  - [ ] Test failsafe behavior (RC_OVERRIDE timeout)
+  - [ ] Measure actual latency (expected ~5-15ms)
 
 #### Advanced Protocol Management
 
@@ -415,32 +276,43 @@
     - Any device that can send/receive 25-byte SBUS frames over standard UART
 
   - [x] SBUS over WiFi/UDP with frame filtering and validation (implemented)
-  - [ ] Configurable UDP source timeout for Timing Keeper (currently hardcoded 1000ms in sbus_router.cpp)
-  - [ ] Modbus↔JSON conversion
-  - [ ] NMEA→Binary conversion
-  - Per-device protocol configuration
-  - Independent protocol detectors per interface
+  - [x] Configurable UDP source timeout for Timing Keeper (100-5000ms, default 1000ms) ✅ v2.18.12
+  - [x] Configurable UDP send rate (10-70 Hz, default 50 Hz) for SBUS Output over WiFi ✅ v2.18.12
 
-### Future Considerations
+### Future Considerations (Low Priority)
 
-- [ ] **Advanced Network Features**
-  - **TCP Client Mode** - Connect to remote servers
-    - Automatic reconnection on disconnect
-    - Configurable server address and port
-    - **Implementation**: Use AsyncTCP library
-    - Use cases: Cloud logging, remote monitoring
-    - **Note**: Low priority - UDP covers most use cases
-    
-  - **TCP Server Mode** - Accept TCP connections
-    - Multiple client support with connection management
-    - Authentication options for secure access
-    - Connection timeout and cleanup handling
+#### New Protocol Support 🔵 LOW PRIORITY
 
-- [ ] **High-Speed Testing**
-  - Test operation at 921600 and 1000000 baud
-  - Profile CPU usage and latency
-  - Verify packet integrity under load
-  - Document any limitations
+- [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
+  - RC channel monitoring for automated switching (video frequencies, ELRS bands)
+  - Telemetry data extraction (RSSI, link quality, GPS, voltage, current)
+  - Integration with VTX control (SmartAudio/IRC Tramp)
+- [ ] **Modbus RTU** - Inter-frame timing preservation
+- [ ] **NMEA GPS** - GPS data parsing and routing
+- [ ] **Per-device protocol configuration** - Independent protocol selection for each Device
+- [ ] **Independent protocol detectors** - Separate MAVLink/SBUS/Raw detection per interface
+
+#### System Reliability & Memory Management 🔵 LOW PRIORITY
+
+- [ ] **Periodic Reboot System**
+  - Configurable interval (12h, 24h, 48h, never)
+  - Graceful shutdown with connection cleanup
+  - Pre-reboot statistics logging
+
+- [ ] **Emergency Memory Protection**
+  - Critical threshold: 20KB (reboot after sustained low memory)
+  - Warning threshold: 50KB (log warnings)
+  - Heap fragmentation tracking
+
+#### Advanced Network Features 🔵 LOW PRIORITY
+
+- [ ] **TCP Client Mode** - Connect to remote servers
+  - Automatic reconnection on disconnect
+  - Use cases: Cloud logging, remote monitoring
+
+- [ ] **TCP Server Mode** - Accept TCP connections
+  - Multiple client support
+  - Authentication options
 
 ## Libraries and Dependencies
 
