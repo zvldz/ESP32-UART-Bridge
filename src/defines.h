@@ -73,7 +73,11 @@ Hardware: ESP32-WROOM-32 based development board
 #define DEVICE_VERSION "2.18.12"
 
 // Hardware pins - Device 1 (Main UART)
-#define BOOT_BUTTON_PIN     0
+#if defined(BOARD_MINIKIT_ESP32)
+    #define BOOT_BUTTON_PIN     -1   // No BOOT button on MiniKit
+#else
+    #define BOOT_BUTTON_PIN     0
+#endif
 #define UART_RX_PIN         4   // Zero/SuperMini: GPIO4, XIAO: GPIO4 (D3)
 #define UART_TX_PIN         5   // Zero/SuperMini: GPIO5, XIAO: GPIO5 (D4)
 // Board type verification at compile time
