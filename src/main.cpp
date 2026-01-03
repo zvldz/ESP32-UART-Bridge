@@ -19,6 +19,7 @@
 #include "uart/uart_interface.h"
 #if defined(BOARD_MINIKIT_ESP32)
 #include "quick_reset.h"
+#include "bluetooth/bluetooth_spp.h"
 #endif
 #include "uart/uart_dma.h"
 #include "protocols/udp_sender.h"
@@ -213,10 +214,16 @@ void setup() {
     quickResetUpdateUptime();
 #endif
 
-    // Detect boot mode
+    // Detect boot mode FIRST - quick reset check happens here
     log_msg(LOG_INFO, "Detecting boot mode...");
     detectMode();
     log_msg(LOG_INFO, "Mode detected: %s", bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network");
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Initialize Bluetooth SPP AFTER mode detection
+    // Quick reset = temp AP mode, BT skipped to save RAM for WiFi
+    initDevice5Bluetooth();
+#endif
 
     // Initialize TaskScheduler
     initializeScheduler();
@@ -237,6 +244,15 @@ void setup() {
 
     // Create FreeRTOS tasks
     createTasks();
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Log BT status after network is up (so it appears in UDP logs)
+    if (bluetoothSPP) {
+        log_msg(LOG_INFO, "Bluetooth SPP active: %s", bluetoothSPP->getName());
+    } else if (config.device5_config.role != D5_NONE) {
+        log_msg(LOG_ERROR, "Bluetooth SPP failed to initialize");
+    }
+#endif
 
     log_msg(LOG_INFO, "Setup complete!");
 
@@ -298,6 +314,14 @@ void detectMode() {
         bridgeMode = BRIDGE_NET;
         systemState.isTemporaryNetwork = true;
         systemState.tempForceApMode = true;
+        return;
+    }
+
+    // MiniKit: WiFi and BT are mutually exclusive (no PSRAM = OOM)
+    // If BT is enabled, skip network mode entirely (BT-only operation)
+    if (config.device5_config.role != D5_NONE) {
+        log_msg(LOG_INFO, "Bluetooth enabled - skipping WiFi (mutual exclusion)");
+        bridgeMode = BRIDGE_STANDALONE;
         return;
     }
 #endif
@@ -718,6 +742,13 @@ void createTasks() {
         config.device4.role == D4_LOG_NETWORK) {    // UDP logger
         needSenderTask = true;
     }
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 Bluetooth SPP
+    if (config.device5_config.role != D5_NONE) {
+        needSenderTask = true;
+    }
+#endif
 
     // Create sender task only if needed
     if (needSenderTask) {

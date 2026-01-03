@@ -26,19 +26,8 @@
                 🧾 System Logs
                 <span id="logsArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="logsBlock" style="position: relative; display: none;">
-                <span id="copyBtn" onclick="copyLogs()" style="position: absolute; top: 10px; right: 10px; cursor: pointer; user-select: none; display: flex; align-items: center; padding: 5px; z-index: 10; background: rgba(233, 236, 239, 0.9); border-radius: 4px;" title="Copy logs to clipboard">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5">
-                        <rect x="6" y="6" width="10" height="12" rx="1"></rect>
-                        <path d="M14 4V3a1 1 0 00-1-1H5a1 1 0 00-1 1v12a1 1 0 001 1h1"></path>
-                    </svg>
-                </span>
-                <div class="log-container">
-                    <div id="logContainer">
-                        <div id="logEntries">Loading logs...</div>
-                    </div>
-                </div>
-                <p style="margin-top: 10px; margin-bottom: 0;"><small>Showing last <span id="logCount">50</span> entries. Auto-updates every 5 seconds.</small></p>
+            <div id="logsBlock" style="position: relative; display: none;" data-fragment="logs">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
 
@@ -59,25 +48,8 @@
                     <span id="crashArrow" style="user-select: none; font-size: 18px;">▶</span>
                 </span>
             </h4>
-            <div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;">
-                <div class="log-container" style="height: auto; max-height: 400px;">
-                    <table style="width: 100%; font-size: 12px;">
-                        <thead>
-                            <tr>
-                                <th style="width: 8%;">#</th>
-                                <th style="width: 18%;">Type</th>
-                                <th style="width: 18%;">Uptime</th>
-                                <th style="width: 15%;">Heap</th>
-                                <th class="crash-min-heap" style="width: 15%;">Min</th>
-                                <th class="crash-details" style="width: 26%;">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="crashTableBody">
-                            <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <small class="hint">💡 Click on a row with 🔍 to view detailed backtrace information</small>
+            <div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;" data-fragment="crash">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
 
@@ -87,9 +59,8 @@
                 📊 System Status
                 <span id="systemStatusToggle" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="systemStatusBlock" style="display: none;">
-                <div id="systemInfo"></div>
-                <div id="deviceStats"></div>
+            <div id="systemStatusBlock" style="display: none;" data-fragment="status">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
 
@@ -99,10 +70,8 @@
                 📈 Protocol Statistics
                 <span id="protocolStatsToggle" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="protocolStats" style="display: none;">
-                <div id="protocolStatsContent">
-                    <p style="color: #666; text-align: center; margin: 20px 0;">No protocol statistics available</p>
-                </div>
+            <div id="protocolStats" style="display: none;" data-fragment="protocol">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
 
@@ -275,10 +244,11 @@
                         <div style="margin-top: 15px;">
                             <label for="mdns_hostname">mDNS Hostname:</label>
                             <input type="text" name="mdns_hostname" id="mdns_hostname" maxlength="63"
-                                   pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
+                                   pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
                                    style="text-transform: lowercase;"
                                    placeholder="esp-bridge-xxxx">
                             <small class="hint">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
+                            <small class="hint" id="mdns_bt_hint" style="margin-top: 0; display: none;">📶 Also used as Bluetooth device name (MiniKit)</small>
                             <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
                         </div>
                     </div>
@@ -454,30 +424,8 @@
                 💾 Configuration Backup
                 <span id="configArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="configBackupContent" style="display: none;">
-                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center;">
-                    <div style="text-align: center;">
-                        <button type="button" onclick="window.location.href='/config/export'" style="background-color: #2196F3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">💾 Export Config</button>
-                        <br><small style="color: #666; font-size: 12px;">Download current configuration</small>
-                    </div>
-                    <div style="text-align: center;">
-                        <button type="button" onclick="document.getElementById('configFile').click()" style="background-color: #FF9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📁 Import Config</button>
-                        <br><small style="color: #666; font-size: 12px;">Upload configuration file</small>
-                    </div>
-                    <div style="text-align: center;">
-                        <button type="button" onclick="factoryReset()" style="background-color: #f44336; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">🔄 Factory Reset</button>
-                        <br><small style="color: #666; font-size: 12px;">Reset all settings to defaults</small>
-                    </div>
-                </div>
-                <form id="importForm" action="/config/import" method="POST" enctype="multipart/form-data" style="display: none;">
-                    <input type="file" id="configFile" name="config" accept=".json" onchange="handleConfigImport(this)">
-                </form>
-                <div id="importProgress" style="display: none; margin-top: 10px;">
-                    <div style="background: #f0f0f0; border-radius: 4px; overflow: hidden;">
-                        <div id="progressBar" style="background: #4CAF50; height: 4px; width: 0%; transition: width 0.3s;"></div>
-                    </div>
-                    <p id="importStatus">Uploading configuration...</p>
-                </div>
+            <div id="configBackupContent" style="display: none;" data-fragment="backup">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
 
@@ -487,27 +435,8 @@
                 🔄 Firmware Update
                 <span id="firmwareArrow" style="float: right; font-size: 18px;">▶</span>
             </h4>
-            <div id="firmwareUpdateContent" style="display: none; text-align: center;">
-                <div style="margin-bottom: 15px;">
-                    <label for="firmwareFile">Select Firmware File (.bin):</label><br>
-                    <input type="file" id="firmwareFile" accept=".bin" style="margin: 5px 0;">
-                </div>
-                <div style="margin-bottom: 15px;">
-                    <button type="button" id="updateButton" onclick="handleFirmwareUpdate()"
-                            style="padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Update Firmware
-                    </button>
-                </div>
-
-                <!-- Progress indication -->
-                <div id="updateProgress" style="display: none; margin-top: 15px;">
-                    <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
-                        <div id="updateProgressBar" style="height: 20px; background-color: #007bff; width: 0%; transition: width 0.3s;"></div>
-                    </div>
-                    <p id="updateStatus" style="margin: 5px 0; font-weight: bold;">Uploading firmware...</p>
-                </div>
-
-                <p><small>Select .bin firmware file. Device will restart automatically after update.</small></p>
+            <div id="firmwareUpdateContent" style="display: none; text-align: center;" data-fragment="firmware">
+                <p style="color: #666; text-align: center;">Loading...</p>
             </div>
         </div>
     </div>

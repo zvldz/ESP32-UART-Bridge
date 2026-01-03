@@ -96,6 +96,7 @@ struct BridgeContext {
         CircularBuffer* udpInputBuffer;    // UDP input (after udpRxBuffer)
         CircularBuffer* uart2InputBuffer;  // UART2 input
         CircularBuffer* uart3InputBuffer;  // UART3 input
+        CircularBuffer* btInputBuffer;     // Bluetooth SPP input (MiniKit only)
     } buffers;
     
     // Cached device flags (for performance)
@@ -200,6 +201,7 @@ inline void initBridgeContext(BridgeContext* ctx,
     ctx->buffers.udpInputBuffer = nullptr;
     ctx->buffers.uart2InputBuffer = nullptr;
     ctx->buffers.uart3InputBuffer = nullptr;
+    ctx->buffers.btInputBuffer = nullptr;
     
     // Device flags
     ctx->devices.device2IsUSB = device2IsUSB;

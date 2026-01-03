@@ -113,7 +113,7 @@ public:
         // Initialize pymavlink status
         memset(&rxStatus, 0, sizeof(rxStatus));
         memset(&rxMessage, 0, sizeof(rxMessage));
-        
+
         log_msg(LOG_DEBUG, "pymav: Parser initialized (channel=%u)", rxChannel);
     }
     
@@ -155,11 +155,11 @@ public:
             );
             
             // Count detection errors (CRC, signature failures)
-            if (parseResult == MAVLINK_FRAMING_BAD_CRC || 
+            if (parseResult == MAVLINK_FRAMING_BAD_CRC ||
                 parseResult == MAVLINK_FRAMING_BAD_SIGNATURE) {
                 if (stats) stats->onDetectionError();
             }
-            
+
             if (parseResult == MAVLINK_FRAMING_OK) {
                 // === TEMPORARY DIAGNOSTIC BLOCK START ===
                 // Log sequence gaps (rate limited)

@@ -106,9 +106,9 @@
 
 **Note**: Tested with CP2104 USB-UART chip. CH9102 may have issues with DTR/RTS signals causing unwanted resets — not yet verified. ESP32 MiniKit uses classic WROOM-32 chip without PSRAM, resulting in significantly less available RAM compared to S3 variants.
 
-#### Bluetooth Classic SPP (MiniKit only)
+#### Bluetooth Classic SPP (MiniKit only) ✅ IMPLEMENTED
 
-- [ ] **Bluetooth SPP as alternative to WiFi**
+- [x] **Bluetooth SPP as Device 5**
 
   **Why MiniKit only**: ESP32-WROOM-32 has Bluetooth Classic, ESP32-S3 does not (only BLE).
 
@@ -123,23 +123,76 @@
   - Lower power consumption
   - Less RAM usage (~20KB vs ~50KB for WiFi buffers)
 
-  **Supported data:**
-  - MAVLink telemetry (primary use case)
-  - Raw protocol passthrough
-  - Text logging
+  **Device 5 Roles:**
+  - D5_NONE (0) - Disabled
+  - D5_BT_BRIDGE (1) - MAVLink/Raw telemetry (per protocolOptimization)
+  - D5_BT_SBUS_TEXT (2) - SBUS text format over Bluetooth
 
   **Latency note**: BT SPP has 20-100ms latency — acceptable for telemetry, NOT for RC control.
 
   **Implementation:**
-  - `BluetoothSerial` library (built into ESP32 Arduino)
-  - New transport layer (like UdpTransport, but for SPP)
-  - Config option: WiFi vs Bluetooth mode (mutually exclusive)
-  - Web UI for initial config via USB, then BT takes over
+  - [x] BluetoothSPP class (bluetooth/bluetooth_spp.h/.cpp)
+  - [x] BluetoothSender class (protocols/bluetooth_sender.h)
+  - [x] Device5Config struct (name uses mDNS hostname)
+  - [x] Web UI configuration (Device 5 row)
+  - [x] Protocol pipeline integration (IDX_DEVICE5, SENDER_BT)
+  - [x] WiFi and BT work together (initially)
+  - [x] SSP "Just Works" pairing (no PIN prompt)
+  - [x] Code isolation with `#if defined(BOARD_MINIKIT_ESP32)`
 
   **Pairing:**
-  - PIN code required (unlike TX16S-RC which uses "Just Works")
-  - `SerialBT.setPin("1234")` or configurable via Web UI
-  - BT device name from config (default: "ESP-Bridge-XXXX" with MAC suffix)
+  - SSP "Just Works" mode — no PIN prompt (modern IoT standard)
+  - BT device name from mDNS hostname (e.g., "esp-bridge")
+
+  **TODO:**
+  - [x] **REFACTOR**: BT name uses mDNS hostname instead of separate bt_name
+
+  **Memory optimization (MiniKit) — usage scenarios:**
+
+  Current situation: ~35KB free heap with WiFi+BT+WebServer enabled
+
+  - [ ] **Scenario A: WiFi only (D5_NONE)**
+    - Release BT memory: `esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT)` — frees ~30KB
+    - Expected heap: ~65KB — sufficient for stable WiFi+UDP+WebServer
+    - Use case: network telemetry without Bluetooth
+
+  - [ ] **Scenario B: BT only (no network)**
+    - Release WiFi memory: `esp_wifi_deinit()` + release — frees ~40KB
+    - Expected heap: ~75KB — sufficient for stable BT operation
+    - Use case: standalone BT serial adapter (SBUS text to phone)
+    - WebServer only on quick reset for configuration
+
+  - [ ] **Scenario C: Headless WiFi+UDP+BT**
+    - Disable AsyncWebServer in normal operation — saves ~15-30KB runtime heap
+    - Keep WiFi for UDP bridge, enable BT simultaneously
+    - Expected heap: ~50-65KB
+    - WebServer only on quick reset (for configuration)
+    - mDNS still needed for quick reset discovery
+    - Use case: full bridge functionality (UART↔UDP + UART↔BT)
+
+  Implementation notes:
+  - Memory release is one-way (cannot re-enable without reboot) — fits "save = reboot" model
+  - Prefer runtime selection based on config (D5 role, D4 role) — avoid separate builds
+  - Separate build configs only as last resort
+  - Map file analysis: ESPAsyncWebServer ~109KB flash, web_api+web_interface ~97KB flash (static RAM minimal ~65 bytes)
+
+  **Memory notes (MiniKit ESP-IDF BT):**
+  - UART1_TX_RING_SIZE reduced to 4KB for MiniKit (was 8KB) — may need to revert if issues
+
+  **Heap measurements (MiniKit):**
+  - v2.8.11 (no BT in sdkconfig, WiFi): **76KB** free
+  - v2.18.12 (CONFIG_BT_ENABLED=y, D5_NONE, WiFi): **~35KB** free — ~40KB consumed by BT stack static allocation
+  - v2.18.x (D5_BT_BRIDGE, standalone mode, no WiFi): **~70KB** free, Min=70KB, MaxBlock=55KB — good margin for buffers
+
+  **Binary size comparison (xtensa-esp32-elf-size):**
+  ```
+  Section   v2.8.11      v2.18.12     Difference
+  text      977 KB       1,267 KB     +290 KB (flash)
+  data      178 KB       239 KB       +61 KB
+  bss       47 KB        68 KB        +21 KB (RAM)
+  ```
+  CONFIG_BT_ENABLED=y adds ~21KB .bss (static RAM) even without BT initialization.
+  Remaining ~20KB — likely .data sections of BT stack.
 
 ### Device 3 SBUS_IN Role ✅ COMPLETED
 
@@ -170,6 +223,33 @@
   - Number of connected stations
   - List of client IP addresses
   - IP of current web interface user
+
+- [ ] **JavaScript Architecture Refactoring** 🔵 TECHNICAL DEBT
+
+  **Problem**: Web UI code grew organically, accumulated technical debt:
+  - Toggle logic scattered across 4 files (main.js, status-updates.js, form-utils.js, crash-log.js)
+  - Mixed responsibilities in StatusUpdates (status + logs + SBUS controls + protocol stats)
+  - Duplicate patterns (each toggle function repeats: isOpening → loadFragment → rememberedToggle → postAction)
+  - Inconsistent element caching (some cached in init, some fetched dynamically)
+  - Build functions generate HTML as strings (buildSystemInfo, buildDeviceStats, renderSbusStats)
+
+  **Proposed structure**:
+  ```
+  utils.js          - pure utilities (formatting, fetch, localStorage)
+  ui-sections.js    - unified toggle/restore logic for all collapsible sections
+  status-display.js - status and statistics display only
+  device-config.js  - device configuration (keep as is)
+  form-handler.js   - form handling (save, backup, firmware)
+  main.js           - initialization only
+  ```
+
+  **Benefits**:
+  - Single place for section toggle logic
+  - Clear separation of concerns
+  - Easier to maintain and extend
+  - Reduced code duplication
+
+  **Priority**: Low — current code works, refactor when adding new features
 
 #### SBUS Text Format Output ✅ IMPLEMENTED
 
@@ -202,11 +282,21 @@
   - Works with Mission Planner/QGC on UDP port 14550
   - ArduPilot RC_OVERRIDE=1 enables automatic failover
 
-- [ ] **Testing MAVLink RC_OVERRIDE** 🟡 NEEDS TESTING
-  - [ ] Test with Mission Planner on port 14550
-  - [ ] Verify RC channel values in MP RC Calibration
+- [x] **Testing RC_OVERRIDE via USB** ✅
+  - [x] Tested with TX16S-RC ESP firmware + Mission Planner plugin
+  - [ ] Test with ESP32 UART Bridge SBUS text output
+
+- [x] **Testing RC_OVERRIDE via Bluetooth** ✅
+  - [x] Tested with TX16S-RC ESP firmware + MiniKit + Mission Planner plugin
+  - [ ] Test with ESP32 UART Bridge SBUS text output
+
+- [ ] **Testing RC_OVERRIDE via UDP** (ESP32 UART Bridge only)
+  - [ ] Test with ESP32 UART Bridge SBUS text over UDP
   - [ ] Test failsafe behavior (RC_OVERRIDE timeout)
   - [ ] Measure actual latency (expected ~5-15ms)
+
+  **Note**: USB/BT tested with TX16S-RC ESP firmware — confirms MP plugin compatibility.
+  ESP32 UART Bridge SBUS text output (USB/BT/UDP) needs separate testing.
 
 #### Advanced Protocol Management
 
@@ -281,6 +371,50 @@
 
 ### Future Considerations (Low Priority)
 
+#### BLE SBUS for ESP32-S3 🔵 FUTURE
+
+- [ ] **BLE GATT SBUS Output (ESP32-S3 only)**
+
+  **Why**: ESP32-S3 has BLE but no Bluetooth Classic. BLE enables wireless SBUS to GCS with custom plugins.
+
+  **Use case**: SBUS from RC receiver to Mission Planner/QGC via BLE
+  ```
+  [SBUS RX] → [ESP32-S3] → BLE GATT notify → [MP/QGC Plugin]
+  ```
+
+  **Advantages over WiFi:**
+  - Phone/PC keeps WiFi for internet
+  - Lower latency than Classic SPP (7.5-30ms vs 20-100ms)
+  - Works on all S3 boards (Zero, SuperMini, XIAO)
+
+  **Technical details:**
+  - NimBLE stack (~20-30KB static RAM, lighter than Bluedroid)
+  - GATT Server with SBUS characteristic
+  - Notifications (ESP → Client), no pairing required for unencrypted data
+  - SBUS frame (25 bytes) fits in single BLE packet (MTU ≥ 25)
+  - Throughput ~20KB/s — sufficient for SBUS (70Hz × 25 bytes = 1.75KB/s)
+
+  **Implementation (ESP side):**
+  - [ ] Add NimBLE to sdkconfig for S3 boards
+  - [ ] BluetoothBLE class (bluetooth/bluetooth_ble.h/.cpp)
+  - [ ] SBUS GATT service and characteristic
+  - [ ] Integration with protocol pipeline (SENDER_BLE)
+  - [ ] D5_BLE_SBUS role for S3 boards
+
+  **Implementation (GCS side):**
+  - [ ] MP Plugin: BLE transport using Windows.Devices.Bluetooth API
+  - [ ] Device discovery and connection UI
+  - [ ] GATT characteristic subscription for SBUS data
+  - [ ] Parse SBUS/Text format → RC_CHANNELS_OVERRIDE
+
+  **Memory considerations:**
+  - S3 boards: ~70-76KB free → with NimBLE ~45-55KB free
+  - May require Scenario C (no WebServer in runtime) for stability
+  - Alternative: separate builds with/without BLE (`zero_ble_production`)
+
+  **Note**: Requires custom GCS plugin — no virtual COM port like Classic SPP.
+  Plugin already needed for RC Override, adding BLE transport is incremental work.
+
 #### New Protocol Support 🔵 LOW PRIORITY
 
 - [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
@@ -313,6 +447,16 @@
 - [ ] **TCP Server Mode** - Accept TCP connections
   - Multiple client support
   - Authentication options
+
+## Build & CI/CD
+
+### GitHub Actions Improvements
+- [x] **Add MiniKit to GitHub Actions auto-build**
+  - Added `minikit_production` to build workflow
+  - Firmware files: `firmware-minikit.bin`, `firmware-minikit.elf`
+
+- [x] **Exclude TODO.md from source archive**
+  - Added to `.gitattributes`: `TODO.md export-ignore`
 
 ## Libraries and Dependencies
 

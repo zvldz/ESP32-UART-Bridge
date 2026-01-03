@@ -43,6 +43,9 @@ private:
         SENDER_UART2 = (1 << IDX_DEVICE2_UART2),
         SENDER_UART3 = (1 << IDX_DEVICE3),
         SENDER_UDP = (1 << IDX_DEVICE4),
+#if defined(BOARD_MINIKIT_ESP32)
+        SENDER_BT = (1 << IDX_DEVICE5),
+#endif
         SENDER_ALL = 0xFF
     };
     

@@ -83,13 +83,13 @@ public:
         }
         
         ParsedPacket finalCopy = packet.duplicate();
-        
+
         if (!finalCopy.data) {
             log_msg(LOG_ERROR, "%s: Failed to duplicate packet", getName());
             totalDropped++;
             return false;
         }
-        
+
         // Enqueue
         QueuedPacket qp(finalCopy);
         packetQueue.push_back(qp);
@@ -141,8 +141,17 @@ protected:
     // Drop oldest packet if queue full
     bool dropOldestPacket() {
         if (!packetQueue.empty()) {
-            currentQueueBytes -= packetQueue.front().packet.size;
-            packetQueue.front().packet.free();
+            ParsedPacket& pkt = packetQueue.front().packet;
+
+            // Safety check: skip already-freed packets (corruption recovery)
+            if (pkt.data == nullptr && pkt.allocSize == 0) {
+                packetQueue.pop_front();
+                totalDropped++;
+                return true;
+            }
+
+            currentQueueBytes -= pkt.size;
+            pkt.free();
             packetQueue.pop_front();
             totalDropped++;
             return true;

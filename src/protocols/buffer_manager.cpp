@@ -82,6 +82,17 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     } else {
         ctx->buffers.udpInputBuffer = nullptr;
     }
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Bluetooth SPP input buffer (MiniKit only)
+    if (config->device5_config.role == D5_BT_BRIDGE) {
+        ctx->buffers.btInputBuffer = new CircularBuffer();
+        ctx->buffers.btInputBuffer->init(2048);  // Smaller buffer for memory-constrained MiniKit
+        log_msg(LOG_INFO, "BT input buffer allocated: 2048 bytes");
+    } else {
+        ctx->buffers.btInputBuffer = nullptr;
+    }
+#endif
 }
 
 void freeProtocolBuffers(BridgeContext* ctx) {
@@ -110,5 +121,9 @@ void freeProtocolBuffers(BridgeContext* ctx) {
     if (ctx->buffers.udpInputBuffer) {
         delete ctx->buffers.udpInputBuffer;
         ctx->buffers.udpInputBuffer = nullptr;
+    }
+    if (ctx->buffers.btInputBuffer) {
+        delete ctx->buffers.btInputBuffer;
+        ctx->buffers.btInputBuffer = nullptr;
     }
 }

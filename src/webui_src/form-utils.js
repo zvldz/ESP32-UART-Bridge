@@ -526,7 +526,11 @@ const FormUtils = {
         Utils.toggleElement('wifiConfigContent', 'wifiArrow');
     },
     
-    toggleFirmwareUpdate() {
+    async toggleFirmwareUpdate() {
+        const el = document.getElementById('firmwareUpdateContent');
+        if (el && el.dataset.fragment) {
+            await Utils.loadFragment(el);
+        }
         Utils.toggleElement('firmwareUpdateContent', 'firmwareArrow');
     },
     
@@ -570,7 +574,11 @@ const FormUtils = {
         return true;
     },
     
-    toggleConfigBackup() {
+    async toggleConfigBackup() {
+        const el = document.getElementById('configBackupContent');
+        if (el && el.dataset.fragment) {
+            await Utils.loadFragment(el);
+        }
         Utils.toggleElement('configBackupContent', 'configArrow');
     },
     
