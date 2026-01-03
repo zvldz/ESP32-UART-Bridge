@@ -28,7 +28,7 @@ jobs:
           pip install platformio
 
       - name: Build all production firmware
-        run: pio run -e zero_production -e supermini_production -e xiao_production
+        run: pio run -e zero_production -e supermini_production -e xiao_production -e minikit_production
 
       - name: Prepare release zip
         run: |
@@ -39,6 +39,8 @@ jobs:
           cp .pio/build/supermini_production/firmware.elf tmp/firmware-supermini.elf
           cp .pio/build/xiao_production/firmware.bin tmp/firmware-xiao.bin
           cp .pio/build/xiao_production/firmware.elf tmp/firmware-xiao.elf
+          cp .pio/build/minikit_production/firmware.bin tmp/firmware-minikit.bin
+          cp .pio/build/minikit_production/firmware.elf tmp/firmware-minikit.elf
           cd tmp && zip -r ../firmware-${{ github.ref_name }}.zip .
 
       - name: Extract changelog for version

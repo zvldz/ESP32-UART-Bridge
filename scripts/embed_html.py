@@ -8,51 +8,43 @@ import hashlib
 import json
 from pathlib import Path
 
-# Try to import minification libraries
+# Try to import cssmin (only library actually used)
 try:
-    from minify_html import minify as html_minify
     from cssmin import cssmin
-    from jsmin import jsmin
-    JS_MINIFY_AVAILABLE = "jsmin"
     MINIFY_AVAILABLE = True
-    print("Minification libraries available")
 except ImportError:
-    print("Minification libraries not found. Installing...")
+    print("cssmin not found. Installing...")
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "minify-html", "jsmin", "cssmin"])
-        from minify_html import minify as html_minify
-        from jsmin import jsmin
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "cssmin"])
         from cssmin import cssmin
-        JS_MINIFY_AVAILABLE = "jsmin"
         MINIFY_AVAILABLE = True
-        print("Minification libraries installed successfully")
+        print("cssmin installed successfully")
     except Exception as e:
-        print(f"Failed to install minification libraries: {e}")
-        print("Proceeding without minification...")
+        print(f"Failed to install cssmin: {e}")
+        print("Proceeding without CSS minification...")
         MINIFY_AVAILABLE = False
-        JS_MINIFY_AVAILABLE = None
 
 print("\n" + "="*60)
 print("EMBED_HTML.PY SCRIPT STARTED!")
 print("="*60 + "\n")
 
+def strip_html_comments(content):
+    """Remove HTML comments (<!-- ... -->) but preserve conditional comments"""
+    # DOTALL flag makes . match newlines for multiline comments
+    return re.sub(r'<!--(?!\[if)(?!<!).*?-->', '', content, flags=re.DOTALL)
+
 def minify_and_compress(content, content_type, filename):
-    """Minify and gzip compress content"""
+    """Minify CSS and gzip compress all content"""
     original_size = len(content.encode('utf-8'))
-    
-    # Minify content if libraries are available
-    if MINIFY_AVAILABLE:
+
+    # Strip HTML comments (safe operation that won't break code)
+    if content_type == 'html':
+        content = strip_html_comments(content)
+
+    # Only CSS minification is used (HTML/JS minifiers break code)
+    if MINIFY_AVAILABLE and content_type == 'css':
         try:
-            if content_type == 'html':
-                # Skip HTML minification to preserve text readability
-                # gzip compression will handle size reduction
-                pass
-            elif content_type == 'js':
-                # Skip JS minification - jsmin is too aggressive and breaks code
-                # gzip compression provides sufficient size reduction
-                pass
-            elif content_type == 'css':
-                content = cssmin(content)
+            content = cssmin(content)
         except Exception as e:
             print(f"  Warning: Failed to minify {filename}: {e}")
     
@@ -91,23 +83,30 @@ def write_compressed_constant(f, const_name, compressed_data):
 def get_files_hash(web_src, js_files):
     """Calculate combined hash of all source files"""
     hasher = hashlib.sha256()
-    
+
     # Hash HTML files
     for html_file in sorted(web_src.glob("*.html")):
         if html_file.exists():
             hasher.update(html_file.read_bytes())
-    
+
     # Hash CSS
     css_file = web_src / "style.css"
     if css_file.exists():
         hasher.update(css_file.read_bytes())
-    
+
     # Hash JS files
     for js_name in js_files:
         js_file = web_src / js_name
         if js_file.exists():
             hasher.update(js_file.read_bytes())
-    
+
+    # Hash fragment files
+    fragments_dir = web_src / "fragments"
+    if fragments_dir.exists():
+        for frag_file in sorted(fragments_dir.glob("*.html")):
+            if frag_file.exists():
+                hasher.update(frag_file.read_bytes())
+
     return hasher.hexdigest()
 
 def should_regenerate(web_src, generated, js_files):
@@ -243,18 +242,34 @@ def process_html_files(source, target, env):
             if js_file.exists():
                 js_content = js_file.read_text(encoding='utf-8')
                 print(f"  Processing {js_file.name}")
-                
+
                 # Generate constant name (replace - with _)
                 const_name = f"JS_{js_file.stem.replace('-', '_').upper()}"
-                
+
                 # Minify and compress
                 compressed_data = minify_and_compress(js_content, 'js', js_file.name)
-                
+
                 # Write compressed constant
                 write_compressed_constant(f, const_name, compressed_data)
             else:
                 print(f"  WARNING: {js_name} not found!")
-        
+
+        # Write fragment constants (lazy-loaded HTML sections)
+        fragments_dir = web_src / "fragments"
+        if fragments_dir.exists():
+            for frag_file in sorted(fragments_dir.glob("*.html")):
+                frag_content = frag_file.read_text(encoding='utf-8')
+                print(f"  Processing fragment: {frag_file.name}")
+
+                # Generate constant name: FRAGMENT_LOGS, FRAGMENT_CRASH, etc.
+                const_name = f"FRAGMENT_{frag_file.stem.upper()}"
+
+                # Compress (no minification for HTML fragments)
+                compressed_data = minify_and_compress(frag_content, 'html', frag_file.name)
+
+                # Write compressed constant
+                write_compressed_constant(f, const_name, compressed_data)
+
         f.write("#endif // WEB_CONTENT_H\n")
     
     # Save cache after successful generation

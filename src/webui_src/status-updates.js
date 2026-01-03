@@ -56,11 +56,8 @@ const StatusUpdates = {
             
             // Totals
             totalTraffic: document.getElementById('totalTraffic'),
-            lastActivity: document.getElementById('lastActivity'),
-            
-            // Logs
-            logContainer: document.getElementById('logContainer'),
-            logEntries: document.getElementById('logEntries')
+            lastActivity: document.getElementById('lastActivity')
+            // Note: logContainer and logEntries are loaded via fragment, get them dynamically
         };
     },
     
@@ -147,6 +144,13 @@ const StatusUpdates = {
     
     updateStatus() {
         Utils.safeFetch('/status', (data) => {
+            // Build system info tables if fragment just loaded (elements don't exist yet)
+            const systemInfo = document.getElementById('systemInfo');
+            if (systemInfo && !document.getElementById('freeRam')) {
+                this.buildSystemInfo();
+                this.buildDeviceStats();
+            }
+
             // Update system info
             if (this.elements.freeRam) {
                 this.elements.freeRam.textContent = Utils.formatBytes(data.freeRam);
@@ -292,27 +296,30 @@ const StatusUpdates = {
         if (logsHidden && !shouldBeVisible) return;
 
         Utils.safeFetch('/logs', (data) => {
-            if (!this.elements.logEntries) return;
+            // Get elements dynamically (they may be loaded via fragment)
+            const logEntries = document.getElementById('logEntries');
+            const logContainer = document.getElementById('logContainer');
+            if (!logEntries) return;
 
-            this.elements.logEntries.innerHTML = '';
+            logEntries.innerHTML = '';
 
             if (data.logs && data.logs.length > 0) {
                 data.logs.forEach(log => {
                     const entry = document.createElement('div');
                     entry.className = 'log-entry';
                     entry.textContent = log;
-                    this.elements.logEntries.appendChild(entry);
+                    logEntries.appendChild(entry);
                 });
             } else {
                 const entry = document.createElement('div');
                 entry.className = 'log-entry';
                 entry.textContent = 'No logs available';
-                this.elements.logEntries.appendChild(entry);
+                logEntries.appendChild(entry);
             }
 
             // Auto-scroll to bottom
-            if (this.elements.logContainer) {
-                this.elements.logContainer.scrollTop = this.elements.logContainer.scrollHeight;
+            if (logContainer) {
+                logContainer.scrollTop = logContainer.scrollHeight;
             }
         });
     },
@@ -352,10 +359,11 @@ const StatusUpdates = {
                 };
                 
                 Utils.updateElements(updates);
-                
-                // Clear logs
-                if (this.elements.logEntries) {
-                    this.elements.logEntries.innerHTML = '<div class="log-entry">Statistics and logs cleared</div>';
+
+                // Clear logs (get element dynamically)
+                const logEntries = document.getElementById('logEntries');
+                if (logEntries) {
+                    logEntries.innerHTML = '<div class="log-entry">Statistics and logs cleared</div>';
                 }
                 
                 // Reset button state properly
@@ -396,9 +404,10 @@ const StatusUpdates = {
     
     // Copy logs to clipboard
     copyLogs() {
-        if (!this.elements.logEntries) return;
-        
-        const logs = this.elements.logEntries.innerText || this.elements.logEntries.textContent || '';
+        const logEntries = document.getElementById('logEntries');
+        if (!logEntries) return;
+
+        const logs = logEntries.innerText || logEntries.textContent || '';
         if (!logs || logs === 'Loading logs...' || logs === 'No logs available') return;
         
         const textArea = document.createElement('textarea');
@@ -904,6 +913,19 @@ function copyLogs() {
     StatusUpdates.copyLogs();
 }
 
-function toggleLogs() {
+async function toggleLogs() {
+    const el = document.getElementById('logsBlock');
+    const isOpening = el && el.style.display === 'none';
+
+    // Load fragment first if opening
+    if (isOpening && el && el.dataset.fragment) {
+        await Utils.loadFragment(el);
+    }
+
     Utils.rememberedToggle('logsBlock', 'logsArrow', 'collapse:logs');
+
+    // Trigger immediate log update after fragment loads
+    if (isOpening) {
+        StatusUpdates.updateLogs();
+    }
 }

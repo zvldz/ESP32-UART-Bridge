@@ -86,6 +86,25 @@ const Utils = {
         }
     },
 
+    // Track loaded fragments to avoid duplicate fetches
+    _loadedFragments: {},
+
+    // Load fragment content on demand
+    async loadFragment(el) {
+        const fragment = el.dataset.fragment;
+        if (!fragment || this._loadedFragments[fragment]) return;
+
+        try {
+            const response = await fetch(`/fragment?section=${fragment}`);
+            if (response.ok) {
+                el.innerHTML = await response.text();
+                this._loadedFragments[fragment] = true;
+            }
+        } catch (err) {
+            console.error('Failed to load fragment:', fragment, err);
+        }
+    },
+
     // Toggle element with localStorage persistence
     rememberedToggle(blockId, arrowId, storageKey) {
         const el = document.getElementById(blockId);
@@ -99,6 +118,10 @@ const Utils = {
         } else {
             el.style.display = 'block';
             if (arrow) arrow.textContent = '▼';
+            // Load fragment content if not loaded yet
+            if (el.dataset.fragment) {
+                this.loadFragment(el);
+            }
         }
 
         try {
@@ -124,6 +147,10 @@ const Utils = {
         if (v === 'shown') {
             el.style.display = 'block';
             if (arrow) arrow.textContent = '▼';
+            // Load fragment content if section was open
+            if (el.dataset.fragment) {
+                this.loadFragment(el);
+            }
         } else {
             // Default: collapsed (including when v === null - no saved state)
             el.style.display = 'none';

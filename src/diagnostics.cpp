@@ -8,7 +8,7 @@
 #include <Arduino.h>
 #include "esp_heap_caps.h"
 
-// External object from main.cpp  
+// External object from main.cpp
 extern BridgeMode bridgeMode;
 
 // Global access to context (for TaskScheduler callbacks)
@@ -77,7 +77,7 @@ void systemDiagnostics() {
     } else if (freeHeap < 20000) {
         log_msg(LOG_WARNING, "Warning: Memory getting low. Free: %u bytes, Min: %u bytes, PSRAM: %zu/%zu KB",
                 freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
-    } else {    
+    } else {
         log_msg(LOG_DEBUG, "Memory: Free=%u bytes, Min=%u bytes, PSRAM: %zu/%zu KB",
                 freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
     }
@@ -129,6 +129,18 @@ const char* getDevice4RoleName(uint8_t role) {
   }
 }
 
+#if defined(BOARD_MINIKIT_ESP32)
+// Helper function for device5 role names (Bluetooth SPP)
+const char* getDevice5RoleName(uint8_t role) {
+  switch(role) {
+    case D5_NONE: return "Disabled";
+    case D5_BT_BRIDGE: return "Bluetooth Bridge";
+    case D5_BT_SBUS_TEXT: return "BT SBUS Text";
+    default: return "Unknown";
+  }
+}
+#endif
+
 // Separate diagnostic functions for TaskScheduler
 
 void runBridgeActivityLog() {
@@ -170,7 +182,7 @@ void runStackDiagnostics() {
 
 void runDroppedDataStats() {
     if (!g_bridgeContext) return;
-    
+
     // Only log if there's something to report
     if (*g_bridgeContext->diagnostics.droppedBytes > 0) {
         // For regular drops (buffer full)
@@ -180,7 +192,7 @@ void runDroppedDataStats() {
                     *g_bridgeContext->diagnostics.totalDroppedBytes, *g_bridgeContext->diagnostics.maxDropSize);
             *g_bridgeContext->diagnostics.maxDropSize = 0;  // Reset for next period
         }
-        
+
         // For timeout drops
         int* timeoutDropSizes = g_bridgeContext->diagnostics.timeoutDropSizes;
         bool hasTimeoutDrops = false;
@@ -190,7 +202,7 @@ void runDroppedDataStats() {
                 break;
             }
         }
-        
+
         if (hasTimeoutDrops) {
             // Build string with last 10 timeout drop sizes
             String sizes = "Sizes: ";
@@ -202,17 +214,17 @@ void runDroppedDataStats() {
                     sizeCount++;
                 }
             }
-            
+
             log_msg(LOG_INFO, "USB timeout: dropped %lu bytes in %lu events (total: %lu bytes). %s",
                     *g_bridgeContext->diagnostics.droppedBytes, *g_bridgeContext->diagnostics.dropEvents,
                     *g_bridgeContext->diagnostics.totalDroppedBytes, sizes.c_str());
-            
+
             // Clear timeout sizes for next period
             for (int i = 0; i < 10; i++) {
                 timeoutDropSizes[i] = 0;
             }
         }
-        
+
         *g_bridgeContext->timing.lastDropLog = millis();
         *g_bridgeContext->diagnostics.droppedBytes = 0;
         *g_bridgeContext->diagnostics.dropEvents = 0;
@@ -267,7 +279,7 @@ void runAllStacksDiagnostics() {
 void logDmaStatistics(UartInterface* uartSerial) {
   UartDMA* dma = static_cast<UartDMA*>(uartSerial);
   if (dma && dma->isInitialized()) {
-    log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu", 
+    log_msg(LOG_DEBUG, "DMA stats: RX=%lu TX=%lu, Overruns=%lu",
             dma->getRxBytesTotal(), dma->getTxBytesTotal(), dma->getOverrunCount());
   }
 }
@@ -282,16 +294,16 @@ void forceSerialLog(const char* format, ...) {
         vTaskDelay(pdMS_TO_TICKS(100));
         serialInited = true;
     }
-    
+
     // Use stack buffer to avoid heap allocation
     char buffer[256];
-    
+
     // Format the message
     va_list args;
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    
+
     // Output with prefix
     Serial.print("FORCE_LOG: ");
     Serial.println(buffer);

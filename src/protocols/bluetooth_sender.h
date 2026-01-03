@@ -1,0 +1,163 @@
+// Bluetooth SPP sender for MiniKit
+#if defined(BOARD_MINIKIT_ESP32)
+
+#ifndef BLUETOOTH_SENDER_H
+#define BLUETOOTH_SENDER_H
+
+#include "packet_sender.h"
+#include "../bluetooth/bluetooth_spp.h"
+#include "../device_types.h"
+#include "../types.h"
+#include "../logging.h"
+#include <cstring>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+class BluetoothSender : public PacketSender {
+private:
+    uint32_t lastSendAttempt;
+    uint32_t backoffDelay;
+    SemaphoreHandle_t queueMutex;  // Protect queue from concurrent access
+
+    void applyBackoff(uint32_t delayUs = 1000) {
+        lastSendAttempt = micros();
+        backoffDelay = (backoffDelay == 0) ? delayUs : std::min((uint32_t)(backoffDelay * 2), (uint32_t)5000);
+    }
+
+    void resetBackoff() {
+        backoffDelay = 0;
+    }
+
+    bool inBackoff() const {
+        return backoffDelay > 0 && (micros() - lastSendAttempt) < backoffDelay;
+    }
+
+    void commitPackets(size_t count) {
+        for (size_t i = 0; i < count; i++) {
+            if (packetQueue.empty()) break;
+            totalSent++;
+
+            ParsedPacket& pkt = packetQueue.front().packet;
+            currentQueueBytes -= pkt.size;
+            pkt.free();
+            packetQueue.pop_front();
+        }
+    }
+
+public:
+    // BT SPP queue - same size as UDP for buffering during slow transmission
+    static constexpr size_t BT_MAX_PACKETS = 20;
+    static constexpr size_t BT_MAX_BYTES = 8192;
+
+    BluetoothSender() :
+        PacketSender(BT_MAX_PACKETS, BT_MAX_BYTES),
+        lastSendAttempt(0),
+        backoffDelay(0) {
+        queueMutex = xSemaphoreCreateMutex();
+        log_msg(LOG_DEBUG, "BluetoothSender initialized (queue: %d pkts, %d bytes)",
+                BT_MAX_PACKETS, BT_MAX_BYTES);
+    }
+
+    ~BluetoothSender() {
+        if (queueMutex) {
+            vSemaphoreDelete(queueMutex);
+        }
+    }
+
+    // Direct send without queue (for fast path - SBUS text)
+    size_t sendDirect(const uint8_t* data, size_t size) override {
+        if (!bluetoothSPP || !bluetoothSPP->hasClient()) return 0;
+
+        const uint8_t* sendData = data;
+        size_t sendSize = size;
+
+        // Convert SBUS binary to text if TEXT format selected
+        if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
+            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;
+            sendData = (const uint8_t*)sbusTextBuffer;
+        }
+
+        size_t sent = bluetoothSPP->write(sendData, sendSize);
+        if (sent > 0) {
+            // Update stats for Device 5
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+        }
+        return sent;
+    }
+
+    void processSendQueue(bool bulkMode = false) override {
+        (void)bulkMode;  // BT doesn't use bulk mode
+
+        if (inBackoff()) return;
+        if (!isReady()) return;
+
+        // Lock queue for entire operation
+        // esp_spp_write() is non-blocking (just queues to BT stack)
+        if (xSemaphoreTake(queueMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+            return;  // Couldn't get lock, try next time
+        }
+
+        if (packetQueue.empty()) {
+            xSemaphoreGive(queueMutex);
+            return;
+        }
+
+        QueuedPacket* item = &packetQueue.front();
+
+        // Safety check: skip corrupted packets
+        if (!item->packet.data || item->packet.size == 0 || item->packet.size > 512) {
+            log_msg(LOG_ERROR, "[BT] Corrupt packet detected, dropping");
+            if (item->packet.allocSize > 0) {
+                currentQueueBytes -= item->packet.size;
+                item->packet.free();
+            }
+            packetQueue.pop_front();
+            totalDropped++;
+            xSemaphoreGive(queueMutex);
+            return;
+        }
+
+        // Send packet while holding lock
+        size_t sent = bluetoothSPP->write(item->packet.data, item->packet.size);
+
+        if (sent > 0) {
+            resetBackoff();
+            g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
+            commitPackets(1);
+        } else {
+            applyBackoff();
+        }
+
+        xSemaphoreGive(queueMutex);
+    }
+
+    bool isReady() const override {
+        return bluetoothSPP && bluetoothSPP->hasClient();
+    }
+
+    const char* getName() const override {
+        return "Bluetooth";
+    }
+
+    // Override enqueue with mutex protection
+    bool enqueue(const ParsedPacket& packet) override {
+        // Reject invalid packets early
+        if (!packet.data || packet.size == 0 || packet.size > 512) {
+            return false;
+        }
+
+        // Lock queue for thread-safe access
+        if (xSemaphoreTake(queueMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+            totalDropped++;
+            return false;
+        }
+
+        bool result = PacketSender::enqueue(packet);
+        xSemaphoreGive(queueMutex);
+        return result;
+    }
+};
+
+#endif // BLUETOOTH_SENDER_H
+#endif // BOARD_MINIKIT_ESP32

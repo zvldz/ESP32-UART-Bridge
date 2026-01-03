@@ -144,6 +144,10 @@ Hardware: ESP32-WROOM-32 based development board
 #define DEFAULT_AP_SSID     "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
+// Bluetooth SPP defaults (MiniKit only)
+// Note: BT name uses mDNS hostname (config.mdns_hostname)
+// PIN removed - using SSP "Just Works" mode (modern standard)
+
 // Logging system - reduced for low-memory boards
 #if defined(BOARD_MINIKIT_ESP32)
 #define LOG_BUFFER_SIZE     30      // MiniKit: no PSRAM, limited heap
@@ -173,7 +177,10 @@ Hardware: ESP32-WROOM-32 based development board
 #define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
 
 // TX ring buffer for UART1 (single-writer: all inputs → one buffer → UART1 TX)
-// TODO: Test if 4KB is enough for MiniKit (RAW mode issue suspected)
-#define UART1_TX_RING_SIZE 8192 // 8KB - single-writer architecture buffer
+#if defined(BOARD_MINIKIT_ESP32)
+#define UART1_TX_RING_SIZE 4096 // 4KB for MiniKit (limited heap)
+#else
+#define UART1_TX_RING_SIZE 8192 // 8KB for S3 boards
+#endif
 
 #endif // DEFINES_H

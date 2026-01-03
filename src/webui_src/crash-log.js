@@ -18,7 +18,7 @@ const CrashLog = {
         };
     },
     
-    toggle() {
+    async toggle() {
         if (!this.elements.content || !this.elements.arrow) return;
 
         const isOpening = this.elements.content.style.display === 'none';
@@ -26,6 +26,12 @@ const CrashLog = {
         if (isOpening) {
             this.elements.content.style.display = 'block';
             this.elements.arrow.textContent = '▼';
+            // Load fragment HTML first if not loaded yet
+            if (this.elements.content.dataset.fragment) {
+                await Utils.loadFragment(this.elements.content);
+                // Re-cache tbody after fragment loads
+                this.elements.tbody = document.getElementById('crashTableBody');
+            }
             this.load();
         } else {
             this.elements.content.style.display = 'none';
@@ -41,7 +47,7 @@ const CrashLog = {
     },
 
     // Restore collapsed state from localStorage
-    restoreState() {
+    async restoreState() {
         if (!this.elements.content || !this.elements.arrow) return;
 
         let v = null;
@@ -54,6 +60,12 @@ const CrashLog = {
         if (v === 'shown') {
             this.elements.content.style.display = 'block';
             this.elements.arrow.textContent = '▼';
+            // Load fragment HTML first if not loaded yet
+            if (this.elements.content.dataset.fragment) {
+                await Utils.loadFragment(this.elements.content);
+                // Re-cache tbody after fragment loads
+                this.elements.tbody = document.getElementById('crashTableBody');
+            }
             // Load data if block is open on page load
             this.load();
         } else {

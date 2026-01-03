@@ -3,6 +3,7 @@
 #include "defines.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 #include "esp_heap_caps.h"
 
 // Configuration constants
@@ -140,6 +141,12 @@ void config_init(Config* config) {
 
     // SBUS settings defaults
     config->sbusTimingKeeper = false;  // Disabled by default
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 (Bluetooth SPP) defaults
+    // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
+    config->device5_config.role = D5_NONE;
+#endif
 }
 
 // Reset WiFi settings to defaults (AP mode, empty credentials)
@@ -347,6 +354,14 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->device4_config.udpSendRate = doc["device4"]["send_rate"] | 50;
     }
 
+#if defined(BOARD_MINIKIT_ESP32)
+    // Load Device 5 (Bluetooth SPP) configuration
+    // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
+    if (doc["device5"].is<JsonObject>()) {
+        config->device5_config.role = doc["device5"]["role"] | D5_NONE;
+    }
+#endif
+
     // Load log levels (new in v2)
     if (doc["logging"].is<JsonObject>()) {
         config->log_level_web = (LogLevel)(doc["logging"]["web"] | LOG_WARNING);
@@ -451,6 +466,12 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["protocol"]["mavlink_routing"] = config->mavlinkRouting;
     doc["protocol"]["sbus_timing_keeper"] = config->sbusTimingKeeper;
 
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 (Bluetooth SPP) configuration
+    // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
+    doc["device5"]["role"] = config->device5_config.role;
+#endif
+
     // Note: device_version and device_name are NOT saved - always use compiled values
 }
 
@@ -499,4 +520,13 @@ void config_save(Config* config) {
     }
 
     file.close();
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Duplicate D5 role to Preferences for btInUse() early access
+    // btInUse() is called by Arduino before LittleFS is mounted
+    Preferences prefs;
+    prefs.begin("btconfig", false);
+    prefs.putUChar("d5_role", config->device5_config.role);
+    prefs.end();
+#endif
 }
