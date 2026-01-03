@@ -8,8 +8,14 @@
 #ifndef MAVLINK_USE_CONVENIENCE_FUNCTIONS
 #define MAVLINK_USE_CONVENIENCE_FUNCTIONS 1
 #endif
+// Channels: 0=Telemetry, 1=USB, 2=UDP, 3=UART2, 4=UART3, 5=BT (MiniKit only)
+// NOTE: If BLE transport added for S3 boards, change to 6 for all platforms
 #ifndef MAVLINK_COMM_NUM_BUFFERS
-#define MAVLINK_COMM_NUM_BUFFERS 4
+#if defined(BOARD_MINIKIT_ESP32)
+#define MAVLINK_COMM_NUM_BUFFERS 6
+#else
+#define MAVLINK_COMM_NUM_BUFFERS 5
+#endif
 #endif
 
 // 2. Disable warnings

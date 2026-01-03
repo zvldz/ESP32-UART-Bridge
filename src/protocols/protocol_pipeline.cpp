@@ -3,6 +3,9 @@
 #include "uart1_sender.h"
 #include "../uart/uart1_tx_service.h"
 #include "sbus_fast_parser.h"
+#if defined(BOARD_MINIKIT_ESP32)
+#include "bluetooth_sender.h"
+#endif
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) :
     activeFlows(0),
@@ -119,7 +122,14 @@ void ProtocolPipeline::setupFlows(Config* config) {
     if (config->device4.role == D4_NETWORK_BRIDGE) {
         telemetryMask |= SENDER_UDP;
     }
-    
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device5 routing - Bluetooth SPP bridge
+    if (config->device5_config.role == D5_BT_BRIDGE) {
+        telemetryMask |= SENDER_BT;
+    }
+#endif
+
     // Check for no destinations configured
     if (telemetryMask == 0) {
         log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
@@ -164,12 +174,22 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         
         // Log the final telemetry routing mask for debugging
+#if defined(BOARD_MINIKIT_ESP32)
+        log_msg(LOG_INFO, "Telemetry routing mask: 0x%02X (USB:%d UART2:%d UART3:%d UDP:%d BT:%d)",
+                telemetryMask,
+                (telemetryMask & SENDER_USB) ? 1 : 0,
+                (telemetryMask & SENDER_UART2) ? 1 : 0,
+                (telemetryMask & SENDER_UART3) ? 1 : 0,
+                (telemetryMask & SENDER_UDP) ? 1 : 0,
+                (telemetryMask & SENDER_BT) ? 1 : 0);
+#else
         log_msg(LOG_INFO, "Telemetry routing mask: 0x%02X (USB:%d UART2:%d UART3:%d UDP:%d)",
                 telemetryMask,
                 (telemetryMask & SENDER_USB) ? 1 : 0,
                 (telemetryMask & SENDER_UART2) ? 1 : 0,
                 (telemetryMask & SENDER_UART3) ? 1 : 0,
                 (telemetryMask & SENDER_UDP) ? 1 : 0);
+#endif
     } else if (telemetryMask) {
         log_msg(LOG_ERROR, "Telemetry buffer not allocated but telemetry senders configured!");
     }
@@ -332,7 +352,48 @@ void ProtocolPipeline::setupFlows(Config* config) {
         
         flows[activeFlows++] = f;
     }
-    
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Bluetooth Input flow (BT → UART1)
+    if (config->device5_config.role == D5_BT_BRIDGE && ctx->buffers.btInputBuffer &&
+        !hasSbusDevice && bluetoothSPP) {
+        // Link BT input buffer to BluetoothSPP
+        bluetoothSPP->setInputBuffer(ctx->buffers.btInputBuffer);
+
+        DataFlow f;
+        f.name = "BT_Input";
+        f.inputBuffer = ctx->buffers.btInputBuffer;
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_BT;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
+
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser(5);  // BT Input channel
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for BT_Input flow (channel=5)");
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "BT→UART1 input flow created");
+    }
+#endif
+
     // SBUS Input flow (SBUS → UART1)
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         
@@ -574,13 +635,29 @@ void ProtocolPipeline::createSenders(Config* config) {
     if (uartBridgeSerial) {
         // Initialize TX service with correct buffer size
         Uart1TxService::getInstance()->init(uartBridgeSerial, UART1_TX_RING_SIZE);
-        
+
         // Create sender that uses TX service
         senders[IDX_UART1] = new Uart1Sender();
         log_msg(LOG_INFO, "Created UART1 sender at index %d", IDX_UART1);
     } else {
         log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
     }
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device5 - Bluetooth SPP
+    if (config->device5_config.role != D5_NONE && bluetoothSPP) {
+        BluetoothSender* btSender = new BluetoothSender();
+
+        // Set SBUS output format for D5_BT_SBUS_TEXT
+        if (config->device5_config.role == D5_BT_SBUS_TEXT) {
+            btSender->setSbusOutputFormat(SBUS_FMT_TEXT);
+        }
+
+        senders[IDX_DEVICE5] = btSender;
+        log_msg(LOG_INFO, "Created Bluetooth sender at index %d for role %d",
+                IDX_DEVICE5, config->device5_config.role);
+    }
+#endif
 }
 
 void ProtocolPipeline::processInputFlows() {
@@ -751,18 +828,19 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
         static uint32_t totalConsumed = 0;
         static uint32_t totalPackets = 0;
         static uint32_t lastParseReport = 0;
-        
+
         totalConsumed += result.bytesConsumed;
         totalPackets += result.count;
-        
+
         if (millis() - lastParseReport > 1000) {
-            log_msg(LOG_INFO, "[PARSE] Telemetry: consumed %u bytes, parsed %u packets/sec", 
+            log_msg(LOG_INFO, "[PARSE] Telemetry: consumed %u bytes, parsed %u packets/sec",
                     totalConsumed, totalPackets);
             totalConsumed = 0;
             totalPackets = 0;
             lastParseReport = millis();
         }
     }
+
     // === TEMPORARY DIAGNOSTIC BLOCK END ===
     
     // Consume bytes if parser processed them

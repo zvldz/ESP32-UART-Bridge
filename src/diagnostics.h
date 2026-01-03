@@ -14,6 +14,9 @@ const char* getDevice1RoleName(uint8_t role);
 const char* getDevice2RoleName(uint8_t role);
 const char* getDevice3RoleName(uint8_t role);
 const char* getDevice4RoleName(uint8_t role);
+#if defined(BOARD_MINIKIT_ESP32)
+const char* getDevice5RoleName(uint8_t role);
+#endif
 
 // Separate diagnostic functions for TaskScheduler
 void runBridgeActivityLog();

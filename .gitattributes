@@ -8,3 +8,6 @@
 *.jpg binary
 *.ico binary
 *.zip binary
+
+# Exclude from GitHub release source archives
+TODO.md export-ignore

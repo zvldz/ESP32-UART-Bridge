@@ -141,6 +141,20 @@ const DeviceConfig = {
                         </select>
                     </td>
                 </tr>
+                <tr id="device5_row" style="display:none;">
+                    <td><strong>Device 5</strong></td>
+                    <td id="device5_pins">Bluetooth</td>
+                    <td>
+                        <select name="device5_role" id="device5_role" onchange="DeviceConfig.onDevice5RoleChange()" style="width: 100%;">
+                            <option value="0">Disabled</option>
+                            <option value="1">Bluetooth Bridge</option>
+                            <option value="2">BT SBUS Text</option>
+                        </select>
+                    </td>
+                    <td id="device5_options">
+                        <!-- SSP "Just Works" pairing - no PIN needed -->
+                    </td>
+                </tr>
             </table>
             <div id="sbus-config-warning" style="display:none; background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-top:10px; font-size:13px;">
                 ⚠️ SBUS Output configured but no SBUS Input source detected
@@ -188,7 +202,22 @@ const DeviceConfig = {
             this.updateDevice4Options();
             device4Role.value = this.config.device4Role;
         }
-        
+
+        // Device 5 (Bluetooth SPP - MiniKit only)
+        const device5Row = document.getElementById('device5_row');
+        const device5Role = document.getElementById('device5_role');
+        if (this.config.boardType === 'minikit' && device5Row && device5Role) {
+            device5Row.style.display = '';  // Show row for MiniKit
+            device5Role.value = this.config.device5Role || '0';
+
+            // Show mDNS hint about BT (name uses mDNS hostname)
+            const mdnsBtHint = document.getElementById('mdns_bt_hint');
+            if (mdnsBtHint) mdnsBtHint.style.display = '';
+
+            // Show/hide BT config based on role
+            this.updateDevice5Config();
+        }
+
         // Set log levels
         const logLevelWeb = document.getElementById('log_level_web');
         const logLevelUart = document.getElementById('log_level_uart');
@@ -571,6 +600,19 @@ const DeviceConfig = {
 
         const role = device4Role.value;
 
+        // Handle Disabled role first - hide config and remove validation
+        if (role === '0') {
+            device4AdvancedConfig.style.display = 'none';
+            if (targetIpInput) {
+                targetIpInput.disabled = true;
+                targetIpInput.removeAttribute('required');
+                targetIpInput.removeAttribute('pattern');
+            }
+            if (portInput) portInput.disabled = true;
+            if (networkLogLevel) networkLogLevel.disabled = true;
+            return;
+        }
+
         // Network Configuration block needed for all network roles (1, 2, 3, 4)
         // - Network Bridge (1): needs IP and port to send
         // - Network Logger (2): needs IP and port to send
@@ -915,9 +957,9 @@ const DeviceConfig = {
                 targetIpGroup.style.opacity = '0.5';
             }
         } else {
-            // Re-enable unless in RX mode (role 4)
+            // Re-enable unless in RX mode (role 4) or Disabled (role 0)
             const device4Role = document.getElementById('device4_role');
-            if (device4Role && device4Role.value !== '4') {
+            if (device4Role && device4Role.value !== '4' && device4Role.value !== '0') {
                 targetIpInput.disabled = false;
                 targetIpInput.style.opacity = '1';
                 targetIpInput.setAttribute('required', 'required');
@@ -927,5 +969,19 @@ const DeviceConfig = {
                 }
             }
         }
+    },
+
+    // Device 5 role change handler (Bluetooth SPP - MiniKit only)
+    onDevice5RoleChange() {
+        const device5Role = document.getElementById('device5_role');
+        if (device5Role) {
+            this.config.device5Role = device5Role.value;
+            this.updateDevice5Config();
+        }
+    },
+
+    // Show/hide Device 5 PIN input based on role
+    updateDevice5Config() {
+        // Device 5 uses SSP "Just Works" - no PIN configuration needed
     }
 };

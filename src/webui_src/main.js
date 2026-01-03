@@ -59,13 +59,39 @@ document.addEventListener('DOMContentLoaded', initializeUI);
 window.bridgeConfig = config;
 
 // Toggle system status visibility
-function toggleSystemStatus() {
+async function toggleSystemStatus() {
+    const el = document.getElementById('systemStatusBlock');
+    const isOpening = el && el.style.display === 'none';
+
+    // Load fragment first if opening
+    if (isOpening && el && el.dataset.fragment) {
+        await Utils.loadFragment(el);
+    }
+
     Utils.rememberedToggle('systemStatusBlock', 'systemStatusToggle', 'collapse:systemStatus');
+
+    // Trigger immediate update after fragment loads
+    if (isOpening) {
+        StatusUpdates.updateAll();
+    }
 }
 
 // Toggle protocol statistics visibility
-function toggleProtocolStats() {
+async function toggleProtocolStats() {
+    const el = document.getElementById('protocolStats');
+    const isOpening = el && el.style.display === 'none';
+
+    // Load fragment first if opening
+    if (isOpening && el && el.dataset.fragment) {
+        await Utils.loadFragment(el);
+    }
+
     Utils.rememberedToggle('protocolStats', 'protocolStatsToggle', 'collapse:protocolStats');
+
+    // Trigger immediate update after fragment loads
+    if (isOpening) {
+        StatusUpdates.updateAll();
+    }
 }
 
 // Toggle advanced configuration visibility

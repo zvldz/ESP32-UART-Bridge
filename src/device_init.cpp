@@ -14,6 +14,12 @@
 #include "protocols/packet_sender.h"
 #include <freertos/semphr.h>
 
+#if defined(BOARD_MINIKIT_ESP32)
+#include "bluetooth/bluetooth_spp.h"
+#include "quick_reset.h"
+#include <esp_mac.h>
+#endif
+
 // External objects from main.cpp
 extern Config config;
 
@@ -311,6 +317,47 @@ void initDevice3SBUS() {
     }
 }
 
+#if defined(BOARD_MINIKIT_ESP32)
+// Initialize Device 5 as Bluetooth SPP
+// NOTE: WiFi and BT are mutually exclusive on MiniKit (no PSRAM, OOM)
+// If BT enabled in config AND this is not a quick-reset (temp AP), BT starts and WiFi is skipped
+void initDevice5Bluetooth() {
+    if (config.device5_config.role == D5_NONE) {
+        // BT controller NOT initialized - memory not allocated
+        log_msg(LOG_DEBUG, "Device 5 Bluetooth disabled");
+        return;
+    }
+
+    // Quick reset = temporary AP mode for config, skip BT to save RAM
+    if (quickResetDetected()) {
+        log_msg(LOG_INFO, "Quick reset detected - skipping BT for temp AP mode");
+        return;
+    }
+
+    // Use mDNS hostname for Bluetooth name (same name across network and BT)
+    String btName = config.mdns_hostname;
+    if (btName.isEmpty()) {
+        // Fallback: generate from MAC if mDNS hostname not set
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_BT);
+        char name[32];
+        snprintf(name, sizeof(name), "esp-bridge-%02x%02x", mac[4], mac[5]);
+        btName = name;
+    }
+
+    // Create and initialize Bluetooth SPP (SSP "Just Works" pairing)
+    bluetoothSPP = new BluetoothSPP();
+    if (bluetoothSPP->init(btName.c_str(), "1234")) {  // PIN for legacy fallback only
+        const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";
+        log_msg(LOG_INFO, "Device 5 Bluetooth SPP initialized: %s (role: %s)", btName.c_str(), roleStr);
+    } else {
+        delete bluetoothSPP;
+        bluetoothSPP = nullptr;
+        log_msg(LOG_ERROR, "Failed to initialize Device 5 Bluetooth SPP");
+    }
+}
+#endif
+
 // Helper to check if any SBUS device is configured
 bool hasSbusDevice() {
     return (config.device1.role == D1_SBUS_IN ||
@@ -398,7 +445,17 @@ void initDevices() {
     log_msg(LOG_INFO, "- Device 3: %s", getDevice3RoleName(config.device3.role));
 
     // Device 4
-    log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Future feature");
+    log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Network");
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 (Bluetooth SPP)
+    if (config.device5_config.role != D5_NONE) {
+        const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";
+        log_msg(LOG_INFO, "- Device 5: Bluetooth SPP (%s)", roleStr);
+    } else {
+        log_msg(LOG_INFO, "- Device 5: Disabled");
+    }
+#endif
 
     // Log logging configuration
     log_msg(LOG_INFO, "Logging configuration:");

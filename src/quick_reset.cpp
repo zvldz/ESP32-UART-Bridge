@@ -4,7 +4,6 @@
 
 #include "quick_reset.h"
 #include "logging.h"
-#include "diagnostics.h"  // TEMP: for forceSerialLog debug
 #include <esp_system.h>
 #include <Preferences.h>
 
@@ -23,12 +22,6 @@ void quickResetInit() {
     unsigned long lastUptime = prefs.getULong("uptime", 0);
     int quickResetCount = prefs.getInt("count", 0);
 
-    // TEMP DEBUG: Early diagnostics before logging is initialized
-#ifdef DEBUG
-    forceSerialLog("[QR] reason=%d, lastUptime=%lu, count=%d",
-                   (int)reason, lastUptime, quickResetCount);
-#endif
-
     // MiniKit RESET button gives POWERON (not EXT), so we accept any reason
     // Crashes (PANIC, WDT, BROWNOUT) clear the counter to prevent boot loop triggers
     bool isCrash = (reason == ESP_RST_PANIC ||
@@ -37,41 +30,24 @@ void quickResetInit() {
                     reason == ESP_RST_WDT ||
                     reason == ESP_RST_BROWNOUT);
 
-#ifdef DEBUG
-    forceSerialLog("[QR] isCrash=%d", isCrash);
-#endif
-
     // Crash - clear counter (boot loop protection)
     if (isCrash) {
         prefs.putInt("count", 0);
         prefs.putULong("uptime", 0);
         prefs.end();
-#ifdef DEBUG
-        forceSerialLog("[QR] Counter cleared (crash/WDT/brownout)");
-#endif
         return;
     }
 
     // Check if previous session was short (quick reset)
     if (lastUptime > 0 && lastUptime < QUICK_RESET_THRESHOLD_MS) {
         quickResetCount++;
-#ifdef DEBUG
-        forceSerialLog("[QR] Quick reset! count=%d/%d, uptime=%lu",
-                       quickResetCount, QUICK_RESET_COUNT_TARGET, lastUptime);
-#endif
     } else {
         // First boot OR previous session ran long enough - reset counter
         quickResetCount = 0;
-#ifdef DEBUG
-        forceSerialLog("[QR] Normal boot, counter cleared (uptime was %lu)", lastUptime);
-#endif
     }
 
     // Check if we hit the target
     if (quickResetCount >= QUICK_RESET_COUNT_TARGET) {
-#ifdef DEBUG
-        forceSerialLog("[QR] *** FORCE NETWORK MODE ***");
-#endif
         forceNetworkMode = true;
         quickResetCount = 0;  // Reset for next time
     }

@@ -59,6 +59,15 @@ enum Device4Role {
     D4_SBUS_UDP_RX = 4      // UDP→SBUS only
 };
 
+// Device 5 role (Bluetooth SPP - MiniKit only)
+#if defined(BOARD_MINIKIT_ESP32)
+enum Device5Role {
+    D5_NONE = 0,
+    D5_BT_BRIDGE = 1,      // Bluetooth bridge (Raw/MAVLink per protocolOptimization)
+    D5_BT_SBUS_TEXT = 2    // SBUS text format over Bluetooth
+};
+#endif
+
 // SBUS output format
 enum SbusOutputFormat : uint8_t {
     SBUS_FMT_BINARY = 0,   // Standard SBUS (100000 8E2 INV) → FC
@@ -82,6 +91,15 @@ struct Device4Config {
     uint16_t udpSourceTimeout; // UDP source timeout in ms (100-5000, default 1000) for D4_SBUS_UDP_RX
     uint8_t udpSendRate;       // Send rate in Hz (10-70, default 50) for D4_SBUS_UDP_TX
 };
+
+// Device 5 Configuration (Bluetooth SPP - MiniKit only)
+// Note: BT device name uses mDNS hostname (config.mdns_hostname)
+// Uses SSP "Just Works" pairing (no PIN required)
+#if defined(BOARD_MINIKIT_ESP32)
+struct Device5Config {
+    uint8_t role;           // Device5Role
+};
+#endif
 
 // WiFi network credentials for Client mode
 struct WiFiNetwork {
@@ -139,4 +157,9 @@ typedef struct {
 
     // SBUS settings
     bool sbusTimingKeeper;
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 - Bluetooth SPP
+    Device5Config device5_config;
+#endif
 } Config;

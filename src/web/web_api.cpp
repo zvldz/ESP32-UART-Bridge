@@ -14,6 +14,9 @@
 #include "protocols/protocol_pipeline.h"
 #include "protocols/sbus_router.h"
 #include "protocols/sbus_fast_parser.h"
+#if defined(BOARD_MINIKIT_ESP32)
+#include "../bluetooth/bluetooth_spp.h"
+#endif
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -135,6 +138,16 @@ static void populateConfigJson(JsonDocument& doc) {
     doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
     doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 (Bluetooth SPP)
+    // Note: BT name uses mdnsHostname, SSP "Just Works" pairing
+    doc["device5Role"] = String(config.device5_config.role);
+    doc["device5RoleName"] = getDevice5RoleName(config.device5_config.role);
+    // BT runtime status
+    doc["btInitialized"] = (bluetoothSPP != nullptr);
+    doc["btConnected"] = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
+#endif
 
     // Device 4 configuration
     doc["device4TargetIp"] = config.device4_config.target_ip;
@@ -494,6 +507,23 @@ void handleSave(AsyncWebServerRequest *request) {
             log_msg(LOG_INFO, "Device 4 SBUS output format: %s", fmtNames[newFmt]);
         }
     }
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device 5 role (Bluetooth SPP)
+    if (request->hasParam("device5_role", true)) {
+        const AsyncWebParameter* p = request->getParam("device5_role", true);
+        int role = p->value().toInt();
+        if (role >= D5_NONE && role <= D5_BT_SBUS_TEXT) {
+            if (role != config.device5_config.role) {
+                config.device5_config.role = role;
+                configChanged = true;
+                log_msg(LOG_INFO, "Device 5 role changed to %d", role);
+            }
+        }
+    }
+
+    // Note: BT name uses mdns_hostname, SSP "Just Works" pairing (no PIN)
+#endif
 
     // Validate SBUS configuration before saving
     if (!validateSbusConfig(config)) {

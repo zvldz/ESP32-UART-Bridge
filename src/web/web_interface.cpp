@@ -170,6 +170,43 @@ void webserver_init(Config* config, SystemState* state) {
         sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
     });
 
+    // Lazy-loaded HTML fragments
+    server->on("/fragment", HTTP_GET, [](AsyncWebServerRequest *request){
+        if (!request->hasParam("section")) {
+            request->send(400, "text/plain", "Missing section parameter");
+            return;
+        }
+
+        String section = request->getParam("section")->value();
+        const uint8_t* data = nullptr;
+        size_t len = 0;
+
+        if (section == "logs") {
+            data = FRAGMENT_LOGS_GZ;
+            len = FRAGMENT_LOGS_GZ_LEN;
+        } else if (section == "crash") {
+            data = FRAGMENT_CRASH_GZ;
+            len = FRAGMENT_CRASH_GZ_LEN;
+        } else if (section == "status") {
+            data = FRAGMENT_STATUS_GZ;
+            len = FRAGMENT_STATUS_GZ_LEN;
+        } else if (section == "protocol") {
+            data = FRAGMENT_PROTOCOL_GZ;
+            len = FRAGMENT_PROTOCOL_GZ_LEN;
+        } else if (section == "backup") {
+            data = FRAGMENT_BACKUP_GZ;
+            len = FRAGMENT_BACKUP_GZ_LEN;
+        } else if (section == "firmware") {
+            data = FRAGMENT_FIRMWARE_GZ;
+            len = FRAGMENT_FIRMWARE_GZ_LEN;
+        } else {
+            request->send(404, "text/plain", "Fragment not found");
+            return;
+        }
+
+        sendGzippedResponse(request, "text/html", data, len);
+    });
+
     // Setup OTA update with async handlers
     server->on("/update", HTTP_POST,
         [](AsyncWebServerRequest *request) {

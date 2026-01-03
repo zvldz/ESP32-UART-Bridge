@@ -3,37 +3,27 @@
 ## v2.18.12
 
 ### New Features
-- **SBUS Output Format Selector**: Replaced checkbox with dropdown for SBUS output format
-  - Binary (SBUS) — standard 25-byte SBUS frame
-  - Text (RC) — `RC 1500,1500,...\r\n` for rcoverride_v2 plugin
-  - MAVLink (RC Override) — RC_CHANNELS_OVERRIDE message (requires plugin for Mission Planner)
-- **MAVLink RC_CHANNELS_OVERRIDE**: New output format for wireless RC control
-  - Converts SBUS frames to MAVLink messages (system_id=255, component_id=190)
-  - Requires ArduPilot RC_OVERRIDE_TIME parameter for failsafe timeout
-- **UDP Send Rate**: Configurable send rate for SBUS UDP Output (10-70 Hz, default 50 Hz)
-  - Reduces WiFi congestion for RC control applications
-  - Setting visible in Web UI for Device 4 SBUS Output role
-- **UDP Source Timeout**: Configurable timeout for SBUS Input role (100-5000 ms, default 1000 ms)
-  - Resets SBUS Timing Keeper when UDP source stops sending
+- **SBUS Output Format Selector**: Dropdown with Binary/Text/MAVLink options
+- **MAVLink RC_CHANNELS_OVERRIDE**: SBUS→MAVLink conversion for wireless RC control
+- **UDP Send Rate**: Configurable 10-70 Hz for SBUS UDP Output
+- **UDP Source Timeout**: Configurable 100-5000 ms for SBUS Input role
 
-### Mission Planner Plugin
-- **RC Override Plugin v2.0**: Modified TX16S-RC plugin with UDP support
-  - Located in `plugins/rcoverride_v2.cs`
-  - Supports both COM (Bluetooth) and UDP (WiFi) sources
-  - Configurable UDP port, rate limit constant
-  - Compatible with ESP SBUS Text format output
+### MiniKit Bluetooth
+- **Bluetooth SPP Bridge**: New Device 5 with two roles
+  - BT Bridge — MAVLink/Raw telemetry output
+  - BT SBUS Text — text format for RC Override plugin
+  - SSP "Just Works" pairing (no PIN prompt)
 
 ### MiniKit Fixes
-- **Fix spurious WiFi reset**: Disabled GPIO0 button handling (MiniKit has no BOOT button, floating GPIO0 caused false triggers from EMI)
-- **Quick reset always forces AP**: Triple RESET now always activates temporary AP mode regardless of saved WiFi settings
-  - Guarantees access to Web UI even if saved Client mode can't connect
-  - No WiFi reset via button — use Web UI Settings → Factory Reset
+- **Fix spurious WiFi reset**: Disabled floating GPIO0 button handling
+- **Quick reset always forces AP**: Triple RESET guarantees Web UI access
 
 ### Web UI
-- **Device 4 roles renamed**: "SBUS→UDP TX" → "SBUS Output", "UDP→SBUS RX" → "SBUS Input"
-- **Device 4 Pins column**: Shows "Network" for SBUS Output/Input roles
-- **MiniKit Device 2**: USB role forced, other options show "(not available)" or "(USB always on)"
-- **Device 2 USB**: Now available when Device 1 is SBUS Input (was incorrectly blocked)
+- **Device 4/5 configuration**: Renamed roles, MiniKit-specific options
+- **Modular JS architecture**: Reduced code duplication
+
+### Mission Planner Plugin
+- **RC Override Plugin v2.0** (`plugins/rcoverride_v2.cs`): COM and UDP sources
 
 ## v2.18.11
 
