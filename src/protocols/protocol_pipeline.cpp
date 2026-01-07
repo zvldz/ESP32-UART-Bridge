@@ -1,5 +1,6 @@
 #include "protocol_pipeline.h"
 #include "../logging.h"
+#include "../diagnostics.h"
 #include "uart1_sender.h"
 #include "../uart/uart1_tx_service.h"
 #include "sbus_fast_parser.h"
@@ -565,14 +566,32 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
         mask |= (1 << IDX_DEVICE4);
         log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> UDP enabled");
     }
-    
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Device5 for Bluetooth SBUS text output
+    if (config->device5_config.role == D5_BT_SBUS_TEXT) {
+        mask |= (1 << IDX_DEVICE5);
+        log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> BT Text enabled");
+    }
+#endif
+
     // Log final routing configuration
+#if defined(BOARD_MINIKIT_ESP32)
+    log_msg(LOG_INFO, "SBUS routing mask: 0x%02X (UART1=%d D2=%d D3=%d D4=%d D5=%d)",
+            mask,
+            (mask & (1 << IDX_UART1)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE2_UART2)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE3)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE4)) ? 1 : 0,
+            (mask & (1 << IDX_DEVICE5)) ? 1 : 0);
+#else
     log_msg(LOG_INFO, "SBUS routing mask: 0x%02X (UART1=%d D2=%d D3=%d D4=%d)",
             mask,
             (mask & (1 << IDX_UART1)) ? 1 : 0,
             (mask & (1 << IDX_DEVICE2_UART2)) ? 1 : 0,
             (mask & (1 << IDX_DEVICE3)) ? 1 : 0,
             (mask & (1 << IDX_DEVICE4)) ? 1 : 0);
+#endif
     
     return mask;
 }
@@ -648,9 +667,10 @@ void ProtocolPipeline::createSenders(Config* config) {
     if (config->device5_config.role != D5_NONE && bluetoothSPP) {
         BluetoothSender* btSender = new BluetoothSender();
 
-        // Set SBUS output format for D5_BT_SBUS_TEXT
+        // Set SBUS output format and rate limit for D5_BT_SBUS_TEXT
         if (config->device5_config.role == D5_BT_SBUS_TEXT) {
             btSender->setSbusOutputFormat(SBUS_FMT_TEXT);
+            btSender->setSendRate(config->device5_config.btSendRate);
         }
 
         senders[IDX_DEVICE5] = btSender;
@@ -665,7 +685,7 @@ void ProtocolPipeline::processInputFlows() {
     uint32_t startMs = millis();
     const uint32_t MAX_PROCESSING_TIME_MS = 5;  // Max 5ms per call
     bool timeExceeded = false;
-    
+
     for (size_t i = 0; i < activeFlows; i++) {
         if (flows[i].isInputFlow) {  // Use explicit flag
             // Check time before processing each flow

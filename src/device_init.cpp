@@ -230,19 +230,29 @@ void initDevice3(uint8_t role) {
         .ringBufSize = 8192       // Adequate for most protocols
     };
 
-    device3Serial = new UartDMA(UART_NUM_0, dmaCfg);
+    // MiniKit uses UART2 for Device3 (UART0 is USB-Serial via CP2102)
+    // Other boards use UART0 for Device3
+#if defined(BOARD_MINIKIT_ESP32)
+    uart_port_t device3UartNum = UART_NUM_2;
+    const char* uartName = "UART2";
+#else
+    uart_port_t device3UartNum = UART_NUM_0;
+    const char* uartName = "UART0";
+#endif
+
+    device3Serial = new UartDMA(device3UartNum, dmaCfg);
 
     if (device3Serial) {
         if (role == D3_UART3_MIRROR) {
             // Mirror mode - TX only
             device3Serial->begin(uartCfg, -1, DEVICE3_UART_TX_PIN);
-            log_msg(LOG_INFO, "Device 3 Mirror mode initialized on GPIO%d (TX only) at %u baud (UART0, DMA polling)",
-                    DEVICE3_UART_TX_PIN, config.baudrate);
+            log_msg(LOG_INFO, "Device 3 Mirror mode initialized on GPIO%d (TX only) at %u baud (%s, DMA polling)",
+                    DEVICE3_UART_TX_PIN, config.baudrate, uartName);
         } else if (role == D3_UART3_BRIDGE) {
             // Bridge mode - full duplex
             device3Serial->begin(uartCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
-            log_msg(LOG_INFO, "Device 3 Bridge mode initialized on GPIO%d/%d at %u baud (UART0, DMA polling)",
-                    DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, config.baudrate);
+            log_msg(LOG_INFO, "Device 3 Bridge mode initialized on GPIO%d/%d at %u baud (%s, DMA polling)",
+                    DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, config.baudrate, uartName);
         } else if (role == D3_UART3_LOG) {
             // Log mode - TX only with fixed 115200 baud
             UartConfig logCfg = {
@@ -253,8 +263,8 @@ void initDevice3(uint8_t role) {
                 .flowcontrol = false
             };
             device3Serial->begin(logCfg, -1, DEVICE3_UART_TX_PIN);
-            log_msg(LOG_INFO, "Device 3 Log mode initialized on GPIO%d (TX only) at 115200 baud (UART0, DMA polling)",
-                    DEVICE3_UART_TX_PIN);
+            log_msg(LOG_INFO, "Device 3 Log mode initialized on GPIO%d (TX only) at 115200 baud (%s, DMA polling)",
+                    DEVICE3_UART_TX_PIN, uartName);
             logging_init_uart();
         }
     } else {
@@ -297,7 +307,17 @@ void initDevice3SBUS() {
         .ringBufSize = 8192
     };
 
-    device3Serial = new UartDMA(UART_NUM_0, dmaCfg);
+    // MiniKit uses UART2 for Device3 (UART0 is USB-Serial via CP2102)
+    // Other boards use UART0 for Device3
+#if defined(BOARD_MINIKIT_ESP32)
+    uart_port_t device3UartNum = UART_NUM_2;
+    const char* uartName = "UART2";
+#else
+    uart_port_t device3UartNum = UART_NUM_0;
+    const char* uartName = "UART0";
+#endif
+
+    device3Serial = new UartDMA(device3UartNum, dmaCfg);
 
     if (device3Serial) {
         // Initialize with selected configuration
@@ -305,13 +325,13 @@ void initDevice3SBUS() {
 
         // Enable signal inversion only for binary SBUS mode
         if (!textMode) {
-            uart_set_line_inverse(UART_NUM_0, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
+            uart_set_line_inverse(device3UartNum, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV);
         }
 
         const char* modeStr = (config.device3.role == D3_SBUS_IN) ? "SBUS IN" :
                               textMode ? "SBUS OUT Text (115200 8N1)" : "SBUS OUT (100000 8E2 INV)";
-        log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (UART0)",
-                modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+        log_msg(LOG_INFO, "Device 3 %s initialized on GPIO%d/%d (%s)",
+                modeStr, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, uartName);
     } else {
         log_msg(LOG_ERROR, "Failed to create Device 3 SBUS interface");
     }
@@ -424,6 +444,19 @@ void registerSbusOutputs() {
             log_msg(LOG_ERROR, "Failed to get Device4 sender for SBUS UDP output");
         }
     }
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Register Device5 Bluetooth SBUS text output
+    if (config.device5_config.role == D5_BT_SBUS_TEXT) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE5);
+        if (sender) {
+            router->registerOutput(sender);
+            log_msg(LOG_INFO, "Device5 BT SBUS text output registered");
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device5 sender for BT SBUS output");
+        }
+    }
+#endif
 }
 
 // Initialize and log device configuration

@@ -144,6 +144,7 @@ static void populateConfigJson(JsonDocument& doc) {
     // Note: BT name uses mdnsHostname, SSP "Just Works" pairing
     doc["device5Role"] = String(config.device5_config.role);
     doc["device5RoleName"] = getDevice5RoleName(config.device5_config.role);
+    doc["btSendRate"] = config.device5_config.btSendRate;
     // BT runtime status
     doc["btInitialized"] = (bluetoothSPP != nullptr);
     doc["btConnected"] = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
@@ -413,7 +414,7 @@ void handleSave(AsyncWebServerRequest *request) {
     if (request->hasParam("device3_role", true)) {
         const AsyncWebParameter* p = request->getParam("device3_role", true);
         int role = p->value().toInt();
-        if (role >= D3_NONE && role <= D3_SBUS_OUT && role != 4) {
+        if (role >= D3_NONE && role <= D3_SBUS_OUT) {
             if (role != config.device3.role) {
                 config.device3.role = role;
                 configChanged = true;
@@ -518,6 +519,19 @@ void handleSave(AsyncWebServerRequest *request) {
                 config.device5_config.role = role;
                 configChanged = true;
                 log_msg(LOG_INFO, "Device 5 role changed to %d", role);
+            }
+        }
+    }
+
+    // Device 5 BT send rate (for SBUS Text mode)
+    if (request->hasParam("bt_send_rate", true)) {
+        const AsyncWebParameter* p = request->getParam("bt_send_rate", true);
+        int rate = p->value().toInt();
+        if (rate >= 10 && rate <= 70) {
+            if (rate != config.device5_config.btSendRate) {
+                config.device5_config.btSendRate = rate;
+                configChanged = true;
+                log_msg(LOG_INFO, "BT send rate changed to %d Hz", rate);
             }
         }
     }

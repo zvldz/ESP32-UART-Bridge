@@ -2,9 +2,10 @@
 #define UART_SENDER_H
 
 #include "packet_sender.h"
-#include "../uart/uart_interface.h"  // Correct include
-#include "../device_types.h" // For SbusOutputFormat enum
-#include "../types.h"  // For g_deviceStats
+#include "sbus_router.h"
+#include "../uart/uart_interface.h"
+#include "../device_types.h"
+#include "../types.h"
 
 // Base UART sender class
 class UartSender : public PacketSender {
@@ -29,9 +30,10 @@ public:
 
         // Convert SBUS binary to text if TEXT format selected (MAVLink not supported for UART)
         if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
-            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+            char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
             if (sendSize == 0) return 0;  // Conversion failed
-            sendData = (const uint8_t*)sbusTextBuffer;
+            sendData = (const uint8_t*)buf;
         }
 
         return uartInterface->write(sendData, sendSize);

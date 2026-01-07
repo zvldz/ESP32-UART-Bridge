@@ -2,10 +2,16 @@
 #define SBUS_ROUTER_H
 
 #include "sbus_common.h"
+#include "sbus_text.h"
+#include "sbus_mavlink.h"
 #include "../types.h"
 #include "../logging.h"
 #include <stdint.h>
 #include <vector>
+
+// SBUS conversion buffer size - must fit both TEXT (101 bytes) and MAVLink (64 bytes)
+static constexpr size_t SBUS_OUTPUT_BUFFER_SIZE =
+    (SBUS_TEXT_BUFFER_SIZE > SBUS_MAVLINK_BUFFER_SIZE) ? SBUS_TEXT_BUFFER_SIZE : SBUS_MAVLINK_BUFFER_SIZE;
 
 // Forward declarations
 class PacketSender;
@@ -87,6 +93,9 @@ private:
     // Timing keeper
     uint32_t lastRepeatMs = 0;
 
+    // Lazy-allocated conversion buffer (for TEXT/MAVLink output)
+    char* convertBuffer = nullptr;
+
 public:
     // Singleton accessor
     static SbusRouter* getInstance() {
@@ -94,6 +103,14 @@ public:
             instance = new SbusRouter();
         }
         return instance;
+    }
+
+    // Lazy-allocated buffer for SBUS TEXT/MAVLink conversion
+    char* getConvertBuffer() {
+        if (!convertBuffer) {
+            convertBuffer = new char[SBUS_OUTPUT_BUFFER_SIZE];
+        }
+        return convertBuffer;
     }
 
     // Fast routing without parsing channels

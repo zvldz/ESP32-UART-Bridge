@@ -5,6 +5,7 @@
 #include "../types.h"
 #include "../logging.h"
 #include "sbus_text.h"
+#include "sbus_mavlink.h"
 #include <deque>
 #include <Arduino.h>
 
@@ -44,8 +45,6 @@ protected:
     // SBUS output format (for SBUS_OUT roles)
     // 0 = BINARY, 1 = TEXT, 2 = MAVLINK (see SbusOutputFormat enum)
     uint8_t sbusOutputFormat = 0;
-    static constexpr size_t SBUS_OUTPUT_BUFFER_SIZE = 64;  // MAVLink RC_OVERRIDE ~50 bytes
-    char sbusTextBuffer[SBUS_OUTPUT_BUFFER_SIZE];
     
 public:
     PacketSender(size_t maxPackets = DEFAULT_MAX_PACKETS, size_t maxBytes = DEFAULT_MAX_BYTES) : 
