@@ -152,7 +152,15 @@ const DeviceConfig = {
                         </select>
                     </td>
                     <td id="device5_options">
-                        <!-- SSP "Just Works" pairing - no PIN needed -->
+                        <select id="bt_send_rate" name="bt_send_rate" style="display: none; width: 100px;">
+                            <option value="10">10 Hz</option>
+                            <option value="20">20 Hz</option>
+                            <option value="30">30 Hz</option>
+                            <option value="40">40 Hz</option>
+                            <option value="50">50 Hz</option>
+                            <option value="60">60 Hz</option>
+                            <option value="70">70 Hz</option>
+                        </select>
                     </td>
                 </tr>
             </table>
@@ -206,9 +214,13 @@ const DeviceConfig = {
         // Device 5 (Bluetooth SPP - MiniKit only)
         const device5Row = document.getElementById('device5_row');
         const device5Role = document.getElementById('device5_role');
+        const btSendRate = document.getElementById('bt_send_rate');
         if (this.config.boardType === 'minikit' && device5Row && device5Role) {
             device5Row.style.display = '';  // Show row for MiniKit
             device5Role.value = this.config.device5Role || '0';
+            if (btSendRate) {
+                btSendRate.value = this.config.btSendRate || 50;
+            }
 
             // Show mDNS hint about BT (name uses mDNS hostname)
             const mdnsBtHint = document.getElementById('mdns_bt_hint');
@@ -399,15 +411,32 @@ const DeviceConfig = {
         const role = device3Role.value;
         const boardType = this.config.boardType || 's3zero';
         const isXiao = (boardType === 'xiao');
+        const isMiniKit = (boardType === 'minikit');
 
         if (role === '1' || role === '2') { // UART3 Mirror/Bridge
-            pinsCell.textContent = isXiao ? this.formatGpioPinPair(43, 44) : 'GPIO 11/12';
+            if (isMiniKit) {
+                pinsCell.textContent = 'GPIO 16/17';
+            } else {
+                pinsCell.textContent = isXiao ? this.formatGpioPinPair(43, 44) : 'GPIO 11/12';
+            }
         } else if (role === '3') { // UART3 Logger
-            pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX only)' : 'GPIO 12 (TX only)';
+            if (isMiniKit) {
+                pinsCell.textContent = 'GPIO 17 (TX only)';
+            } else {
+                pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX only)' : 'GPIO 12 (TX only)';
+            }
         } else if (role === '4') { // SBUS IN
-            pinsCell.textContent = isXiao ? this.formatGpioPin(44) + ' (RX)' : 'GPIO 11 (RX)';
+            if (isMiniKit) {
+                pinsCell.textContent = 'GPIO 16 (RX)';
+            } else {
+                pinsCell.textContent = isXiao ? this.formatGpioPin(44) + ' (RX)' : 'GPIO 11 (RX)';
+            }
         } else if (role === '5') { // SBUS OUT
-            pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX)' : 'GPIO 12 (TX)';
+            if (isMiniKit) {
+                pinsCell.textContent = 'GPIO 17 (TX)';
+            } else {
+                pinsCell.textContent = isXiao ? this.formatGpioPin(43) + ' (TX)' : 'GPIO 12 (TX)';
+            }
         } else {
             pinsCell.textContent = 'N/A';
         }
@@ -980,8 +1009,13 @@ const DeviceConfig = {
         }
     },
 
-    // Show/hide Device 5 PIN input based on role
+    // Show/hide Device 5 options based on role
     updateDevice5Config() {
-        // Device 5 uses SSP "Just Works" - no PIN configuration needed
+        const device5Role = document.getElementById('device5_role');
+        const btSendRate = document.getElementById('bt_send_rate');
+        if (device5Role && btSendRate) {
+            // Show rate selector only for SBUS Text mode (role = 2)
+            btSendRate.style.display = (device5Role.value === '2') ? 'inline-block' : 'none';
+        }
     }
 };

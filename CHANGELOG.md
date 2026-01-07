@@ -7,6 +7,7 @@
 - **MAVLink RC_CHANNELS_OVERRIDE**: SBUS→MAVLink conversion for wireless RC control
 - **UDP Send Rate**: Configurable 10-70 Hz for SBUS UDP Output
 - **UDP Source Timeout**: Configurable 100-5000 ms for SBUS Input role
+- **BT Send Rate**: Configurable 10-70 Hz for Bluetooth SBUS Text output
 
 ### MiniKit Bluetooth
 - **Bluetooth SPP Bridge**: New Device 5 with two roles
@@ -17,13 +18,26 @@
 ### MiniKit Fixes
 - **Fix spurious WiFi reset**: Disabled floating GPIO0 button handling
 - **Quick reset always forces AP**: Triple RESET guarantees Web UI access
+- **Fix Device 3 role validation**: SBUS_IN role was blocked by incorrect validation
+- **Fix BT SBUS Text output**: Buffer size was too small (64 < 101 bytes needed)
+
+### Code Quality
+- **SBUS conversion buffer refactored**: Lazy allocation in SbusRouter singleton
+  - Memory saved when SBUS output conversion not used (~101 bytes)
+  - Removed global g_sbusConvertBuffer variable
 
 ### Web UI
 - **Device 4/5 configuration**: Renamed roles, MiniKit-specific options
 - **Modular JS architecture**: Reduced code duplication
+- **BT Send Rate slider**: Rate control for SBUS Text output (Device 5)
 
 ### Mission Planner Plugin
-- **RC Override Plugin v2.0** (`plugins/rcoverride_v2.cs`): COM and UDP sources
+- **RC Override Plugin v2.0.1** (`plugins/rcoverride_v2.cs`):
+  - COM and UDP sources
+  - Port open retry with 2s interval (for BT SPP connection delay)
+  - Lock port/source selection when connected
+  - Dynamic port list refresh every 3s
+  - Console diagnostics for debugging
 
 ## v2.18.11
 
@@ -31,7 +45,7 @@
 - **WiFi AP Channel**: Configurable WiFi channel (1-11) for AP mode via Web UI
 - **SBUS Text Format Output**: Optional text format `RC 1500,1500,...\r\n` for SBUS output roles
   - Checkbox "Text format" in Web UI for Device 2/3/4 SBUS outputs
-  - Use case: TX16S-RC plugin compatibility, debugging
+  - Use case: Mission Planner RC Override plugin compatibility, debugging
 - **Device 3 SBUS Input**: New D3_SBUS_IN role for SBUS input on Device 3 UART pins
   - Needed for MiniKit where Device 2 = USB only
 

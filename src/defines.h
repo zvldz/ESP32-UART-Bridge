@@ -144,10 +144,6 @@ Hardware: ESP32-WROOM-32 based development board
 #define DEFAULT_AP_SSID     "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
-// Bluetooth SPP defaults (MiniKit only)
-// Note: BT name uses mDNS hostname (config.mdns_hostname)
-// PIN removed - using SSP "Just Works" mode (modern standard)
-
 // Logging system - reduced for low-memory boards
 #if defined(BOARD_MINIKIT_ESP32)
 #define LOG_BUFFER_SIZE     30      // MiniKit: no PSRAM, limited heap

@@ -27,6 +27,7 @@ namespace RcOverridePlugin
         private const int LED_TIMEOUT_MS = 1000;
         private const int DATA_TIMEOUT_MS = 1000;
         private const int BUFFER_MAX_SIZE = 4096;
+        private const int PORT_RETRY_INTERVAL_MS = 2000;  // Wait 2s between open attempts (for BT ports)
 
         // --- Serial config ---
         private const string PORT_DEFAULT = "COM14";
@@ -49,6 +50,7 @@ namespace RcOverridePlugin
         private DateTime _lastFrameSent = DateTime.MinValue;
         private DateTime _lastDataTime = DateTime.MinValue;
         private DateTime _lastPacketTime = DateTime.MinValue;
+        private DateTime _lastPortOpenAttempt = DateTime.MinValue;
         private bool _running = false;
 
         // --- UI controls ---
@@ -61,9 +63,20 @@ namespace RcOverridePlugin
 
         public override string Name => "RC Override";
         public override string Author => "ACh / mod";
-        public override string Version => "2.0";
+        public override string Version => "2.0.1";
 
         private StringBuilder _buffer = new StringBuilder(256);
+
+        // Diagnostic counters
+        private int _linesReceived = 0;
+        private int _linesParsed = 0;
+        private int _framesSent = 0;
+        private DateTime _lastDiagTime = DateTime.MinValue;
+        private const int DIAG_INTERVAL_MS = 5000;
+
+        // Port refresh
+        private DateTime _lastPortRefresh = DateTime.MinValue;
+        private const int PORT_REFRESH_INTERVAL_MS = 3000;
 
         public override bool Init()
         {
@@ -74,7 +87,7 @@ namespace RcOverridePlugin
         public override bool Loaded()
         {
             _running = true;
-            Debug.WriteLine("[RC] Plugin loaded");
+            Console.WriteLine("[RC] Plugin v{0} loaded", Version);
             SetupUiPanel();
             return true;
         }
@@ -82,7 +95,8 @@ namespace RcOverridePlugin
         public override bool Exit()
         {
             _running = false;
-            Debug.WriteLine("[RC] Plugin exiting");
+            Console.WriteLine("[RC] Plugin exiting, stats: lines={0}, parsed={1}, sent={2}",
+                _linesReceived, _linesParsed, _framesSent);
 
             try { ClearRcOverride(); } catch { }
             try { ClosePort(); } catch { }
@@ -97,11 +111,33 @@ namespace RcOverridePlugin
             if (!_running)
                 return true;
 
+            // Dynamic port refresh when dropdown is open or periodically
+            if (_sourceMode == SourceMode.COM && _cmbPort != null)
+            {
+                var now = DateTime.UtcNow;
+                if ((now - _lastPortRefresh).TotalMilliseconds > PORT_REFRESH_INTERVAL_MS)
+                {
+                    _lastPortRefresh = now;
+                    RefreshPortListIfChanged();
+                }
+            }
+
             if (_chkEnable != null && !_chkEnable.Checked)
                 return true;
 
             if (!IsVehicleReady())
                 return true;
+
+            // Periodic diagnostics
+            var diagNow = DateTime.UtcNow;
+            if ((diagNow - _lastDiagTime).TotalMilliseconds > DIAG_INTERVAL_MS)
+            {
+                _lastDiagTime = diagNow;
+                Console.WriteLine("[RC] Stats: lines={0}, parsed={1}, sent={2}, port={3}, open={4}",
+                    _linesReceived, _linesParsed, _framesSent,
+                    _currentPortName,
+                    _port != null && _port.IsOpen ? "yes" : "no");
+            }
 
             try
             {
@@ -221,16 +257,19 @@ namespace RcOverridePlugin
             {
                 string line = bufStr.Substring(0, newline).Trim('\r', '\n', ' ');
                 bufStr = bufStr.Substring(newline + 1);
+                _linesReceived++;
 
                 ushort[] rc = ParseRcLine(line);
                 if (rc != null)
                 {
+                    _linesParsed++;
                     DateTime now = DateTime.UtcNow;
                     if (RATE_LIMIT_MS == 0 || (now - _lastFrameSent).TotalMilliseconds >= RATE_LIMIT_MS)
                     {
                         _lastFrameSent = now;
                         _lastPacketTime = now;
                         SendRcOverride(rc);
+                        _framesSent++;
                     }
                 }
             }
@@ -288,6 +327,10 @@ namespace RcOverridePlugin
             {
                 SetLedColor(Color.Red);
             }
+
+            // Lock port/source selection when connected (prevent accidental changes)
+            if (_cmbPort != null) _cmbPort.Enabled = !connected;
+            if (_cmbSource != null) _cmbSource.Enabled = !connected;
         }
 
         // ---------------------------------------------------------------
@@ -432,21 +475,28 @@ namespace RcOverridePlugin
             if (_port != null && _port.IsOpen)
                 return;
 
+            // Rate limit port open attempts (BT ports need time to establish SPP connection)
+            var now = DateTime.UtcNow;
+            if ((now - _lastPortOpenAttempt).TotalMilliseconds < PORT_RETRY_INTERVAL_MS)
+                return;
+            _lastPortOpenAttempt = now;
+
             try
             {
                 ClosePort();
 
+                Console.WriteLine("[RC] Opening port {0} at {1} baud...", _currentPortName, BAUD);
                 _port = new SerialPort(_currentPortName, BAUD, Parity.None, 8, StopBits.One);
                 _port.ReadTimeout = 5;
                 _port.Open();
 
                 _lastDataTime = DateTime.UtcNow;
 
-                Debug.WriteLine("[RC] Opened " + _currentPortName);
+                Console.WriteLine("[RC] Port {0} opened successfully", _currentPortName);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[RC] Failed to open " + _currentPortName + ": " + ex.Message);
+                Console.WriteLine("[RC] Failed to open {0}: {1}", _currentPortName, ex.Message);
                 ClosePort();
             }
         }
@@ -731,6 +781,69 @@ namespace RcOverridePlugin
             int idx = Array.IndexOf(ports, _currentPortName);
             if (idx < 0) idx = 0;
             _cmbPort.SelectedIndex = idx;
+        }
+
+        // Cached port list for change detection
+        private string[] _lastKnownPorts = null;
+
+        private void RefreshPortListIfChanged()
+        {
+            if (_cmbPort == null)
+                return;
+
+            try
+            {
+                string[] ports = SerialPort.GetPortNames();
+                Array.Sort(ports, StringComparer.OrdinalIgnoreCase);
+
+                // Compare with cached list
+                bool changed = false;
+                if (_lastKnownPorts == null || _lastKnownPorts.Length != ports.Length)
+                {
+                    changed = true;
+                }
+                else
+                {
+                    for (int i = 0; i < ports.Length; i++)
+                    {
+                        if (_lastKnownPorts[i] != ports[i])
+                        {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (changed)
+                {
+                    Console.WriteLine("[RC] Port list changed: {0} -> {1}",
+                        _lastKnownPorts != null ? string.Join(",", _lastKnownPorts) : "null",
+                        string.Join(",", ports));
+
+                    _lastKnownPorts = ports;
+
+                    // Preserve current selection
+                    string currentSelection = _currentPortName;
+
+                    _cmbPort.Items.Clear();
+                    if (ports.Length == 0)
+                    {
+                        _cmbPort.Items.Add(PORT_DEFAULT);
+                        _cmbPort.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        _cmbPort.Items.AddRange(ports);
+                        int idx = Array.IndexOf(ports, currentSelection);
+                        if (idx < 0) idx = 0;
+                        _cmbPort.SelectedIndex = idx;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[RC] RefreshPortListIfChanged error: {0}", ex.Message);
+            }
         }
 
         private void RemoveUiPanel()

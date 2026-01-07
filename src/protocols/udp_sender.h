@@ -2,13 +2,14 @@
 #define UDP_SENDER_H
 
 #include "packet_sender.h"
-#include "protocol_types.h"  // For DataFormat::FORMAT_SBUS
-#include "sbus_mavlink.h"    // For sbusFrameToMavlink()
-#include "../device_types.h" // For SbusOutputFormat enum
+#include "sbus_router.h"
+#include "protocol_types.h"
+#include "sbus_mavlink.h"
+#include "../device_types.h"
 #include <ArduinoJson.h>
 #include <AsyncUDP.h>
-#include "../types.h"  // For g_deviceStats
-#include "../wifi/wifi_manager.h"  // For wifiIsReady()
+#include "../types.h"
+#include "../wifi/wifi_manager.h"
 
 class UdpSender : public PacketSender {
 private:
@@ -221,13 +222,15 @@ public:
         // Convert SBUS binary based on output format setting
         if (size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
             if (sbusOutputFormat == SBUS_FMT_TEXT) {
-                sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+                char* buf = SbusRouter::getInstance()->getConvertBuffer();
+                sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
-                sendData = (const uint8_t*)sbusTextBuffer;
+                sendData = (const uint8_t*)buf;
             } else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
-                sendSize = sbusFrameToMavlink(data, (uint8_t*)sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+                char* buf = SbusRouter::getInstance()->getConvertBuffer();
+                sendSize = sbusFrameToMavlink(data, (uint8_t*)buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
-                sendData = (const uint8_t*)sbusTextBuffer;
+                sendData = (const uint8_t*)buf;
             }
             // SBUS_FMT_BINARY: sendData/sendSize unchanged (pass-through)
         }

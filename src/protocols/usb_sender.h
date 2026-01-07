@@ -2,11 +2,12 @@
 #define USB_SENDER_H
 
 #include "packet_sender.h"
+#include "sbus_router.h"
 #include "../usb/usb_interface.h"
-#include "../device_types.h" // For SbusOutputFormat enum
-#include "../types.h"  // For g_deviceStats
-#include <cstring>   // for memcpy
-#include <algorithm> // for min
+#include "../device_types.h"
+#include "../types.h"
+#include <cstring>
+#include <algorithm>
 
 class UsbSender : public PacketSender {
 private:
@@ -124,9 +125,10 @@ public:
 
         // Convert SBUS binary to text if TEXT format selected (MAVLink not supported for USB)
         if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
-            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+            char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
             if (sendSize == 0) return 0;  // Conversion failed
-            sendData = (const uint8_t*)sbusTextBuffer;
+            sendData = (const uint8_t*)buf;
         }
 
         size_t sent = usbInterface->write(sendData, sendSize);
