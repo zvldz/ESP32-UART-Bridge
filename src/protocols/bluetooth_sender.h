@@ -5,6 +5,7 @@
 #define BLUETOOTH_SENDER_H
 
 #include "packet_sender.h"
+#include "sbus_router.h"
 #include "../bluetooth/bluetooth_spp.h"
 #include "../device_types.h"
 #include "../types.h"
@@ -17,6 +18,8 @@ class BluetoothSender : public PacketSender {
 private:
     uint32_t lastSendAttempt;
     uint32_t backoffDelay;
+    uint32_t sendRateIntervalMs = 0;  // 0 = disabled (no rate limit)
+    uint32_t lastRateSendMs = 0;
     SemaphoreHandle_t queueMutex;  // Protect queue from concurrent access
 
     void applyBackoff(uint32_t delayUs = 1000) {
@@ -68,14 +71,24 @@ public:
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!bluetoothSPP || !bluetoothSPP->hasClient()) return 0;
 
+        // Rate limiting check (if enabled via setSendRate)
+        if (sendRateIntervalMs > 0) {
+            uint32_t now = millis();
+            if ((now - lastRateSendMs) < sendRateIntervalMs) {
+                return 0;  // Skip frame (rate limited)
+            }
+            lastRateSendMs = now;
+        }
+
         const uint8_t* sendData = data;
         size_t sendSize = size;
 
         // Convert SBUS binary to text if TEXT format selected
         if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
-            sendSize = sbusFrameToText(data, sbusTextBuffer, SBUS_OUTPUT_BUFFER_SIZE);
+            char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
             if (sendSize == 0) return 0;
-            sendData = (const uint8_t*)sbusTextBuffer;
+            sendData = (const uint8_t*)buf;
         }
 
         size_t sent = bluetoothSPP->write(sendData, sendSize);
@@ -156,6 +169,16 @@ public:
         bool result = PacketSender::enqueue(packet);
         xSemaphoreGive(queueMutex);
         return result;
+    }
+
+    // Set send rate limit for SBUS text mode
+    void setSendRate(uint8_t rateHz) {
+        if (rateHz == 0) {
+            sendRateIntervalMs = 0;  // Disabled
+        } else {
+            sendRateIntervalMs = 1000 / rateHz;
+            log_msg(LOG_INFO, "BT send rate: %d Hz (%lu ms interval)", rateHz, sendRateIntervalMs);
+        }
     }
 };
 

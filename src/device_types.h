@@ -98,6 +98,7 @@ struct Device4Config {
 #if defined(BOARD_MINIKIT_ESP32)
 struct Device5Config {
     uint8_t role;           // Device5Role
+    uint8_t btSendRate;     // Send rate in Hz for SBUS Text mode (10-70, default 50)
 };
 #endif
 

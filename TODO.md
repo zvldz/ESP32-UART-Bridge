@@ -194,6 +194,12 @@
   CONFIG_BT_ENABLED=y adds ~21KB .bss (static RAM) even without BT initialization.
   Remaining ~20KB — likely .data sections of BT stack.
 
+- [ ] **Device 2 USB SBUS Text Output (MiniKit)**
+  - Add SBUS Text format support for USB output (D2_USB role)
+  - Similar to BT SBUS Text — send `RC 1500,1500,...\r\n` over USB Serial
+  - Needed for TX16S-RC ESP firmware compatibility (it sends to both BT and USB)
+  - Rate limiting option (same as BT: 10-70 Hz)
+
 ### Device 3 SBUS_IN Role ✅ COMPLETED
 
 - [x] **Add D3_SBUS_IN role to Device 3**
@@ -261,7 +267,7 @@
   - [x] Web UI checkbox "Text format" for SBUS Output roles
   - [x] Web UI warning when SBUS Output configured without SBUS Input
   - [x] Protocol optimization auto-set to SBUS when SBUS roles active
-  - **Use case**: Replace TX16S-RC Bluetooth dongle with WiFi/USB output
+  - **Use case**: Replace TX16S-RC ESP firmware Bluetooth dongle with WiFi/USB output
   - **Files**: sbus_text.h, packet_sender.h, uart_sender.h, usb_sender.h, udp_sender.h
   - [ ] **Requires hardware testing** with actual RC receiver
 
@@ -271,7 +277,7 @@
 
   Replaced `sbusTextFormat` (bool) with `sbusOutputFormat` (enum) dropdown:
   - Binary (SBUS) — standard 25-byte SBUS frame
-  - Text (RC) — `RC 1500,...\r\n` for TX16S-RC plugin
+  - Text (RC) — `RC 1500,...\r\n` for Mission Planner RC Override plugin
   - MAVLink (RC Override) — RC_CHANNELS_OVERRIDE for direct FC control
 
 - [x] **MAVLink RC_CHANNELS_OVERRIDE output** ✅ IMPLEMENTED (v2.18.12)

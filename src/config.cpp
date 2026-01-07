@@ -98,7 +98,11 @@ void config_init(Config* config) {
     config->flowcontrol = false;
     config->ssid = "";  // Empty = auto-generate unique SSID on first AP start
     config->password = DEFAULT_AP_PASSWORD;
+#ifdef DEFAULT_PERMANENT_AP
+    config->permanent_network_mode = true;  // AP always available on fresh firmware
+#else
     config->permanent_network_mode = false;
+#endif
 
     // WiFi Client mode defaults
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
@@ -146,6 +150,7 @@ void config_init(Config* config) {
     // Device 5 (Bluetooth SPP) defaults
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     config->device5_config.role = D5_NONE;
+    config->device5_config.btSendRate = 50;  // 50 Hz default for SBUS Text
 #endif
 }
 
@@ -359,6 +364,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     if (doc["device5"].is<JsonObject>()) {
         config->device5_config.role = doc["device5"]["role"] | D5_NONE;
+        config->device5_config.btSendRate = doc["device5"]["btSendRate"] | 50;
     }
 #endif
 
@@ -470,6 +476,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     // Device 5 (Bluetooth SPP) configuration
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     doc["device5"]["role"] = config->device5_config.role;
+    doc["device5"]["btSendRate"] = config->device5_config.btSendRate;
 #endif
 
     // Note: device_version and device_name are NOT saved - always use compiled values
@@ -522,11 +529,12 @@ void config_save(Config* config) {
     file.close();
 
 #if defined(BOARD_MINIKIT_ESP32)
-    // Duplicate D5 role to Preferences for btInUse() early access
+    // Duplicate D5 config to Preferences for btInUse() early access
     // btInUse() is called by Arduino before LittleFS is mounted
     Preferences prefs;
     prefs.begin("btconfig", false);
     prefs.putUChar("d5_role", config->device5_config.role);
+    prefs.putUChar("d5_rate", config->device5_config.btSendRate);
     prefs.end();
 #endif
 }
