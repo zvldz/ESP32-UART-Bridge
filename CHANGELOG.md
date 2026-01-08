@@ -15,11 +15,19 @@
   - BT SBUS Text — text format for RC Override plugin
   - SSP "Just Works" pairing (no PIN prompt)
 
+### MiniKit Memory Optimization
+- **DMA buffers reduced**: 2x smaller for MiniKit (16KB vs 32KB on S3)
+- **Auto Device1 SBUS_IN**: When any device has SBUS role, Device 1 auto-switches to SBUS_IN
+  - Saves ~14KB RAM (minimal DMA buffers instead of full UART bridge)
+  - UART bridge is unused in SBUS mode anyway
+- **SBUS→MAVLink conditional**: Disabled by default to save memory (uncomment `-D SBUS_MAVLINK_SUPPORT` in platformio.ini to enable)
+
 ### MiniKit Fixes
 - **Fix spurious WiFi reset**: Disabled floating GPIO0 button handling
 - **Quick reset always forces AP**: Triple RESET guarantees Web UI access
 - **Fix Device 3 role validation**: SBUS_IN role was blocked by incorrect validation
 - **Fix BT SBUS Text output**: Buffer size was too small (64 < 101 bytes needed)
+- **Fix SBUS validation**: Added D3_SBUS_IN and D5_BT_SBUS_TEXT to validation
 
 ### Code Quality
 - **SBUS conversion buffer refactored**: Lazy allocation in SbusRouter singleton
@@ -30,6 +38,7 @@
 - **Device 4/5 configuration**: Renamed roles, MiniKit-specific options
 - **Modular JS architecture**: Reduced code duplication
 - **BT Send Rate slider**: Rate control for SBUS Text output (Device 5)
+- **Auto Device1 role**: Device 1 automatically set to SBUS_IN when SBUS role selected on other devices
 
 ### Mission Planner Plugin
 - **RC Override Plugin v2.0.1** (`plugins/rcoverride_v2.cs`):

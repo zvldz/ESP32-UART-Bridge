@@ -98,8 +98,8 @@
   - [x] Verify Device 1 UART interface (GPIO4/5 pins) ✅
   - [x] UDP telemetry (MAVLink bridge) working ✅
   - [x] Device 2 USB TX/RX verified (tested with CP2104) ✅
-  - [ ] Verify Device 3 UART interface (GPIO16/17 pins)
-  - [ ] Test SBUS with hardware inverter
+  - [x] Verify Device 3 UART interface (GPIO16/17 pins) ✅
+  - [x] Test SBUS with hardware inverter (Device 3 SBUS_IN → BT SBUS Text) ✅
   - [ ] Full protocol testing (MAVLink, SBUS, etc.)
 
 **Status**: ESP32 MiniKit (WROOM-32) support implemented and tested. WiFi and web interface working. Quick reset detection working (3 quick resets = network mode). Device 2 = USB via external chip (no native UART2). USB TX/RX verified with CP2104 — no packet loss after buffer initialization fix.
@@ -194,11 +194,55 @@
   CONFIG_BT_ENABLED=y adds ~21KB .bss (static RAM) even without BT initialization.
   Remaining ~20KB — likely .data sections of BT stack.
 
-- [ ] **Device 2 USB SBUS Text Output (MiniKit)**
-  - Add SBUS Text format support for USB output (D2_USB role)
-  - Similar to BT SBUS Text — send `RC 1500,1500,...\r\n` over USB Serial
-  - Needed for TX16S-RC ESP firmware compatibility (it sends to both BT and USB)
-  - Rate limiting option (same as BT: 10-70 Hz)
+- [ ] **Device 2 USB SBUS Text Output (MiniKit)** 🟡 ANALYSIS COMPLETE
+
+  **Goal**: SBUS input → USB Serial text output (`RC 1500,1500,...\r\n`)
+  Needed for TX16S-RC ESP firmware compatibility (GPIO16 SBUS → USB COM port)
+
+  **Two implementation options:**
+
+  **Option A: Add USB to SbusRouter outputs** (no pin changes)
+  - Register USB sender in SbusRouter when SBUS source configured
+  - Device 3 SBUS_IN (GPIO16) → SbusRouter → USB sender
+  - ~30 lines code change
+  - Pros: No breaking changes, works alongside BT/UDP outputs
+  - Cons: Device 1 (UART1) initialized but unused — wastes ~12KB RAM and CPU cycles
+    on high-priority task polling empty UART
+
+  **Option B: Swap Device 1 ↔ Device 3 pins for MiniKit** (architectural fix)
+  - Change defines.h: Device 1 = GPIO16/17, Device 3 = GPIO4/5
+  - Device 1 SBUS_IN on GPIO16 (highest priority, optimized path)
+  - ~4 lines code change
+  - Pros: Architecturally correct — SBUS on main input with full optimizations,
+    TX service disabled, no wasted resources
+  - Cons: Changes pin mapping for MiniKit (experimental, never released)
+
+  **Current architecture issue with Option A:**
+  When D1=UART1 (default) + D3=SBUS_IN:
+  - High-priority uartBridgeTask polls empty UART1 every iteration
+  - UART1 TX service allocated (~4KB) but never used
+  - UART1 DMA buffers allocated (~8KB) but never used
+  - SBUS processed as "secondary" Device 3 input
+
+  **Recommendation**: Option B is cleaner for MiniKit as dedicated SBUS→USB/BT bridge.
+  MiniKit is experimental, no existing users with FC on GPIO4/5.
+
+  **Option C: Configurable pin mapping via Web UI** (future flexibility)
+  - Whitelist of verified pins per board (GPIO4/5, GPIO16/17 for MiniKit)
+  - User selects which pins for Device 1 / Device 3 in Web UI
+  - Stored in config, applied at boot
+  - ~100 lines code change (config fields, Web UI dropdowns, validation)
+  - Pros: Maximum flexibility, one firmware for multiple use cases
+  - Cons: More code, config migration needed
+  - Safety: Whitelist prevents invalid pins, conflict validation, quick reset fallback
+
+  **Files to modify:**
+  - Option A: device_init.cpp (registerSbusOutputs), protocol_pipeline.cpp
+  - Option B: defines.h (UART_RX_PIN, DEVICE3_UART_RX_PIN for MiniKit)
+  - Option C: config.cpp, device_types.h, device_init.cpp, web UI (device-config.js)
+
+  **Both options A/B preserve**: BT SBUS Text, UDP SBUS output functionality
+  **Option C**: Also enables FC mode on GPIO16 if user wants
 
 ### Device 3 SBUS_IN Role ✅ COMPLETED
 
@@ -220,6 +264,13 @@
     - D3_SBUS_IN conflicts with D3_SBUS_OUT (same UART pins)
     - D3_SBUS_IN conflicts with D3_UART3_* roles
     - Validation in config save and Web UI
+
+### DOCUMENTATION 📝
+
+- [ ] **Update README with MiniKit Bluetooth**
+  - Device 5 roles: BT Bridge, BT SBUS Text
+  - SSP pairing (no PIN)
+  - Use case: wireless telemetry to Android apps, RC Override plugin
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
@@ -294,7 +345,7 @@
 
 - [x] **Testing RC_OVERRIDE via Bluetooth** ✅
   - [x] Tested with TX16S-RC ESP firmware + MiniKit + Mission Planner plugin
-  - [ ] Test with ESP32 UART Bridge SBUS text output
+  - [x] Test with ESP32 UART Bridge SBUS text output (Device 3 SBUS_IN → Device 5 BT SBUS Text) ✅
 
 - [ ] **Testing RC_OVERRIDE via UDP** (ESP32 UART Bridge only)
   - [ ] Test with ESP32 UART Bridge SBUS text over UDP
@@ -455,6 +506,20 @@
   - Authentication options
 
 ## Build & CI/CD
+
+### Debug Toolchain Paths
+
+```
+# ESP32 (MiniKit) - xtensa-esp32
+TOOLCHAIN: C:/Users/vladn/.platformio/packages/toolchain-xtensa-esp-elf/bin/
+addr2line: xtensa-esp32-elf-addr2line.exe -pfiaC -e .pio/build/minikit_debug/firmware.elf <addresses>
+size:      xtensa-esp32-elf-size.exe .pio/build/minikit_production/firmware.elf
+nm:        xtensa-esp32-elf-nm.exe .pio/build/minikit_production/firmware.elf
+
+# ESP32-S3 (Zero, SuperMini, XIAO) - xtensa-esp32s3
+addr2line: xtensa-esp32s3-elf-addr2line.exe -pfiaC -e .pio/build/zero_debug/firmware.elf <addresses>
+size:      xtensa-esp32s3-elf-size.exe .pio/build/zero_production/firmware.elf
+```
 
 ### GitHub Actions Improvements
 - [x] **Add MiniKit to GitHub Actions auto-build**

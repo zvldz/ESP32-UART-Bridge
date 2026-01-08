@@ -873,6 +873,24 @@ const DeviceConfig = {
 
     // Called when any device role changes
     onDeviceRoleChange() {
+        // Auto-set Device1 to SBUS_IN when any other device has SBUS role
+        // This saves ~14KB RAM (minimal DMA buffers) since UART bridge is unused in SBUS mode
+        const device1Role = document.getElementById('device1_role');
+        const device2Role = document.getElementById('device2_role')?.value;
+        const device3Role = document.getElementById('device3_role')?.value;
+        const device4Role = document.getElementById('device4_role')?.value;
+        const device5Role = document.getElementById('device5_role')?.value;
+
+        const otherHasSbus = (device2Role === '3' || device2Role === '4' ||  // D2_SBUS_IN/OUT
+                              device3Role === '4' || device3Role === '5' ||  // D3_SBUS_IN/OUT
+                              device4Role === '3' || device4Role === '4' ||  // D4_SBUS_UDP_TX/RX
+                              device5Role === '2');                          // D5_BT_SBUS_TEXT
+
+        if (device1Role && otherHasSbus && device1Role.value !== '1') {
+            device1Role.value = '1';  // D1_SBUS_IN
+            this.onDevice1RoleChange();  // Trigger Device1 change handlers
+        }
+
         this.updateDevice4Options();
         this.updateSbusFormatOptions();
         this.updateProtocolFieldState();
@@ -887,6 +905,15 @@ const DeviceConfig = {
         const d2Format = document.getElementById('device2_sbus_format');
         const d3Format = document.getElementById('device3_sbus_format');
         const d4Format = document.getElementById('device4_sbus_format');
+
+        // Hide MAVLink option if not supported (sbusMavlinkEnabled from backend)
+        const hideMavlink = !this.config.sbusMavlinkEnabled;
+        [d2Format, d3Format, d4Format].forEach(select => {
+            if (select) {
+                const mavlinkOpt = select.querySelector('option[value="2"]');
+                if (mavlinkOpt) mavlinkOpt.style.display = hideMavlink ? 'none' : '';
+            }
+        });
 
         // Device 2: show for SBUS Output (value 4)
         if (d2Format) {
@@ -1006,6 +1033,7 @@ const DeviceConfig = {
         if (device5Role) {
             this.config.device5Role = device5Role.value;
             this.updateDevice5Config();
+            this.onDeviceRoleChange();  // Check if Device1 should be auto-set to SBUS_IN
         }
     },
 
