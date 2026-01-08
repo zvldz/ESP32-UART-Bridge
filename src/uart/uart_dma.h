@@ -14,9 +14,16 @@ public:
     // DMA-specific configuration structure
     struct DmaConfig {
         bool useEventTask = true;         // Create event task for interrupt-driven operation
-        size_t dmaRxBufSize = 8192;       // DMA RX buffer size
-        size_t dmaTxBufSize = 8192;       // DMA TX buffer size  
-        size_t ringBufSize = 16384;       // Application ring buffer size
+#if defined(BOARD_MINIKIT_ESP32)
+        // MiniKit: no PSRAM, limited heap (~160KB) - reduced buffers (2x smaller)
+        size_t dmaRxBufSize = 4096;       // DMA RX buffer size (4KB)
+        size_t dmaTxBufSize = 4096;       // DMA TX buffer size (4KB)
+        size_t ringBufSize = 8192;        // Application ring buffer size (8KB)
+#else
+        size_t dmaRxBufSize = 8192;       // DMA RX buffer size (8KB)
+        size_t dmaTxBufSize = 8192;       // DMA TX buffer size (8KB)
+        size_t ringBufSize = 16384;       // Application ring buffer size (16KB)
+#endif
         uint8_t eventTaskPriority = (configMAX_PRIORITIES - 1);   // Priority for event task (if used) (20)
         size_t eventQueueSize = 30;       // UART event queue size
     };

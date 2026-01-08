@@ -71,8 +71,11 @@ enum Device5Role {
 // SBUS output format
 enum SbusOutputFormat : uint8_t {
     SBUS_FMT_BINARY = 0,   // Standard SBUS (100000 8E2 INV) → FC
-    SBUS_FMT_TEXT = 1,     // "RC 1500,..." (115200 8N1) → PC/App
-    SBUS_FMT_MAVLINK = 2   // RC_CHANNELS_OVERRIDE → MP/FC
+    SBUS_FMT_TEXT = 1      // "RC 1500,..." (115200 8N1) → PC/App
+#ifdef SBUS_MAVLINK_SUPPORT
+    , SBUS_FMT_MAVLINK = 2 // RC_CHANNELS_OVERRIDE → MP/FC
+#endif
+    // Note: value 2 reserved for MAVLINK, new formats should start from 3
 };
 
 // Device configuration

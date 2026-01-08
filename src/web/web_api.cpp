@@ -37,10 +37,15 @@ bool validateSbusConfig(const Config& cfg) {
     // Check if there are SBUS_IN without any SBUS_OUT
     bool hasSbusIn = (cfg.device1.role == D1_SBUS_IN ||
                       cfg.device2.role == D2_SBUS_IN ||
+                      cfg.device3.role == D3_SBUS_IN ||
                       cfg.device4.role == D4_SBUS_UDP_RX);
     bool hasSbusOut = (cfg.device2.role == D2_SBUS_OUT ||
                        cfg.device3.role == D3_SBUS_OUT ||
-                       cfg.device4.role == D4_SBUS_UDP_TX);
+                       cfg.device4.role == D4_SBUS_UDP_TX
+#if defined(BOARD_MINIKIT_ESP32)
+                       || cfg.device5_config.role == D5_BT_SBUS_TEXT
+#endif
+                       );
 
     if (hasSbusIn && !hasSbusOut) {
         log_msg(LOG_ERROR, "SBUS_IN devices require at least one SBUS_OUT device");
@@ -83,6 +88,13 @@ static void populateConfigJson(JsonDocument& doc) {
     // Compile-time verification
 #if defined(BOARD_ESP32_S3_SUPER_MINI) && defined(BOARD_ESP32_S3_ZERO)
     #error "Both BOARD_ESP32_S3_SUPER_MINI and BOARD_ESP32_S3_ZERO are defined - this should not happen"
+#endif
+
+    // Feature flags for Web UI
+#ifdef SBUS_MAVLINK_SUPPORT
+    doc["sbusMavlinkEnabled"] = true;
+#else
+    doc["sbusMavlinkEnabled"] = false;
 #endif
 
     // Calculate uptime
@@ -1054,6 +1066,7 @@ void handleSbusSetMode(AsyncWebServerRequest *request) {
 
 // Get current SBUS source status
 void handleSbusStatus(AsyncWebServerRequest *request) {
+
     JsonDocument doc;
     doc["status"] = "ok";
 

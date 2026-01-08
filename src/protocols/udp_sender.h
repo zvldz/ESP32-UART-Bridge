@@ -226,12 +226,15 @@ public:
                 sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
                 sendData = (const uint8_t*)buf;
-            } else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
+            }
+#ifdef SBUS_MAVLINK_SUPPORT
+            else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
                 char* buf = SbusRouter::getInstance()->getConvertBuffer();
                 sendSize = sbusFrameToMavlink(data, (uint8_t*)buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
                 sendData = (const uint8_t*)buf;
             }
+#endif
             // SBUS_FMT_BINARY: sendData/sendSize unchanged (pass-through)
         }
 

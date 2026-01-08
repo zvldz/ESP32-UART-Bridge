@@ -5,7 +5,9 @@
 #include "../types.h"
 #include "../logging.h"
 #include "sbus_text.h"
+#ifdef SBUS_MAVLINK_SUPPORT
 #include "sbus_mavlink.h"
+#endif
 #include <deque>
 #include <Arduino.h>
 
