@@ -111,14 +111,6 @@ void setup() {
     // Initialize filesystem
     log_msg(LOG_INFO, "Initializing LittleFS...");
 
-    #ifdef FORMAT_FILESYSTEM
-        log_msg(LOG_WARNING, "FORMAT_FILESYSTEM flag detected - formatting LittleFS...");
-        if (LittleFS.format()) {
-            log_msg(LOG_INFO, "LittleFS formatted successfully");
-        } else {
-            log_msg(LOG_ERROR, "LittleFS format failed");
-        }
-    #endif
 
     if (!LittleFS.begin()) {
         log_msg(LOG_WARNING, "LittleFS mount failed, formatting...");
@@ -568,7 +560,15 @@ void initNetworkMode() {
     }
 
     // Initialize web server
+#ifdef DEBUG
+    forceSerialLog("HEAP before webserver_init: free=%u, minFree=%u",
+                   ESP.getFreeHeap(), ESP.getMinFreeHeap());
+#endif
     webserver_init(&config, &systemState);
+#ifdef DEBUG
+    forceSerialLog("HEAP after webserver_init: free=%u, minFree=%u",
+                   ESP.getFreeHeap(), ESP.getMinFreeHeap());
+#endif
 }
 
 //================================================================

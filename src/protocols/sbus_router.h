@@ -3,15 +3,21 @@
 
 #include "sbus_common.h"
 #include "sbus_text.h"
+#ifdef SBUS_MAVLINK_SUPPORT
 #include "sbus_mavlink.h"
+#endif
 #include "../types.h"
 #include "../logging.h"
 #include <stdint.h>
 #include <vector>
 
-// SBUS conversion buffer size - must fit both TEXT (101 bytes) and MAVLink (64 bytes)
+// SBUS conversion buffer size - must fit TEXT (101 bytes) and MAVLink (64 bytes) if enabled
+#ifdef SBUS_MAVLINK_SUPPORT
 static constexpr size_t SBUS_OUTPUT_BUFFER_SIZE =
     (SBUS_TEXT_BUFFER_SIZE > SBUS_MAVLINK_BUFFER_SIZE) ? SBUS_TEXT_BUFFER_SIZE : SBUS_MAVLINK_BUFFER_SIZE;
+#else
+static constexpr size_t SBUS_OUTPUT_BUFFER_SIZE = SBUS_TEXT_BUFFER_SIZE;
+#endif
 
 // Forward declarations
 class PacketSender;
