@@ -25,7 +25,7 @@ namespace RcOverridePlugin
 
         // --- LED and timeout config ---
         private const int LED_TIMEOUT_MS = 1000;
-        private const int DATA_TIMEOUT_MS = 1000;
+        private const int DATA_TIMEOUT_MS = 3000;
         private const int BUFFER_MAX_SIZE = 4096;
         private const int PORT_RETRY_INTERVAL_MS = 2000;  // Wait 2s between open attempts (for BT ports)
 
@@ -123,7 +123,12 @@ namespace RcOverridePlugin
             }
 
             if (_chkEnable != null && !_chkEnable.Checked)
+            {
+                // Close port when disabled
+                ClosePort();
+                CloseUdp();
                 return true;
+            }
 
             if (!IsVehicleReady())
                 return true;
@@ -294,10 +299,12 @@ namespace RcOverridePlugin
             if (_ledPanel == null)
                 return;
 
-            // If RC override is disabled, LED is gray
+            // If RC override is disabled, LED is gray and controls unlocked
             if (_chkEnable == null || !_chkEnable.Checked)
             {
                 SetLedColor(Color.DarkGray);
+                if (_cmbPort != null) _cmbPort.Enabled = true;
+                if (_cmbSource != null) _cmbSource.Enabled = true;
                 return;
             }
 
@@ -691,6 +698,14 @@ namespace RcOverridePlugin
             _chkEnable.Margin = new Padding(4, 4, 0, 0);
             _chkEnable.TabStop = false;
             _chkEnable.Location = new System.Drawing.Point(_cmbPort.Right + 5, 4);
+            _chkEnable.CheckedChanged += (s, e) => {
+                if (!_chkEnable.Checked)
+                {
+                    ClosePort();
+                    CloseUdp();
+                }
+                UpdateLed(DateTime.Now);
+            };
 
             // LED indicator panel (red/green/gray)
             _ledPanel = new Panel();

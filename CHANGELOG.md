@@ -28,6 +28,8 @@
 - **Fix Device 3 role validation**: SBUS_IN role was blocked by incorrect validation
 - **Fix BT SBUS Text output**: Buffer size was too small (64 < 101 bytes needed)
 - **Fix SBUS validation**: Added D3_SBUS_IN and D5_BT_SBUS_TEXT to validation
+- **Fix SBUS + WiFi crash**: Reduced DMA buffers for all SBUS devices (512/0/1024 vs 4096/4096/8192)
+  - Root cause: Large buffers caused heap fragmentation, WiFi tcp_accept failed
 
 ### Code Quality
 - **SBUS conversion buffer refactored**: Lazy allocation in SbusRouter singleton
@@ -39,6 +41,11 @@
 - **Modular JS architecture**: Reduced code duplication
 - **BT Send Rate slider**: Rate control for SBUS Text output (Device 5)
 - **Auto Device1 role**: Device 1 automatically set to SBUS_IN when SBUS role selected on other devices
+- **SBUS Output roles refactored**: Split into "SBUS Output" (binary) and "SBUS Text Output" for Device 3/4
+  - Format selector dropdown replaced with composite role values
+  - Rate selector shown only for Text output modes
+- **Device 5 roles renamed**: "BT Bridge" → "Bridge", "BT SBUS Text" → "SBUS Text Output"
+- **UART roles disabled in SBUS mode**: UART2/UART3 Bridge options disabled when Device 1 = SBUS Input
 
 ### Mission Planner Plugin
 - **RC Override Plugin v2.0.1** (`plugins/rcoverride_v2.cs`):
@@ -47,6 +54,8 @@
   - Lock port/source selection when connected
   - Dynamic port list refresh every 3s
   - Console diagnostics for debugging
+  - Fix RC checkbox behavior: LED turns gray and port closes when unchecked
+  - Fix controls unlock: COM port and Source dropdowns re-enabled when RC disabled
 
 ## v2.18.11
 
