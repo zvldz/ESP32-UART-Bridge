@@ -242,7 +242,10 @@ const FormUtils = {
         
         // Submit via fetch to handle JSON response
         const formData = new FormData(form);
-        
+
+        // Handle composite role values (e.g., "5_1" -> role=5, format=1)
+        this.convertCompositeRoles(formData);
+
         fetch('/save', {
             method: 'POST',
             body: formData
@@ -834,6 +837,27 @@ const FormUtils = {
             } else {
                 sbusSection.style.display = 'none';
             }
+        }
+    },
+
+    // Convert composite role values (e.g., "5_1") to separate role and format fields
+    // Device 3: "5_0" -> device3_role=5, device3_sbus_format=0
+    // Device 4: "3_1" -> device4_role=3, device4_sbus_format=1
+    convertCompositeRoles(formData) {
+        // Device 3
+        const d3Role = formData.get('device3_role');
+        if (d3Role && d3Role.includes('_')) {
+            const [role, format] = d3Role.split('_');
+            formData.set('device3_role', role);
+            formData.set('device3_sbus_format', format);
+        }
+
+        // Device 4
+        const d4Role = formData.get('device4_role');
+        if (d4Role && d4Role.includes('_')) {
+            const [role, format] = d4Role.split('_');
+            formData.set('device4_role', role);
+            formData.set('device4_sbus_format', format);
         }
     }
 };

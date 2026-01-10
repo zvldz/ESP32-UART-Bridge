@@ -31,6 +31,7 @@ public:
         // Convert SBUS binary to text if TEXT format selected (MAVLink not supported for UART)
         if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
             char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            if (!buf) return 0;  // Buffer not allocated - skip
             sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
             if (sendSize == 0) return 0;  // Conversion failed
             sendData = (const uint8_t*)buf;

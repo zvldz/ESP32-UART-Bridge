@@ -223,6 +223,7 @@ public:
         if (size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
             if (sbusOutputFormat == SBUS_FMT_TEXT) {
                 char* buf = SbusRouter::getInstance()->getConvertBuffer();
+                if (!buf) return 0;  // Buffer not allocated - skip
                 sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
                 sendData = (const uint8_t*)buf;
@@ -230,6 +231,7 @@ public:
 #ifdef SBUS_MAVLINK_SUPPORT
             else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
                 char* buf = SbusRouter::getInstance()->getConvertBuffer();
+                if (!buf) return 0;  // Buffer not allocated - skip
                 sendSize = sbusFrameToMavlink(data, (uint8_t*)buf, SBUS_OUTPUT_BUFFER_SIZE);
                 if (sendSize == 0) return 0;  // Conversion failed
                 sendData = (const uint8_t*)buf;

@@ -15,6 +15,10 @@ private:
     uint32_t lastSendAttempt;
     uint32_t backoffDelay;
     uint32_t lastStatsLog;
+
+    // Rate limiting for SBUS output
+    uint32_t sendRateIntervalMs = 0;  // 0 = disabled (no rate limit)
+    uint32_t lastRateSendMs = 0;
     
     // Batch buffer (keep existing)
     static constexpr size_t BATCH_BUFFER_SIZE = 2048;
@@ -120,12 +124,22 @@ public:
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!usbInterface) return 0;
 
+        // Rate limiting check (if enabled via setSendRate)
+        if (sendRateIntervalMs > 0) {
+            uint32_t now = millis();
+            if ((now - lastRateSendMs) < sendRateIntervalMs) {
+                return 0;  // Skip frame (rate limited)
+            }
+            lastRateSendMs = now;
+        }
+
         const uint8_t* sendData = data;
         size_t sendSize = size;
 
         // Convert SBUS binary to text if TEXT format selected (MAVLink not supported for USB)
         if (sbusOutputFormat == SBUS_FMT_TEXT && size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
             char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            if (!buf) return 0;  // Buffer not allocated - skip
             sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
             if (sendSize == 0) return 0;  // Conversion failed
             sendData = (const uint8_t*)buf;
@@ -330,7 +344,17 @@ public:
     const char* getName() const override {
         return "USB";
     }
-    
+
+    // Set send rate limit (for SBUS output modes)
+    void setSendRate(uint8_t rateHz) {
+        if (rateHz == 0 || rateHz > 100) {
+            sendRateIntervalMs = 0;  // Disabled
+        } else {
+            sendRateIntervalMs = 1000 / rateHz;
+            log_msg(LOG_INFO, "USB send rate: %d Hz (%lu ms interval)", rateHz, sendRateIntervalMs);
+        }
+    }
+
     bool enqueue(const ParsedPacket& packet) override {
         // When USB is blocked, keep only 1 packet for testing
         if (usbBlocked) {

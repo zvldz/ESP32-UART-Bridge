@@ -40,6 +40,7 @@ bool validateSbusConfig(const Config& cfg) {
                       cfg.device3.role == D3_SBUS_IN ||
                       cfg.device4.role == D4_SBUS_UDP_RX);
     bool hasSbusOut = (cfg.device2.role == D2_SBUS_OUT ||
+                       cfg.device2.role == D2_USB_SBUS_TEXT ||
                        cfg.device3.role == D3_SBUS_OUT ||
                        cfg.device4.role == D4_SBUS_UDP_TX
 #if defined(BOARD_MINIKIT_ESP32)
@@ -169,8 +170,9 @@ static void populateConfigJson(JsonDocument& doc) {
     doc["device4UdpTimeout"] = config.device4_config.udpSourceTimeout;
     doc["device4SendRate"] = config.device4_config.udpSendRate;
 
-    // SBUS output format options (for SBUS_OUT roles)
+    // SBUS output format and rate options
     doc["device2SbusFormat"] = config.device2.sbusOutputFormat;
+    doc["device2SbusRate"] = config.device2.sbusRate;
     doc["device3SbusFormat"] = config.device3.sbusOutputFormat;
     doc["device4SbusFormat"] = config.device4_config.sbusOutputFormat;
 
@@ -413,11 +415,24 @@ void handleSave(AsyncWebServerRequest *request) {
     if (request->hasParam("device2_role", true)) {
         const AsyncWebParameter* p = request->getParam("device2_role", true);
         int role = p->value().toInt();
-        if (role >= D2_NONE && role <= D2_SBUS_OUT) {
+        if (role >= D2_NONE && role <= D2_USB_SBUS_TEXT) {
             if (role != config.device2.role) {
                 config.device2.role = role;
                 configChanged = true;
                 log_msg(LOG_INFO, "Device 2 role changed to %d", role);
+            }
+        }
+    }
+
+    // Device 2 SBUS send rate (for USB SBUS Text mode)
+    if (request->hasParam("device2_sbus_rate", true)) {
+        const AsyncWebParameter* p = request->getParam("device2_sbus_rate", true);
+        int rate = p->value().toInt();
+        if (rate >= 10 && rate <= 70) {
+            if (rate != config.device2.sbusRate) {
+                config.device2.sbusRate = rate;
+                configChanged = true;
+                log_msg(LOG_INFO, "Device 2 SBUS rate changed to %d Hz", rate);
             }
         }
     }

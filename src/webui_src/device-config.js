@@ -90,6 +90,7 @@ const DeviceConfig = {
                             <option value="2">USB</option>
                             <option value="3">SBUS Input</option>
                             <option value="4">SBUS Output</option>
+                            <option value="5">USB SBUS Text Output</option>
                         </select>
                     </td>
                     <td id="device2_options">
@@ -97,6 +98,15 @@ const DeviceConfig = {
                             <option value="0">Binary (SBUS)</option>
                             <option value="1">Text (RC)</option>
                             <option value="2">MAVLink (RC Override)</option>
+                        </select>
+                        <select id="device2_sbus_rate" name="device2_sbus_rate" style="display:none; width: 100px;">
+                            <option value="10">10 Hz</option>
+                            <option value="20">20 Hz</option>
+                            <option value="30">30 Hz</option>
+                            <option value="40">40 Hz</option>
+                            <option value="50" selected>50 Hz</option>
+                            <option value="60">60 Hz</option>
+                            <option value="70">70 Hz</option>
                         </select>
                     </td>
                 </tr>
@@ -110,14 +120,19 @@ const DeviceConfig = {
                             <option value="2">UART3 Bridge</option>
                             <option value="3">UART3 Logger</option>
                             <option value="4">SBUS Input</option>
-                            <option value="5">SBUS Output</option>
+                            <option value="5_0">SBUS Output</option>
+                            <option value="5_1">SBUS Text Output</option>
                         </select>
                     </td>
                     <td id="device3_options">
-                        <select id="device3_sbus_format" name="device3_sbus_format" style="display:none; width: 100%;">
-                            <option value="0">Binary (SBUS)</option>
-                            <option value="1">Text (RC)</option>
-                            <option value="2">MAVLink (RC Override)</option>
+                        <select id="device3_sbus_rate" name="device3_sbus_rate" style="display:none; width: 100px;">
+                            <option value="10">10 Hz</option>
+                            <option value="20">20 Hz</option>
+                            <option value="30">30 Hz</option>
+                            <option value="40">40 Hz</option>
+                            <option value="50" selected>50 Hz</option>
+                            <option value="60">60 Hz</option>
+                            <option value="70">70 Hz</option>
                         </select>
                     </td>
                 </tr>
@@ -129,15 +144,20 @@ const DeviceConfig = {
                             <option value="0">Disabled</option>
                             <option value="1">Network Bridge</option>
                             <option value="2">Network Logger</option>
-                            <option value="3">SBUS Output</option>
+                            <option value="3_0">SBUS Output</option>
+                            <option value="3_1">SBUS Text Output</option>
                             <option value="4">SBUS Input</option>
                         </select>
                     </td>
                     <td id="device4_options">
-                        <select id="device4_sbus_format" name="device4_sbus_format" style="display:none; width: 100%;">
-                            <option value="0">Binary (SBUS)</option>
-                            <option value="1">Text (RC)</option>
-                            <option value="2">MAVLink (RC Override)</option>
+                        <select id="device4_sbus_rate" name="device4_sbus_rate" style="display:none; width: 100px;">
+                            <option value="10">10 Hz</option>
+                            <option value="20">20 Hz</option>
+                            <option value="30">30 Hz</option>
+                            <option value="40">40 Hz</option>
+                            <option value="50" selected>50 Hz</option>
+                            <option value="60">60 Hz</option>
+                            <option value="70">70 Hz</option>
                         </select>
                     </td>
                 </tr>
@@ -147,8 +167,8 @@ const DeviceConfig = {
                     <td>
                         <select name="device5_role" id="device5_role" onchange="DeviceConfig.onDevice5RoleChange()" style="width: 100%;">
                             <option value="0">Disabled</option>
-                            <option value="1">Bluetooth Bridge</option>
-                            <option value="2">BT SBUS Text</option>
+                            <option value="1">Bridge</option>
+                            <option value="2">SBUS Text Output</option>
                         </select>
                     </td>
                     <td id="device5_options">
@@ -182,33 +202,59 @@ const DeviceConfig = {
             this.onDevice1RoleChange();
         }
         if (device2Role) {
-            // MiniKit: Device 2 is USB only (always on, can't be disabled)
+            // MiniKit: UART2 not available (GPIO8/9 used by SPI flash)
+            // Available roles: Disabled (0), USB (2), USB SBUS Text (5)
             if (this.config.uart2Available === false) {
-                // Disable all options except USB
-                ['0', '1', '3', '4'].forEach(val => {
+                // Disable UART2-based options only, keep Disabled and USB options enabled
+                ['1', '3', '4'].forEach(val => {
                     const opt = device2Role.querySelector(`option[value="${val}"]`);
                     if (opt && !opt.text.includes('(not available)')) {
                         opt.disabled = true;
-                        if (val === '0') {
-                            opt.text = 'Disabled (USB always on)';
-                        } else {
-                            opt.text += ' (not available)';
-                        }
+                        opt.text += ' (not available)';
                     }
                 });
-                // Force USB role
-                this.config.device2Role = '2';
             }
             device2Role.value = this.config.device2Role;
+            // Set Device 2 SBUS rate
+            const device2SbusRate = document.getElementById('device2_sbus_rate');
+            if (device2SbusRate) {
+                device2SbusRate.value = this.config.device2SbusRate || 50;
+            }
+            this.updateDevice2Config();
         }
         if (device3Role) {
-            device3Role.value = this.config.device3Role;
+            // Convert role + format to composite value for SBUS Output
+            const d3Role = this.config.device3Role;
+            const d3Format = this.config.device3SbusFormat || '0';
+            if (d3Role === '5') {
+                device3Role.value = d3Format === '1' ? '5_1' : '5_0';
+            } else {
+                device3Role.value = d3Role;
+            }
+            // Set Device 3 SBUS rate
+            const device3SbusRate = document.getElementById('device3_sbus_rate');
+            if (device3SbusRate) {
+                device3SbusRate.value = this.config.device3SbusRate || 50;
+            }
             this.updateDevice3Pins();
+            this.updateDevice3Config();
         }
         if (device4Role) {
             // Update Device4 options based on SBUS context first
             this.updateDevice4Options();
-            device4Role.value = this.config.device4Role;
+            // Convert role + format to composite value for SBUS Output
+            const d4Role = this.config.device4Role;
+            const d4Format = this.config.device4SbusFormat || '0';
+            if (d4Role === '3') {
+                device4Role.value = d4Format === '1' ? '3_1' : '3_0';
+            } else {
+                device4Role.value = d4Role;
+            }
+            // Set Device 4 SBUS rate in options
+            const device4SbusRate = document.getElementById('device4_sbus_rate');
+            if (device4SbusRate) {
+                device4SbusRate.value = this.config.device4SendRate || 50;
+            }
         }
 
         // Device 5 (Bluetooth SPP - MiniKit only)
@@ -289,16 +335,11 @@ const DeviceConfig = {
         // Update auto broadcast visibility after device4_role is set
         this.updateAutoBroadcastState();
 
-        // Set SBUS output format selects
-        const d2SbusFormat = document.getElementById('device2_sbus_format');
-        const d3SbusFormat = document.getElementById('device3_sbus_format');
-        const d4SbusFormat = document.getElementById('device4_sbus_format');
-        if (d2SbusFormat) d2SbusFormat.value = this.config.device2SbusFormat || '0';
-        if (d3SbusFormat) d3SbusFormat.value = this.config.device3SbusFormat || '0';
-        if (d4SbusFormat) d4SbusFormat.value = this.config.device4SbusFormat || '0';
-
-        // Update SBUS format option visibility
+        // Update rate selectors visibility and SBUS warnings
+        this.updateDevice3Config();
+        this.updateDevice4SbusRate();
         this.updateSbusFormatOptions();
+        this.updateDevice5BridgeState();
     },
 
     attachListeners() {
@@ -373,7 +414,7 @@ const DeviceConfig = {
 
         if (role === '1') { // UART2
             pinsCell.textContent = this.formatGpioPinPair(8, 9);
-        } else if (role === '2') { // USB
+        } else if (role === '2' || role === '5') { // USB or USB SBUS Text
             pinsCell.textContent = 'USB';
         } else if (role === '3') { // SBUS IN
             pinsCell.textContent = this.formatGpioPin(8) + ' (RX)';
@@ -431,7 +472,7 @@ const DeviceConfig = {
             } else {
                 pinsCell.textContent = isXiao ? this.formatGpioPin(44) + ' (RX)' : 'GPIO 11 (RX)';
             }
-        } else if (role === '5') { // SBUS OUT
+        } else if (role === '5' || role === '5_0' || role === '5_1') { // SBUS OUT (Binary or Text)
             if (isMiniKit) {
                 pinsCell.textContent = 'GPIO 17 (TX)';
             } else {
@@ -439,6 +480,16 @@ const DeviceConfig = {
             }
         } else {
             pinsCell.textContent = 'N/A';
+        }
+    },
+
+    // Show/hide Device 3 SBUS rate selector based on role
+    updateDevice3Config() {
+        const device3Role = document.getElementById('device3_role');
+        const device3SbusRate = document.getElementById('device3_sbus_rate');
+        if (device3Role && device3SbusRate) {
+            // Show rate selector only for SBUS Text Output mode (role = 5_1)
+            device3SbusRate.style.display = (device3Role.value === '5_1') ? 'inline-block' : 'none';
         }
     },
 
@@ -450,7 +501,8 @@ const DeviceConfig = {
 
         const role = device4Role.value;
 
-        if (role === '1' || role === '2' || role === '3' || role === '4') { // Network roles
+        // Network roles: 1, 2, 3, 3_0, 3_1, 4
+        if (role === '1' || role === '2' || role === '3' || role === '3_0' || role === '3_1' || role === '4') {
             pinsCell.textContent = 'Network';
         } else {
             pinsCell.textContent = 'N/A';
@@ -504,7 +556,7 @@ const DeviceConfig = {
     
     updateProtocolFieldState() {
         // Check if any device has SBUS role active (read from DOM for real-time updates)
-        // D1: 1=SBUS_IN; D2: 3=SBUS_IN, 4=SBUS_OUT; D3: 4=SBUS_IN, 5=SBUS_OUT; D4: 3=SBUS_TX, 4=SBUS_RX
+        // D1: 1=SBUS_IN; D2: 3=SBUS_IN, 4=SBUS_OUT; D3: 4=SBUS_IN, 5/5_0/5_1=SBUS_OUT; D4: 3/3_0/3_1=SBUS_TX, 4=SBUS_RX
         const d1Role = document.getElementById('device1_role')?.value;
         const d2Role = document.getElementById('device2_role')?.value;
         const d3Role = document.getElementById('device3_role')?.value;
@@ -513,8 +565,8 @@ const DeviceConfig = {
         const isSbusActive = (
             d1Role === '1' ||
             d2Role === '3' || d2Role === '4' ||
-            d3Role === '4' || d3Role === '5' ||
-            d4Role === '3' || d4Role === '4'
+            d3Role === '4' || d3Role?.startsWith('5') ||
+            d4Role?.startsWith('3') || d4Role === '4'
         );
 
         // Protocol optimization field should be blocked when SBUS is active
@@ -642,28 +694,31 @@ const DeviceConfig = {
             return;
         }
 
-        // Network Configuration block needed for all network roles (1, 2, 3, 4)
+        // Extract base role (handle composite values like 3_0, 3_1)
+        const baseRole = role.split('_')[0];
+
+        // Network Configuration block needed for all network roles (1, 2, 3, 3_0, 3_1, 4)
         // - Network Bridge (1): needs IP and port to send
         // - Network Logger (2): needs IP and port to send
-        // - SBUS→UDP TX (3): needs IP and port to send
+        // - SBUS→UDP TX (3, 3_0, 3_1): needs IP and port to send
         // - SBUS UDP RX (4): needs port to listen (IP ignored)
-        if (role === '1' || role === '2' || role === '3' || role === '4') {
+        if (baseRole === '1' || baseRole === '2' || baseRole === '3' || baseRole === '4') {
             device4AdvancedConfig.style.display = 'block';
 
             // Show/hide UDP timeout field (only for SBUS Input role)
             const timeoutGroup = document.getElementById('device4_udp_timeout_group');
             if (timeoutGroup) {
-                timeoutGroup.style.display = (role === '4') ? 'block' : 'none';
+                timeoutGroup.style.display = (baseRole === '4') ? 'block' : 'none';
             }
 
-            // Show/hide Send Rate field (only for SBUS Output role)
+            // Hide Send Rate from Network Config (now in device options column)
             const sendRateGroup = document.getElementById('device4_send_rate_group');
             if (sendRateGroup) {
-                sendRateGroup.style.display = (role === '3') ? 'block' : 'none';
+                sendRateGroup.style.display = 'none';
             }
 
             // Enable/disable fields based on role
-            if (role === '4') {
+            if (baseRole === '4') {
                 // SBUS UDP RX - only port needed (listens on all interfaces)
                 if (targetIpInput) {
                     targetIpInput.disabled = true;  // IP not used for RX
@@ -688,19 +743,19 @@ const DeviceConfig = {
 
             // Only update port when role changes, not on initial load
             if (isRoleChange) {
-                if (role === '1') {  // Network Bridge
+                if (baseRole === '1') {  // Network Bridge
                     portInput.value = '14550';
-                } else if (role === '2') {  // Network Logger
+                } else if (baseRole === '2') {  // Network Logger
                     portInput.value = '14560';
-                } else if (role === '3') {  // SBUS→UDP TX
+                } else if (baseRole === '3') {  // SBUS→UDP TX (Binary or Text)
                     portInput.value = '14551';
-                } else if (role === '4') {  // SBUS UDP RX
+                } else if (baseRole === '4') {  // SBUS UDP RX
                     portInput.value = '14552';  // Listen port
                 }
             }
 
             // Set IP defaults only if field is empty (and not RX role)
-            if (role !== '4' && (!targetIpInput.value || targetIpInput.value === '')) {
+            if (baseRole !== '4' && (!targetIpInput.value || targetIpInput.value === '')) {
                 const wifiMode = document.getElementById('wifi_mode');
                 const isApMode = wifiMode && wifiMode.value === '0';
 
@@ -795,20 +850,18 @@ const DeviceConfig = {
 
         // Update Device2 options
         // Note: USB (value=2) remains enabled - it can output SBUS in Text/MAVLink format
+        // UART2 disabled because SBUS uses different baud rate (100000 8E2 vs standard UART)
         Array.from(device2Select.options).forEach(option => {
             if (option.value === '1') {  // D2_UART2
                 option.disabled = true;
-                option.text = option.text.includes('(converter needed)') ?
-                    option.text : option.text + ' (SBUS→UART converter needed)';
             }
         });
 
         // Update Device3 options
+        // UART3 Bridge disabled because SBUS uses different baud rate
         Array.from(device3Select.options).forEach(option => {
             if (option.value === '2') {  // D3_UART3_BRIDGE
                 option.disabled = true;
-                option.text = option.text.includes('(converter needed)') ?
-                    option.text : option.text + ' (SBUS→UART converter needed)';
             }
         });
 
@@ -825,14 +878,11 @@ const DeviceConfig = {
                 return;  // Keep disabled
             }
             option.disabled = false;
-            // Remove warning text
-            option.text = option.text.replace(' (SBUS→UART converter needed)', '');
         });
 
         // Re-enable all Device3 options
         Array.from(device3Select.options).forEach(option => {
             option.disabled = false;
-            option.text = option.text.replace(' (SBUS→UART converter needed)', '');
         });
 
     },
@@ -840,11 +890,12 @@ const DeviceConfig = {
     updateDevice4Options() {
         const device1Role = document.getElementById('device1_role').value;
         const device2Role = document.getElementById('device2_role').value;
-        const device3Role = document.getElementById('device3_role').value;
+        const device3Role = document.getElementById('device3_role')?.value;
 
+        // Check for SBUS roles (including composite values)
         const hasSbus = (device1Role === '1' ||  // D1_SBUS_IN
-                         device2Role === '3' || device2Role === '4' ||  // D2_SBUS_IN/OUT
-                         device3Role === '4' || device3Role === '5');   // D3_SBUS_IN/OUT
+                         device2Role === '3' || device2Role === '4' || device2Role === '5' ||  // D2_SBUS_IN/OUT/USB_TEXT
+                         device3Role === '4' || device3Role?.startsWith('5'));   // D3_SBUS_IN/OUT (5, 5_0, 5_1)
 
         const select = document.getElementById('device4_role');
         if (!select) return;
@@ -853,10 +904,11 @@ const DeviceConfig = {
         select.innerHTML = '';
 
         if (hasSbus) {
-            // SBUS context - split TX/RX
+            // SBUS context - split TX/RX with separate Binary/Text options
             this.addOption(select, '0', 'Disabled');
             this.addOption(select, '2', 'UDP Logger');
-            this.addOption(select, '3', 'SBUS Output');
+            this.addOption(select, '3_0', 'SBUS Output');
+            this.addOption(select, '3_1', 'SBUS Text Output');
             this.addOption(select, '4', 'SBUS Input');
         } else {
             // Normal context
@@ -881,56 +933,33 @@ const DeviceConfig = {
         const device4Role = document.getElementById('device4_role')?.value;
         const device5Role = document.getElementById('device5_role')?.value;
 
-        const otherHasSbus = (device2Role === '3' || device2Role === '4' ||  // D2_SBUS_IN/OUT
-                              device3Role === '4' || device3Role === '5' ||  // D3_SBUS_IN/OUT
-                              device4Role === '3' || device4Role === '4' ||  // D4_SBUS_UDP_TX/RX
-                              device5Role === '2');                          // D5_BT_SBUS_TEXT
+        // Check for SBUS roles (including composite values like 5_0, 5_1, 3_0, 3_1)
+        const otherHasSbus = (
+            device2Role === '3' || device2Role === '4' || device2Role === '5' ||  // D2_SBUS_IN/OUT/USB_SBUS_TEXT
+            device3Role === '4' || device3Role?.startsWith('5') ||  // D3_SBUS_IN/OUT (5, 5_0, 5_1)
+            device4Role?.startsWith('3') || device4Role === '4' ||  // D4_SBUS_UDP_TX (3, 3_0, 3_1) / RX
+            device5Role === '2'  // D5_BT_SBUS_TEXT
+        );
 
         if (device1Role && otherHasSbus && device1Role.value !== '1') {
             device1Role.value = '1';  // D1_SBUS_IN
             this.onDevice1RoleChange();  // Trigger Device1 change handlers
         }
 
+        this.updateDevice2Config();
+        this.updateDevice2Pins();
+        this.updateDevice3Config();
         this.updateDevice4Options();
+        this.updateDevice4SbusRate();
         this.updateSbusFormatOptions();
         this.updateProtocolFieldState();
+        this.updateDevice5BridgeState();
     },
 
-    // Show/hide SBUS output format selects based on role
+    // Update SBUS-related UI elements
     updateSbusFormatOptions() {
-        const device2Role = document.getElementById('device2_role');
-        const device3Role = document.getElementById('device3_role');
-        const device4Role = document.getElementById('device4_role');
-
-        const d2Format = document.getElementById('device2_sbus_format');
-        const d3Format = document.getElementById('device3_sbus_format');
-        const d4Format = document.getElementById('device4_sbus_format');
-
-        // Hide MAVLink option if not supported (sbusMavlinkEnabled from backend)
-        const hideMavlink = !this.config.sbusMavlinkEnabled;
-        [d2Format, d3Format, d4Format].forEach(select => {
-            if (select) {
-                const mavlinkOpt = select.querySelector('option[value="2"]');
-                if (mavlinkOpt) mavlinkOpt.style.display = hideMavlink ? 'none' : '';
-            }
-        });
-
-        // Device 2: show for SBUS Output (value 4)
-        if (d2Format) {
-            d2Format.style.display = (device2Role && device2Role.value === '4') ? 'inline-block' : 'none';
-        }
-
-        // Device 3: show for SBUS Output (value 5)
-        if (d3Format) {
-            d3Format.style.display = (device3Role && device3Role.value === '5') ? 'inline-block' : 'none';
-        }
-
-        // Device 4: show for SBUS UDP TX (value 3)
-        if (d4Format) {
-            d4Format.style.display = (device4Role && device4Role.value === '3') ? 'inline-block' : 'none';
-        }
-
-        // Update SBUS configuration warning
+        // Format selectors are no longer used - format is now part of the role
+        // Just update the configuration warning
         this.updateSbusConfigWarning();
     },
 
@@ -952,11 +981,11 @@ const DeviceConfig = {
             (device4Role && device4Role.value === '4')     // D4_UDP_SBUS_RX (also a source)
         );
 
-        // Check for SBUS Output destinations
+        // Check for SBUS Output destinations (including composite values)
         const hasSbusOutput = (
-            (device2Role && device2Role.value === '4') ||  // D2_SBUS_OUT
-            (device3Role && device3Role.value === '5') ||  // D3_SBUS_OUT
-            (device4Role && device4Role.value === '3')     // D4_SBUS_UDP_TX
+            (device2Role && (device2Role.value === '4' || device2Role.value === '5')) ||  // D2_SBUS_OUT/USB_TEXT
+            (device3Role && device3Role.value?.startsWith('5')) ||  // D3_SBUS_OUT (5, 5_0, 5_1)
+            (device4Role && device4Role.value?.startsWith('3'))     // D4_SBUS_UDP_TX (3, 3_0, 3_1)
         );
 
         // Show warning if output without input
@@ -1037,6 +1066,16 @@ const DeviceConfig = {
         }
     },
 
+    // Show/hide Device 2 SBUS rate selector based on role
+    updateDevice2Config() {
+        const device2Role = document.getElementById('device2_role');
+        const device2SbusRate = document.getElementById('device2_sbus_rate');
+        if (device2Role && device2SbusRate) {
+            // Show rate selector only for USB SBUS Text mode (role = 5)
+            device2SbusRate.style.display = (device2Role.value === '5') ? 'inline-block' : 'none';
+        }
+    },
+
     // Show/hide Device 5 options based on role
     updateDevice5Config() {
         const device5Role = document.getElementById('device5_role');
@@ -1044,6 +1083,54 @@ const DeviceConfig = {
         if (device5Role && btSendRate) {
             // Show rate selector only for SBUS Text mode (role = 2)
             btSendRate.style.display = (device5Role.value === '2') ? 'inline-block' : 'none';
+        }
+    },
+
+    // Show/hide Device 4 SBUS rate selector based on role
+    updateDevice4SbusRate() {
+        const device4Role = document.getElementById('device4_role');
+        const device4SbusRate = document.getElementById('device4_sbus_rate');
+        if (device4Role && device4SbusRate) {
+            // Show rate selector only for SBUS Text Output mode (role = 3_1)
+            device4SbusRate.style.display = (device4Role.value === '3_1') ? 'inline-block' : 'none';
+        }
+    },
+
+    // Disable Device 5 Bridge option when SBUS roles are active in other devices
+    updateDevice5BridgeState() {
+        const device5Role = document.getElementById('device5_role');
+        if (!device5Role) return;
+
+        const device1Role = document.getElementById('device1_role')?.value;
+        const device2Role = document.getElementById('device2_role')?.value;
+        const device3Role = document.getElementById('device3_role')?.value;
+        const device4Role = document.getElementById('device4_role')?.value;
+
+        // Check if any SBUS role is active
+        const hasSbusActive = (
+            device1Role === '1' ||  // D1_SBUS_IN
+            device2Role === '3' || device2Role === '4' || device2Role === '5' ||  // D2_SBUS_IN/OUT/USB_TEXT
+            device3Role === '4' || device3Role?.startsWith('5') ||  // D3_SBUS_IN/OUT
+            device4Role?.startsWith('3') || device4Role === '4'  // D4_SBUS_TX/RX
+        );
+
+        // Find Bridge option (value = 1)
+        const bridgeOption = device5Role.querySelector('option[value="1"]');
+        if (bridgeOption) {
+            if (hasSbusActive) {
+                bridgeOption.disabled = true;
+                if (!bridgeOption.text.includes('(SBUS mode)')) {
+                    bridgeOption.text += ' (SBUS mode)';
+                }
+                // If Bridge was selected, switch to Disabled
+                if (device5Role.value === '1') {
+                    device5Role.value = '0';
+                    this.updateDevice5Config();
+                }
+            } else {
+                bridgeOption.disabled = false;
+                bridgeOption.text = bridgeOption.text.replace(' (SBUS mode)', '');
+            }
         }
     }
 };

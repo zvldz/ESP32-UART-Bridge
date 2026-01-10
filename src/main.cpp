@@ -149,17 +149,10 @@ void setup() {
 #endif
 
     // Validate SBUS configuration (block incompatible combinations)
+    // Note: D1_SBUS_IN + D2_USB is allowed (raw SBUS passthrough for debugging)
+    // Note: D1_SBUS_IN + D2_USB_SBUS_TEXT is the recommended combination
     if (config.device1.role == D1_SBUS_IN) {
-        // Block D1_SBUS_IN + D2_USB (requires SBUS→UART converter not implemented)
-        if (config.device2.role == D2_USB) {
-            log_msg(LOG_ERROR, "Configuration error: D1_SBUS_IN → D2_USB not supported");
-            log_msg(LOG_ERROR, "SBUS→USB requires protocol converter (not implemented)");
-            log_msg(LOG_INFO, "Please use D2_SBUS_OUT for native SBUS output");
-            // Reset to safe defaults
-            config.device2.role = D2_NONE;
-            config_save(&config);
-        }
-        // Block D1_SBUS_IN + UART Bridge roles
+        // Block D1_SBUS_IN + UART Bridge roles (SBUS→UART conversion not implemented)
         if (config.device2.role == D2_UART2 || config.device3.role == D3_UART3_BRIDGE) {
             log_msg(LOG_ERROR, "Configuration error: SBUS→UART conversion not implemented");
             log_msg(LOG_INFO, "Use SBUS_OUT roles for native SBUS transmission");
@@ -173,6 +166,7 @@ void setup() {
     // Auto-detect protocol optimization based on device roles
     bool hasSBUSDevice = (config.device1.role == D1_SBUS_IN ||
                          config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
+                         config.device2.role == D2_USB_SBUS_TEXT ||
                          config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
 
     if (hasSBUSDevice) {
@@ -408,8 +402,8 @@ void initCommonDevices() {
         }
     }
 
-    // Create USB interface based on configuration (only if Device 2 is USB)
-    if (config.device2.role == D2_USB) {
+    // Create USB interface based on configuration (only if Device 2 uses USB)
+    if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT) {
         switch(config.usb_mode) {
 #if !defined(BOARD_MINIKIT_ESP32)
             case USB_MODE_HOST:
@@ -560,15 +554,7 @@ void initNetworkMode() {
     }
 
     // Initialize web server
-#ifdef DEBUG
-    forceSerialLog("HEAP before webserver_init: free=%u, minFree=%u",
-                   ESP.getFreeHeap(), ESP.getMinFreeHeap());
-#endif
     webserver_init(&config, &systemState);
-#ifdef DEBUG
-    forceSerialLog("HEAP after webserver_init: free=%u, minFree=%u",
-                   ESP.getFreeHeap(), ESP.getMinFreeHeap());
-#endif
 }
 
 //================================================================
@@ -731,6 +717,7 @@ void createTasks() {
 
     // Check all possible sender configurations
     if (config.device2.role == D2_USB ||            // USB sender
+        config.device2.role == D2_USB_SBUS_TEXT ||  // USB SBUS text output
         config.device2.role == D2_UART2 ||          // UART2 sender
         config.device2.role == D2_SBUS_IN ||        // SBUS input
         config.device2.role == D2_SBUS_OUT ||       // SBUS output

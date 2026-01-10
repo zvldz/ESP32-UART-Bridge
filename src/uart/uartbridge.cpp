@@ -103,7 +103,7 @@ void uartBridgeTask(void* parameter) {
     bool device3Active = (config.device3.role == D3_UART3_MIRROR ||
                           config.device3.role == D3_UART3_BRIDGE ||
                           config.device3.role == D3_SBUS_IN);
-    bool device2IsUSB = (config.device2.role == D2_USB && g_usbInterface);
+    bool device2IsUSB = ((config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT) && g_usbInterface);
     bool device2IsUART2 = ((config.device2.role == D2_UART2 ||
                             config.device2.role == D2_SBUS_IN ||
                             config.device2.role == D2_SBUS_OUT) && device2Serial);

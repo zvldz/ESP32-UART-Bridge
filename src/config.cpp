@@ -80,6 +80,7 @@ static void setDeviceDefaults(Config* config) {
     config->device1.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device2.role = D2_USB;
     config->device2.sbusOutputFormat = SBUS_FMT_BINARY;
+    config->device2.sbusRate = 50;
     config->device3.role = D3_NONE;
     config->device3.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device4.role = D4_NONE;
@@ -332,6 +333,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
             // Migration: old bool format -> new enum (true -> TEXT, false -> BINARY)
             config->device2.sbusOutputFormat = doc["devices"]["device2_sbus_text"] | false ? SBUS_FMT_TEXT : SBUS_FMT_BINARY;
         }
+        config->device2.sbusRate = doc["devices"]["device2_sbus_rate"] | 50;
         config->device3.role = doc["devices"]["device3"] | D3_NONE;
         if (doc["devices"]["device3_sbus_format"].is<int>()) {
             config->device3.sbusOutputFormat = doc["devices"]["device3_sbus_format"] | SBUS_FMT_BINARY;
@@ -448,6 +450,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["devices"]["device1"] = config->device1.role;
     doc["devices"]["device2"] = config->device2.role;
     doc["devices"]["device2_sbus_format"] = config->device2.sbusOutputFormat;
+    doc["devices"]["device2_sbus_rate"] = config->device2.sbusRate;
     doc["devices"]["device3"] = config->device3.role;
     doc["devices"]["device3_sbus_format"] = config->device3.sbusOutputFormat;
     doc["devices"]["device4"] = config->device4.role;
