@@ -264,10 +264,20 @@
                     <strong>🌐 Device 4 - Network Channel:</strong><br>
                     - <strong>Network Logger:</strong> Stream system logs via UDP (port 14560)<br>
                     - <strong>Network Bridge:</strong> Bidirectional UART↔UDP conversion (port 14550)<br>
-                    - <strong>SBUS UDP TX:</strong> Send SBUS frames over WiFi with batching<br>
-                    - <strong>SBUS UDP RX:</strong> Receive SBUS from WiFi with failover<br>
+                    - <strong>SBUS Output:</strong> Send SBUS frames over WiFi (binary format)<br>
+                    - <strong>SBUS Text Output:</strong> Send SBUS as text format via UDP<br>
+                    - <strong>SBUS Input:</strong> Receive SBUS from WiFi with failover<br>
                     - Configure target IP and port in main settings<br>
                     - Requires active Wi-Fi connection
+                </div>
+
+                <div class="success" style="margin-top: 15px;">
+                    <strong>📶 Device 5 - Bluetooth SPP (MiniKit only):</strong><br>
+                    - <strong>Bridge:</strong> MAVLink/Raw telemetry to Android apps (QGC, Tower)<br>
+                    - <strong>SBUS Text Output:</strong> Text format for Mission Planner RC Override plugin<br>
+                    - Uses SSP "Just Works" pairing (no PIN required)<br>
+                    - BT device name matches mDNS hostname<br>
+                    - Available only on MiniKit (WROOM-32 has Bluetooth Classic)
                 </div>
             </div>
         </div>
