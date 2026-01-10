@@ -340,10 +340,11 @@ Primary UART interface on GPIO 4/5. Can be configured as:
 ### Device 2 - Secondary Channel
 Can be configured as:
 - **Disabled**: No secondary channel
-- **UART2**: Additional UART on GPIO 8/9
+- **UART2**: Additional UART on GPIO 8/9 (not available on MiniKit)
 - **USB**: USB device or host mode
 - **SBUS Input**: Second SBUS source for failover
-- **SBUS Output**: Send SBUS to flight controller
+- **SBUS Output**: Send SBUS to flight controller (binary format)
+- **USB SBUS Text Output**: Text format `RC 1500,...\r\n` via USB (MiniKit)
 
 ### Device 3 - Auxiliary UART
 Can be configured as:
@@ -352,15 +353,23 @@ Can be configured as:
 - **Bridge**: Full bidirectional UART bridge with Device 1 and protocol-aware processing
 - **Logger**: Dedicated UART log output at 115200 baud
 - **SBUS Input**: Third SBUS source for failover
-- **SBUS Output**: Send SBUS to flight controller
+- **SBUS Output**: Send SBUS to flight controller (binary format)
+- **SBUS Text Output**: Text format `RC 1500,...\r\n` via UART
 
 ### Device 4 - Network Channel
 Requires active Wi-Fi connection. Can be configured as:
 - **Disabled**: Not used
 - **Network Logger**: Stream system logs via UDP (port 14560)
 - **Network Bridge**: Bidirectional UART-to-UDP conversion (port 14550)
-- **SBUS UDP TX**: Send SBUS frames over WiFi with batching
-- **SBUS UDP RX**: Receive SBUS from WiFi with failover support
+- **SBUS Output**: Send SBUS frames over WiFi (binary format)
+- **SBUS Text Output**: Send SBUS as text format `RC 1500,...\r\n` over UDP
+- **SBUS Input**: Receive SBUS from WiFi with failover support
+
+### Device 5 - Bluetooth SPP (MiniKit only)
+Available only on ESP32 MiniKit (WROOM-32 has Bluetooth Classic, S3 boards do not). Uses SSP "Just Works" pairing (no PIN required). BT device name matches mDNS hostname.
+- **Disabled**: Bluetooth off
+- **Bridge**: MAVLink/Raw telemetry to Android apps (QGC, Tower)
+- **SBUS Text Output**: Text format `RC 1500,...\r\n` for Mission Planner RC Override plugin
 
 ### Network Configuration for Device 4
 When Device 4 is enabled, additional settings appear:
