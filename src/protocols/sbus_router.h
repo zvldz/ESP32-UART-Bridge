@@ -111,11 +111,16 @@ public:
         return instance;
     }
 
-    // Lazy-allocated buffer for SBUS TEXT/MAVLink conversion
-    char* getConvertBuffer() {
+    // Pre-allocate conversion buffer (call during sender init)
+    void allocateConvertBuffer() {
         if (!convertBuffer) {
             convertBuffer = new char[SBUS_OUTPUT_BUFFER_SIZE];
+            log_msg(LOG_DEBUG, "SbusRouter: allocated convert buffer (%d bytes)", SBUS_OUTPUT_BUFFER_SIZE);
         }
+    }
+
+    // Get conversion buffer
+    char* getConvertBuffer() {
         return convertBuffer;
     }
 

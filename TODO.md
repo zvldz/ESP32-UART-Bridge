@@ -106,48 +106,7 @@
 
 **Note**: Tested with CP2104 USB-UART chip. CH9102 may have issues with DTR/RTS signals causing unwanted resets — not yet verified. ESP32 MiniKit uses classic WROOM-32 chip without PSRAM, resulting in significantly less available RAM compared to S3 variants.
 
-#### Bluetooth Classic SPP (MiniKit only) ✅ IMPLEMENTED
-
-- [x] **Bluetooth SPP as Device 5**
-
-  **Why MiniKit only**: ESP32-WROOM-32 has Bluetooth Classic, ESP32-S3 does not (only BLE).
-
-  **Use case**: Wireless telemetry to Android apps (QGC, Tower)
-  ```
-  [FC] → UART → [MiniKit] → Bluetooth SPP → [Android: QGC/Tower]
-  ```
-
-  **Advantages over WiFi:**
-  - Phone keeps WiFi for internet (no hotspot switching)
-  - Simpler pairing (no IP configuration)
-  - Lower power consumption
-  - Less RAM usage (~20KB vs ~50KB for WiFi buffers)
-
-  **Device 5 Roles:**
-  - D5_NONE (0) - Disabled
-  - D5_BT_BRIDGE (1) - MAVLink/Raw telemetry (per protocolOptimization)
-  - D5_BT_SBUS_TEXT (2) - SBUS text format over Bluetooth
-
-  **Latency note**: BT SPP has 20-100ms latency — acceptable for telemetry, NOT for RC control.
-
-  **Implementation:**
-  - [x] BluetoothSPP class (bluetooth/bluetooth_spp.h/.cpp)
-  - [x] BluetoothSender class (protocols/bluetooth_sender.h)
-  - [x] Device5Config struct (name uses mDNS hostname)
-  - [x] Web UI configuration (Device 5 row)
-  - [x] Protocol pipeline integration (IDX_DEVICE5, SENDER_BT)
-  - [x] WiFi and BT work together (initially)
-  - [x] SSP "Just Works" pairing (no PIN prompt)
-  - [x] Code isolation with `#if defined(BOARD_MINIKIT_ESP32)`
-
-  **Pairing:**
-  - SSP "Just Works" mode — no PIN prompt (modern IoT standard)
-  - BT device name from mDNS hostname (e.g., "esp-bridge")
-
-  **TODO:**
-  - [x] **REFACTOR**: BT name uses mDNS hostname instead of separate bt_name
-
-  **Memory optimization (MiniKit) — usage scenarios:**
+#### Memory Optimization (MiniKit) — Usage Scenarios
 
   Current situation: ~35KB free heap with WiFi+BT+WebServer enabled
 
@@ -194,77 +153,6 @@
   CONFIG_BT_ENABLED=y adds ~21KB .bss (static RAM) even without BT initialization.
   Remaining ~20KB — likely .data sections of BT stack.
 
-- [ ] **Device 2 USB SBUS Text Output (MiniKit)** 🟡 ANALYSIS COMPLETE
-
-  **Goal**: SBUS input → USB Serial text output (`RC 1500,1500,...\r\n`)
-  Needed for TX16S-RC ESP firmware compatibility (GPIO16 SBUS → USB COM port)
-
-  **Two implementation options:**
-
-  **Option A: Add USB to SbusRouter outputs** (no pin changes)
-  - Register USB sender in SbusRouter when SBUS source configured
-  - Device 3 SBUS_IN (GPIO16) → SbusRouter → USB sender
-  - ~30 lines code change
-  - Pros: No breaking changes, works alongside BT/UDP outputs
-  - Cons: Device 1 (UART1) initialized but unused — wastes ~12KB RAM and CPU cycles
-    on high-priority task polling empty UART
-
-  **Option B: Swap Device 1 ↔ Device 3 pins for MiniKit** (architectural fix)
-  - Change defines.h: Device 1 = GPIO16/17, Device 3 = GPIO4/5
-  - Device 1 SBUS_IN on GPIO16 (highest priority, optimized path)
-  - ~4 lines code change
-  - Pros: Architecturally correct — SBUS on main input with full optimizations,
-    TX service disabled, no wasted resources
-  - Cons: Changes pin mapping for MiniKit (experimental, never released)
-
-  **Current architecture issue with Option A:**
-  When D1=UART1 (default) + D3=SBUS_IN:
-  - High-priority uartBridgeTask polls empty UART1 every iteration
-  - UART1 TX service allocated (~4KB) but never used
-  - UART1 DMA buffers allocated (~8KB) but never used
-  - SBUS processed as "secondary" Device 3 input
-
-  **Recommendation**: Option B is cleaner for MiniKit as dedicated SBUS→USB/BT bridge.
-  MiniKit is experimental, no existing users with FC on GPIO4/5.
-
-  **Option C: Configurable pin mapping via Web UI** (future flexibility)
-  - Whitelist of verified pins per board (GPIO4/5, GPIO16/17 for MiniKit)
-  - User selects which pins for Device 1 / Device 3 in Web UI
-  - Stored in config, applied at boot
-  - ~100 lines code change (config fields, Web UI dropdowns, validation)
-  - Pros: Maximum flexibility, one firmware for multiple use cases
-  - Cons: More code, config migration needed
-  - Safety: Whitelist prevents invalid pins, conflict validation, quick reset fallback
-
-  **Files to modify:**
-  - Option A: device_init.cpp (registerSbusOutputs), protocol_pipeline.cpp
-  - Option B: defines.h (UART_RX_PIN, DEVICE3_UART_RX_PIN for MiniKit)
-  - Option C: config.cpp, device_types.h, device_init.cpp, web UI (device-config.js)
-
-  **Both options A/B preserve**: BT SBUS Text, UDP SBUS output functionality
-  **Option C**: Also enables FC mode on GPIO16 if user wants
-
-### Device 3 SBUS_IN Role ✅ COMPLETED
-
-- [x] **Add D3_SBUS_IN role to Device 3**
-  - Enables SBUS input on Device 3 UART pins
-  - Needed for ESP32 MiniKit compatibility (Device 2 = USB only)
-  - Symmetric with existing D3_SBUS_OUT role
-
-  **Implementation completed:**
-  - [x] **SBUS Router integration**
-    - Added SBUS_SOURCE_DEVICE3 to SbusRouter sources
-    - Failsafe flag handling from Device 3 input
-    - Frame timing with Timing Keeper
-  - [x] **Output validation**
-    - SBUS_IN requires at least one output configured (D1_SBUS_OUT, D3_SBUS_OUT, or UDP)
-    - Web UI warns if SBUS_IN enabled without outputs
-    - Prevents invalid config: D3_SBUS_IN + D3_SBUS_OUT on same device (conflict)
-  - [x] **Role conflict checks**
-    - D3_SBUS_IN conflicts with D3_SBUS_OUT (same UART pins)
-    - D3_SBUS_IN conflicts with D3_UART3_* roles
-    - Validation in config save and Web UI
-
 ### DOCUMENTATION 📝
 
 - [ ] **Update README with MiniKit Bluetooth**
@@ -307,53 +195,6 @@
   - Reduced code duplication
 
   **Priority**: Low — current code works, refactor when adding new features
-
-#### SBUS Text Format Output ✅ IMPLEMENTED
-
-- [x] **SBUS → Text format for USB/UDP**
-  - [x] Add config option `sbusTextFormat` (bool, default false)
-  - [x] Implement `sbusToUs()` converter (raw 173-1811 → µs 1000-2000)
-  - [x] Format RC string: `RC 1500,1500,...\r\n` (16 channels)
-  - [x] Route SBUS text to USB/UART/UDP when enabled (via sendDirect)
-  - [x] Web UI checkbox "Text format" for SBUS Output roles
-  - [x] Web UI warning when SBUS Output configured without SBUS Input
-  - [x] Protocol optimization auto-set to SBUS when SBUS roles active
-  - **Use case**: Replace TX16S-RC ESP firmware Bluetooth dongle with WiFi/USB output
-  - **Files**: sbus_text.h, packet_sender.h, uart_sender.h, usb_sender.h, udp_sender.h
-  - [ ] **Requires hardware testing** with actual RC receiver
-
-#### SBUS Output Format Selector (Future Enhancement)
-
-- [x] **Replace checkbox with format dropdown** ✅ IMPLEMENTED (v2.18.12)
-
-  Replaced `sbusTextFormat` (bool) with `sbusOutputFormat` (enum) dropdown:
-  - Binary (SBUS) — standard 25-byte SBUS frame
-  - Text (RC) — `RC 1500,...\r\n` for Mission Planner RC Override plugin
-  - MAVLink (RC Override) — RC_CHANNELS_OVERRIDE for direct FC control
-
-- [x] **MAVLink RC_CHANNELS_OVERRIDE output** ✅ IMPLEMENTED (v2.18.12)
-
-  Converts SBUS frames to MAVLink RC_CHANNELS_OVERRIDE packets:
-  - system_id=255 (GCS), component_id=190 (UDP_BRIDGE)
-  - target_system=1, target_component=1 (FC)
-  - Works with Mission Planner/QGC on UDP port 14550
-  - ArduPilot RC_OVERRIDE=1 enables automatic failover
-
-- [x] **Testing RC_OVERRIDE via USB** ✅
-  - [x] Tested with TX16S-RC ESP firmware + Mission Planner plugin
-  - [ ] Test with ESP32 UART Bridge SBUS text output
-
-- [x] **Testing RC_OVERRIDE via Bluetooth** ✅
-  - [x] Tested with TX16S-RC ESP firmware + MiniKit + Mission Planner plugin
-  - [x] Test with ESP32 UART Bridge SBUS text output (Device 3 SBUS_IN → Device 5 BT SBUS Text) ✅
-
-- [ ] **Testing RC_OVERRIDE via UDP** (ESP32 UART Bridge only)
-  - [ ] Test with ESP32 UART Bridge SBUS text over UDP
-  - [ ] Test failsafe behavior (RC_OVERRIDE timeout)
-  - [ ] Measure actual latency (expected ~5-15ms)
-
-  **Note**: USB/BT tested with TX16S-RC ESP firmware — confirms MP plugin compatibility.
-  ESP32 UART Bridge SBUS text output (USB/BT/UDP) needs separate testing.
 
 #### Advanced Protocol Management
 

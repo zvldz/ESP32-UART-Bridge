@@ -98,8 +98,9 @@ const char* getDevice2RoleName(uint8_t role) {
     case D2_NONE: return "Disabled";
     case D2_UART2: return "UART2";
     case D2_USB: return "USB";
-    case D2_SBUS_IN: return "SBUS Input";    // NEW
-    case D2_SBUS_OUT: return "SBUS Output";  // NEW
+    case D2_SBUS_IN: return "SBUS Input";
+    case D2_SBUS_OUT: return "SBUS Output";
+    case D2_USB_SBUS_TEXT: return "USB SBUS Text";
     default: return "Unknown";
   }
 }

@@ -184,11 +184,13 @@ void initDevice2SBUS() {
     }
 
     // Use UartDMA with polling mode for Device 2
+    // SBUS frames are 25 bytes at 50Hz - minimal buffers are sufficient
+    bool isSbusIn = (config.device2.role == D2_SBUS_IN);
     UartDMA::DmaConfig dmaCfg = {
-        .useEventTask = false,     // Polling mode
-        .dmaRxBufSize = 4096,
-        .dmaTxBufSize = 4096,
-        .ringBufSize = 8192
+        .useEventTask = false,
+        .dmaRxBufSize = isSbusIn ? (size_t)512 : (size_t)0,
+        .dmaTxBufSize = isSbusIn ? (size_t)0 : (size_t)512,
+        .ringBufSize = (size_t)1024
     };
 
     device2Serial = new UartDMA(UART_NUM_2, dmaCfg);
@@ -300,11 +302,13 @@ void initDevice3SBUS() {
     }
 
     // Use UartDMA with polling mode for Device 3
+    // SBUS frames are 25 bytes at 50Hz - minimal buffers are sufficient
+    bool isSbusIn = (config.device3.role == D3_SBUS_IN);
     UartDMA::DmaConfig dmaCfg = {
-        .useEventTask = false,     // Polling mode
-        .dmaRxBufSize = 4096,
-        .dmaTxBufSize = 4096,
-        .ringBufSize = 8192
+        .useEventTask = false,
+        .dmaRxBufSize = isSbusIn ? (size_t)512 : (size_t)0,
+        .dmaTxBufSize = isSbusIn ? (size_t)0 : (size_t)512,
+        .ringBufSize = (size_t)1024
     };
 
     // MiniKit uses UART2 for Device3 (UART0 is USB-Serial via CP2102)
@@ -438,10 +442,27 @@ void registerSbusOutputs() {
         if (sender) {
             sender->setSbusOutputFormat(config.device4_config.sbusOutputFormat);
             router->registerOutput(sender);
+            // Allocate conversion buffer for TEXT/MAVLINK formats
+            if (config.device4_config.sbusOutputFormat != SBUS_FMT_BINARY) {
+                router->allocateConvertBuffer();
+            }
             static const char* fmtNames[] = {"binary", "text", "mavlink"};
             log_msg(LOG_INFO, "Device4 SBUS UDP output: format=%s", fmtNames[config.device4_config.sbusOutputFormat % 3]);
         } else {
             log_msg(LOG_ERROR, "Failed to get Device4 sender for SBUS UDP output");
+        }
+    }
+
+    // Register Device2 USB SBUS text output
+    if (config.device2.role == D2_USB_SBUS_TEXT) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE2_USB);
+        if (sender) {
+            router->registerOutput(sender);
+            // Pre-allocate conversion buffer early (before WiFi fully active)
+            router->allocateConvertBuffer();
+            log_msg(LOG_INFO, "Device2 USB SBUS text output registered");
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device2 USB sender for SBUS output");
         }
     }
 
@@ -451,6 +472,8 @@ void registerSbusOutputs() {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE5);
         if (sender) {
             router->registerOutput(sender);
+            // Pre-allocate conversion buffer early (before WiFi fully active)
+            router->allocateConvertBuffer();
             log_msg(LOG_INFO, "Device5 BT SBUS text output registered");
         } else {
             log_msg(LOG_ERROR, "Failed to get Device5 sender for BT SBUS output");

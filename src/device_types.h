@@ -36,8 +36,9 @@ enum Device2Role {
     D2_NONE = 0,
     D2_UART2 = 1,
     D2_USB = 2,
-    D2_SBUS_IN = 3,   // SBUS input from RC receiver
-    D2_SBUS_OUT = 4   // SBUS output to servos
+    D2_SBUS_IN = 3,        // SBUS input from RC receiver (UART2)
+    D2_SBUS_OUT = 4,       // SBUS output to servos (UART2)
+    D2_USB_SBUS_TEXT = 5   // SBUS text output via USB (for MiniKit)
 };
 
 // Device 3 role
@@ -82,6 +83,7 @@ enum SbusOutputFormat : uint8_t {
 typedef struct {
     uint8_t role;
     uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK
+    uint8_t sbusRate;          // Send rate in Hz for SBUS output modes (10-70, default 50)
 } DeviceConfig;
 
 // Device 4 Configuration

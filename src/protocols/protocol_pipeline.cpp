@@ -4,6 +4,7 @@
 #include "uart1_sender.h"
 #include "../uart/uart1_tx_service.h"
 #include "sbus_fast_parser.h"
+#include "sbus_router.h"
 #if defined(BOARD_MINIKIT_ESP32)
 #include "bluetooth_sender.h"
 #endif
@@ -567,6 +568,12 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
         log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> UDP enabled");
     }
 
+    // Device2 USB SBUS Text output
+    if (config->device2.role == D2_USB_SBUS_TEXT) {
+        mask |= (1 << IDX_DEVICE2_USB);
+        log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> USB Text enabled");
+    }
+
 #if defined(BOARD_MINIKIT_ESP32)
     // Device5 for Bluetooth SBUS text output
     if (config->device5_config.role == D5_BT_SBUS_TEXT) {
@@ -603,11 +610,19 @@ void ProtocolPipeline::createSenders(Config* config) {
     }
     
     // Device2 - USB, UART2, or SBUS_OUT (mutually exclusive)
-    if (config->device2.role == D2_USB && ctx->interfaces.usbInterface) {
-        senders[IDX_DEVICE2_USB] = new UsbSender(
-            ctx->interfaces.usbInterface
-        );
-        log_msg(LOG_INFO, "Created USB sender at index %d", IDX_DEVICE2_USB);
+    if ((config->device2.role == D2_USB || config->device2.role == D2_USB_SBUS_TEXT) &&
+        ctx->interfaces.usbInterface) {
+        UsbSender* usbSender = new UsbSender(ctx->interfaces.usbInterface);
+
+        // Set SBUS TEXT format and rate limit for USB SBUS Text role
+        if (config->device2.role == D2_USB_SBUS_TEXT) {
+            usbSender->setSbusOutputFormat(SBUS_FMT_TEXT);
+            usbSender->setSendRate(config->device2.sbusRate);
+            // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
+        }
+
+        senders[IDX_DEVICE2_USB] = usbSender;
+        log_msg(LOG_INFO, "Created USB sender at index %d (role=%d)", IDX_DEVICE2_USB, config->device2.role);
     }
     else if ((config->device2.role == D2_UART2 || config->device2.role == D2_SBUS_OUT) &&
              ctx->interfaces.device2Serial) {
@@ -671,6 +686,7 @@ void ProtocolPipeline::createSenders(Config* config) {
         if (config->device5_config.role == D5_BT_SBUS_TEXT) {
             btSender->setSbusOutputFormat(SBUS_FMT_TEXT);
             btSender->setSendRate(config->device5_config.btSendRate);
+            // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
         }
 
         senders[IDX_DEVICE5] = btSender;

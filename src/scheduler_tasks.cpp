@@ -109,7 +109,7 @@ void initializeScheduler() {
         ledPrevSnapshot.d1_rx = d1_rx;
 
         // Device 2 activity (USB or UART2)
-        if (config.device2.role == D2_USB) {
+        if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT) {
             const auto d2_rx = g_deviceStats.device2.rxBytes.load(std::memory_order_relaxed);
             if (d2_rx > ledPrevSnapshot.d2_rx) {
                 led_notify_usb_rx();  // Green LED
