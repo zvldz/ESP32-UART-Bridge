@@ -41,6 +41,7 @@ enum BlinkType {
     BLINK_CLIENT_SEARCH,
     BLINK_CLIENT_ERROR,
     BLINK_SAFE_MODE,
+    BLINK_BT_CONNECTED,
     BLINK_MAX
 };
 
@@ -66,7 +67,9 @@ static volatile BlinkState blinkStates[BLINK_MAX] = {
     // BLINK_CLIENT_ERROR
     {false, -1, 0, 0, 0, false, (uint32_t)CRGB::Red},
     // BLINK_SAFE_MODE
-    {false, -1, 500, 4500, 0, false, (uint32_t)CRGB::Red}
+    {false, -1, 500, 4500, 0, false, (uint32_t)CRGB::Red},
+    // BLINK_BT_CONNECTED (MiniKit only - uses single color LED)
+    {false, -1, LED_BT_CONNECTED_BLINK_MS, LED_BT_CONNECTED_BLINK_MS, 0, false, (uint32_t)CRGB::Blue}
 };
 
 // Safe millis() comparison that handles wrap-around correctly
@@ -452,7 +455,17 @@ void led_process_updates() {
             return;
         }
     }
-    
+
+#if defined(BOARD_MINIKIT_ESP32)
+    // Bluetooth connected mode (MiniKit only)
+    if (currentLedMode == LED_MODE_BT_CONNECTED) {
+        if (processBlinkPatternUnderMutex(BLINK_BT_CONNECTED)) {
+            xSemaphoreGive(ledMutex);
+            return;
+        }
+    }
+#endif
+
     // Network mode check - unchanged
     if (bridgeMode == BRIDGE_NET) {
         bool rapidActive = processBlinkPatternUnderMutex(BLINK_RAPID);
@@ -530,7 +543,19 @@ void led_set_mode(LedMode mode) {
             startBlink(BLINK_SAFE_MODE, CRGB(COLOR_RED), -1, 500, 4500);
             log_msg(LOG_DEBUG, "LED set to Safe Mode - red blink every 5s");
             break;
-            
+
+#if defined(BOARD_MINIKIT_ESP32)
+        case LED_MODE_BT_CONNECTED:
+            if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                clearOtherBlinks(BLINK_BT_CONNECTED);
+                xSemaphoreGive(ledMutex);
+            }
+            startBlink(BLINK_BT_CONNECTED, CRGB::Blue, -1,
+                      LED_BT_CONNECTED_BLINK_MS, LED_BT_CONNECTED_BLINK_MS);
+            log_msg(LOG_DEBUG, "LED set to BT Connected - blinking");
+            break;
+#endif
+
         case LED_MODE_DATA_FLASH:
         default:
             // Data flash mode is handled by activity notifications
