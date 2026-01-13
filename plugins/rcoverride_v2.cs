@@ -1,7 +1,6 @@
 // RcOverridePlugin.cs
 // Mission Planner plugin: read "RC <16 pwm values>" from COM port or UDP
 // and send RC_OVERRIDE via MAVLink.
-// Based on TX16S-RC by ACh, extended with UDP support for ESP32 UART Bridge.
 
 using System;
 using System.Drawing;
@@ -692,7 +691,7 @@ namespace RcOverridePlugin
 
             // Enable checkbox
             _chkEnable = new CheckBox();
-            _chkEnable.Text = "RC";
+            _chkEnable.Text = "MAVLINK RC";
             _chkEnable.AutoSize = true;
             _chkEnable.Checked = false;
             _chkEnable.Margin = new Padding(4, 4, 0, 0);
