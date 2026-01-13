@@ -2,6 +2,18 @@
 
 ## v2.18.12
 
+### SBUS Conversion
+- **OpenTX/EdgeTX compatible formula**: SBUS→µs conversion now matches radio display
+  - 172 → 988µs, 992 → 1500µs, 1811 → 2012µs (was 1000-2000 Betaflight-style)
+
+### MiniKit LED
+- **BT connection indicator**: LED blinks when Bluetooth SPP client connected
+  - Distinguishes from WiFi mode (solid LED)
+
+---
+
+## v2.18.12-prev
+
 ### New Features
 - **SBUS Output Format Selector**: Dropdown with Binary/Text/MAVLink options
 - **MAVLink RC_CHANNELS_OVERRIDE**: SBUS→MAVLink conversion for wireless RC control

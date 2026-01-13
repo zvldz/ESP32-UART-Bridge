@@ -39,7 +39,8 @@ typedef enum {
     LED_MODE_WIFI_CLIENT_CONNECTED,
     LED_MODE_WIFI_CLIENT_SEARCHING,
     LED_MODE_WIFI_CLIENT_ERROR,
-    LED_MODE_SAFE_MODE
+    LED_MODE_SAFE_MODE,
+    LED_MODE_BT_CONNECTED       // Bluetooth SPP connected (MiniKit only)
 } LedMode;
 
 // System state
