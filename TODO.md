@@ -65,46 +65,11 @@
 
 **Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols.
 
-#### ESP32 MiniKit Support 🟡 BASIC TESTING COMPLETED
+#### ESP32 MiniKit Support ✅ COMPLETED
 
-- [x] **Hardware Adaptation** ✅ COMPLETED
-  - [x] Pin mapping for ESP32 MiniKit board (ESP32-WROOM-32)
-  - [x] GPIO mapping documented (Device1: GPIO4/5, Device3: GPIO16/17, RTS/CTS: GPIO18/19)
-  - [x] LED functionality (single color LED on GPIO2, normal logic HIGH=ON)
-  - [x] Adjust for different GPIO availability (GPIO6-11 unavailable - SPI flash)
-  - [x] No PSRAM - fallback to internal RAM for all operations
+**Status**: ESP32 MiniKit (WROOM-32) fully implemented and tested. Features: WiFi, web interface, quick reset detection (3 resets = network mode), Bluetooth SPP bridge, SBUS support. Device 2 = USB via external chip (CP2104 tested). All protocols verified (MAVLink, SBUS binary/text).
 
-- [x] **Build Configuration** ✅ COMPLETED
-  - [x] Add platformio environment for ESP32 MiniKit (minikit_production, minikit_debug)
-  - [x] Conditional compilation with board flags (BOARD_MINIKIT_ESP32)
-  - [x] Web interface board type detection ("minikit")
-  - [x] SDK configuration for MiniKit variant (sdkconfig.minikit_*.defaults)
-  - [x] USB Host excluded (#if !defined for WROOM)
-
-- [x] **Quick Reset Detection** ✅ COMPLETED (MiniKit has no BOOT button)
-  - [x] NVS-based detection (RESET clears RTC memory on this board)
-  - [x] 3 quick resets within 3 seconds activates network mode
-  - [x] Boot loop protection (crashes/WDT clear counter)
-  - [x] 4 uptime write points in main.cpp for reliable detection
-
-- [ ] **Testing on ESP32 MiniKit** 🟡 BASIC TESTING COMPLETED
-  - [x] Basic ESP32 operation verified ✅
-  - [x] WiFi and web interface functionality ✅
-  - [x] Quick reset detection working ✅
-  - [x] LED control functional ✅
-  - [x] Memory optimization — no OOM crashes after sdkconfig fix ✅
-  - [x] Remove DEBUG diagnostics from quick_reset.cpp after verification ✅
-  - [x] UDP logging operational ✅
-  - [x] Verify Device 1 UART interface (GPIO4/5 pins) ✅
-  - [x] UDP telemetry (MAVLink bridge) working ✅
-  - [x] Device 2 USB TX/RX verified (tested with CP2104) ✅
-  - [x] Verify Device 3 UART interface (GPIO16/17 pins) ✅
-  - [x] Test SBUS with hardware inverter (Device 3 SBUS_IN → BT SBUS Text) ✅
-  - [ ] Full protocol testing (MAVLink, SBUS, etc.)
-
-**Status**: ESP32 MiniKit (WROOM-32) support implemented and tested. WiFi and web interface working. Quick reset detection working (3 quick resets = network mode). Device 2 = USB via external chip (no native UART2). USB TX/RX verified with CP2104 — no packet loss after buffer initialization fix.
-
-**Note**: Tested with CP2104 USB-UART chip. CH9102 may have issues with DTR/RTS signals causing unwanted resets — not yet verified. ESP32 MiniKit uses classic WROOM-32 chip without PSRAM, resulting in significantly less available RAM compared to S3 variants.
+**Note**: CH9102 may have DTR/RTS issues — not yet verified. WROOM-32 has limited RAM (~160KB heap) compared to S3 variants.
 
 #### Memory Optimization (MiniKit) — Usage Scenarios
 
@@ -135,30 +100,10 @@
   - Separate build configs only as last resort
   - Map file analysis: ESPAsyncWebServer ~109KB flash, web_api+web_interface ~97KB flash (static RAM minimal ~65 bytes)
 
-  **Memory notes (MiniKit ESP-IDF BT):**
-  - UART1_TX_RING_SIZE reduced to 4KB for MiniKit (was 8KB) — may need to revert if issues
-
-  **Heap measurements (MiniKit):**
-  - v2.8.11 (no BT in sdkconfig, WiFi): **76KB** free
-  - v2.18.12 (CONFIG_BT_ENABLED=y, D5_NONE, WiFi): **~35KB** free — ~40KB consumed by BT stack static allocation
-  - v2.18.x (D5_BT_BRIDGE, standalone mode, no WiFi): **~70KB** free, Min=70KB, MaxBlock=55KB — good margin for buffers
-
-  **Binary size comparison (xtensa-esp32-elf-size):**
-  ```
-  Section   v2.8.11      v2.18.12     Difference
-  text      977 KB       1,267 KB     +290 KB (flash)
-  data      178 KB       239 KB       +61 KB
-  bss       47 KB        68 KB        +21 KB (RAM)
-  ```
-  CONFIG_BT_ENABLED=y adds ~21KB .bss (static RAM) even without BT initialization.
-  Remaining ~20KB — likely .data sections of BT stack.
-
-### DOCUMENTATION 📝
-
-- [ ] **Update README with MiniKit Bluetooth**
-  - Device 5 roles: BT Bridge, BT SBUS Text
-  - SSP pairing (no PIN)
-  - Use case: wireless telemetry to Android apps, RC Override plugin
+  **Heap reference (MiniKit v2.18.12):**
+  - WiFi+BT+WebServer: ~35KB free (BT stack takes ~40KB static)
+  - BT only (no WiFi): ~70KB free
+  - WiFi only (no BT in sdkconfig): ~76KB free
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
@@ -169,32 +114,67 @@
   - List of client IP addresses
   - IP of current web interface user
 
-- [ ] **JavaScript Architecture Refactoring** 🔵 TECHNICAL DEBT
+- [ ] **Web UI Refactoring with Alpine.js** 🔵 TECHNICAL DEBT
 
-  **Problem**: Web UI code grew organically, accumulated technical debt:
-  - Toggle logic scattered across 4 files (main.js, status-updates.js, form-utils.js, crash-log.js)
-  - Mixed responsibilities in StatusUpdates (status + logs + SBUS controls + protocol stats)
-  - Duplicate patterns (each toggle function repeats: isOpening → loadFragment → rememberedToggle → postAction)
-  - Inconsistent element caching (some cached in init, some fetched dynamically)
-  - Build functions generate HTML as strings (buildSystemInfo, buildDeviceStats, renderSbusStats)
+  **Problem**: Web UI JS code grew to ~3800 lines with significant complexity:
+  - device-config.js: 1135 lines, 35+ functions, 97× getElementById calls
+  - status-updates.js: 930 lines with mixed responsibilities
+  - form-utils.js: 862 lines
+  - Imperative DOM manipulation, manual state tracking
+  - Hard to extend — each new Device/role requires changes in 5+ places
 
-  **Proposed structure**:
-  ```
-  utils.js          - pure utilities (formatting, fetch, localStorage)
-  ui-sections.js    - unified toggle/restore logic for all collapsible sections
-  status-display.js - status and statistics display only
-  device-config.js  - device configuration (keep as is)
-  form-handler.js   - form handling (save, backup, firmware)
-  main.js           - initialization only
+  **Solution**: Migrate to Alpine.js — lightweight reactive framework (~15KB gzip)
+  - Declarative bindings in HTML (`x-model`, `x-show`, `:disabled`)
+  - Reactive state with computed properties (automatic dependency tracking)
+  - Plugins: Collapse (smooth animations), Persist (localStorage auto-save)
+
+  **Expected results**:
+  | Metric | Before | After |
+  |--------|--------|-------|
+  | JS code | ~3800 lines | ~500 lines |
+  | Files | 6 JS files | 1 app.js + alpine.min.js |
+  | getElementById | 97 calls | 0 |
+  | Adding new Device | ~100 lines | ~10 lines |
+
+  **Migration plan**:
+  1. Add alpine.min.js + collapse + persist plugins to webui_src/
+  2. Convert device-config.js first (biggest win)
+  3. Convert status-updates.js (SBUS controls, stats display)
+  4. Convert form-utils.js (form handling, validation)
+  5. Merge remaining code into single app.js
+  6. Remove old JS files
+
+  **Example transformation**:
+  ```javascript
+  // Before: 30 lines JS
+  updateDeviceOptionsForSBUS() {
+      const select = document.getElementById('device2_role');
+      Array.from(select.options).forEach(option => {
+          if (option.value === '1') option.disabled = true;
+      });
+  }
+
+  // After: 1 line in HTML
+  <option value="1" :disabled="isSbusMode">UART2</option>
   ```
 
   **Benefits**:
-  - Single place for section toggle logic
-  - Clear separation of concerns
-  - Easier to maintain and extend
-  - Reduced code duplication
+  - Declarative logic visible in HTML
+  - Automatic reactivity (no manual update calls)
+  - Better extensibility (new features = add data + HTML)
+  - Industry standard (29K GitHub stars, used in Laravel/Django)
+  - Size neutral (Alpine ~15KB replaces ~80KB of our JS after gzip)
 
-  **Priority**: Low — current code works, refactor when adding new features
+  **Follow-up (do together with Alpine migration)**:
+  1. **Split API endpoints** — reduce JSON response size and memory spikes:
+     - `/api/config` — full config (load once at startup, ~2KB)
+     - `/api/stats` — only dynamic data for polling (~500 bytes)
+     - Benefits all boards: MiniKit (35KB heap), S3 with BLE (future)
+     - Fixes "Failed to load configuration" errors on memory-constrained devices
+  2. **JSON body for POST** — switch form submission from `application/x-www-form-urlencoded`
+     to JSON body, simplifying `web_api.cpp` `handleSave()` (~560 → ~150 lines)
+
+  **Priority**: Medium — significant maintainability improvement, do before major UI changes
 
 #### Advanced Protocol Management
 
@@ -336,16 +316,6 @@
   - Warning threshold: 50KB (log warnings)
   - Heap fragmentation tracking
 
-#### Advanced Network Features 🔵 LOW PRIORITY
-
-- [ ] **TCP Client Mode** - Connect to remote servers
-  - Automatic reconnection on disconnect
-  - Use cases: Cloud logging, remote monitoring
-
-- [ ] **TCP Server Mode** - Accept TCP connections
-  - Multiple client support
-  - Authentication options
-
 ## Build & CI/CD
 
 ### Debug Toolchain Paths
@@ -361,14 +331,6 @@ nm:        xtensa-esp32-elf-nm.exe .pio/build/minikit_production/firmware.elf
 addr2line: xtensa-esp32s3-elf-addr2line.exe -pfiaC -e .pio/build/zero_debug/firmware.elf <addresses>
 size:      xtensa-esp32s3-elf-size.exe .pio/build/zero_production/firmware.elf
 ```
-
-### GitHub Actions Improvements
-- [x] **Add MiniKit to GitHub Actions auto-build**
-  - Added `minikit_production` to build workflow
-  - Firmware files: `firmware-minikit.bin`, `firmware-minikit.elf`
-
-- [x] **Exclude TODO.md from source archive**
-  - Added to `.gitattributes`: `TODO.md export-ignore`
 
 ## Libraries and Dependencies
 

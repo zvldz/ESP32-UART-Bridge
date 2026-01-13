@@ -9,6 +9,7 @@
 #define LED_WIFI_RESET_BLINK_MS 100  // WiFi reset rapid blink interval
 #define LED_WIFI_SEARCH_BLINK_MS 2000 // Orange slow blink for WiFi searching
 #define LED_WIFI_ERROR_BLINK_MS  500  // Fast blink for WiFi errors
+#define LED_BT_CONNECTED_BLINK_MS 500 // Bluetooth connected blink interval (MiniKit)
 
 // LED colors for Device 3
 #define COLOR_MAGENTA   0xFF00FF  // Device 3 TX

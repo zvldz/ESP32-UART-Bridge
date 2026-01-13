@@ -257,6 +257,18 @@ void loop() {
         quickResetUpdateUptime();
         lastNvsUpdate = millis();
     }
+
+    // Track Bluetooth connection status for LED indication
+    static bool lastBtConnected = false;
+    bool btConnected = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
+    if (btConnected != lastBtConnected) {
+        if (btConnected) {
+            led_set_mode(LED_MODE_BT_CONNECTED);
+        } else if (bridgeMode == BRIDGE_STANDALONE) {
+            led_set_mode(LED_MODE_DATA_FLASH);
+        }
+        lastBtConnected = btConnected;
+    }
 #endif
 
     // Process LED updates from main thread - MUST be first
