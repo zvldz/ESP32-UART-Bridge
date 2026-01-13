@@ -1,5 +1,5 @@
 // SBUS Text Format Conversion
-// Converts binary SBUS frames to text format compatible with TX16S-RC
+// Converts binary SBUS frames to text format for Mission Planner RC Override
 // Format: "RC 1500,1500,...\r\n" (16 channels in microseconds)
 #pragma once
 
