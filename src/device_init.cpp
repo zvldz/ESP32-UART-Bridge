@@ -164,7 +164,7 @@ void initDevice2SBUS() {
 
     UartConfig uartCfg;
     if (textMode) {
-        // Text format: standard UART 115200 8N1 (like TX16S-RC)
+        // Text format: standard UART 115200 8N1
         uartCfg = {
             .baudrate = 115200,
             .databits = UART_DATA_8_BITS,
@@ -282,7 +282,7 @@ void initDevice3SBUS() {
 
     UartConfig uartCfg;
     if (textMode) {
-        // Text format: standard UART 115200 8N1 (like TX16S-RC)
+        // Text format: standard UART 115200 8N1
         uartCfg = {
             .baudrate = 115200,
             .databits = UART_DATA_8_BITS,
