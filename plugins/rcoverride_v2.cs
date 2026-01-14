@@ -62,7 +62,7 @@ namespace RcOverridePlugin
 
         public override string Name => "RC Override";
         public override string Author => "ACh / mod";
-        public override string Version => "2.0.1";
+        public override string Version => "2.0.2";
 
         private StringBuilder _buffer = new StringBuilder(256);
 
@@ -72,10 +72,6 @@ namespace RcOverridePlugin
         private int _framesSent = 0;
         private DateTime _lastDiagTime = DateTime.MinValue;
         private const int DIAG_INTERVAL_MS = 5000;
-
-        // Port refresh
-        private DateTime _lastPortRefresh = DateTime.MinValue;
-        private const int PORT_REFRESH_INTERVAL_MS = 3000;
 
         public override bool Init()
         {
@@ -109,17 +105,6 @@ namespace RcOverridePlugin
         {
             if (!_running)
                 return true;
-
-            // Dynamic port refresh when dropdown is open or periodically
-            if (_sourceMode == SourceMode.COM && _cmbPort != null)
-            {
-                var now = DateTime.UtcNow;
-                if ((now - _lastPortRefresh).TotalMilliseconds > PORT_REFRESH_INTERVAL_MS)
-                {
-                    _lastPortRefresh = now;
-                    RefreshPortListIfChanged();
-                }
-            }
 
             if (_chkEnable != null && !_chkEnable.Checked)
             {
@@ -481,6 +466,10 @@ namespace RcOverridePlugin
             if (_port != null && _port.IsOpen)
                 return;
 
+            // Don't try to open port if "No ports" is selected or port name is null/empty
+            if (string.IsNullOrEmpty(_currentPortName) || string.Equals(_currentPortName, "No ports", StringComparison.OrdinalIgnoreCase))
+                return;
+
             // Rate limit port open attempts (BT ports need time to establish SPP connection)
             var now = DateTime.UtcNow;
             if ((now - _lastPortOpenAttempt).TotalMilliseconds < PORT_RETRY_INTERVAL_MS)
@@ -648,12 +637,19 @@ namespace RcOverridePlugin
 
             RefreshPortList();
 
+            // Refresh port list when dropdown is opened
+            _cmbPort.DropDown += (s, e) => RefreshPortList();
+
             _cmbPort.SelectedIndexChanged += (s, e) =>
             {
                 try
                 {
                     string selected = _cmbPort.SelectedItem as string;
-                    if (!string.IsNullOrEmpty(selected) && !string.Equals(selected, _currentPortName, StringComparison.OrdinalIgnoreCase))
+                    // Ignore "No ports" selection
+                    if (string.IsNullOrEmpty(selected) || string.Equals(selected, "No ports", StringComparison.OrdinalIgnoreCase))
+                        return;
+
+                    if (!string.Equals(selected, _currentPortName, StringComparison.OrdinalIgnoreCase))
                     {
                         _currentPortName = selected;
                         Debug.WriteLine("[RC] Port changed to " + _currentPortName);
@@ -700,6 +696,7 @@ namespace RcOverridePlugin
             _chkEnable.CheckedChanged += (s, e) => {
                 if (!_chkEnable.Checked)
                 {
+                    try { ClearRcOverride(); } catch { }
                     ClosePort();
                     CloseUdp();
                 }
@@ -780,83 +777,33 @@ namespace RcOverridePlugin
             string[] ports = SerialPort.GetPortNames();
             Array.Sort(ports, StringComparer.OrdinalIgnoreCase);
 
+            // Preserve current selection
+            string currentSelection = _currentPortName;
+
             _cmbPort.Items.Clear();
 
             if (ports.Length == 0)
             {
-                _cmbPort.Items.Add(PORT_DEFAULT);
+                _cmbPort.Items.Add("No ports");
                 _cmbPort.SelectedIndex = 0;
-                _currentPortName = PORT_DEFAULT;
+                _currentPortName = null;
                 return;
             }
 
             _cmbPort.Items.AddRange(ports);
 
-            int idx = Array.IndexOf(ports, _currentPortName);
+            int idx = Array.IndexOf(ports, currentSelection);
             if (idx < 0) idx = 0;
             _cmbPort.SelectedIndex = idx;
-        }
 
-        // Cached port list for change detection
-        private string[] _lastKnownPorts = null;
-
-        private void RefreshPortListIfChanged()
-        {
-            if (_cmbPort == null)
-                return;
-
-            try
+            // Update _currentPortName to match selected port
+            if (_cmbPort.SelectedItem != null)
             {
-                string[] ports = SerialPort.GetPortNames();
-                Array.Sort(ports, StringComparer.OrdinalIgnoreCase);
-
-                // Compare with cached list
-                bool changed = false;
-                if (_lastKnownPorts == null || _lastKnownPorts.Length != ports.Length)
+                string selectedPort = _cmbPort.SelectedItem as string;
+                if (!string.IsNullOrEmpty(selectedPort) && !string.Equals(selectedPort, "No ports", StringComparison.OrdinalIgnoreCase))
                 {
-                    changed = true;
+                    _currentPortName = selectedPort;
                 }
-                else
-                {
-                    for (int i = 0; i < ports.Length; i++)
-                    {
-                        if (_lastKnownPorts[i] != ports[i])
-                        {
-                            changed = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (changed)
-                {
-                    Console.WriteLine("[RC] Port list changed: {0} -> {1}",
-                        _lastKnownPorts != null ? string.Join(",", _lastKnownPorts) : "null",
-                        string.Join(",", ports));
-
-                    _lastKnownPorts = ports;
-
-                    // Preserve current selection
-                    string currentSelection = _currentPortName;
-
-                    _cmbPort.Items.Clear();
-                    if (ports.Length == 0)
-                    {
-                        _cmbPort.Items.Add(PORT_DEFAULT);
-                        _cmbPort.SelectedIndex = 0;
-                    }
-                    else
-                    {
-                        _cmbPort.Items.AddRange(ports);
-                        int idx = Array.IndexOf(ports, currentSelection);
-                        if (idx < 0) idx = 0;
-                        _cmbPort.SelectedIndex = idx;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[RC] RefreshPortListIfChanged error: {0}", ex.Message);
             }
         }
 
