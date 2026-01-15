@@ -47,12 +47,12 @@ const Utils = {
         return '📶'; // Weak signal
     },
 
-    // Generate WiFi signal bars based on RSSI percentage (mobile style)
+    // Generate WiFi signal indicator based on RSSI percentage
     getWifiSignalBars(rssiPercent) {
-        if (rssiPercent >= 75) return '<span style="font-family: monospace;">▂▄▆█</span>'; // 4 bars
-        if (rssiPercent >= 50) return '<span style="font-family: monospace;">▂▄▆</span>';  // 3 bars  
-        if (rssiPercent >= 25) return '<span style="font-family: monospace;">▂▄</span>';   // 2 bars
-        return '<span style="font-family: monospace;">▂</span>';                          // 1 bar
+        if (rssiPercent >= 75) return '<span style="color: #4CAF50;">●●●●</span>';
+        if (rssiPercent >= 50) return '<span style="color: #8BC34A;">●●●○</span>';
+        if (rssiPercent >= 25) return '<span style="color: #FF9800;">●●○○</span>';
+        return '<span style="color: #f44336;">●○○○</span>';
     },
 
     // Update element text content safely

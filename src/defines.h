@@ -98,7 +98,7 @@ Hardware: ESP32-WROOM-32 based development board
   #define BOARD_TYPE_STRING "ESP32 MiniKit"
   #define LED_TYPE_SINGLE_COLOR  // Blink-only mode (no RGB colors)
   #define LED_ACTIVE_HIGH        // Normal logic (unlike XIAO which is inverted)
-  #define DEVICE2_UART_NOT_AVAILABLE  // GPIO 8/9 unavailable on WROOM (SPI flash)
+  #define DEVICE2_UART_NOT_AVAILABLE  // GPIO used by external USB-UART converter (CP210x/CH340)
 #elif defined(BOARD_ESP32_S3_ZERO)
   #define LED_PIN1          21  // WS2812 RGB LED on GPIO21 for S3-Zero
   #define BOARD_TYPE_STRING "ESP32-S3-Zero"

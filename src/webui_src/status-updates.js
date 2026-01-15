@@ -67,7 +67,10 @@ const StatusUpdates = {
         
         // Build WiFi info based on mode
         let wifiInfo = '';
-        if (this.config.wifiMode === 0) {  // AP Mode
+        if (this.config.tempNetworkMode) {
+            // Temporary network mode (forced by triple-click/reset on MiniKit)
+            wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Temporary AP (${this.config.ssid})</td></tr>`;
+        } else if (this.config.wifiMode === 0) {  // AP Mode
             wifiInfo = `<tr><td><strong>WiFi Mode:</strong></td><td>Access Point (${this.config.ssid})</td></tr>`;
         } else {  // Client Mode
             if (this.config.wifiClientConnected) {
@@ -589,6 +592,9 @@ const StatusUpdates = {
             inputCount++;
         }
         if (this.config.device2Role === '3') {  // D2_SBUS_IN
+            inputCount++;
+        }
+        if (this.config.device3Role === '4') {  // D3_SBUS_IN
             inputCount++;
         }
         if (this.config.device4Role === '4') {  // D4_SBUS_UDP_RX

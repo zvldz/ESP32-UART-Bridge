@@ -1,18 +1,15 @@
 <!-- Firmware Update fragment - loaded on demand -->
-<div style="margin-bottom: 15px;">
-    <label for="firmwareFile">Select Firmware File (.bin):</label><br>
-    <input type="file" id="firmwareFile" accept=".bin" style="margin: 5px 0;">
-</div>
-<div style="margin-bottom: 15px;">
-    <button type="button" id="updateButton" onclick="handleFirmwareUpdate()"
+<div style="text-align: center;">
+    <button type="button" id="updateButton" onclick="document.getElementById('firmwareFile').click()"
             style="padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
         Update Firmware
     </button>
+    <br><small style="color: #666; font-size: 12px;">Select .bin file, device restarts after update</small>
 </div>
+<input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="handleFirmwareUpdate()">
 <div id="updateProgress" style="display: none; margin-top: 15px;">
     <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
         <div id="updateProgressBar" style="height: 20px; background-color: #007bff; width: 0%; transition: width 0.3s;"></div>
     </div>
     <p id="updateStatus" style="margin: 5px 0; font-weight: bold;">Uploading firmware...</p>
 </div>
-<p><small>Select .bin firmware file. Device will restart automatically after update.</small></p>

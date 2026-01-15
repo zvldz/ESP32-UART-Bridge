@@ -142,8 +142,8 @@ const DeviceConfig = {
                     <td>
                         <select name="device4_role" id="device4_role" onchange="DeviceConfig.onDeviceRoleChange()" style="width: 100%;">
                             <option value="0">Disabled</option>
-                            <option value="1">Network Bridge</option>
-                            <option value="2">Network Logger</option>
+                            <option value="1">Bridge</option>
+                            <option value="2">Logger</option>
                             <option value="3_0">SBUS Output</option>
                             <option value="3_1">SBUS Text Output</option>
                             <option value="4">SBUS Input</option>
@@ -913,7 +913,7 @@ const DeviceConfig = {
         } else {
             // Normal context
             this.addOption(select, '0', 'Disabled');
-            this.addOption(select, '1', 'Network Bridge');
+            this.addOption(select, '1', 'Bridge');
             this.addOption(select, '2', 'UDP Logger');
         }
 

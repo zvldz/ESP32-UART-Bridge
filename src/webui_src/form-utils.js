@@ -691,23 +691,11 @@ const FormUtils = {
 
     handleFirmwareUpdate() {
         const fileInput = document.getElementById('firmwareFile');
+        const file = fileInput.files[0];
         const updateButton = document.getElementById('updateButton');
         const progressDiv = document.getElementById('updateProgress');
         const progressBar = document.getElementById('updateProgressBar');
         const statusText = document.getElementById('updateStatus');
-        
-        if (!fileInput.files[0]) {
-            alert('Please select a firmware file (.bin)');
-            return;
-        }
-        
-        const file = fileInput.files[0];
-        
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.bin')) {
-            alert('Please select a .bin firmware file');
-            return;
-        }
 
         // Show progress and disable button
         if (progressDiv && progressBar && statusText && updateButton) {
