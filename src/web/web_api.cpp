@@ -137,6 +137,9 @@ static void populateConfigJson(JsonDocument& doc) {
         }
     }
 
+    // Temporary network mode (triple-click/reset activates WiFi, not permanent)
+    doc["tempNetworkMode"] = systemState.isTemporaryNetwork;
+
     // USB mode
     doc["usbMode"] = config.usb_mode == USB_MODE_HOST ? "host" : "device";
 
@@ -1119,6 +1122,19 @@ void handleSbusStatus(AsyncWebServerRequest *request) {
         src["hasData"] = router->getSourceHasData(SBUS_SOURCE_DEVICE2);
         src["valid"] = router->getSourceIsValid(SBUS_SOURCE_DEVICE2);
         src["hasFailsafe"] = router->getSourceHasFailsafe(SBUS_SOURCE_DEVICE2);
+    }
+
+    // Device3
+    if (config.device3.role == D3_SBUS_IN) {
+        JsonObject src = sources.add<JsonObject>();
+        src["id"] = SBUS_SOURCE_DEVICE3;
+        src["name"] = "Device3 (GPIO6)";
+        src["configured"] = router->isSourceConfigured(SBUS_SOURCE_DEVICE3);
+        src["quality"] = router->getSourceQuality(SBUS_SOURCE_DEVICE3);
+        src["priority"] = router->getSourcePriority(SBUS_SOURCE_DEVICE3);
+        src["hasData"] = router->getSourceHasData(SBUS_SOURCE_DEVICE3);
+        src["valid"] = router->getSourceIsValid(SBUS_SOURCE_DEVICE3);
+        src["hasFailsafe"] = router->getSourceHasFailsafe(SBUS_SOURCE_DEVICE3);
     }
 
     // UDP
