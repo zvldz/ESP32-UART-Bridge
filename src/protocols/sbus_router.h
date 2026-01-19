@@ -181,6 +181,9 @@ public:
     bool getSourceHasFailsafe(uint8_t sourceId) const {
         return (sourceId < 4) ? sources[sourceId].hasFailsafe : false;
     }
+    uint32_t getSourceFramesReceived(uint8_t sourceId) const {
+        return (sourceId < 4) ? sources[sourceId].framesReceived : 0;
+    }
 
     // Statistics
     uint32_t getFramesRouted() const { return framesRouted; }
