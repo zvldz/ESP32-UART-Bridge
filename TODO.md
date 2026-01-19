@@ -114,67 +114,31 @@
   - List of client IP addresses
   - IP of current web interface user
 
-- [ ] **Web UI Refactoring with Alpine.js** 🔵 TECHNICAL DEBT
+- [x] **Web UI Refactoring with Alpine.js** ✅ COMPLETED
 
-  **Problem**: Web UI JS code grew to ~3800 lines with significant complexity:
-  - device-config.js: 1135 lines, 35+ functions, 97× getElementById calls
-  - status-updates.js: 930 lines with mixed responsibilities
-  - form-utils.js: 862 lines
-  - Imperative DOM manipulation, manual state tracking
-  - Hard to extend — each new Device/role requires changes in 5+ places
+  **Completed migration**:
+  - Alpine.js + Collapse + Persist plugins integrated
+  - All device configuration logic moved to Alpine stores
+  - Status updates, SBUS controls, protocol stats via reactive stores
+  - help.html migrated to Alpine (collapsible sections with $persist)
+  - Removed: device-config.js, status-updates.js (dead code cleanup)
 
-  **Solution**: Migrate to Alpine.js — lightweight reactive framework (~15KB gzip)
-  - Declarative bindings in HTML (`x-model`, `x-show`, `:disabled`)
-  - Reactive state with computed properties (automatic dependency tracking)
-  - Plugins: Collapse (smooth animations), Persist (localStorage auto-save)
-
-  **Expected results**:
+  **Results achieved**:
   | Metric | Before | After |
   |--------|--------|-------|
-  | JS code | ~3800 lines | ~500 lines |
-  | Files | 6 JS files | 1 app.js + alpine.min.js |
-  | getElementById | 97 calls | 0 |
-  | Adding new Device | ~100 lines | ~10 lines |
+  | JS files | 6 files | 4 files (app.js, utils.js, form-utils.js, crash-log.js) |
+  | getElementById | 97 calls | ~15 calls (legacy crash-log, form-utils) |
+  | x-model bindings | 0 | 44 |
+  | $store references | 0 | 201 |
 
-  **Migration plan**:
-  1. Add alpine.min.js + collapse + persist plugins to webui_src/
-  2. Convert device-config.js first (biggest win)
-  3. Convert status-updates.js (SBUS controls, stats display)
-  4. Convert form-utils.js (form handling, validation)
-  5. Merge remaining code into single app.js
-  6. Remove old JS files
+  **Follow-up tasks**:
+  1. ~~**Split API endpoints**~~ ✅ DONE — `/api/config` + `/api/status` implemented
+  2. ~~**JSON body for POST**~~ ✅ DONE — switched to JSON body, `handleSaveJson()` (~560 → ~486 lines)
+     - JS sends JSON via `Content-Type: application/json`
+     - C++ uses ArduinoJson for parsing (cleaner than manual string parsing)
+     - Fixed log level selects disabled state (UART/Network logs react to device roles)
 
-  **Example transformation**:
-  ```javascript
-  // Before: 30 lines JS
-  updateDeviceOptionsForSBUS() {
-      const select = document.getElementById('device2_role');
-      Array.from(select.options).forEach(option => {
-          if (option.value === '1') option.disabled = true;
-      });
-  }
-
-  // After: 1 line in HTML
-  <option value="1" :disabled="isSbusMode">UART2</option>
-  ```
-
-  **Benefits**:
-  - Declarative logic visible in HTML
-  - Automatic reactivity (no manual update calls)
-  - Better extensibility (new features = add data + HTML)
-  - Industry standard (29K GitHub stars, used in Laravel/Django)
-  - Size neutral (Alpine ~15KB replaces ~80KB of our JS after gzip)
-
-  **Follow-up (do together with Alpine migration)**:
-  1. **Split API endpoints** — reduce JSON response size and memory spikes:
-     - `/api/config` — full config (load once at startup, ~2KB)
-     - `/api/stats` — only dynamic data for polling (~500 bytes)
-     - Benefits all boards: MiniKit (35KB heap), S3 with BLE (future)
-     - Fixes "Failed to load configuration" errors on memory-constrained devices
-  2. **JSON body for POST** — switch form submission from `application/x-www-form-urlencoded`
-     to JSON body, simplifying `web_api.cpp` `handleSave()` (~560 → ~150 lines)
-
-  **Priority**: Medium — significant maintainability improvement, do before major UI changes
+  **Status**: Alpine.js refactoring complete, all follow-up tasks done
 
 #### Advanced Protocol Management
 
@@ -246,6 +210,11 @@
   - [x] SBUS over WiFi/UDP with frame filtering and validation (implemented)
   - [x] Configurable UDP source timeout for Timing Keeper (100-5000ms, default 1000ms) ✅ v2.18.12
   - [x] Configurable UDP send rate (10-70 Hz, default 50 Hz) for SBUS Output over WiFi ✅ v2.18.12
+  - [ ] Configurable send rate for binary SBUS output (D2_SBUS_OUT, D3_SBUS_OUT, D4_SBUS_UDP_TX binary)
+    - Currently binary SBUS outputs at native 70 Hz (14ms frame timing)
+    - Some FC or receivers may benefit from throttled rate (50 Hz typical)
+    - D4 binary (format=0) also needs rate control — currently only text format (format=1) has it
+    - Reuse existing rate selector UI (10-70 Hz)
 
 ### Future Considerations (Low Priority)
 
