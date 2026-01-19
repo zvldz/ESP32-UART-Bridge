@@ -6,58 +6,20 @@
     <title>ESP32 UART Bridge - Connection Help</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
     <link rel="stylesheet" href="/style.css">
-    <style>
-        .section {
-            transition: padding 0.2s, margin 0.2s;
-        }
-        .section.collapsed {
-            padding: 10px 15px;
-            margin-bottom: 8px;
-        }
-        .section.collapsed h3 {
-            margin: 0;
-        }
-        .collapsible-header {
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .collapsible-header:hover {
-            opacity: 0.8;
-        }
-        .collapse-arrow {
-            font-size: 18px;
-            transition: transform 0.2s;
-        }
-        .subsection {
-            margin: 15px 0;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 3px solid #007bff;
-        }
-        .subsection h4 {
-            margin: 0 0 10px 0;
-            cursor: pointer;
-            user-select: none;
-        }
-        .subsection h4:hover {
-            opacity: 0.8;
-        }
-    </style>
+    <script defer src="/lib/alpine-persist.min.js"></script>
+    <script defer src="/lib/alpine-collapse.min.js"></script>
+    <script defer src="/lib/alpine.min.js"></script>
 </head>
-<body>
+<body x-data="helpPage()">
     <div class="container">
         <h1>🔗 ESP32 UART Bridge - Connection Help</h1>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('protocolContent', 'protocolArrow')">
+            <h3 class="collapsible-header" @click="toggle('protocol')">
                 📡 Protocol Support
-                <span id="protocolArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.protocol ? '▼' : '▶'"></span>
             </h3>
-            <div id="protocolContent">
+            <div x-show="sections.protocol" x-collapse>
                 <div class="success">
                     <strong>Works with ANY UART protocol:</strong> DMA-accelerated with adaptive buffering (256-2048 bytes based on baud rate).
                 </div>
@@ -72,11 +34,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('wifiContent', 'wifiArrow')">
+            <h3 class="collapsible-header" @click="toggle('wifi')">
                 🌐 WiFi Operation Modes
-                <span id="wifiArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.wifi ? '▼' : '▶'"></span>
             </h3>
-            <div id="wifiContent">
+            <div x-show="sections.wifi" x-collapse>
                 <div class="success">
                     <strong>The bridge supports dual WiFi modes with flexible operation:</strong><br><br>
                     <strong>📡 WiFi Access Point (AP) Mode:</strong><br>
@@ -127,11 +89,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('usbContent', 'usbArrow')">
+            <h3 class="collapsible-header" @click="toggle('usb')">
                 🔌 USB Modes
-                <span id="usbArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.usb ? '▼' : '▶'"></span>
             </h3>
-            <div id="usbContent">
+            <div x-show="sections.usb" x-collapse>
                 <div class="success">
                     <strong>The bridge supports two USB operation modes:</strong><br>
                     - <strong>Device Mode (default):</strong> ESP32 acts as USB-to-Serial converter, appears as COM port on PC<br>
@@ -153,22 +115,22 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('pinsContent', 'pinsArrow')">
+            <h3 class="collapsible-header" @click="toggle('pins')">
                 📌 Pin Connections
-                <span id="pinsArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.pins ? '▼' : '▶'"></span>
             </h3>
-            <div id="pinsContent">
+            <div x-show="sections.pins" x-collapse>
                 <div class="warning" style="margin-bottom: 10px;">
                     <strong>📌 Board Support:</strong> Optimized for Waveshare ESP32-S3-Zero. Also supported: ESP32-S3 Super Mini (no USB Host, LED on GPIO48), XIAO ESP32-S3 (D-pin labels, single-color LED), ESP32 MiniKit with CP2104 (WROOM-32, no USB Host, Device 2 USB only, triple RESET for WiFi).
                 </div>
 
                 <!-- ESP32-S3-Zero / Super Mini subsection -->
                 <div class="subsection">
-                    <h4 onclick="toggleSection('zeroPinsContent', 'zeroPinsArrow')">
+                    <h4 @click="toggle('zeroPins')" style="cursor: pointer;">
                         🔹 ESP32-S3-Zero / Super Mini
-                        <span id="zeroPinsArrow" class="collapse-arrow" style="float: right;">▼</span>
+                        <span class="collapse-arrow" style="float: right;" x-text="sections.zeroPins ? '▼' : '▶'"></span>
                     </h4>
-                    <div id="zeroPinsContent">
+                    <div x-show="sections.zeroPins" x-collapse>
                         <table>
                             <tr><th>ESP32-S3 Pin</th><th>Function</th><th>Connect To</th><th>Required</th></tr>
                             <tr><td colspan="4" style="background: #f0f4f8; font-weight: bold;">Device 1 - Main UART (Always Active)</td></tr>
@@ -194,11 +156,11 @@
 
                 <!-- XIAO ESP32-S3 subsection -->
                 <div class="subsection">
-                    <h4 onclick="toggleSection('xiaoPinsContent', 'xiaoPinsArrow')">
+                    <h4 @click="toggle('xiaoPins')" style="cursor: pointer;">
                         🔸 XIAO ESP32-S3
-                        <span id="xiaoPinsArrow" class="collapse-arrow" style="float: right;">▼</span>
+                        <span class="collapse-arrow" style="float: right;" x-text="sections.xiaoPins ? '▼' : '▶'"></span>
                     </h4>
-                    <div id="xiaoPinsContent">
+                    <div x-show="sections.xiaoPins" x-collapse>
                         <div class="warning" style="margin-bottom: 10px;">
                             <strong>📌 XIAO uses D-pin labels on board (castellated holes).</strong> Web interface shows both GPIO and D-pin numbers.
                         </div>
@@ -227,11 +189,11 @@
 
                 <!-- ESP32 MiniKit with CP2104 subsection -->
                 <div class="subsection">
-                    <h4 onclick="toggleSection('minikitPinsContent', 'minikitPinsArrow')">
+                    <h4 @click="toggle('minikitPins')" style="cursor: pointer;">
                         🔸 ESP32 MiniKit with CP2104 (WROOM-32)
-                        <span id="minikitPinsArrow" class="collapse-arrow" style="float: right;">▼</span>
+                        <span class="collapse-arrow" style="float: right;" x-text="sections.minikitPins ? '▼' : '▶'"></span>
                     </h4>
-                    <div id="minikitPinsContent">
+                    <div x-show="sections.minikitPins" x-collapse>
                         <div class="warning" style="margin-bottom: 10px;">
                             <strong>⚠️ MiniKit Requirements:</strong> Only boards with CP2104 USB-UART chip are supported (CH340/CH9102 not tested). No native USB, no PSRAM (~160KB heap), no UART2 option for Device 2 (GPIO8/9 used by flash). Device 2 is USB only. WiFi activation via triple RESET (no BOOT button).
                         </div>
@@ -283,11 +245,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('ledContent', 'ledArrow')">
+            <h3 class="collapsible-header" @click="toggle('led')">
                 💡 LED Status Indicators
-                <span id="ledArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.led ? '▼' : '▶'"></span>
             </h3>
-            <div id="ledContent">
+            <div x-show="sections.led" x-collapse>
                 <div class="success">
                     <strong>Zero/SuperMini - RGB LED provides comprehensive visual feedback:</strong><br><br>
                     <strong>📊 Data Activity (Standalone Mode):</strong><br>
@@ -327,11 +289,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('guideContent', 'guideArrow')">
+            <h3 class="collapsible-header" @click="toggle('guide')">
                 🚀 Basic Connection Guide
-                <span id="guideArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.guide ? '▼' : '▶'"></span>
             </h3>
-            <div id="guideContent">
+            <div x-show="sections.guide" x-collapse>
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center;">
                     <h4>Minimal Setup - UART to USB Bridge</h4>
                     <p style="font-size: 18px; background: #e9ecef; padding: 10px; border-radius: 5px;">
@@ -351,11 +313,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('setupContent', 'setupArrow')">
+            <h3 class="collapsible-header" @click="toggle('setup')">
                 🛠️ Setup Instructions
-                <span id="setupArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.setup ? '▼' : '▶'"></span>
             </h3>
-            <div id="setupContent">
+            <div x-show="sections.setup" x-collapse>
                 <div class="warning"><strong>⚠️ Important:</strong> Only connect signal wires and GND. Do not connect power between devices!</div>
                 <div class="warning" style="background-color: #ffebee; border-left-color: #f44336;">
                     <strong>⚡ Voltage Warning:</strong> ESP32-S3 GPIO pins support only 3.3V logic levels!<br>
@@ -374,11 +336,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('troubleContent', 'troubleArrow')">
+            <h3 class="collapsible-header" @click="toggle('trouble')">
                 🔧 Troubleshooting
-                <span id="troubleArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.trouble ? '▼' : '▶'"></span>
             </h3>
-            <div id="troubleContent">
+            <div x-show="sections.trouble" x-collapse>
                 <table>
                     <tr><th>Problem</th><th>Solution</th></tr>
                     <tr><td>No UART activity</td><td>Check TX/RX wiring, verify device UART settings</td></tr>
@@ -400,11 +362,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('backupContent', 'backupArrow')">
+            <h3 class="collapsible-header" @click="toggle('backup')">
                 💾 Configuration Backup & Restore
-                <span id="backupArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.backup ? '▼' : '▶'"></span>
             </h3>
-            <div id="backupContent">
+            <div x-show="sections.backup" x-collapse>
                 <div class="success">
                     <strong>Save and restore your device configuration:</strong><br>
                     <br>
@@ -435,11 +397,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('buttonContent', 'buttonArrow')">
+            <h3 class="collapsible-header" @click="toggle('button')">
                 🔘 Button Functions
-                <span id="buttonArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.button ? '▼' : '▶'"></span>
             </h3>
-            <div id="buttonContent">
+            <div x-show="sections.button" x-collapse>
                 <div class="success">
                     <strong>BOOT Button (GPIO0) Functions - S3 Boards:</strong><br><br>
                     <strong>🔘 Triple-Click (Mode Switching):</strong><br>
@@ -474,11 +436,11 @@
         </div>
 
         <div class="section">
-            <h3 class="collapsible-header" onclick="toggleSection('crashContent', 'crashArrow')">
+            <h3 class="collapsible-header" @click="toggle('crash')">
                 🔍 Crash Diagnostics
-                <span id="crashArrow" class="collapse-arrow">▼</span>
+                <span class="collapse-arrow" x-text="sections.crash ? '▼' : '▶'"></span>
             </h3>
-            <div id="crashContent">
+            <div x-show="sections.crash" x-collapse>
                 <div class="success">
                     <strong>The device automatically logs system crashes to help diagnose issues:</strong><br>
                     <br>
@@ -514,65 +476,31 @@
     </div>
 
     <script>
-        // Toggle section visibility with localStorage persistence
-        function toggleSection(contentId, arrowId) {
-            const content = document.getElementById(contentId);
-            const arrow = document.getElementById(arrowId);
-            if (!content) return;
+        // Alpine.js help page component with persisted section states
+        function helpPage() {
+            return {
+                sections: Alpine.$persist({
+                    protocol: false,
+                    wifi: false,
+                    usb: false,
+                    pins: false,
+                    zeroPins: false,
+                    xiaoPins: false,
+                    minikitPins: false,
+                    led: false,
+                    guide: false,
+                    setup: false,
+                    trouble: false,
+                    backup: false,
+                    button: false,
+                    crash: false
+                }).as('help-sections'),
 
-            const isHidden = content.style.display === 'none';
-            content.style.display = isHidden ? 'block' : 'none';
-            if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
-
-            // Toggle collapsed class on parent section
-            const section = content.parentElement;
-            if (section && section.classList.contains('section')) {
-                section.classList.toggle('collapsed', !isHidden);
-            }
-
-            // Save state to localStorage
-            try {
-                localStorage.setItem('help:' + contentId, isHidden ? 'shown' : 'hidden');
-            } catch(e) {}
-        }
-
-        // Restore all section states on page load
-        function restoreStates() {
-            const sections = [
-                'protocolContent', 'wifiContent', 'usbContent', 'pinsContent',
-                'ledContent', 'guideContent', 'setupContent', 'troubleContent',
-                'backupContent', 'buttonContent', 'crashContent',
-                'zeroPinsContent', 'xiaoPinsContent', 'minikitPinsContent'
-            ];
-
-            sections.forEach(function(contentId) {
-                const content = document.getElementById(contentId);
-                const arrowId = contentId.replace('Content', 'Arrow');
-                const arrow = document.getElementById(arrowId);
-                if (!content) return;
-
-                let state = null;
-                try {
-                    state = localStorage.getItem('help:' + contentId);
-                } catch(e) {}
-
-                // Default: all sections collapsed
-                const defaultExpanded = false;
-                const isExpanded = state === 'shown' || (state === null && defaultExpanded);
-
-                content.style.display = isExpanded ? 'block' : 'none';
-                if (arrow) arrow.textContent = isExpanded ? '▼' : '▶';
-
-                // Set collapsed class on parent section
-                const section = content.parentElement;
-                if (section && section.classList.contains('section')) {
-                    section.classList.toggle('collapsed', !isExpanded);
+                toggle(section) {
+                    this.sections[section] = !this.sections[section];
                 }
-            });
+            };
         }
-
-        // Initialize on DOM ready
-        document.addEventListener('DOMContentLoaded', restoreStates);
     </script>
 </body>
 </html>

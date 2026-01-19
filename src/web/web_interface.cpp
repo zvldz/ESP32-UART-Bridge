@@ -63,8 +63,31 @@ void webserver_init(Config* config, SystemState* state) {
     });
 
     // Setup API routes
-    server->on("/save", HTTP_POST, handleSave);
-    server->on("/status", HTTP_GET, handleStatus);
+    // /save accepts JSON body
+    server->on("/save", HTTP_POST,
+        [](AsyncWebServerRequest *request) {
+            // Called after body is received
+            handleSaveJson(request);
+        },
+        nullptr,  // No file upload handler
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            // Body handler - accumulate JSON data
+            if (index == 0) {
+                // Allocate buffer for JSON (max 4KB should be plenty)
+                request->_tempObject = malloc(total + 1);
+                if (!request->_tempObject) {
+                    return;
+                }
+            }
+            if (request->_tempObject) {
+                memcpy(static_cast<char*>(request->_tempObject) + index, data, len);
+                if (index + len == total) {
+                    static_cast<char*>(request->_tempObject)[total] = '\0';
+                }
+            }
+        }
+    );
+    // Note: /status removed - use /api/status instead
     server->on("/logs", HTTP_GET, handleLogs);
     server->on("/reboot", HTTP_GET, handleReboot);
     server->on("/reset_stats", HTTP_GET, handleResetStats);
@@ -146,13 +169,14 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/sbus/set_source", HTTP_GET, handleSbusSetSource);
     server->on("/sbus/set_mode", HTTP_GET, handleSbusSetMode);
     server->on("/sbus/status", HTTP_GET, handleSbusStatus);
-  
+
+    // Split API endpoints for Alpine.js refactoring
+    server->on("/api/config", HTTP_GET, handleApiConfig);
+    server->on("/api/status", HTTP_GET, handleApiStatus);
+
     // Serve static files with gzip compression
     server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
-    });
-    server->on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_MAIN_GZ, JS_MAIN_GZ_LEN);
     });
     server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
@@ -160,52 +184,25 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
     });
-    server->on("/device-config.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_DEVICE_CONFIG_GZ, JS_DEVICE_CONFIG_GZ_LEN);
-    });
     server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
     });
-    server->on("/status-updates.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_STATUS_UPDATES_GZ, JS_STATUS_UPDATES_GZ_LEN);
+
+    // Alpine.js libraries and app
+    server->on("/lib/alpine.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_LIB_ALPINE_MIN_GZ, JS_LIB_ALPINE_MIN_GZ_LEN);
+    });
+    server->on("/lib/alpine-persist.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_LIB_ALPINE_PERSIST_MIN_GZ, JS_LIB_ALPINE_PERSIST_MIN_GZ_LEN);
+    });
+    server->on("/lib/alpine-collapse.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_LIB_ALPINE_COLLAPSE_MIN_GZ, JS_LIB_ALPINE_COLLAPSE_MIN_GZ_LEN);
+    });
+    server->on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_APP_GZ, JS_APP_GZ_LEN);
     });
 
-    // Lazy-loaded HTML fragments
-    server->on("/fragment", HTTP_GET, [](AsyncWebServerRequest *request){
-        if (!request->hasParam("section")) {
-            request->send(400, "text/plain", "Missing section parameter");
-            return;
-        }
-
-        String section = request->getParam("section")->value();
-        const uint8_t* data = nullptr;
-        size_t len = 0;
-
-        if (section == "logs") {
-            data = FRAGMENT_LOGS_GZ;
-            len = FRAGMENT_LOGS_GZ_LEN;
-        } else if (section == "crash") {
-            data = FRAGMENT_CRASH_GZ;
-            len = FRAGMENT_CRASH_GZ_LEN;
-        } else if (section == "status") {
-            data = FRAGMENT_STATUS_GZ;
-            len = FRAGMENT_STATUS_GZ_LEN;
-        } else if (section == "protocol") {
-            data = FRAGMENT_PROTOCOL_GZ;
-            len = FRAGMENT_PROTOCOL_GZ_LEN;
-        } else if (section == "backup") {
-            data = FRAGMENT_BACKUP_GZ;
-            len = FRAGMENT_BACKUP_GZ_LEN;
-        } else if (section == "firmware") {
-            data = FRAGMENT_FIRMWARE_GZ;
-            len = FRAGMENT_FIRMWARE_GZ_LEN;
-        } else {
-            request->send(404, "text/plain", "Fragment not found");
-            return;
-        }
-
-        sendGzippedResponse(request, "text/html", data, len);
-    });
+    // Note: Fragments removed - all HTML now inlined in index.html for better gzip compression
 
     // Setup OTA update with async handlers
     server->on("/update", HTTP_POST,

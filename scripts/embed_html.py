@@ -100,12 +100,7 @@ def get_files_hash(web_src, js_files):
         if js_file.exists():
             hasher.update(js_file.read_bytes())
 
-    # Hash fragment files
-    fragments_dir = web_src / "fragments"
-    if fragments_dir.exists():
-        for frag_file in sorted(fragments_dir.glob("*.html")):
-            if frag_file.exists():
-                hasher.update(frag_file.read_bytes())
+    # Note: Fragments no longer used - all HTML inlined in index.html
 
     return hasher.hexdigest()
 
@@ -176,13 +171,19 @@ def process_html_files(source, target, env):
         env.Exit(1)
     
     # Define all JavaScript files to process
+    # Libraries (lib/) must be loaded first, in this order
     js_files = [
-        "main.js",
-        "crash-log.js",
+        # Alpine.js libraries (plugins before core)
+        "lib/alpine-persist.min.js",
+        "lib/alpine-collapse.min.js",
+        "lib/alpine.min.js",
+        # Alpine application (main entry point)
+        "app.js",
+        # Utility modules
         "utils.js",
-        "device-config.js",
         "form-utils.js",
-        "status-updates.js"
+        # TODO: Migrate crash-log.js to Alpine templates
+        "crash-log.js"
     ]
     
     # Check if regeneration needed
@@ -241,10 +242,11 @@ def process_html_files(source, target, env):
             js_file = web_src / js_name
             if js_file.exists():
                 js_content = js_file.read_text(encoding='utf-8')
-                print(f"  Processing {js_file.name}")
+                print(f"  Processing {js_name}")
 
-                # Generate constant name (replace - with _)
-                const_name = f"JS_{js_file.stem.replace('-', '_').upper()}"
+                # Generate constant name from full path (lib/alpine.min.js -> JS_LIB_ALPINE_MIN)
+                name_for_const = js_name.replace('/', '_').replace('-', '_').replace('.min', '_MIN').replace('.js', '')
+                const_name = f"JS_{name_for_const.upper()}"
 
                 # Minify and compress
                 compressed_data = minify_and_compress(js_content, 'js', js_file.name)
@@ -254,21 +256,9 @@ def process_html_files(source, target, env):
             else:
                 print(f"  WARNING: {js_name} not found!")
 
-        # Write fragment constants (lazy-loaded HTML sections)
-        fragments_dir = web_src / "fragments"
-        if fragments_dir.exists():
-            for frag_file in sorted(fragments_dir.glob("*.html")):
-                frag_content = frag_file.read_text(encoding='utf-8')
-                print(f"  Processing fragment: {frag_file.name}")
-
-                # Generate constant name: FRAGMENT_LOGS, FRAGMENT_CRASH, etc.
-                const_name = f"FRAGMENT_{frag_file.stem.upper()}"
-
-                # Compress (no minification for HTML fragments)
-                compressed_data = minify_and_compress(frag_content, 'html', frag_file.name)
-
-                # Write compressed constant
-                write_compressed_constant(f, const_name, compressed_data)
+        # Note: Fragments removed - all HTML now inlined in index.html
+        # This reduces HTTP requests and improves gzip compression
+        # (fragments_dir = web_src / "fragments" - no longer processed)
 
         f.write("#endif // WEB_CONTENT_H\n")
     

@@ -1,4 +1,8 @@
 /* ESP32 UART Bridge Styles */
+
+/* Alpine.js: hide elements until Alpine initializes */
+[x-cloak] { display: none !important; }
+
 body {
     font-family: Arial, sans-serif;
     margin: 20px;
@@ -54,6 +58,34 @@ button {
 button:hover {
     background-color: #45a049;
 }
+
+/* Button color variants */
+.btn-blue { background-color: #2196F3; }
+.btn-blue:hover { background-color: #1976D2; }
+
+.btn-orange { background-color: #FF9800; }
+.btn-orange:hover { background-color: #F57C00; }
+
+.btn-red { background-color: #f44336; }
+.btn-red:hover { background-color: #d32f2f; }
+
+.btn-small { padding: 8px 16px; margin: 0; }
+.btn-large { padding: 12px 30px; font-size: 16px; }
+
+/* SBUS source selection buttons */
+.sbus-source-btn {
+    padding: 8px 16px;
+    color: white;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    min-width: 100px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    transition: opacity 0.2s;
+}
+.sbus-source-btn:hover { opacity: 0.9; }
+.sbus-source-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+.sbus-source-btn.sbus-active { font-weight: bold; border-color: #1e7e34; }
 
 .status {
     padding: 10px;
@@ -266,139 +298,221 @@ pre {
     }
 }
 
-/* SBUS Source Management Styles */
-.sbus-status-panel {
-    padding: 15px;
+/* Collapsible sections (used in help.html) */
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.collapsible-header:hover {
+    opacity: 0.8;
+}
+
+.collapse-arrow {
+    font-size: 18px;
+    transition: transform 0.2s;
+}
+
+/* Help page subsections */
+.subsection {
+    margin: 15px 0;
+    padding: 10px;
     background: #f8f9fa;
     border-radius: 8px;
-    margin: 15px 0;
+    border-left: 3px solid #007bff;
 }
 
-.sbus-current-status {
+.subsection h4 {
+    margin: 0 0 10px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.subsection h4:hover {
+    opacity: 0.8;
+}
+
+/* Protocol Statistics */
+.protocol-stats-empty {
+    color: #666;
     text-align: center;
-    margin-bottom: 15px;
-    font-size: 16px;
+    margin: 20px 0;
 }
 
-.sbus-source-indicators {
+.protocol-stats-title {
+    margin: 0 0 15px 0;
+    color: #333;
+}
+
+.protocol-stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px;
-    margin: 15px 0;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
 }
 
-.sbus-source-indicator {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.protocol-stats-card {
     padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 6px;
-    background: white;
-    transition: all 0.3s;
-}
-
-.sbus-source-indicator.active {
-    border-color: #4CAF50;
-    background: #e8f5e9;
-}
-
-.sbus-source-indicator.standby {
-    border-color: #FF9800;
-    background: #fff8e1;
-}
-
-.sbus-source-indicator.offline {
-    border-color: #dc3545;
-    background: #ffebee;
-}
-
-.sbus-quality-bar {
-    width: 100%;
-    height: 8px;
-    background: #e0e0e0;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.sbus-quality-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #dc3545 0%, #FF9800 50%, #4CAF50 100%);
-    transition: width 0.3s;
-    background-size: 100px 100%;
-}
-
-.sbus-manual-controls {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin-top: 15px;
-}
-
-.sbus-manual-controls button {
-    padding: 8px 16px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    background: white;
+}
+
+.protocol-stats-card-wide {
+    min-width: 300px;
+}
+
+.protocol-stats-card h5 {
+    margin: 0 0 10px 0;
     color: #333;
-    cursor: pointer;
-    transition: all 0.2s;
 }
 
-.sbus-manual-controls button:hover {
-    background: #f0f0f0;
-}
-
-.sbus-manual-controls button.active {
-    background: #4CAF50;
-    color: white;
-    border-color: #4CAF50;
-}
-
-.sbus-manual-controls button.active:hover {
-    background: #45a049;
-}
-
-.sbus-priority-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.sbus-priority-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.sbus-priority-item span {
-    width: 80px;
-}
-
-.sbus-timing-settings {
+.stats-grid-2col {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px;
-}
-
-.sbus-timing-settings label {
-    display: block;
-    margin-bottom: 5px;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     font-size: 14px;
 }
 
-/* SBUS Mobile responsive additions */
-@media (max-width: 480px) {
-    .sbus-source-indicators {
-        grid-template-columns: 1fr;
-    }
-
-    .sbus-manual-controls {
-        flex-direction: column;
-    }
-
-    .sbus-manual-controls button {
-        width: 100%;
-    }
+.senders-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
 }
+
+.senders-table th {
+    padding: 5px;
+    text-align: left;
+    background: #f5f5f5;
+}
+
+.senders-table td {
+    padding: 5px;
+}
+
+/* Utility classes */
+.text-success { color: #28a745; }
+.text-danger { color: #dc3545; }
+.text-warning { color: #ffc107; }
+.text-muted { color: #6c757d; }
+.text-center { text-align: center; }
+
+/* WiFi signal colors */
+.wifi-signal-excellent { color: #4CAF50; }
+.wifi-signal-good { color: #8BC34A; }
+.wifi-signal-fair { color: #FF9800; }
+.wifi-signal-weak { color: #f44336; }
+
+/* SBUS success rate colors */
+.sbus-rate-excellent { color: #28a745; }
+.sbus-rate-good { color: #ffc107; }
+.sbus-rate-fair { color: #ff6b6b; }
+.sbus-rate-poor { color: #dc3545; }
+
+/* UDP Batching info */
+.udp-batching-info {
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #666;
+    margin-top: 10px;
+    text-align: center;
+}
+
+/* =========================================================================
+   COMMON PATTERNS - extracted from repeated inline styles
+   ========================================================================= */
+
+/* Collapsible section header (used 7 times) */
+.section-header {
+    margin: 0 0 10px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Section toggle arrow (used 7 times) */
+.section-arrow {
+    float: right;
+    font-size: 18px;
+}
+
+/* Close button in collapsible sections (used 6 times) */
+.section-close-btn {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+}
+
+/* Section content wrapper for close button positioning */
+.section-content {
+    position: relative;
+}
+
+/* Content with close button needs padding */
+.section-content-padded {
+    padding-right: 40px;
+}
+
+/* Card/box styling (used 4 times) */
+.info-card {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f9f9f9;
+}
+
+/* Inner card (used 3 times) */
+.inner-card {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #fff;
+    border-radius: 4px;
+}
+
+/* Section subtitle (used 5 times) */
+.section-subtitle {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+/* Small muted text (used 4 times) */
+.text-small-muted {
+    color: #666;
+    font-size: 12px;
+}
+
+/* Flex row with space-between (used 3 times) */
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+/* Font weight medium (used 5 times) */
+.fw-medium { font-weight: 500; }
+
+/* Common margins */
+.mt-10 { margin-top: 10px; }
+.mt-15 { margin-top: 15px; }
+.mt-20 { margin-top: 20px; }
+.mb-15 { margin-bottom: 15px; }
+.mb-20 { margin-bottom: 20px; }
+.ml-15 { margin-left: 15px; }
+
+/* Common widths for inputs */
+.w-60 { width: 60px; }
+.w-80 { width: 80px; }
+.w-100 { width: 100px; }
+.w-120 { width: 120px; }
+.w-180 { width: 180px; }
+.w-200 { width: 200px; }
+.w-full { width: 100%; }

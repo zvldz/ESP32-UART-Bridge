@@ -6,38 +6,133 @@
     <title>ESP32 UART Bridge</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text x='50%' y='50%' font-size='12' text-anchor='middle' dominant-baseline='middle'>🔗</text></svg>">
     <link rel="stylesheet" href="/style.css">
-    <!-- Config will be loaded dynamically via AJAX -->
+    <!-- Alpine.js (plugins must load before core, app.js registers stores) -->
+    <script defer src="/lib/alpine-persist.min.js"></script>
+    <script defer src="/lib/alpine-collapse.min.js"></script>
+    <script src="/app.js"></script>
+    <script defer src="/lib/alpine.min.js"></script>
 </head>
-<body>
+<body x-data x-init="$store.app.init(); $store.status.startPolling(); $watch('$store.app.isSbusActive', val => { if(val) $store.sbus.startPolling(); else $store.sbus.stopPolling(); });"
+      x-effect="if($store.app.isSbusActive && !$store.sbus.pollInterval) $store.sbus.startPolling();">
     <div class="container">
-        <h1>🔗 ESP32 UART Bridge</h1>
+        <h1>🔗 ESP32 UART Bridge <small x-show="$store.app.version" x-text="'v' + $store.app.version" style="font-size: 14px; color: #666;"></small></h1>
+
+        <!-- Loading indicator -->
+        <div x-cloak x-show="$store.app.loading" class="section" style="text-align: center; padding: 20px;">
+            <p>Loading configuration...</p>
+        </div>
+
+        <!-- Error indicator -->
+        <div x-cloak x-show="$store.app.error" class="section" style="background: #ffebee; border-color: #f44336;">
+            <p style="color: #c62828; margin: 0;">⚠️ Error: <span x-text="$store.app.error"></span></p>
+        </div>
 
         <!-- Quick Guide -->
         <div class="section" style="padding: 10px 15px;">
             <p style="margin: 5px 0; text-align: center;"><a href='/help' target='_blank' style="font-size: 16px;">📋 Connection Guide & Troubleshooting</a></p>
         </div>
 
-        <!-- SBUS Source Selection (dynamically inserted here when available) -->
-        <div id="sbusSourcePlaceholder"></div>
+        <!-- SBUS Source Selection (Alpine.js reactive, shows when 2+ SBUS inputs) -->
+        <!-- SBUS polling starts after app init via x-effect on body -->
+        <div x-cloak x-show="$store.sbus.showSourceSelection"
+             class="section sbus-source-container" style="padding: 15px; border: 2px solid #007bff; border-radius: 4px; background: #f0f8ff;">
+            <h4 style="margin: 0 0 15px 0; color: #333;">🎮 SBUS Source Selection</h4>
 
-        <!-- System Logs -->
-        <div class="section">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleLogs()">
-                🧾 System Logs
-                <span id="logsArrow" style="float: right; font-size: 18px;">▶</span>
-            </h4>
-            <div id="logsBlock" style="position: relative; display: none;" data-fragment="logs">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <!-- Source buttons -->
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <!-- AUTO button -->
+                <button class="sbus-source-btn"
+                        :disabled="$store.sbus.mode === 0"
+                        :class="{ 'sbus-active': $store.sbus.mode === 0 }"
+                        :style="{ background: $store.sbus.mode === 0 ? '#6c757d' : '#28a745' }"
+                        @click="$store.sbus.setMode(0)">
+                    AUTO
+                </button>
+
+                <!-- Source buttons (x-for) - only configured sources -->
+                <template x-for="src in $store.sbus.configuredSources" :key="src.id">
+                    <button class="sbus-source-btn"
+                            :data-source="src.id"
+                            @click="$store.sbus.setSource(src.id)"
+                            :class="{ 'sbus-active': src.id === $store.sbus.activeSource }"
+                            :style="{
+                                background: `linear-gradient(90deg, ${
+                                    src.id === $store.sbus.activeSource
+                                        ? (src.quality > 70 ? '#28a745' : src.quality > 30 ? '#ffc107' : '#dc3545')
+                                        : (src.quality > 70 ? '#007bff' : src.quality > 30 ? '#6c757d' : '#495057')
+                                } ${src.quality}%, rgba(108, 117, 125, 0.3) ${src.quality}%)`,
+                                minWidth: '150px',
+                                border: src.id === $store.sbus.activeSource ? '2px solid #1e7e34' : '2px solid transparent',
+                                fontWeight: src.id === $store.sbus.activeSource ? 'bold' : 'normal',
+                                textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                            }"
+                            x-text="(src.name || ('Source ' + src.id)) +
+                                (src.quality > 0 ? ' (' + src.quality + '%)' : '') +
+                                (src.framesReceived > 0 ? (src.framesReceived < 1000 ? ' ' + src.framesReceived + 'fr' : ' ' + Math.floor(src.framesReceived/1000) + 'k') : '')">
+                    </button>
+                </template>
+            </div>
+
+            <!-- Status line -->
+            <div style="margin-top: 10px; font-size: 13px; color: #666;">
+                Active: <strong x-text="$store.sbus.configuredSources.find(s => s.id === $store.sbus.activeSource)?.name || 'None'"></strong>
+                <span class="ml-15">Mode: <strong x-text="$store.sbus.modeText"></strong></span>
+                <span class="ml-15">State:
+                    <strong :class="$store.sbus.stateClass"
+                            :style="{ color: $store.sbus.state === 0 ? '#28a745' : $store.sbus.state === 1 ? '#ffc107' : '#dc3545' }"
+                            x-text="$store.sbus.stateText"></strong>
+                </span>
+                <span class="ml-15" x-show="$store.sbus.framesRouted > 0">
+                    Frames: <strong x-text="$store.sbus.framesRouted"></strong>
+                    <span x-show="$store.sbus.repeatedFrames > 0" style="color: #6c757d;">
+                        (repeated: <span x-text="$store.sbus.repeatedFrames"></span>)
+                    </span>
+                </span>
             </div>
         </div>
 
-        <!-- Crash History -->
+        <!-- System Logs (Alpine.js reactive) -->
+        <div class="section">
+            <h4 class="section-header" @click="$store.ui.toggle('logs')">
+                🧾 System Logs
+                <span class="section-arrow" x-text="$store.ui.logs ? '▼' : '▶'"></span>
+            </h4>
+            <div x-show="$store.ui.logs" x-collapse x-init="if ($store.ui.logs) $store.status.startLogsPolling()" class="section-content">
+                <!-- Copy button -->
+                <span @click="$store.status.copyLogs()" style="position: absolute; top: 10px; right: 10px; cursor: pointer; user-select: none; display: flex; align-items: center; padding: 5px; z-index: 10; background: rgba(233, 236, 239, 0.9); border-radius: 4px;" title="Copy logs to clipboard">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5">
+                        <rect x="6" y="6" width="10" height="12" rx="1"></rect>
+                        <path d="M14 4V3a1 1 0 00-1-1H5a1 1 0 00-1 1v12a1 1 0 001 1h1"></path>
+                    </svg>
+                </span>
+                <!-- Log entries -->
+                <div class="log-container">
+                    <div id="logContainer" x-effect="$el.scrollTop = $el.scrollHeight">
+                        <template x-if="!$store.status.logsLoaded">
+                            <div class="log-entry">Loading logs...</div>
+                        </template>
+                        <template x-if="$store.status.logsLoaded && $store.status.logs.length === 0">
+                            <div class="log-entry">No logs available</div>
+                        </template>
+                        <template x-for="(log, index) in $store.status.logs" :key="index">
+                            <div class="log-entry" x-text="log"></div>
+                        </template>
+                    </div>
+                </div>
+                <p style="margin-top: 10px; margin-bottom: 0;"><small>Showing last <span x-text="$store.app.logDisplayCount || 30"></span> entries. Auto-updates every 5 seconds.</small></p>
+            </div>
+        </div>
+
+        <!-- Crash History (Alpine.js reactive badge) -->
         <div class="section" style="padding: 10px 15px;">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" onclick="toggleCrashLog()">
+            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center;" @click="$store.ui.toggle('crash')">
                 <span>💥 Crash History</span>
                 <span style="display: flex; align-items: center; gap: 10px;">
-                    <span id="crashBadge" class="badge" style="background: #4CAF50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px; font-weight: bold; min-width: 20px; text-align: center;">0</span>
-                    <span id="crashClear" onclick="event.stopPropagation(); clearCrashHistory();" title="Clear all crash history" style="cursor: pointer; display: none; opacity: 0.6; padding: 4px; transition: all 0.2s;">
+                    <span class="badge" style="color: white; padding: 2px 8px; border-radius: 12px; font-size: 14px; font-weight: bold; min-width: 20px; text-align: center;"
+                          :style="{ background: $store.crash.badgeColor }"
+                          x-text="$store.crash.count">0</span>
+                    <span @click.stop="$store.crash.clear()" title="Clear all crash history" style="cursor: pointer; opacity: 0.6; padding: 4px; transition: all 0.2s;"
+                          x-show="$store.crash.showClearButton">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M3 3h10l-1 10H4L3 3z"></path>
                             <path d="M6 3V2a1 1 0 011-1h2a1 1 0 011 1v1"></path>
@@ -45,33 +140,317 @@
                             <path d="M6 6v4M10 6v4"></path>
                         </svg>
                     </span>
-                    <span id="crashArrow" style="user-select: none; font-size: 18px;">▶</span>
+                    <span style="user-select: none; font-size: 18px;" x-text="$store.ui.crash ? '▼' : '▶'"></span>
                 </span>
             </h4>
-            <div id="crashContent" style="display: none; overflow: hidden; transition: max-height 0.3s ease-out; margin-top: 10px;" data-fragment="crash">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <div x-show="$store.ui.crash" x-collapse style="overflow: hidden; margin-top: 10px;">
+                <!-- Crash table (populated by CrashLog.updateTable) -->
+                <div class="log-container" style="height: auto; max-height: 400px;">
+                    <table style="width: 100%; font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 8%;">#</th>
+                                <th style="width: 18%;">Type</th>
+                                <th style="width: 18%;">Uptime</th>
+                                <th style="width: 15%;">Heap</th>
+                                <th class="crash-min-heap" style="width: 15%;">Min</th>
+                                <th class="crash-details" style="width: 26%;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crashTableBody">
+                            <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="hint">Click on a row with magnifying glass to view detailed backtrace information</small>
             </div>
         </div>
 
-        <!-- System Status -->
+        <!-- System Status (Alpine.js reactive) -->
         <div class="section">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleSystemStatus()">
+            <h4 class="section-header" @click="$store.ui.toggle('systemStatus')">
                 📊 System Status
-                <span id="systemStatusToggle" style="float: right; font-size: 18px;">▶</span>
+                <span class="section-arrow" x-text="$store.ui.systemStatus ? '▼' : '▶'"></span>
             </h4>
-            <div id="systemStatusBlock" style="display: none;" data-fragment="status">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <div x-show="$store.ui.systemStatus" x-collapse>
+                <!-- Device Info Table -->
+                <div id="systemInfo">
+                    <table>
+                        <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Info</td></tr>
+                        <tr>
+                            <td><strong>Version:</strong></td>
+                            <td x-text="$store.app.version ? 'v' + $store.app.version + ' / ' + $store.app.arduinoVersion + ' / ' + $store.app.idfVersion : '-'"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Board:</strong></td>
+                            <td x-text="$store.status.boardName"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Uptime:</strong></td>
+                            <td x-text="$store.status.uptimeFormatted"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Free RAM:</strong></td>
+                            <td x-text="$store.status.freeRamFormatted"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>UART Config:</strong></td>
+                            <td>
+                                <span x-text="$store.status.uartConfig"></span>,
+                                <template x-if="$store.status.flowControl === 'Disabled'"><s>RTS/CTS</s></template>
+                                <template x-if="$store.status.flowControl !== 'Disabled'"><span>RTS/CTS</span></template>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>WiFi Mode:</strong></td>
+                            <td>
+                                <span x-text="$store.status.wifiModeText"></span>
+                                <!-- Signal bars for connected client mode -->
+                                <template x-if="$store.app.wifiMode === 1 && $store.status.wifiClientConnected">
+                                    <span>
+                                        <span class="wifi-signal" :class="$store.status.wifiSignalClass" x-text="$store.status.wifiSignalBars"></span>
+                                        <span x-text="$store.status.rssiPercent + '%'"></span>
+                                    </span>
+                                </template>
+                            </td>
+                        </tr>
+                        <!-- IP Address row (client mode only) -->
+                        <tr x-show="$store.status.showIpAddress">
+                            <td><strong>IP Address:</strong></td>
+                            <td x-text="$store.status.ipAddress || 'N/A'"></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Device Statistics Table -->
+                <div id="deviceStats">
+                    <table>
+                        <tr><td colspan="2" style="text-align: center; font-weight: bold; background-color: #f0f0f0;">Device Statistics</td></tr>
+
+                        <!-- Device 1 (always visible) -->
+                        <tr>
+                            <td><strong>Device 1 (<span x-text="$store.status.device1RoleName"></span>):</strong></td>
+                            <td>
+                                <div class="flex-between">
+                                    <span>
+                                        <span :style="{ color: $store.status.device1RxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device1RxActive ? '●' : '○'"></span>
+                                        ↓ <strong x-text="$store.status.formatBytes($store.status.device1Rx)"></strong>
+                                    </span>
+                                    <span>
+                                        <strong x-text="$store.status.formatBytes($store.status.device1Tx)"></strong> ↑
+                                        <span :style="{ color: $store.status.device1TxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device1TxActive ? '●' : '○'"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Device 2 (if role != 0) -->
+                        <tr x-show="$store.status.device2Role">
+                            <td><strong>Device 2 (<span x-text="$store.status.device2RoleName"></span>):</strong></td>
+                            <td>
+                                <div class="flex-between">
+                                    <span>
+                                        <span :style="{ color: $store.status.device2RxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device2RxActive ? '●' : '○'"></span>
+                                        ↓ <strong x-text="$store.status.formatBytes($store.status.device2Rx)"></strong>
+                                    </span>
+                                    <span>
+                                        <strong x-text="$store.status.formatBytes($store.status.device2Tx)"></strong> ↑
+                                        <span :style="{ color: $store.status.device2TxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device2TxActive ? '●' : '○'"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Device 3 (if role != 0) -->
+                        <tr x-show="$store.status.device3Role">
+                            <td><strong>Device 3 (<span x-text="$store.status.device3RoleName"></span>):</strong></td>
+                            <td>
+                                <div class="flex-between">
+                                    <span>
+                                        <span :style="{ color: $store.status.device3RxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device3RxActive ? '●' : '○'"></span>
+                                        ↓ <strong x-text="$store.status.formatBytes($store.status.device3Rx)"></strong>
+                                    </span>
+                                    <span>
+                                        <strong x-text="$store.status.formatBytes($store.status.device3Tx)"></strong> ↑
+                                        <span :style="{ color: $store.status.device3TxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device3TxActive ? '●' : '○'"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Device 4 (if role != 0) - Network stats with packets -->
+                        <tr x-show="$store.status.device4Role">
+                            <td><strong>Device 4 (<span x-text="$store.status.device4RoleName"></span>):</strong></td>
+                            <td>
+                                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.9em;">
+                                    <span>
+                                        <span :style="{ color: $store.status.device4RxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device4RxActive ? '●' : '○'"></span>
+                                        ↓ <strong x-text="$store.status.formatBytes($store.status.device4RxBytes)"></strong>
+                                        <span style="color: #6c757d; font-size: 0.85em;" x-text="$store.status.device4RxPackets + 'p'"></span>
+                                    </span>
+                                    <span>
+                                        <strong x-text="$store.status.formatBytes($store.status.device4TxBytes)"></strong>
+                                        <span style="color: #6c757d; font-size: 0.85em;" x-text="$store.status.device4TxPackets + 'p'"></span>
+                                        ↑ <span :style="{ color: $store.status.device4TxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device4TxActive ? '●' : '○'"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <tr><td colspan="2" style="border-top: 1px solid #ddd; padding-top: 5px;"></td></tr>
+
+                        <tr>
+                            <td><strong>Total Traffic:</strong></td>
+                            <td x-text="$store.status.totalTrafficFormatted"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Last Activity:</strong></td>
+                            <td x-text="$store.status.lastActivity"></td>
+                        </tr>
+                    </table>
+
+                    <!-- UDP Batching Info (only when Device 4 active) -->
+                    <div x-show="$store.status.device4Role" class="udp-batching-info">
+                        <template x-if="!$store.status.udpBatchingEnabled">
+                            <span>ℹ️ UDP Batching: <span class="text-muted">DISABLED</span> - Single packet per datagram</span>
+                        </template>
+                        <template x-if="$store.status.udpBatchingEnabled && $store.status.udpBatchingStats?.totalBatches > 0">
+                            <span>ℹ️ UDP Batching: <span class="text-success">ENABLED</span> - <span x-text="$store.status.udpBatchingStats.avgPacketsPerBatch"></span> pkts/batch avg, <span x-text="$store.status.udpBatchingStats.maxPacketsInBatch"></span> max, <span x-text="$store.status.udpBatchingStats.batchEfficiency"></span> efficiency</span>
+                        </template>
+                        <template x-if="$store.status.udpBatchingEnabled && !($store.status.udpBatchingStats?.totalBatches > 0)">
+                            <span>ℹ️ UDP Batching: <span class="text-success">ENABLED</span> - Ready (no traffic yet)</span>
+                        </template>
+                    </div>
+
+                    <!-- Reset Statistics Button -->
+                    <div style="text-align: center; margin: 15px 0;">
+                        <button
+                            type="button"
+                            style="background-color: #ff9800;"
+                            x-data="{ loading: false, success: false, error: false }"
+                            @click="
+                                loading = true;
+                                success = false;
+                                error = false;
+                                $store.status.resetStatistics()
+                                    .then(() => { loading = false; success = true; setTimeout(() => success = false, 2000); })
+                                    .catch(() => { loading = false; error = true; setTimeout(() => error = false, 3000); });
+                            "
+                            :disabled="loading"
+                            :style="{
+                                backgroundColor: success ? '#4CAF50' : error ? '#f44336' : '#ff9800'
+                            }"
+                            x-text="loading ? 'Resetting...' : success ? 'Reset Complete ✓' : error ? 'Error!' : 'Reset Statistics'"
+                        >Reset Statistics</button>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Protocol Statistics -->
         <div class="section">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleProtocolStats()">
+            <h4 class="section-header" @click="$store.ui.toggle('protocolStats')">
                 📈 Protocol Statistics
-                <span id="protocolStatsToggle" style="float: right; font-size: 18px;">▶</span>
+                <span class="section-arrow" x-text="$store.ui.protocolStats ? '▼' : '▶'"></span>
             </h4>
-            <div id="protocolStats" style="display: none;" data-fragment="protocol">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <div x-show="$store.ui.protocolStats" x-collapse>
+                <!-- No stats available -->
+                <template x-if="!$store.status.protocolStats">
+                    <p class="protocol-stats-empty">No protocol statistics available</p>
+                </template>
+
+                <!-- Protocol stats available -->
+                <template x-if="$store.status.protocolStats">
+                    <div>
+                        <!-- Protocol header -->
+                        <h4 class="protocol-stats-title" x-text="$store.status.protocolName"></h4>
+
+                        <!-- RAW Protocol Stats -->
+                        <template x-if="$store.status.protocolType === 0">
+                            <div class="protocol-stats-grid">
+                                <div class="protocol-stats-card">
+                                    <h5>Data Processing</h5>
+                                    <div class="stats-grid-2col">
+                                        <div>Chunks Created:</div><div><strong x-text="$store.status.protocolStats.parser?.chunksCreated || 0"></strong></div>
+                                        <div>Bytes Processed:</div><div><strong x-text="$store.status.formatBytes($store.status.protocolStats.parser?.bytesProcessed || 0)"></strong></div>
+                                        <div>Average Chunk:</div><div><strong x-text="($store.status.protocolStats.parser?.avgPacketSize || 0) + ' bytes'"></strong></div>
+                                        <div>Size Range:</div><div><strong x-text="($store.status.protocolStats.parser?.minPacketSize || 0) + '-' + ($store.status.protocolStats.parser?.maxPacketSize || 0) + 'B'"></strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- MAVLink Protocol Stats -->
+                        <template x-if="$store.status.protocolType === 1">
+                            <div class="protocol-stats-grid">
+                                <div class="protocol-stats-card">
+                                    <h5>Packet Statistics</h5>
+                                    <div class="stats-grid-2col">
+                                        <div>Parsed:</div><div><strong x-text="$store.status.protocolStats.parser?.packetsParsed || 0"></strong></div>
+                                        <div>Sent:</div><div><strong x-text="$store.status.protocolStats.parser?.packetsSent || 0"></strong></div>
+                                        <div>Dropped:</div><div><strong x-text="$store.status.protocolStats.parser?.packetsDropped || 0"></strong></div>
+                                        <div>Errors:</div><div><strong x-text="$store.status.protocolStats.parser?.detectionErrors || 0"></strong></div>
+                                    </div>
+                                </div>
+                                <div class="protocol-stats-card">
+                                    <h5>Packet Analysis</h5>
+                                    <div class="stats-grid-2col">
+                                        <div>Average Size:</div><div><strong x-text="($store.status.protocolStats.parser?.avgPacketSize || 0) + ' bytes'"></strong></div>
+                                        <div>Size Range:</div><div><strong x-text="($store.status.protocolStats.parser?.minPacketSize || 0) + '-' + ($store.status.protocolStats.parser?.maxPacketSize || 0) + 'B'"></strong></div>
+                                        <div>Last Activity:</div><div><strong x-text="$store.status.formatLastActivity($store.status.protocolStats.parser?.lastActivityMs)"></strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- SBUS Protocol Stats -->
+                        <template x-if="$store.status.protocolType === 2">
+                            <div class="protocol-stats-grid">
+                                <div class="protocol-stats-card protocol-stats-card-wide">
+                                    <h5>SBUS Fast Path Statistics</h5>
+                                    <div class="stats-grid-2col">
+                                        <div>Valid Frames:</div><div><strong class="text-success" x-text="$store.status.protocolStats.parser?.validFrames || 0"></strong></div>
+                                        <div>Invalid Frames:</div><div><strong class="text-danger" x-text="$store.status.protocolStats.parser?.invalidFrames || 0"></strong></div>
+                                        <div>Success Rate:</div><div><strong :class="$store.status.sbusSuccessRateClass" x-text="$store.status.sbusSuccessRate + '%'"></strong></div>
+                                        <div>Last Activity:</div><div><strong :class="$store.status.sbusActivityClass" x-text="$store.status.formatLastActivity($store.status.protocolStats.parser?.lastActivityMs)"></strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Sender Statistics (MAVLink/SBUS) -->
+                        <template x-if="$store.status.protocolType !== 0 && $store.status.protocolStats.senders?.length > 0">
+                            <div class="protocol-stats-card">
+                                <h5>Detected Senders</h5>
+                                <table class="senders-table">
+                                    <!-- MAVLink senders -->
+                                    <template x-if="$store.status.protocolType === 1">
+                                        <thead><tr><th>System</th><th>Packets</th><th>Last Seen</th></tr></thead>
+                                    </template>
+                                    <template x-if="$store.status.protocolType === 2">
+                                        <thead><tr><th>Source</th><th>Frames</th><th>Last Seen</th></tr></thead>
+                                    </template>
+                                    <tbody>
+                                        <template x-for="sender in $store.status.protocolStats.senders" :key="sender.sysId || sender.sourceId">
+                                            <tr>
+                                                <!-- MAVLink: sysId/compId -->
+                                                <template x-if="$store.status.protocolType === 1">
+                                                    <td x-text="sender.sysId + '/' + sender.compId"></td>
+                                                </template>
+                                                <!-- SBUS: name or sourceId -->
+                                                <template x-if="$store.status.protocolType === 2">
+                                                    <td x-text="sender.name || sender.sourceId"></td>
+                                                </template>
+                                                <td class="text-center" x-text="sender.packets || sender.frames"></td>
+                                                <td class="text-center" x-text="$store.status.formatLastActivity(sender.lastSeenMs)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -80,121 +459,295 @@
             <div class="section">
                 <h3>Device Settings</h3>
 
-                <!-- Device Configuration -->
-                <div id="deviceConfig"></div>
+                <!-- Device Configuration (Alpine.js) -->
+                <div id="deviceConfig">
+                    <h3>Device Configuration</h3>
+                    <div id="device-warnings" style="margin-bottom: 15px;"></div>
+                    <table class="device-table">
+                        <tr>
+                            <th>Device</th>
+                            <th>Pins</th>
+                            <th>Role</th>
+                            <th>Options</th>
+                        </tr>
+                        <!-- Device 1 -->
+                        <tr>
+                            <td><strong>Device 1</strong></td>
+                            <td x-text="$store.app.device1PinsText">GPIO 4/5</td>
+                            <td>
+                                <select name="device1_role" id="device1_role"
+                                        x-model="$store.app.device1Role"
+                                        @change="$store.app._checkAutoSbusIn()"
+                                        class="w-full">
+                                    <option value="0">UART Bridge</option>
+                                    <option value="1">SBUS Input</option>
+                                </select>
+                            </td>
+                            <td></td>
+                        </tr>
+                        <!-- Device 2 -->
+                        <tr>
+                            <td><strong>Device 2</strong></td>
+                            <td x-text="$store.app.device2PinsText">Variable</td>
+                            <td>
+                                <select name="device2_role" id="device2_role"
+                                        x-model="$store.app.device2Role"
+                                        @change="$store.app._checkAutoSbusIn()"
+                                        class="w-full">
+                                    <template x-for="opt in $store.app.device2Options" :key="opt.value">
+                                        <option :value="opt.value" :disabled="opt.disabled"
+                                                x-text="opt.label + (opt.disabled && !$store.app.uart2Available ? ' (not available)' : '')"></option>
+                                    </template>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="device2_sbus_rate" name="device2_sbus_rate"
+                                        x-model="$store.app.device2SbusRate"
+                                        x-show="$store.app.showDevice2SbusRate"
+                                        class="w-100">
+                                    <option value="10">10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                    <option value="30">30 Hz</option>
+                                    <option value="40">40 Hz</option>
+                                    <option value="50">50 Hz</option>
+                                    <option value="60">60 Hz</option>
+                                    <option value="70">70 Hz</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <!-- Device 3 -->
+                        <tr>
+                            <td><strong>Device 3</strong></td>
+                            <td x-text="$store.app.device3PinsText">N/A</td>
+                            <td>
+                                <select name="device3_role" id="device3_role"
+                                        x-model="$store.app.device3Role"
+                                        @change="$store.app._checkAutoSbusIn()"
+                                        class="w-full">
+                                    <template x-for="opt in $store.app.device3Options" :key="opt.value">
+                                        <option :value="opt.value" :disabled="opt.disabled" x-text="opt.label"></option>
+                                    </template>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="device3_sbus_rate" name="device3_sbus_rate"
+                                        x-model="$store.app.device3SbusRate"
+                                        x-show="$store.app.showDevice3SbusRate"
+                                        class="w-100">
+                                    <option value="10">10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                    <option value="30">30 Hz</option>
+                                    <option value="40">40 Hz</option>
+                                    <option value="50">50 Hz</option>
+                                    <option value="60">60 Hz</option>
+                                    <option value="70">70 Hz</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <!-- Device 4 -->
+                        <tr>
+                            <td><strong>Device 4</strong></td>
+                            <td x-text="$store.app.device4PinsText">Network</td>
+                            <td>
+                                <select name="device4_role" id="device4_role"
+                                        x-model="$store.app.device4Role"
+                                        @change="$store.app._checkAutoSbusIn()"
+                                        class="w-full"
+                                        x-effect="
+                                            const sbus = $store.app.protocolOptimization == 2;
+                                            $nextTick(() => {
+                                                $el.querySelectorAll('option').forEach(opt => {
+                                                    const v = opt.value;
+                                                    const hide = (v === '1' && sbus) || (['3_0', '3_1', '4'].includes(v) && !sbus);
+                                                    opt.style.display = hide ? 'none' : '';
+                                                });
+                                            });
+                                        ">
+                                    <option value="0">Disabled</option>
+                                    <option value="1">Bridge</option>
+                                    <option value="2">UDP Logger</option>
+                                    <option value="3_0">SBUS Output</option>
+                                    <option value="3_1">SBUS Text Output</option>
+                                    <option value="4">SBUS Input</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="device4_sbus_rate" name="device4_sbus_rate"
+                                        x-model="$store.app.device4SbusRate"
+                                        x-show="$store.app.showDevice4SbusRate"
+                                        class="w-100">
+                                    <option value="10">10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                    <option value="30">30 Hz</option>
+                                    <option value="40">40 Hz</option>
+                                    <option value="50">50 Hz</option>
+                                    <option value="60">60 Hz</option>
+                                    <option value="70">70 Hz</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <!-- Device 5 (MiniKit only) -->
+                        <tr x-show="$store.app.showDevice5" x-cloak>
+                            <td><strong>Device 5</strong></td>
+                            <td>Bluetooth</td>
+                            <td>
+                                <select name="device5_role" id="device5_role"
+                                        x-model="$store.app.device5Role"
+                                        @change="$store.app._checkAutoSbusIn()"
+                                        class="w-full">
+                                    <option value="0">Disabled</option>
+                                    <option value="1" :disabled="$store.app.isDevice5BridgeDisabled"
+                                            x-text="'Bridge' + ($store.app.isDevice5BridgeDisabled ? ' (SBUS mode)' : '')">Bridge</option>
+                                    <option value="2">SBUS Text Output</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select id="bt_send_rate" name="bt_send_rate"
+                                        x-model="$store.app.btSendRate"
+                                        x-show="$store.app.showDevice5SbusRate"
+                                        class="w-100">
+                                    <option value="10">10 Hz</option>
+                                    <option value="20">20 Hz</option>
+                                    <option value="30">30 Hz</option>
+                                    <option value="40">40 Hz</option>
+                                    <option value="50">50 Hz</option>
+                                    <option value="60">60 Hz</option>
+                                    <option value="70">70 Hz</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                    <!-- SBUS Config Warning -->
+                    <div x-show="$store.app.showSbusWarning" x-cloak
+                         style="background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-top:10px; font-size:13px;">
+                        ⚠️ SBUS Output configured but no SBUS Input source detected
+                    </div>
+                </div>
 
                 <!-- WiFi Configuration -->
                 <div class="section" style="margin-top: 20px; padding: 15px;">
-                    <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleWifiConfig()">
+                    <h4 class="section-header" @click="$store.ui.toggle('wifiConfig')">
                         📡 WiFi Configuration
-                        <span id="wifiArrow" style="float: right; font-size: 18px;">▶</span>
+                        <span class="section-arrow" x-text="$store.ui.wifiConfig ? '▼' : '▶'"></span>
                     </h4>
-                    <div id="wifiConfigContent" style="display: none;">
+                    <div x-show="$store.ui.wifiConfig" x-collapse>
                         <!-- WiFi Mode Selection with Permanent checkbox -->
                         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label for="wifi_mode" style="margin: 0; white-space: nowrap;">WiFi Mode:</label>
-                                <select name="wifi_mode" id="wifi_mode" style="width: 200px;">
+                                <select name="wifi_mode" id="wifi_mode" x-model="$store.app.wifiMode" style="width: 200px;">
                                     <option value="0">Access Point</option>
                                     <option value="1">Client (Connect to Network)</option>
                                 </select>
                             </div>
                             <label class="checkbox-label" title="Keep WiFi always on (applies to both AP and Client modes)">
-                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1">
+                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1"
+                                       x-model="$store.app.permanentWifi">
                                 <span>Permanent</span>
                             </label>
                         </div>
 
                         <!-- AP Mode settings -->
-                        <div id="apModeSettings" style="display: none;">
+                        <div id="apModeSettings" x-show="$store.app.wifiMode == 0">
                             <!--<h5>Access Point Settings</h5>-->
                             <label for="ssid">AP Name (SSID):</label>
-                            <input type="text" name="ssid" id="ssid" maxlength="32">
+                            <input type="text" name="ssid" id="ssid" maxlength="32" x-model="$store.app.ssid">
                             <label for="password">AP Password:</label>
-                            <div style="position: relative;">
-                                <input type="password" name="password" id="password" maxlength="64" style="padding-right: 40px;">
-                                <span id="toggleIcon" onclick="togglePassword()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
-                                        <circle cx="10" cy="10" r="3"></circle>
-                                    </svg>
+                            <div class="section-content" x-data="{ show: false }">
+                                <input :type="show ? 'text' : 'password'" name="password" id="password" maxlength="64" class="section-content-padded"
+                                       x-model="$store.app.password">
+                                <span @click="show = !show" class="section-close-btn">
+                                    <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                    <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                 </span>
                             </div>
                         </div>
 
                         <!-- Client Mode settings -->
-                        <div id="clientModeSettings" style="display: none;">
+                        <div id="clientModeSettings" x-show="$store.app.wifiMode == 1">
                             <!-- Primary Network (always visible) -->
                             <div style="margin-bottom: 15px;">
                                 <label for="wifi_network_ssid_0">Primary Network (SSID):</label>
-                                <input type="text" name="wifi_network_ssid_0" id="wifi_network_ssid_0" maxlength="32">
+                                <input type="text" name="wifi_network_ssid_0" id="wifi_network_ssid_0" maxlength="32"
+                                       x-model="$store.app.wifiNetwork0Ssid">
                                 <label for="wifi_network_pass_0">Password:</label>
-                                <div style="position: relative;">
-                                    <input type="password" name="wifi_network_pass_0" id="wifi_network_pass_0" maxlength="64" style="padding-right: 40px;">
-                                    <span onclick="toggleNetworkPassword(0)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path>
-                                            <circle cx="10" cy="10" r="3"></circle>
-                                        </svg>
+                                <div class="section-content" x-data="{ show: false }">
+                                    <input :type="show ? 'text' : 'password'" name="wifi_network_pass_0" id="wifi_network_pass_0" maxlength="64" class="section-content-padded"
+                                           x-model="$store.app.wifiNetwork0Pass">
+                                    <span @click="show = !show" class="section-close-btn">
+                                        <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                        <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                     </span>
                                 </div>
                             </div>
 
                             <!-- Additional Networks (collapsible) -->
                             <div style="margin-top: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                                <div style="padding: 10px 15px; cursor: pointer; user-select: none;" onclick="toggleAdditionalNetworks()">
-                                    <span style="font-weight: 500;">➕ Additional Networks</span>
-                                    <span id="additionalNetworksArrow" style="float: right; font-size: 14px;">▶</span>
+                                <div style="padding: 10px 15px; cursor: pointer; user-select: none;" @click="$store.ui.toggle('additionalNetworks')">
+                                    <span class="fw-medium">➕ Additional Networks</span>
+                                    <span style="float: right; font-size: 14px;" x-text="$store.ui.additionalNetworks ? '▼' : '▶'"></span>
                                 </div>
-                                <div id="additionalNetworksContent" style="display: none; padding: 0 15px 15px 15px;">
+                                <div x-show="$store.ui.additionalNetworks" x-collapse style="padding: 0 15px 15px 15px;">
                                     <small style="display: block; margin-bottom: 15px; color: #666;">
                                         ℹ️ Priority order: Primary &gt; Network 2 &gt; Network 3... Device will connect to first available.
                                     </small>
 
                                     <!-- Network 2 -->
-                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
-                                        <label for="wifi_network_ssid_1" style="font-weight: 500;">Network 2:</label>
-                                        <input type="text" name="wifi_network_ssid_1" id="wifi_network_ssid_1" maxlength="32" placeholder="SSID (leave empty to skip)">
-                                        <div style="position: relative;">
-                                            <input type="password" name="wifi_network_pass_1" id="wifi_network_pass_1" maxlength="64" placeholder="Password" style="padding-right: 40px;">
-                                            <span onclick="toggleNetworkPassword(1)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                    <div class="inner-card">
+                                        <label for="wifi_network_ssid_1" class="fw-medium">Network 2:</label>
+                                        <input type="text" name="wifi_network_ssid_1" id="wifi_network_ssid_1" maxlength="32" placeholder="SSID (leave empty to skip)"
+                                               x-model="$store.app.wifiNetwork1Ssid">
+                                        <div class="section-content" x-data="{ show: false }">
+                                            <input :type="show ? 'text' : 'password'" name="wifi_network_pass_1" id="wifi_network_pass_1" maxlength="64" placeholder="Password" class="section-content-padded"
+                                                   x-model="$store.app.wifiNetwork1Pass">
+                                            <span @click="show = !show" class="section-close-btn">
+                                                <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                                <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                             </span>
                                         </div>
                                     </div>
 
                                     <!-- Network 3 -->
-                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
-                                        <label for="wifi_network_ssid_2" style="font-weight: 500;">Network 3:</label>
-                                        <input type="text" name="wifi_network_ssid_2" id="wifi_network_ssid_2" maxlength="32" placeholder="SSID (leave empty to skip)">
-                                        <div style="position: relative;">
-                                            <input type="password" name="wifi_network_pass_2" id="wifi_network_pass_2" maxlength="64" placeholder="Password" style="padding-right: 40px;">
-                                            <span onclick="toggleNetworkPassword(2)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                    <div class="inner-card">
+                                        <label for="wifi_network_ssid_2" class="fw-medium">Network 3:</label>
+                                        <input type="text" name="wifi_network_ssid_2" id="wifi_network_ssid_2" maxlength="32" placeholder="SSID (leave empty to skip)"
+                                               x-model="$store.app.wifiNetwork2Ssid">
+                                        <div class="section-content" x-data="{ show: false }">
+                                            <input :type="show ? 'text' : 'password'" name="wifi_network_pass_2" id="wifi_network_pass_2" maxlength="64" placeholder="Password" class="section-content-padded"
+                                                   x-model="$store.app.wifiNetwork2Pass">
+                                            <span @click="show = !show" class="section-close-btn">
+                                                <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                                <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                             </span>
                                         </div>
                                     </div>
 
                                     <!-- Network 4 -->
-                                    <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 4px;">
-                                        <label for="wifi_network_ssid_3" style="font-weight: 500;">Network 4:</label>
-                                        <input type="text" name="wifi_network_ssid_3" id="wifi_network_ssid_3" maxlength="32" placeholder="SSID (leave empty to skip)">
-                                        <div style="position: relative;">
-                                            <input type="password" name="wifi_network_pass_3" id="wifi_network_pass_3" maxlength="64" placeholder="Password" style="padding-right: 40px;">
-                                            <span onclick="toggleNetworkPassword(3)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                    <div class="inner-card">
+                                        <label for="wifi_network_ssid_3" class="fw-medium">Network 4:</label>
+                                        <input type="text" name="wifi_network_ssid_3" id="wifi_network_ssid_3" maxlength="32" placeholder="SSID (leave empty to skip)"
+                                               x-model="$store.app.wifiNetwork3Ssid">
+                                        <div class="section-content" x-data="{ show: false }">
+                                            <input :type="show ? 'text' : 'password'" name="wifi_network_pass_3" id="wifi_network_pass_3" maxlength="64" placeholder="Password" class="section-content-padded"
+                                                   x-model="$store.app.wifiNetwork3Pass">
+                                            <span @click="show = !show" class="section-close-btn">
+                                                <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                                <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                             </span>
                                         </div>
                                     </div>
 
                                     <!-- Network 5 -->
                                     <div style="padding: 10px; background: #fff; border-radius: 4px;">
-                                        <label for="wifi_network_ssid_4" style="font-weight: 500;">Network 5:</label>
-                                        <input type="text" name="wifi_network_ssid_4" id="wifi_network_ssid_4" maxlength="32" placeholder="SSID (leave empty to skip)">
-                                        <div style="position: relative;">
-                                            <input type="password" name="wifi_network_pass_4" id="wifi_network_pass_4" maxlength="64" placeholder="Password" style="padding-right: 40px;">
-                                            <span onclick="toggleNetworkPassword(4)" style="position: absolute; right: 12px; top: 12px; cursor: pointer; user-select: none; display: flex; align-items: center;">
-                                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                        <label for="wifi_network_ssid_4" class="fw-medium">Network 5:</label>
+                                        <input type="text" name="wifi_network_ssid_4" id="wifi_network_ssid_4" maxlength="32" placeholder="SSID (leave empty to skip)"
+                                               x-model="$store.app.wifiNetwork4Ssid">
+                                        <div class="section-content" x-data="{ show: false }">
+                                            <input :type="show ? 'text' : 'password'" name="wifi_network_pass_4" id="wifi_network_pass_4" maxlength="64" placeholder="Password" class="section-content-padded"
+                                                   x-model="$store.app.wifiNetwork4Pass">
+                                            <span @click="show = !show" class="section-close-btn">
+                                                <svg x-show="!show" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M1 10s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"></path><circle cx="10" cy="10" r="3"></circle></svg>
+                                                <svg x-show="show" x-cloak width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#666" stroke-width="1.5"><path d="M13.875 13.875A8.5 8.5 0 016.125 6.125m-3.27.73A9.98 9.98 0 001 10s3 6 9 6a9.98 9.98 0 003.145-.855M8.29 4.21A4.95 4.95 0 0110 4c6 0 9 6 9 6a17.46 17.46 0 01-2.145 2.855M1 1l18 18"></path></svg>
                                             </span>
                                         </div>
                                     </div>
@@ -203,11 +756,11 @@
                         </div>
 
                         <!-- WiFi TX Power (applies to both AP and Client modes) -->
-                        <div style="margin-top: 15px;">
+                        <div class="mt-15">
                             <label for="wifi_tx_power">WiFi TX Power:</label>
-                            <select id="wifi_tx_power" name="wifi_tx_power">
+                            <select id="wifi_tx_power" name="wifi_tx_power" x-model="$store.app.wifiTxPower">
                                 <option value="8">Minimum (2dBm)</option>
-                                <option value="20" selected>Low (5dBm)</option>
+                                <option value="20">Low (5dBm)</option>
                                 <option value="34">Medium-Low (8.5dBm)</option>
                                 <option value="52">Medium (13dBm)</option>
                                 <option value="68">High (17dBm)</option>
@@ -217,9 +770,9 @@
                         </div>
 
                         <!-- WiFi AP Channel (AP mode only) -->
-                        <div id="ap_channel_group" style="margin-top: 15px;">
+                        <div id="ap_channel_group" x-show="$store.app.wifiMode == 0" class="mt-15">
                             <label for="wifi_ap_channel">AP Channel:</label>
-                            <select id="wifi_ap_channel" name="wifi_ap_channel">
+                            <select id="wifi_ap_channel" name="wifi_ap_channel" x-model="$store.app.wifiApChannel">
                                 <option value="1" selected>1</option>
                                 <option value="2">2</option>
                                 <option value="3">3</option>
@@ -241,14 +794,15 @@
                         </div>
 
                         <!-- mDNS Hostname -->
-                        <div style="margin-top: 15px;">
+                        <div class="mt-15">
                             <label for="mdns_hostname">mDNS Hostname:</label>
                             <input type="text" name="mdns_hostname" id="mdns_hostname" maxlength="63"
+                                   x-model="$store.app.mdnsHostname"
                                    pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
                                    style="text-transform: lowercase;"
                                    placeholder="esp-bridge-xxxx">
-                            <small class="hint">ℹ️ Access via <strong><span id="mdns_url">hostname</span>.local</strong> (a-z, 0-9, - only)</small>
-                            <small class="hint" id="mdns_bt_hint" style="margin-top: 0; display: none;">📶 Also used as Bluetooth device name (MiniKit)</small>
+                            <small class="hint">ℹ️ Access via <strong><span x-text="$store.app.mdnsHostname || 'hostname'"></span>.local</strong> (a-z, 0-9, - only)</small>
+                            <small class="hint" x-show="$store.app.isMiniKit" style="margin-top: 0;">📶 Also used as Bluetooth device name (MiniKit)</small>
                             <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
                         </div>
                     </div>
@@ -256,48 +810,64 @@
 
                 <!-- Advanced Configuration -->
                 <div class="section" style="margin-top: 20px; padding: 15px;">
-                    <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleAdvancedConfig()">
+                    <h4 class="section-header" @click="$store.ui.toggle('advancedConfig')">
                         ⚙️ Advanced Configuration
-                        <span id="advancedConfigArrow" style="float: right; font-size: 18px;">▶</span>
+                        <span class="section-arrow" x-text="$store.ui.advancedConfig ? '▼' : '▶'"></span>
                     </h4>
-                    <div id="advancedConfigContent" style="display: none;">
-                        <!-- Device 4 Network Configuration (moved from device-config.js) -->
-                        <div id="device4AdvancedConfig" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">🌐 Device 4 Network Configuration</h5>
+                    <div x-show="$store.ui.advancedConfig" x-collapse>
+                        <!-- Device 4 Network Configuration (Alpine.js) -->
+                        <div id="device4AdvancedConfig"
+                             x-show="$store.app.showDevice4Network" x-cloak
+                             class="info-card">
+                            <h5 class="section-subtitle">🌐 Device 4 Network Configuration</h5>
                             <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
-                                <div id="device4_target_ip_group">
+                                <div id="device4_target_ip_group"
+                                     :style="{ opacity: $store.app.device4Role === '4' ? '0.5' : '1' }">
                                     <label for="device4_target_ip">Target IP:</label>
                                     <input type="text" name="device4_target_ip" id="device4_target_ip"
+                                           x-model="$store.app.device4TargetIP"
+                                           :disabled="$store.app.device4Role === '4' || ($store.app.showAutoBroadcast && $store.app.device4AutoBroadcast)"
                                            style="width: 180px;"
                                            placeholder="192.168.x.x, 10.0.0.5">
                                 </div>
                                 <div>
                                     <label for="device4_port">Port:</label>
                                     <input type="number" name="device4_port" id="device4_port"
-                                           style="width: 80px;" min="1" max="65535">
+                                           x-model="$store.app.device4TargetPort"
+                                           class="w-80" min="1" max="65535">
                                 </div>
                                 <div style="display: flex; flex-direction: column; gap: 2px; align-self: flex-end; align-items: flex-start; margin-bottom: 5px;">
                                     <label class="checkbox-label" title="Disable only if your GCS doesn't support batched packets">
-                                        <input type="checkbox" name="udp_batching" id="udp_batching" checked>
+                                        <input type="checkbox" name="udp_batching" id="udp_batching"
+                                               x-model="$store.app.udpBatching">
                                         <span>Batching</span>
                                     </label>
-                                    <label id="device4_auto_broadcast_group" class="checkbox-label" style="visibility: hidden;"
+                                    <label id="device4_auto_broadcast_group" class="checkbox-label"
+                                           :style="{ visibility: $store.app.showAutoBroadcast ? 'visible' : 'hidden' }"
                                            title="Use broadcast IP from DHCP subnet (Client mode only)">
-                                        <input type="checkbox" name="device4_auto_broadcast" id="device4_auto_broadcast">
+                                        <input type="checkbox" name="device4_auto_broadcast" id="device4_auto_broadcast"
+                                               x-model="$store.app.device4AutoBroadcast">
                                         <span>Auto Broadcast</span>
                                     </label>
                                 </div>
                             </div>
                             <small class="hint">ℹ️ Multiple IPs: comma-separated (max 4). Use .255 suffix for subnet broadcast.</small>
-                            <div id="device4_udp_timeout_group" style="display: none; margin-top: 10px;">
+                            <div id="device4_udp_timeout_group"
+                                 x-show="$store.app.showSbusTimingKeeper"
+                                 style="margin-top: 10px;">
                                 <label for="device4_udp_timeout">UDP Timeout:</label>
                                 <input type="number" id="device4_udp_timeout" name="device4_udp_timeout"
-                                       min="100" max="5000" value="1000" style="width: 80px;"> ms
+                                       min="100" max="5000" class="w-80"
+                                       x-model="$store.app.device4UdpTimeout"> ms
                                 <small class="hint" style="display: block; margin-top: 5px;">⏱️ Time before Timing Keeper stops repeating frames (failsafe trigger)</small>
                             </div>
-                            <div id="device4_send_rate_group" style="display: none; margin-top: 10px;">
+                            <div id="device4_send_rate_group"
+                                 x-show="$store.app.showDevice4SbusRate"
+                                 style="margin-top: 10px;">
                                 <label for="device4_send_rate">Send Rate:</label>
-                                <select id="device4_send_rate" name="device4_send_rate" style="width: 180px;">
+                                <select id="device4_send_rate" name="device4_send_rate"
+                                        x-model="$store.app.device4SbusRate"
+                                        style="width: 180px;">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
                                     <option value="30">30 Hz</option>
@@ -310,62 +880,96 @@
                             </div>
                         </div>
 
-                        <!-- Protocol Optimization -->
-                        <div id="protocolOptimizationBlock" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">📡 Protocol Optimization</h5>
+                        <!-- Protocol Optimization (Alpine.js) -->
+                        <div id="protocolOptimizationBlock" class="info-card">
+                            <h5 class="section-subtitle">📡 Protocol Optimization</h5>
                             <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                                <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;">
+                                <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;"
+                                        x-model="$store.app.protocolOptimization"
+                                        :disabled="$store.app.isSbusActive">
                                     <option value="0">None</option>
                                     <option value="1">MAVLink</option>
+                                    <option value="2" x-show="$store.app.isSbusActive">SBUS</option>
                                 </select>
-                                <div id="mavlink-routing-section" style="display: none;">
+                                <div id="mavlink-routing-section" x-show="$store.app.showMavlinkRouting">
                                     <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">
-                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing">
+                                        <input type="checkbox" id="mavlink-routing" name="mavlink_routing"
+                                               x-model="$store.app.mavlinkRouting">
                                         <span>Target-only Routing</span>
                                     </label>
                                 </div>
-                                <div id="sbus-timing-keeper-section" style="display: none;">
+                                <div id="sbus-timing-keeper-section" x-show="$store.app.showSbusTimingKeeper">
                                     <label class="checkbox-label" title="Repeats last valid SBUS frame every 20ms for WiFi stability">
-                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper">
+                                        <input type="checkbox" id="sbus-timing-keeper" name="sbus_timing_keeper"
+                                               x-model="$store.app.sbusTimingKeeper">
                                         <span>SBUS WiFi Timing Keeper</span>
                                     </label>
                                 </div>
                             </div>
-                            <small class="hint">ℹ️ Reduces latency by detecting packet boundaries.</small>
+                            <small class="hint" x-show="$store.app.isSbusActive" style="color: #856404;">
+                                ⚠️ Protocol auto-set to SBUS when SBUS roles are active
+                            </small>
+                            <small class="hint" x-show="!$store.app.isSbusActive">ℹ️ Reduces latency by detecting packet boundaries.</small>
                         </div>
 
-                        <!-- UART Configuration -->
-                        <div id="uartConfigBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 id="uartConfigTitle" style="margin: 0 0 10px 0; color: #333;">🔌 UART Configuration</h5>
+                        <!-- UART Configuration (Alpine.js) -->
+                        <div id="uartConfigBlock" x-show="$store.app.hasUartDevices"
+                             class="info-card">
+                            <h5 id="uartConfigTitle" class="section-subtitle">🔌 UART Configuration</h5>
                             <div id="uartConfigContent" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
                                 <div>
                                     <label for="baudrate">Baud Rate:</label>
-                                    <select name="baudrate" id="baudrate" style="width: 100px;"></select>
+                                    <select name="baudrate" id="baudrate" style="width: 110px;" x-model="$store.app.baudrate">
+                                        <option value="9600">9600</option>
+                                        <option value="19200">19200</option>
+                                        <option value="38400">38400</option>
+                                        <option value="57600">57600</option>
+                                        <option value="115200">115200</option>
+                                        <option value="230400">230400</option>
+                                        <option value="460800">460800</option>
+                                        <option value="921600">921600</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label for="databits">Data:</label>
-                                    <select name="databits" id="databits" style="width: 60px;"></select>
+                                    <select name="databits" id="databits" style="width: 60px;" x-model="$store.app.databits">
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label for="parity">Parity:</label>
-                                    <select name="parity" id="parity" style="width: 80px;"></select>
+                                    <select name="parity" id="parity" class="w-80" x-model="$store.app.parity">
+                                        <option value="N">None</option>
+                                        <option value="E">Even</option>
+                                        <option value="O">Odd</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label for="stopbits">Stop:</label>
-                                    <select name="stopbits" id="stopbits" style="width: 60px;"></select>
+                                    <select name="stopbits" id="stopbits" style="width: 60px;" x-model="$store.app.stopbits">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                    </select>
                                 </div>
                                 <div title="Requires 4-wire connection (TX, RX, RTS, CTS)">
                                     <label for="flowcontrol">Flow Control:</label>
-                                    <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1" style="width: auto; height: 34px;">
+                                    <input type="checkbox" name="flowcontrol" id="flowcontrol" value="1"
+                                           x-model="$store.app.flowcontrol"
+                                           style="width: auto; height: 34px;">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- USB Mode -->
-                        <div id="usbModeBlock" style="display: none; margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">🔗 USB Mode</h5>
+                        <!-- USB Mode (Alpine.js) -->
+                        <div id="usbModeBlock" x-show="$store.app.showUsbModeBlock" x-cloak
+                             class="info-card">
+                            <h5 class="section-subtitle">🔗 USB Mode</h5>
                             <div style="margin: 0;">
-                                <select name="usbmode" id="usbmode" style="width: 200px;">
+                                <select name="usbmode" id="usbmode" style="width: 200px;"
+                                        x-model="$store.app.usbMode">
                                     <option value="device">Device</option>
                                     <option value="host">Host</option>
                                 </select>
@@ -375,11 +979,12 @@
 
                         <!-- Logging Configuration (moved from device-config.js) -->
                         <div id="loggingConfigBlock" style="padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
-                            <h5 style="margin: 0 0 10px 0; color: #333;">📝 Logging Configuration</h5>
+                            <h5 class="section-subtitle">📝 Logging Configuration</h5>
                             <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
                                 <div>
                                     <label>Web Logs:</label>
-                                    <select name="log_level_web" id="log_level_web" style="width: 120px;">
+                                    <select name="log_level_web" id="log_level_web" class="w-120"
+                                            x-model="$store.app.logLevelWeb">
                                         <option value="-1">OFF</option>
                                         <option value="0">ERROR</option>
                                         <option value="1">WARNING</option>
@@ -389,7 +994,9 @@
                                 </div>
                                 <div>
                                     <label>UART Logs:</label>
-                                    <select name="log_level_uart" id="log_level_uart" style="width: 120px;">
+                                    <select name="log_level_uart" id="log_level_uart" class="w-120"
+                                            x-model="$store.app.logLevelUart"
+                                            :disabled="$store.app.device3Role !== '3'">
                                         <option value="-1">OFF</option>
                                         <option value="0">ERROR</option>
                                         <option value="1">WARNING</option>
@@ -399,7 +1006,9 @@
                                 </div>
                                 <div>
                                     <label>Network Logs:</label>
-                                    <select name="log_level_network" id="log_level_network" disabled style="width: 120px;">
+                                    <select name="log_level_network" id="log_level_network" class="w-120"
+                                            x-model="$store.app.logLevelNetwork"
+                                            :disabled="$store.app.device4Role === '0'">
                                         <option value="-1">OFF</option>
                                         <option value="0">ERROR</option>
                                         <option value="1">WARNING</option>
@@ -412,40 +1021,113 @@
                     </div>
                 </div>
 
-                <div style="text-align: center; margin-top: 20px;">
-                    <button id="saveButton" type="submit" style="background-color: #4CAF50; font-size: 16px; padding: 12px 30px;">Save & Reboot</button>
+                <div style="text-align: center; margin-top: 20px;"
+                     x-data="{ saving: false, success: false, error: null, countdown: 0, noChanges: false }">
+                    <button id="saveButton" type="button" class="btn-large"
+                            :disabled="saving || success"
+                            :style="{ backgroundColor: success ? '#4CAF50' : error ? '#f44336' : noChanges ? '#ff9800' : '' }"
+                            @click="
+                                const validationError = $store.app.validate();
+                                if (validationError) {
+                                    error = validationError;
+                                    setTimeout(() => error = null, 4000);
+                                    return;
+                                }
+                                if (!$store.app.isDirty) {
+                                    noChanges = true;
+                                    setTimeout(() => noChanges = false, 2000);
+                                    return;
+                                }
+                                saving = true;
+                                error = null;
+                                noChanges = false;
+                                $store.app.save()
+                                    .then(() => {
+                                        saving = false;
+                                        success = true;
+                                        countdown = 10;
+                                        const timer = setInterval(() => {
+                                            countdown--;
+                                            if (countdown <= 0) {
+                                                clearInterval(timer);
+                                                window.location.reload();
+                                            }
+                                        }, 1000);
+                                    })
+                                    .catch(err => {
+                                        saving = false;
+                                        error = err.message;
+                                        setTimeout(() => error = null, 5000);
+                                    });
+                            "
+                            x-text="saving ? 'Saving...' : success ? 'Saved! Reconnecting in ' + countdown + 's...' : error ? 'Error: ' + error : noChanges ? 'No changes to save' : 'Save & Reboot'">
+                        Save & Reboot
+                    </button>
+                    <button type="button" class="btn-large" style="margin-left: 10px; background: #6c757d;"
+                            x-show="$store.app.isDirty"
+                            @click="$store.app.reset()">
+                        Reset
+                    </button>
                 </div>
             </div>
         </form>
 
         <!-- Configuration Backup -->
         <div class="section" style="margin-top: 20px;">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleConfigBackup()">
+            <h4 class="section-header" @click="$store.ui.toggle('configBackup')">
                 💾 Configuration Backup
-                <span id="configArrow" style="float: right; font-size: 18px;">▶</span>
+                <span class="section-arrow" x-text="$store.ui.configBackup ? '▼' : '▶'"></span>
             </h4>
-            <div id="configBackupContent" style="display: none;" data-fragment="backup">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <div x-show="$store.ui.configBackup" x-collapse>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center;">
+                    <div class="text-center">
+                        <button type="button" class="btn-blue btn-small" onclick="window.location.href='/config/export'">Export Config</button>
+                        <br><small class="text-small-muted">Download current configuration</small>
+                    </div>
+                    <div class="text-center">
+                        <button type="button" class="btn-orange btn-small" onclick="document.getElementById('configFile').click()">Import Config</button>
+                        <br><small class="text-small-muted">Upload configuration file</small>
+                    </div>
+                    <div class="text-center">
+                        <button type="button" class="btn-red btn-small" onclick="factoryReset()">Factory Reset</button>
+                        <br><small class="text-small-muted">Reset all settings to defaults</small>
+                    </div>
+                </div>
+                <input type="file" id="configFile" accept=".json" style="display: none;" onchange="handleConfigImport(this)">
+                <p id="importStatus" style="display: none; margin-top: 10px; text-align: center;"></p>
             </div>
         </div>
 
         <!-- Firmware Update -->
         <div class="section">
-            <h4 style="margin: 0 0 10px 0; cursor: pointer; user-select: none;" onclick="toggleFirmwareUpdate()">
+            <h4 class="section-header" @click="$store.ui.toggle('firmwareUpdate')">
                 🔄 Firmware Update
-                <span id="firmwareArrow" style="float: right; font-size: 18px;">▶</span>
+                <span class="section-arrow" x-text="$store.ui.firmwareUpdate ? '▼' : '▶'"></span>
             </h4>
-            <div id="firmwareUpdateContent" style="display: none; text-align: center;" data-fragment="firmware">
-                <p style="color: #666; text-align: center;">Loading...</p>
+            <div x-show="$store.ui.firmwareUpdate" x-collapse class="text-center">
+                <div class="text-center">
+                    <button type="button" id="updateButton" class="btn-red btn-small"
+                            :disabled="$store.firmware.buttonDisabled"
+                            x-text="$store.firmware.buttonText"
+                            onclick="document.getElementById('firmwareFile').click()">Update Firmware</button>
+                    <br><small class="text-small-muted">Select .bin file, device restarts after update</small>
+                </div>
+                <input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="handleFirmwareUpdate()">
+                <div x-show="$store.firmware.showProgress" x-cloak class="mt-15">
+                    <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
+                        <div style="height: 20px; background-color: #007bff; transition: width 0.3s;"
+                             :style="{ width: $store.firmware.progress + '%' }"></div>
+                    </div>
+                    <p style="margin: 5px 0; font-weight: bold;"
+                       :style="{ color: $store.firmware.statusColor }"
+                       x-text="$store.firmware.status"></p>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="/utils.js"></script>
-    <script src="/device-config.js"></script>
     <script src="/form-utils.js"></script>
-    <script src="/status-updates.js"></script>
     <script src="/crash-log.js"></script>
-    <script src="/main.js"></script>
 </body>
 </html>

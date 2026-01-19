@@ -1,4 +1,6 @@
 // ESP32 UART Bridge - Crash Log Module
+// TODO: Migrate to Alpine.js templates (x-for for table rows, x-show for details)
+// Current implementation uses innerHTML for table rendering which breaks Alpine reactivity
 
 const CrashLog = {
     elements: null,
@@ -10,102 +12,37 @@ const CrashLog = {
     
     cacheElements() {
         return {
-            content: document.getElementById('crashContent'),
-            arrow: document.getElementById('crashArrow'),
-            badge: document.getElementById('crashBadge'),
-            clearBtn: document.getElementById('crashClear'),
             tbody: document.getElementById('crashTableBody')
         };
     },
-    
-    async toggle() {
-        if (!this.elements.content || !this.elements.arrow) return;
 
-        const isOpening = this.elements.content.style.display === 'none';
-
-        if (isOpening) {
-            this.elements.content.style.display = 'block';
-            this.elements.arrow.textContent = '▼';
-            // Load fragment HTML first if not loaded yet
-            if (this.elements.content.dataset.fragment) {
-                await Utils.loadFragment(this.elements.content);
-                // Re-cache tbody after fragment loads
-                this.elements.tbody = document.getElementById('crashTableBody');
-            }
-            this.load();
-        } else {
-            this.elements.content.style.display = 'none';
-            this.elements.arrow.textContent = '▶';
-        }
-
-        // Save state to localStorage
-        try {
-            localStorage.setItem('collapse:crash', isOpening ? 'shown' : 'hidden');
-        } catch(e) {
-            console.warn('localStorage not available:', e);
-        }
-    },
-
-    // Restore collapsed state from localStorage
-    async restoreState() {
-        if (!this.elements.content || !this.elements.arrow) return;
-
-        let v = null;
-        try {
-            v = localStorage.getItem('collapse:crash');
-        } catch(e) {
-            console.warn('localStorage not available:', e);
-        }
-
-        if (v === 'shown') {
-            this.elements.content.style.display = 'block';
-            this.elements.arrow.textContent = '▼';
-            // Load fragment HTML first if not loaded yet
-            if (this.elements.content.dataset.fragment) {
-                await Utils.loadFragment(this.elements.content);
-                // Re-cache tbody after fragment loads
-                this.elements.tbody = document.getElementById('crashTableBody');
-            }
-            // Load data if block is open on page load
-            this.load();
-        } else {
-            // Default: collapsed (including when v === null - no saved state)
-            this.elements.content.style.display = 'none';
-            this.elements.arrow.textContent = '▶';
-        }
-    },
-    
     load() {
         Utils.safeFetch('/crashlog_json', (data) => {
-            this.updateBadge(data.total || 0);
-            this.updateTable(data.entries || []);
+            const count = data.total || 0;
+            const entries = data.entries || [];
+            this.syncToAlpine(count, entries);
+            this.updateTable(entries);
         });
     },
-    
+
     updateCount() {
         Utils.safeFetch('/crashlog_json', (data) => {
-            this.updateBadge(data.total || 0);
+            this.syncToAlpine(data.total || 0);
         }, (error) => {
             // Silent fail - crash log is not critical
             console.log('Could not load crash count');
         });
     },
-    
-    updateBadge(count) {
-        if (!this.elements.badge || !this.elements.clearBtn) return;
-        
-        this.elements.badge.textContent = count;
-        
-        // Update badge appearance based on count
-        if (count === 0) {
-            this.elements.badge.style.background = '#4CAF50';
-            this.elements.clearBtn.style.display = 'none';
-        } else if (count <= 5) {
-            this.elements.badge.style.background = '#ff9800';
-            this.elements.clearBtn.style.display = 'inline-flex';
-        } else {
-            this.elements.badge.style.background = '#f44336';
-            this.elements.clearBtn.style.display = 'inline-flex';
+
+    // Sync data to Alpine store (badge is now Alpine-controlled)
+    syncToAlpine(count, entries = null) {
+        if (typeof Alpine !== 'undefined' && Alpine.store('crash')) {
+            const store = Alpine.store('crash');
+            store.count = count;
+            if (entries !== null) {
+                store.entries = entries;
+                store.loaded = true;
+            }
         }
     },
     
@@ -352,68 +289,7 @@ const CrashLog = {
             'BROWNOUT': 'Brownout',
             'DEEPSLEEP': 'Deep Sleep'
         };
-        
+
         return reasonMap[reason] || reason;
-    },
-    
-    clear() {
-        if (!confirm('Clear all crash history?\nThis action cannot be undone.')) {
-            return;
-        }
-        
-        fetch('/clear_crashlog')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Clear failed');
-                }
-                return response.json(); // Parse JSON response
-            })
-            .then(data => {
-                // Check if response indicates success
-                if (data.status !== 'ok') {
-                    throw new Error('Clear operation failed');
-                }
-                
-                // Update UI
-                this.updateBadge(0);
-                
-                // Update table if visible
-                if (this.elements.content && this.elements.content.style.display !== 'none') {
-                    this.updateTable([]);
-                }
-                
-                // Show feedback
-                const badge = this.elements.badge;
-                if (badge) {
-                    const originalText = badge.textContent;
-                    badge.textContent = '✓';
-                    setTimeout(() => {
-                        badge.textContent = originalText;
-                    }, 1500);
-                }
-            })
-            .catch(error => {
-                console.error('Clear crash log error:', error);
-                alert('Failed to clear crash history: ' + error.message);
-            });
-    },
-    
-    // Auto-refresh crash count if section is open
-    startAutoRefresh() {
-        // This can be called from main.js if needed
-        if (this.elements.content && this.elements.content.style.display !== 'none') {
-            this.load();
-        } else {
-            this.updateCount();
-        }
     }
 };
-
-// Global functions for onclick handlers
-function toggleCrashLog() {
-    CrashLog.toggle();
-}
-
-function clearCrashHistory() {
-    CrashLog.clear();
-}
