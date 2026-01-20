@@ -5,7 +5,7 @@
 #include "../uart/uart1_tx_service.h"
 #include "sbus_fast_parser.h"
 #include "sbus_router.h"
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 #include "bluetooth_sender.h"
 #endif
 
@@ -125,7 +125,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         telemetryMask |= SENDER_UDP;
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device5 routing - Bluetooth SPP bridge
     if (config->device5_config.role == D5_BT_BRIDGE) {
         telemetryMask |= SENDER_BT;
@@ -176,7 +176,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         
         // Log the final telemetry routing mask for debugging
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
         log_msg(LOG_INFO, "Telemetry routing mask: 0x%02X (USB:%d UART2:%d UART3:%d UDP:%d BT:%d)",
                 telemetryMask,
                 (telemetryMask & SENDER_USB) ? 1 : 0,
@@ -355,7 +355,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Bluetooth Input flow (BT → UART1)
     if (config->device5_config.role == D5_BT_BRIDGE && ctx->buffers.btInputBuffer &&
         !hasSbusDevice && bluetoothSPP) {
@@ -574,7 +574,7 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
         log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> USB Text enabled");
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device5 for Bluetooth SBUS text output
     if (config->device5_config.role == D5_BT_SBUS_TEXT) {
         mask |= (1 << IDX_DEVICE5);
@@ -583,7 +583,7 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
 #endif
 
     // Log final routing configuration
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     log_msg(LOG_INFO, "SBUS routing mask: 0x%02X (UART1=%d D2=%d D3=%d D4=%d D5=%d)",
             mask,
             (mask & (1 << IDX_UART1)) ? 1 : 0,
@@ -677,7 +677,7 @@ void ProtocolPipeline::createSenders(Config* config) {
         log_msg(LOG_WARNING, "UART1 sender not created - uartBridgeSerial is NULL");
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device5 - Bluetooth SPP
     if (config->device5_config.role != D5_NONE && bluetoothSPP) {
         BluetoothSender* btSender = new BluetoothSender();

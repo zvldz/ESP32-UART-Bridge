@@ -8,7 +8,7 @@ build_env = env["PIOENV"]
 print("[INFO] custom sdkconfig copy script STARTED")
 print("[INFO] Current environment:", env["PIOENV"])
 
-sdkconfig_src = f"sdkconfig.{build_env}.defaults"
+sdkconfig_src = os.path.join("sdkconfig", f"sdkconfig.{build_env}.defaults")
 sdkconfig_dst = "sdkconfig.defaults"
 
 if os.path.isfile(sdkconfig_src):

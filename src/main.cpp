@@ -19,6 +19,9 @@
 #include "uart/uart_interface.h"
 #if defined(BOARD_MINIKIT_ESP32)
 #include "quick_reset.h"
+#endif
+
+#if defined(MINIKIT_BT_ENABLED)
 #include "bluetooth/bluetooth_spp.h"
 #endif
 #include "uart/uart_dma.h"
@@ -205,7 +208,7 @@ void setup() {
     detectMode();
     log_msg(LOG_INFO, "Mode detected: %s", bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network");
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Initialize Bluetooth SPP AFTER mode detection
     // Quick reset = temp AP mode, BT skipped to save RAM for WiFi
     initDevice5Bluetooth();
@@ -231,7 +234,7 @@ void setup() {
     // Create FreeRTOS tasks
     createTasks();
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Log BT status after network is up (so it appears in UDP logs)
     if (bluetoothSPP) {
         log_msg(LOG_INFO, "Bluetooth SPP active: %s", bluetoothSPP->getName());
@@ -257,7 +260,9 @@ void loop() {
         quickResetUpdateUptime();
         lastNvsUpdate = millis();
     }
+#endif
 
+#if defined(MINIKIT_BT_ENABLED)
     // Track Bluetooth connection status for LED indication
     static bool lastBtConnected = false;
     bool btConnected = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
@@ -314,7 +319,9 @@ void detectMode() {
         systemState.tempForceApMode = true;
         return;
     }
+#endif
 
+#if defined(MINIKIT_BT_ENABLED)
     // MiniKit: WiFi and BT are mutually exclusive (no PSRAM = OOM)
     // If BT is enabled, skip network mode entirely (BT-only operation)
     if (config.device5_config.role != D5_NONE) {
@@ -742,7 +749,7 @@ void createTasks() {
         needSenderTask = true;
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device 5 Bluetooth SPP
     if (config.device5_config.role != D5_NONE) {
         needSenderTask = true;

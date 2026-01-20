@@ -47,6 +47,10 @@ const CrashLog = {
     },
     
     updateTable(entries) {
+        // Re-cache tbody if not found (section may have been collapsed during init)
+        if (!this.elements.tbody) {
+            this.elements.tbody = document.getElementById('crashTableBody');
+        }
         if (!this.elements.tbody) return;
 
         if (entries.length > 0) {

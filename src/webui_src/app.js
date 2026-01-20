@@ -19,7 +19,7 @@ const TRACKED_FIELDS = [
     'wifiNetwork2Ssid', 'wifiNetwork2Pass', 'wifiNetwork3Ssid', 'wifiNetwork3Pass',
     'wifiNetwork4Ssid', 'wifiNetwork4Pass',
     'protocolOptimization', 'mavlinkRouting', 'sbusTimingKeeper',
-    'device4TargetIP', 'device4TargetPort', 'device4ListenPort', 'device4SbusFormat',
+    'device4TargetIP', 'device4TargetPort', 'device4SbusFormat',
     'device4AutoBroadcast', 'device4UdpTimeout', 'udpBatching',
     'device2SbusRate', 'device3SbusRate', 'device4SbusRate', 'btSendRate',
     'logLevelWeb', 'logLevelUart', 'logLevelNetwork',
@@ -55,30 +55,29 @@ document.addEventListener('alpine:init', () => {
 
         // Device 4 extended config
         device4TargetIP: '',
-        device4TargetPort: 14550,
-        device4ListenPort: 14555,
+        device4TargetPort: '14550',
         device4SbusFormat: '0',
         device4AutoBroadcast: false,
-        device4UdpTimeout: 1000,
+        device4UdpTimeout: '1000',
         udpBatching: true,
 
         // USB mode (Device 2 USB role)
         usbMode: 'device',
 
-        // UART config
-        baudrate: 115200,
-        databits: 8,
+        // UART config (strings for x-model select compatibility)
+        baudrate: '115200',
+        databits: '8',
         parity: 'N',
-        stopbits: 1,
-        flowcontrol: 0,
+        stopbits: '1',
+        flowcontrol: false,  // Boolean for checkbox
 
         // WiFi config
-        wifiMode: 0,
+        wifiMode: '0',
         ssid: '',
         password: '',
         permanentWifi: false,
-        wifiTxPower: 20,
-        wifiApChannel: 1,
+        wifiTxPower: '20',
+        wifiApChannel: '1',
         mdnsHostname: '',
 
         // WiFi client networks (5 slots: primary + 4 additional)
@@ -94,7 +93,7 @@ document.addEventListener('alpine:init', () => {
         wifiNetwork4Pass: '',
 
         // Protocol
-        protocolOptimization: 0,
+        protocolOptimization: '0',
         mavlinkRouting: false,
         sbusTimingKeeper: false,
 
@@ -178,21 +177,20 @@ document.addEventListener('alpine:init', () => {
             return this.device4Role !== '0';  // Any role except disabled
         },
 
-        // Computed: is MiniKit board
+        // Computed: is MiniKit board (any variant)
         get isMiniKit() {
-            return this.boardType === 'minikit';
+            return this.boardType === 'minikit' || this.boardType === 'minikit_bt';
         },
 
-        // Computed: show Device 5 row (MiniKit only)
+        // Computed: show Device 5 row (MiniKit BT only)
         get showDevice5() {
-            return this.boardType === 'minikit';
+            return this.boardType === 'minikit_bt';
         },
 
         // Computed: show Auto Broadcast checkbox (Client mode + TX role)
         get showAutoBroadcast() {
             const baseRole = this.device4Role?.split('_')[0];
-            // wifiMode can be string or number, use == for loose comparison
-            return this.wifiMode == 1 && (baseRole === '1' || baseRole === '3');
+            return this.wifiMode === '1' && (baseRole === '1' || baseRole === '3');
         },
 
         // Computed: show USB Mode block (Device 2 is USB)
@@ -207,7 +205,7 @@ document.addEventListener('alpine:init', () => {
 
         // Computed: show MAVLink Routing section
         get showMavlinkRouting() {
-            return this.protocolOptimization === 1 && !this.isSbusActive;
+            return this.protocolOptimization === '1' && !this.isSbusActive;
         },
 
         // XIAO GPIO to D-pin mapping
@@ -253,7 +251,7 @@ document.addEventListener('alpine:init', () => {
         // Computed: Device 3 pins text
         get device3PinsText() {
             const role = this.device3Role;
-            const isMiniKit = this.boardType === 'minikit';
+            const isMiniKit = this.boardType === 'minikit' || this.boardType === 'minikit_bt';
             const isXiao = this.boardType === 'xiao';
 
             if (role === '1' || role === '2') {  // UART3 Mirror/Bridge
@@ -407,12 +405,12 @@ document.addEventListener('alpine:init', () => {
             const baseRole = newRole?.split('_')[0];
             const oldBase = oldRole?.split('_')[0];
 
-            // Only update port when role type changes
+            // Only update port when role type changes (strings for consistency)
             if (baseRole !== oldBase) {
-                if (baseRole === '1') this.device4TargetPort = 14550;       // Bridge
-                else if (baseRole === '2') this.device4TargetPort = 14560; // Logger
-                else if (baseRole === '3') this.device4TargetPort = 14551; // SBUS TX
-                else if (baseRole === '4') this.device4TargetPort = 14552; // SBUS RX (listen port)
+                if (baseRole === '1') this.device4TargetPort = '14550';       // Bridge
+                else if (baseRole === '2') this.device4TargetPort = '14560'; // Logger
+                else if (baseRole === '3') this.device4TargetPort = '14551'; // SBUS TX
+                else if (baseRole === '4') this.device4TargetPort = '14552'; // SBUS RX (listen port)
             }
 
             this._checkAutoSbusIn();
@@ -442,32 +440,31 @@ document.addEventListener('alpine:init', () => {
                 this.device4Role = String(data.device4Role ?? '0');
                 this.device5Role = String(data.device5Role ?? '0');
 
-                // Device 4 config
+                // Device 4 config (strings for x-model number input compatibility)
                 this.device4TargetIP = data.device4TargetIp || data.device4TargetIP || '192.168.4.2';
-                this.device4TargetPort = data.device4Port ?? data.device4TargetPort ?? 14550;
-                this.device4ListenPort = data.device4ListenPort ?? 14555;
+                this.device4TargetPort = String(data.device4Port ?? data.device4TargetPort ?? 14550);
                 this.device4SbusFormat = String(data.device4SbusFormat ?? '0');
                 this.device4AutoBroadcast = data.device4AutoBroadcast ?? false;
-                this.device4UdpTimeout = data.device4UdpTimeout ?? 1000;
+                this.device4UdpTimeout = String(data.device4UdpTimeout ?? 1000);
                 this.udpBatching = data.udpBatchingEnabled ?? true;
 
                 // USB mode
                 this.usbMode = data.usbMode || 'device';
 
-                // UART config
-                this.baudrate = data.baudrate ?? 115200;
-                this.databits = data.databits ?? 8;
+                // UART config (strings for x-model select compatibility)
+                this.baudrate = String(data.baudrate ?? 115200);
+                this.databits = String(data.databits ?? 8);
                 this.parity = data.parity || 'N';
-                this.stopbits = data.stopbits ?? 1;
-                this.flowcontrol = data.flowcontrol ?? 0;
+                this.stopbits = String(data.stopbits ?? 1);
+                this.flowcontrol = Boolean(data.flowcontrol);  // Convert 0/1 to boolean
 
-                // WiFi config
-                this.wifiMode = data.wifiMode ?? 0;
+                // WiFi config (strings for x-model select compatibility)
+                this.wifiMode = String(data.wifiMode ?? 0);
                 this.ssid = data.ssid || '';
                 this.password = data.password || '';
                 this.permanentWifi = data.permanentWifi ?? false;
-                this.wifiTxPower = data.wifiTxPower ?? 20;
-                this.wifiApChannel = data.wifiApChannel ?? 1;
+                this.wifiTxPower = String(data.wifiTxPower ?? 20);
+                this.wifiApChannel = String(data.wifiApChannel ?? 1);
                 this.mdnsHostname = data.mdnsHostname || '';
 
                 // WiFi client networks (from array to individual fields)
@@ -483,8 +480,8 @@ document.addEventListener('alpine:init', () => {
                 this.wifiNetwork4Ssid = networks[4]?.ssid || '';
                 this.wifiNetwork4Pass = networks[4]?.password || '';
 
-                // Protocol
-                this.protocolOptimization = data.protocolOptimization ?? 0;
+                // Protocol (convert to string for x-model select compatibility)
+                this.protocolOptimization = String(data.protocolOptimization ?? 0);
                 this.mavlinkRouting = data.mavlinkRouting ?? false;
                 this.sbusTimingKeeper = data.sbusTimingKeeper ?? false;
 
@@ -565,7 +562,7 @@ document.addEventListener('alpine:init', () => {
                 databits: parseInt(this.databits),
                 parity: this.parity,
                 stopbits: parseInt(this.stopbits),
-                flowcontrol: this.flowcontrol,
+                flowcontrol: this.flowcontrol ? 1 : 0,  // Convert boolean to 0/1
 
                 // WiFi config
                 wifi_mode: parseInt(this.wifiMode),
@@ -610,7 +607,7 @@ document.addEventListener('alpine:init', () => {
         // Returns null if valid, error message string if invalid
         validate() {
             // AP mode validation
-            if (this.wifiMode == 0) {
+            if (this.wifiMode === '0') {
                 if (!this.ssid || this.ssid.trim() === '') {
                     return 'AP SSID required';
                 }
@@ -619,7 +616,7 @@ document.addEventListener('alpine:init', () => {
                 }
             }
             // Client mode validation
-            else if (this.wifiMode == 1) {
+            else if (this.wifiMode === '1') {
                 // Check primary network
                 if (!this.wifiNetwork0Ssid || this.wifiNetwork0Ssid.trim() === '') {
                     return 'Primary SSID required';
@@ -888,6 +885,7 @@ document.addEventListener('alpine:init', () => {
                 'xiao': 'XIAO ESP32-S3',
                 's3supermini': 'ESP32-S3 Super Mini',
                 'minikit': 'ESP32 MiniKit',
+                'minikit_bt': 'ESP32 MiniKit BT',
                 's3zero': 'ESP32-S3-Zero'
             };
             return names[boardType] || 'ESP32-S3-Zero';
@@ -899,7 +897,7 @@ document.addEventListener('alpine:init', () => {
             if (this.tempNetworkMode) {
                 return `Temporary AP (${app.ssid})`;
             }
-            if (app.wifiMode === 0) {
+            if (app.wifiMode === '0') {
                 return `Access Point (${app.ssid})`;
             }
             // Client mode
@@ -912,7 +910,7 @@ document.addEventListener('alpine:init', () => {
 
         // Computed: show IP row (client mode connected)
         get showIpAddress() {
-            return Alpine.store('app').wifiMode === 1 && this.wifiClientConnected;
+            return Alpine.store('app').wifiMode === '1' && this.wifiClientConnected;
         },
 
         // Activity indicators
@@ -1263,6 +1261,10 @@ document.addEventListener('alpine:init', () => {
                 this.count = data.total || 0;
                 this.entries = data.entries || [];
                 this.loaded = true;
+                // Update table via CrashLog module (uses innerHTML)
+                if (typeof CrashLog !== 'undefined') {
+                    CrashLog.updateTable(this.entries);
+                }
             } catch (err) {
                 console.error('Failed to fetch crash log:', err);
             }
@@ -1278,6 +1280,10 @@ document.addEventListener('alpine:init', () => {
 
                 this.count = 0;
                 this.entries = [];
+                // Update table to show "No crashes recorded"
+                if (typeof CrashLog !== 'undefined') {
+                    CrashLog.updateTable([]);
+                }
                 return true;
             } catch (err) {
                 console.error('Clear crash log error:', err);
@@ -1403,7 +1409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
 
         // Restore side effects for persisted open sections
-        // Use setTimeout to ensure Alpine has finished rendering
+        // Use setTimeout to ensure Alpine x-collapse has finished rendering DOM
         setTimeout(() => {
             const ui = Alpine.store('ui');
             if (ui.logs) {
@@ -1412,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ui.crash) {
                 Alpine.store('crash').fetchAll();
             }
-        }, 100);
+        }, 300);
 
         // Start SBUS polling if SBUS active
         // (will be called after config loaded in x-init)
