@@ -143,7 +143,7 @@
                     <span style="user-select: none; font-size: 18px;" x-text="$store.ui.crash ? '▼' : '▶'"></span>
                 </span>
             </h4>
-            <div x-show="$store.ui.crash" x-collapse style="overflow: hidden; margin-top: 10px;">
+            <div x-show="$store.ui.crash" x-collapse x-init="if ($store.ui.crash) setTimeout(() => $store.crash.fetchAll(), 100)" style="overflow: hidden; margin-top: 10px;">
                 <!-- Crash table (populated by CrashLog.updateTable) -->
                 <div class="log-container" style="height: auto; max-height: 400px;">
                     <table style="width: 100%; font-size: 12px;">
@@ -418,31 +418,31 @@
                             </div>
                         </template>
 
-                        <!-- Sender Statistics (MAVLink/SBUS) -->
-                        <template x-if="$store.status.protocolType !== 0 && $store.status.protocolStats.senders?.length > 0">
+                        <!-- Output Devices -->
+                        <template x-if="$store.status.protocolStats.senders?.length > 0">
                             <div class="protocol-stats-card">
-                                <h5>Detected Senders</h5>
+                                <h5>Output Devices</h5>
                                 <table class="senders-table">
-                                    <!-- MAVLink senders -->
-                                    <template x-if="$store.status.protocolType === 1">
-                                        <thead><tr><th>System</th><th>Packets</th><th>Last Seen</th></tr></thead>
-                                    </template>
-                                    <template x-if="$store.status.protocolType === 2">
-                                        <thead><tr><th>Source</th><th>Frames</th><th>Last Seen</th></tr></thead>
-                                    </template>
+                                    <thead>
+                                        <tr>
+                                            <th>Device</th>
+                                            <th x-text="$store.status.protocolType === 1 ? 'Sent (pkts)' : 'Sent'"></th>
+                                            <th>Dropped</th>
+                                            <th>Queue</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
-                                        <template x-for="sender in $store.status.protocolStats.senders" :key="sender.sysId || sender.sourceId">
+                                        <template x-for="sender in $store.status.protocolStats.senders" :key="sender.index">
                                             <tr>
-                                                <!-- MAVLink: sysId/compId -->
-                                                <template x-if="$store.status.protocolType === 1">
-                                                    <td x-text="sender.sysId + '/' + sender.compId"></td>
-                                                </template>
-                                                <!-- SBUS: name or sourceId -->
-                                                <template x-if="$store.status.protocolType === 2">
-                                                    <td x-text="sender.name || sender.sourceId"></td>
-                                                </template>
-                                                <td class="text-center" x-text="sender.packets || sender.frames"></td>
-                                                <td class="text-center" x-text="$store.status.formatLastActivity(sender.lastSeenMs)"></td>
+                                                <td><strong x-text="sender.name"></strong></td>
+                                                <td class="text-center" x-text="sender.sent"></td>
+                                                <td class="text-center">
+                                                    <span x-text="sender.dropped"></span>
+                                                    <span x-show="sender.dropped > 0 && sender.sent > 0"
+                                                          class="text-muted"
+                                                          x-text="' (' + ((sender.dropped / (sender.sent + sender.dropped)) * 100).toFixed(1) + '%)'"></span>
+                                                </td>
+                                                <td class="text-center" x-text="sender.queueDepth + '/' + sender.maxQueueDepth"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -554,7 +554,7 @@
                                         @change="$store.app._checkAutoSbusIn()"
                                         class="w-full"
                                         x-effect="
-                                            const sbus = $store.app.protocolOptimization == 2;
+                                            const sbus = $store.app.protocolOptimization === '2';
                                             $nextTick(() => {
                                                 $el.querySelectorAll('option').forEach(opt => {
                                                     const v = opt.value;
@@ -648,7 +648,7 @@
                         </div>
 
                         <!-- AP Mode settings -->
-                        <div id="apModeSettings" x-show="$store.app.wifiMode == 0">
+                        <div id="apModeSettings" x-show="$store.app.wifiMode === '0'">
                             <!--<h5>Access Point Settings</h5>-->
                             <label for="ssid">AP Name (SSID):</label>
                             <input type="text" name="ssid" id="ssid" maxlength="32" x-model="$store.app.ssid">
@@ -664,7 +664,7 @@
                         </div>
 
                         <!-- Client Mode settings -->
-                        <div id="clientModeSettings" x-show="$store.app.wifiMode == 1">
+                        <div id="clientModeSettings" x-show="$store.app.wifiMode === '1'">
                             <!-- Primary Network (always visible) -->
                             <div style="margin-bottom: 15px;">
                                 <label for="wifi_network_ssid_0">Primary Network (SSID):</label>
@@ -770,7 +770,7 @@
                         </div>
 
                         <!-- WiFi AP Channel (AP mode only) -->
-                        <div id="ap_channel_group" x-show="$store.app.wifiMode == 0" class="mt-15">
+                        <div id="ap_channel_group" x-show="$store.app.wifiMode === '0'" class="mt-15">
                             <label for="wifi_ap_channel">AP Channel:</label>
                             <select id="wifi_ap_channel" name="wifi_ap_channel" x-model="$store.app.wifiApChannel">
                                 <option value="1" selected>1</option>

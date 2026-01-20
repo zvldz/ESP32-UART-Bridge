@@ -1,5 +1,5 @@
 // Bluetooth SPP sender for MiniKit
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 
 #ifndef BLUETOOTH_SENDER_H
 #define BLUETOOTH_SENDER_H
@@ -184,4 +184,4 @@ public:
 };
 
 #endif // BLUETOOTH_SENDER_H
-#endif // BOARD_MINIKIT_ESP32
+#endif // MINIKIT_BT_ENABLED

@@ -107,6 +107,18 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
+#### UART Improvements
+
+- [ ] **Hardware Flow Control CTS/RTS detection**
+  - Currently: if flow control enabled in config but CTS/RTS not physically connected, TX blocks waiting for CTS signal
+  - Other devices often auto-detect and fall back to no flow control
+  - Idea: check CTS pin state before enabling hardware flow control
+    - Configure CTS as input with pull-up
+    - If CTS stays HIGH (pull-up wins) → likely not connected → disable flow control
+    - If CTS is LOW → assume device connected and holding CTS
+  - Not 100% reliable (CTS LOW could mean "not connected but grounded" or "connected, wait")
+  - Low priority: UI checkbox now works correctly, users can disable manually
+
 #### Web Interface Improvements
 
 - [ ] **Show connected clients info in AP mode**

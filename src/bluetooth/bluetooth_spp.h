@@ -1,6 +1,6 @@
 // Bluetooth SPP interface for MiniKit (ESP32 WROOM-32)
 // Uses ESP-IDF SPP API directly - memory allocated only when init() is called
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 
 #pragma once
 
@@ -67,4 +67,4 @@ public:
 // Global instance pointer (created in device_init.cpp)
 extern BluetoothSPP* bluetoothSPP;
 
-#endif // BOARD_MINIKIT_ESP32
+#endif // MINIKIT_BT_ENABLED

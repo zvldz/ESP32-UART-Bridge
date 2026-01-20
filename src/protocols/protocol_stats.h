@@ -62,11 +62,15 @@ struct ProtocolStats {
     }
     
     // Update packet size statistics
+    // TODO: Current cumulative average gets "stuck" at early values over thousands of packets.
+    // For example, if first 1000 packets are 13 bytes (heartbeats), then normal 40-50 byte
+    // packets won't noticeably change the average. Consider implementing sliding window
+    // average (last N packets) or exponential moving average for more responsive stats.
     void updatePacketSize(uint32_t size) {
         if (size < minPacketSize) minPacketSize = size;
         if (size > maxPacketSize) maxPacketSize = size;
-        
-        // Simple running average (can be improved with proper windowing)
+
+        // Simple running average (see TODO above for improvement ideas)
         if (packetsDetected == 0) {
             avgPacketSize = size;
         } else {
@@ -103,9 +107,9 @@ struct ProtocolStats {
     
     // Record successful packet detection
     void onPacketDetected(uint32_t size, uint32_t currentTime) {
+        updatePacketSize(size);  // Update size stats BEFORE incrementing counter
         packetsDetected++;
         packetsInLastSecond++;  // Count here instead
-        updatePacketSize(size);
         lastPacketTime = currentTime;
         consecutiveErrors = 0;
         updatePacketRate(currentTime);  // Just update rate calculation

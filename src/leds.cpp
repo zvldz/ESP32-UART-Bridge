@@ -456,8 +456,8 @@ void led_process_updates() {
         }
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
-    // Bluetooth connected mode (MiniKit only)
+#if defined(MINIKIT_BT_ENABLED)
+    // Bluetooth connected mode (MiniKit with BT only)
     if (currentLedMode == LED_MODE_BT_CONNECTED) {
         if (processBlinkPatternUnderMutex(BLINK_BT_CONNECTED)) {
             xSemaphoreGive(ledMutex);
@@ -544,7 +544,7 @@ void led_set_mode(LedMode mode) {
             log_msg(LOG_DEBUG, "LED set to Safe Mode - red blink every 5s");
             break;
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
         case LED_MODE_BT_CONNECTED:
             if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
                 clearOtherBlinks(BLINK_BT_CONNECTED);
