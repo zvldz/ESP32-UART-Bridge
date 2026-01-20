@@ -15,8 +15,11 @@
 #include <freertos/semphr.h>
 
 #if defined(BOARD_MINIKIT_ESP32)
-#include "bluetooth/bluetooth_spp.h"
 #include "quick_reset.h"
+#endif
+
+#if defined(MINIKIT_BT_ENABLED)
+#include "bluetooth/bluetooth_spp.h"
 #include <esp_mac.h>
 #endif
 
@@ -341,7 +344,7 @@ void initDevice3SBUS() {
     }
 }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 // Initialize Device 5 as Bluetooth SPP
 // NOTE: WiFi and BT are mutually exclusive on MiniKit (no PSRAM, OOM)
 // If BT enabled in config AND this is not a quick-reset (temp AP), BT starts and WiFi is skipped
@@ -466,7 +469,7 @@ void registerSbusOutputs() {
         }
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Register Device5 Bluetooth SBUS text output
     if (config.device5_config.role == D5_BT_SBUS_TEXT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE5);
@@ -503,7 +506,7 @@ void initDevices() {
     // Device 4
     log_msg(LOG_INFO, "- Device 4: %s", config.device4.role == D4_NONE ? "Disabled" : "Network");
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device 5 (Bluetooth SPP)
     if (config.device5_config.role != D5_NONE) {
         const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";

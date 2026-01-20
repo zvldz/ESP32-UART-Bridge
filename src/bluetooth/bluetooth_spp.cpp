@@ -1,6 +1,6 @@
 // Bluetooth SPP implementation for MiniKit using ESP-IDF API
 // Memory is allocated only when init() is called
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 
 #include "bluetooth_spp.h"
 #include "../logging.h"
@@ -338,4 +338,4 @@ void BluetoothSPP::onSppDisconnect() {
     sppHandle = 0;
 }
 
-#endif // BOARD_MINIKIT_ESP32
+#endif // MINIKIT_BT_ENABLED

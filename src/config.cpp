@@ -147,7 +147,7 @@ void config_init(Config* config) {
     // SBUS settings defaults
     config->sbusTimingKeeper = false;  // Disabled by default
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device 5 (Bluetooth SPP) defaults
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     config->device5_config.role = D5_NONE;
@@ -361,7 +361,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->device4_config.udpSendRate = doc["device4"]["send_rate"] | 50;
     }
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Load Device 5 (Bluetooth SPP) configuration
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     if (doc["device5"].is<JsonObject>()) {
@@ -475,7 +475,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["protocol"]["mavlink_routing"] = config->mavlinkRouting;
     doc["protocol"]["sbus_timing_keeper"] = config->sbusTimingKeeper;
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Device 5 (Bluetooth SPP) configuration
     // Note: BT name uses mdns_hostname, SSP "Just Works" pairing
     doc["device5"]["role"] = config->device5_config.role;
@@ -531,7 +531,7 @@ void config_save(Config* config) {
 
     file.close();
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // Duplicate D5 config to Preferences for btInUse() early access
     // btInUse() is called by Arduino before LittleFS is mounted
     Preferences prefs;

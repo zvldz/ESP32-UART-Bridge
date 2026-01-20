@@ -14,7 +14,7 @@
 #include "protocols/protocol_pipeline.h"
 #include "protocols/sbus_router.h"
 #include "protocols/sbus_fast_parser.h"
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
 #include "../bluetooth/bluetooth_spp.h"
 #endif
 #include <Arduino.h>
@@ -65,7 +65,7 @@ bool validateSbusConfig(const Config& cfg) {
                        cfg.device2.role == D2_USB_SBUS_TEXT ||
                        cfg.device3.role == D3_SBUS_OUT ||
                        cfg.device4.role == D4_SBUS_UDP_TX
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
                        || cfg.device5_config.role == D5_BT_SBUS_TEXT
 #endif
                        );
@@ -94,7 +94,13 @@ static void populateApiConfig(JsonDocument& doc) {
     doc["boardType"] = "xiao";
     doc["usbHostSupported"] = true;
 #elif defined(BOARD_MINIKIT_ESP32)
-    doc["boardType"] = "minikit";
+    #if defined(MINIKIT_BT_ENABLED)
+        doc["boardType"] = "minikit_bt";
+        doc["btSupported"] = true;
+    #else
+        doc["boardType"] = "minikit";
+        doc["btSupported"] = false;
+    #endif
     doc["usbHostSupported"] = false;
     doc["uart2Available"] = false;
 #elif defined(BOARD_ESP32_S3_ZERO)
@@ -151,7 +157,7 @@ static void populateApiConfig(JsonDocument& doc) {
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
     doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     doc["device5Role"] = String(config.device5_config.role);
     doc["device5RoleName"] = getDevice5RoleName(config.device5_config.role);
     doc["btSendRate"] = config.device5_config.btSendRate;
@@ -202,7 +208,7 @@ static void populateApiStatus(JsonDocument& doc) {
     }
     doc["tempNetworkMode"] = systemState.isTemporaryNetwork;
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     // BT runtime status
     doc["btInitialized"] = (bluetoothSPP != nullptr);
     doc["btConnected"] = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
@@ -560,7 +566,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
     // Sync device4 role
     config.device4_config.role = config.device4.role;
 
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED)
     if (doc.containsKey("device5_role")) {
         int role = doc["device5_role"];
         if (role >= D5_NONE && role <= D5_BT_SBUS_TEXT && role != config.device5_config.role) {

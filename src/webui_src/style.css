@@ -397,7 +397,7 @@ pre {
 .text-danger { color: #dc3545; }
 .text-warning { color: #ffc107; }
 .text-muted { color: #6c757d; }
-.text-center { text-align: center; }
+.text-center { text-align: center !important; }
 
 /* WiFi signal colors */
 .wifi-signal-excellent { color: #4CAF50; }
