@@ -70,7 +70,7 @@ Hardware: ESP32-WROOM-32 based development board
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.13"
+#define DEVICE_VERSION "2.18.14"
 
 // Hardware pins - Device 1 (Main UART)
 #if defined(BOARD_MINIKIT_ESP32)
@@ -145,11 +145,11 @@ Hardware: ESP32-WROOM-32 based development board
 #define DEFAULT_AP_PASSWORD "12345678"
 
 // Logging system - reduced for low-memory boards
-#if defined(BOARD_MINIKIT_ESP32)
-#define LOG_BUFFER_SIZE     30      // MiniKit: no PSRAM, limited heap
+#if defined(BOARD_MINIKIT_ESP32) || defined(BLE_ENABLED)
+#define LOG_BUFFER_SIZE     30      // MiniKit/BLE: limited internal heap
 #define LOG_DISPLAY_COUNT   25
 #else
-#define LOG_BUFFER_SIZE     100     // S3 boards: PSRAM available
+#define LOG_BUFFER_SIZE     100     // S3 boards without BLE
 #define LOG_DISPLAY_COUNT   95
 #endif
 
@@ -173,8 +173,8 @@ Hardware: ESP32-WROOM-32 based development board
 #define INPUT_BUFFER_SIZE 4096  // 4KB for GCS→FC commands
 
 // TX ring buffer for UART1 (single-writer: all inputs → one buffer → UART1 TX)
-#if defined(BOARD_MINIKIT_ESP32)
-#define UART1_TX_RING_SIZE 4096 // 4KB for MiniKit (limited heap)
+#if defined(BOARD_MINIKIT_ESP32) || defined(BLE_ENABLED)
+#define UART1_TX_RING_SIZE 4096 // 4KB for MiniKit/BLE (limited heap)
 #else
 #define UART1_TX_RING_SIZE 8192 // 8KB for S3 boards
 #endif

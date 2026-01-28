@@ -64,22 +64,23 @@ void printBootInfo() {
 // System diagnostics - memory stats, uptime
 void systemDiagnostics() {
     uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t totalHeap = ESP.getHeapSize();
     uint32_t minFreeHeap = ESP.getMinFreeHeap();
 
     // PSRAM stats (if available)
     size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
     size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-    // Critical memory conditions
+    // Critical memory conditions - format: free/total (min=X)
     if (freeHeap < 10000) {
-        log_msg(LOG_ERROR, "CRITICAL: Low memory! Free: %u bytes, Min: %u bytes, PSRAM: %zu/%zu KB",
-                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
+        log_msg(LOG_ERROR, "CRITICAL: HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
+                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
     } else if (freeHeap < 20000) {
-        log_msg(LOG_WARNING, "Warning: Memory getting low. Free: %u bytes, Min: %u bytes, PSRAM: %zu/%zu KB",
-                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
+        log_msg(LOG_WARNING, "Low mem: HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
+                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
     } else {
-        log_msg(LOG_DEBUG, "Memory: Free=%u bytes, Min=%u bytes, PSRAM: %zu/%zu KB",
-                freeHeap, minFreeHeap, psramFree/1024, psramTotal/1024);
+        log_msg(LOG_DEBUG, "HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
+                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
     }
 }
 
@@ -137,6 +138,18 @@ const char* getDevice5RoleName(uint8_t role) {
     case D5_NONE: return "Disabled";
     case D5_BT_BRIDGE: return "Bluetooth Bridge";
     case D5_BT_SBUS_TEXT: return "BT SBUS Text";
+    default: return "Unknown";
+  }
+}
+#endif
+
+#if defined(BLE_ENABLED)
+// Helper function for device5 role names (BLE)
+const char* getDevice5RoleName(uint8_t role) {
+  switch(role) {
+    case D5_NONE: return "Disabled";
+    case D5_BT_BRIDGE: return "BLE Bridge";
+    case D5_BT_SBUS_TEXT: return "BLE SBUS Text";
     default: return "Unknown";
   }
 }
@@ -305,8 +318,8 @@ void forceSerialLog(const char* format, ...) {
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
 
-    // Output with prefix
-    Serial.print("FORCE_LOG: ");
+    // Output with prefix (leading \n ensures clean line after partial output from other components)
+    Serial.print("\nFORCE_LOG: ");
     Serial.println(buffer);
     Serial.flush();
 }

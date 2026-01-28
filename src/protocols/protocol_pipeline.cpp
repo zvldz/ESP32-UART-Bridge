@@ -8,6 +8,9 @@
 #if defined(MINIKIT_BT_ENABLED)
 #include "bluetooth_sender.h"
 #endif
+#if defined(BLE_ENABLED)
+#include "bluetooth_ble_sender.h"
+#endif
 
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) :
     activeFlows(0),
@@ -131,6 +134,12 @@ void ProtocolPipeline::setupFlows(Config* config) {
         telemetryMask |= SENDER_BT;
     }
 #endif
+#if defined(BLE_ENABLED)
+    // Device5 routing - BLE bridge
+    if (config->device5_config.role == D5_BT_BRIDGE) {
+        telemetryMask |= SENDER_BT;
+    }
+#endif
 
     // Check for no destinations configured
     if (telemetryMask == 0) {
@@ -176,7 +185,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         flows[activeFlows++] = f;
         
         // Log the final telemetry routing mask for debugging
-#if defined(MINIKIT_BT_ENABLED)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
         log_msg(LOG_INFO, "Telemetry routing mask: 0x%02X (USB:%d UART2:%d UART3:%d UDP:%d BT:%d)",
                 telemetryMask,
                 (telemetryMask & SENDER_USB) ? 1 : 0,
@@ -396,6 +405,47 @@ void ProtocolPipeline::setupFlows(Config* config) {
     }
 #endif
 
+#if defined(BLE_ENABLED)
+    // BLE Input flow (BLE → UART1)
+    if (config->device5_config.role == D5_BT_BRIDGE && ctx->buffers.btInputBuffer &&
+        !hasSbusDevice && bluetoothBLE) {
+        // Link BLE input buffer to BluetoothBLE
+        bluetoothBLE->setInputBuffer(ctx->buffers.btInputBuffer);
+
+        DataFlow f;
+        f.name = "BLE_Input";
+        f.inputBuffer = ctx->buffers.btInputBuffer;
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_BT;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
+
+        // Create parser based on protocol
+        switch (config->protocolOptimization) {
+            case PROTOCOL_NONE:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+            case PROTOCOL_MAVLINK:
+                {
+                    MavlinkParser* mavParser = new MavlinkParser(5);  // BLE Input channel
+                    mavParser->setRoutingEnabled(config->mavlinkRouting);
+                    f.parser = mavParser;
+                    log_msg(LOG_INFO, "MAVLink parser created for BLE_Input flow (channel=5)");
+                }
+                f.router = sharedRouter;  // Use shared router
+                break;
+            default:
+                f.parser = new RawParser();
+                f.router = nullptr;
+                break;
+        }
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "BLE→UART1 input flow created");
+    }
+#endif
+
     // SBUS Input flow (SBUS → UART1)
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         
@@ -575,15 +625,22 @@ uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {
     }
 
 #if defined(MINIKIT_BT_ENABLED)
-    // Device5 for Bluetooth SBUS text output
+    // Device5 for Bluetooth SPP SBUS text output
     if (config->device5_config.role == D5_BT_SBUS_TEXT) {
         mask |= (1 << IDX_DEVICE5);
         log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> BT Text enabled");
     }
 #endif
+#if defined(BLE_ENABLED)
+    // Device5 for BLE SBUS text output
+    if (config->device5_config.role == D5_BT_SBUS_TEXT) {
+        mask |= (1 << IDX_DEVICE5);
+        log_msg(LOG_INFO, "SBUS routing: SBUS_IN -> BLE Text enabled");
+    }
+#endif
 
     // Log final routing configuration
-#if defined(MINIKIT_BT_ENABLED)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
     log_msg(LOG_INFO, "SBUS routing mask: 0x%02X (UART1=%d D2=%d D3=%d D4=%d D5=%d)",
             mask,
             (mask & (1 << IDX_UART1)) ? 1 : 0,
@@ -691,6 +748,24 @@ void ProtocolPipeline::createSenders(Config* config) {
 
         senders[IDX_DEVICE5] = btSender;
         log_msg(LOG_INFO, "Created Bluetooth sender at index %d for role %d",
+                IDX_DEVICE5, config->device5_config.role);
+    }
+#endif
+
+#if defined(BLE_ENABLED)
+    // Device5 - BLE
+    if (config->device5_config.role != D5_NONE && bluetoothBLE) {
+        BluetoothBLESender* bleSender = new BluetoothBLESender();
+
+        // Set SBUS output format and rate limit for D5_BT_SBUS_TEXT
+        if (config->device5_config.role == D5_BT_SBUS_TEXT) {
+            bleSender->setSbusOutputFormat(SBUS_FMT_TEXT);
+            bleSender->setSendRate(config->device5_config.btSendRate);
+            // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
+        }
+
+        senders[IDX_DEVICE5] = bleSender;
+        log_msg(LOG_INFO, "Created BLE sender at index %d for role %d",
                 IDX_DEVICE5, config->device5_config.role);
     }
 #endif

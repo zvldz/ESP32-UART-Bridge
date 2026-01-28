@@ -138,8 +138,8 @@ enum PhysicalInterface : uint8_t {
     PHYS_UART3 = 2,  // MUST match IDX_DEVICE3
     PHYS_UDP   = 3,  // MUST match IDX_DEVICE4
     PHYS_UART1 = 4,  // MUST match IDX_UART1
-#if defined(BOARD_MINIKIT_ESP32)
-    PHYS_BT    = 5,  // MUST match IDX_DEVICE5 (Bluetooth SPP, MiniKit only)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
+    PHYS_BT    = 5,  // MUST match IDX_DEVICE5 (Bluetooth SPP or BLE)
 #endif
     PHYS_NONE  = 0xFF // No physical interface (internal sources)
 };
@@ -151,8 +151,8 @@ enum SenderIndex : uint8_t {
     IDX_DEVICE3       = 2,
     IDX_DEVICE4       = 3,
     IDX_UART1         = 4,
-#if defined(BOARD_MINIKIT_ESP32)
-    IDX_DEVICE5       = 5,  // Bluetooth SPP (MiniKit only)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
+    IDX_DEVICE5       = 5,  // Bluetooth SPP or BLE
     MAX_SENDERS       = 6
 #else
     MAX_SENDERS       = 5
@@ -165,7 +165,7 @@ static_assert(static_cast<int>(PHYS_UART2) == static_cast<int>(IDX_DEVICE2_UART2
 static_assert(static_cast<int>(PHYS_UART3) == static_cast<int>(IDX_DEVICE3), "PHYS_UART3 must match IDX_DEVICE3");
 static_assert(static_cast<int>(PHYS_UDP) == static_cast<int>(IDX_DEVICE4), "PHYS_UDP must match IDX_DEVICE4");
 static_assert(static_cast<int>(PHYS_UART1) == static_cast<int>(IDX_UART1), "PHYS_UART1 must match IDX_UART1");
-#if defined(BOARD_MINIKIT_ESP32)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
 static_assert(static_cast<int>(PHYS_BT) == static_cast<int>(IDX_DEVICE5), "PHYS_BT must match IDX_DEVICE5");
 #endif
 

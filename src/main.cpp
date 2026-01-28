@@ -24,6 +24,9 @@
 #if defined(MINIKIT_BT_ENABLED)
 #include "bluetooth/bluetooth_spp.h"
 #endif
+#if defined(BLE_ENABLED)
+#include "bluetooth/bluetooth_ble.h"
+#endif
 #include "uart/uart_dma.h"
 #include "protocols/udp_sender.h"
 #include "circular_buffer.h"
@@ -57,7 +60,7 @@ SemaphoreHandle_t logMutex = NULL;
 
 // Function declarations
 void initPins();
-void detectMode();
+void detectWiFiMode();
 void initStandaloneMode();
 void initNetworkMode();
 void bootButtonISR();
@@ -203,15 +206,29 @@ void setup() {
     quickResetUpdateUptime();
 #endif
 
-    // Detect boot mode FIRST - quick reset check happens here
-    log_msg(LOG_INFO, "Detecting boot mode...");
-    detectMode();
-    log_msg(LOG_INFO, "Mode detected: %s", bridgeMode == BRIDGE_STANDALONE ? "Standalone" : "Network");
+    // Detect WiFi mode - quick reset check happens here
+    log_msg(LOG_INFO, "Detecting WiFi mode...");
+    detectWiFiMode();
+    log_msg(LOG_INFO, "WiFi mode: %s", bridgeMode == BRIDGE_STANDALONE ? "Disabled" : "Enabled");
 
 #if defined(MINIKIT_BT_ENABLED)
     // Initialize Bluetooth SPP AFTER mode detection
     // Quick reset = temp AP mode, BT skipped to save RAM for WiFi
     initDevice5Bluetooth();
+#endif
+
+#if defined(BLE_ENABLED)
+    // TEST: Staged init - BLE first, then WiFi
+    // TEST: Initialize BLE before WiFi to avoid memory spikes from overlapping init
+    initDevice5BLE();
+
+    // TEST: Wait for BLE to stabilize before WiFi init
+    // (NimBLE starts background task, ble_on_sync() called asynchronously)
+    log_msg(LOG_INFO, "TEST: Waiting 2s for BLE stabilization before WiFi...");
+    vTaskDelay(pdMS_TO_TICKS(2000));
+#ifdef DEBUG
+    // forceSerialLog("TEST: After BLE init, heap=%u (min=%u)", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+#endif
 #endif
 
     // Initialize TaskScheduler
@@ -242,6 +259,14 @@ void setup() {
         log_msg(LOG_ERROR, "Bluetooth SPP failed to initialize");
     }
 #endif
+#if defined(BLE_ENABLED)
+    // Log BLE status after network is up
+    if (bluetoothBLE) {
+        log_msg(LOG_INFO, "BLE active: %s", bluetoothBLE->getName());
+    } else if (config.device5_config.role != D5_NONE) {
+        log_msg(LOG_ERROR, "BLE failed to initialize");
+    }
+#endif
 
     log_msg(LOG_INFO, "Setup complete!");
 
@@ -263,7 +288,7 @@ void loop() {
 #endif
 
 #if defined(MINIKIT_BT_ENABLED)
-    // Track Bluetooth connection status for LED indication
+    // Track Bluetooth SPP connection status for LED indication
     static bool lastBtConnected = false;
     bool btConnected = (bluetoothSPP != nullptr && bluetoothSPP->isConnected());
     if (btConnected != lastBtConnected) {
@@ -273,6 +298,19 @@ void loop() {
             led_set_mode(LED_MODE_DATA_FLASH);
         }
         lastBtConnected = btConnected;
+    }
+#endif
+#if defined(BLE_ENABLED)
+    // Track BLE connection status for LED indication
+    static bool lastBleConnected = false;
+    bool bleConnected = (bluetoothBLE != nullptr && bluetoothBLE->isConnected());
+    if (bleConnected != lastBleConnected) {
+        if (bleConnected) {
+            led_set_mode(LED_MODE_BT_CONNECTED);
+        } else if (bridgeMode == BRIDGE_STANDALONE) {
+            led_set_mode(LED_MODE_DATA_FLASH);
+        }
+        lastBleConnected = bleConnected;
     }
 #endif
 
@@ -308,7 +346,7 @@ void initPins() {
     }
 }
 
-void detectMode() {
+void detectWiFiMode() {
 #if defined(BOARD_MINIKIT_ESP32)
     // MiniKit: quick reset ALWAYS forces temporary AP mode
     // (no BOOT button means no other way to regain access if Client mode fails)
@@ -374,9 +412,12 @@ void detectMode() {
     // and this code won't run at all.
 
     // Check for triple click (network mode)
-    log_msg(LOG_DEBUG, "Waiting for potential clicks...");
-    vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
-    log_msg(LOG_DEBUG, "Final click count: %d", systemState.clickCount);
+    // Only wait if at least one click detected (skip 500ms delay on normal boot)
+    if (BOOT_BUTTON_PIN >= 0 && systemState.clickCount > 0) {
+        log_msg(LOG_DEBUG, "Waiting for potential clicks...");
+        vTaskDelay(pdMS_TO_TICKS(500));  // Wait for possible triple-click
+        log_msg(LOG_DEBUG, "Final click count: %d", systemState.clickCount);
+    }
 
     if (systemState.clickCount >= WIFI_ACTIVATION_CLICKS) {
         log_msg(LOG_INFO, "Triple click detected - entering network mode");
@@ -385,6 +426,17 @@ void detectMode() {
         systemState.clickCount = 0;
         return;
     }
+
+#if defined(BLE_ENABLED) && !defined(BLE_WIFI_COEXIST_TEST)
+    // BLE and WiFi mutual exclusion (coexistence requires memory optimization)
+    // Checked AFTER triple-click and temp_net so user can always force network mode
+    // (initDevice5BLE() will skip BLE when isTemporaryNetwork is set)
+    if (config.device5_config.role != D5_NONE) {
+        log_msg(LOG_INFO, "BLE enabled - skipping WiFi (mutual exclusion)");
+        bridgeMode = BRIDGE_STANDALONE;
+        return;
+    }
+#endif
 
     log_msg(LOG_INFO, "Entering standalone mode");
     bridgeMode = BRIDGE_STANDALONE;
@@ -749,8 +801,8 @@ void createTasks() {
         needSenderTask = true;
     }
 
-#if defined(MINIKIT_BT_ENABLED)
-    // Device 5 Bluetooth SPP
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
+    // Device 5 Bluetooth (SPP or BLE)
     if (config.device5_config.role != D5_NONE) {
         needSenderTask = true;
     }

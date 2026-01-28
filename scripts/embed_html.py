@@ -2,27 +2,9 @@ Import("env")
 import os
 import re
 import gzip
-import subprocess
-import sys
 import hashlib
 import json
 from pathlib import Path
-
-# Try to import cssmin (only library actually used)
-try:
-    from cssmin import cssmin
-    MINIFY_AVAILABLE = True
-except ImportError:
-    print("cssmin not found. Installing...")
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "cssmin"])
-        from cssmin import cssmin
-        MINIFY_AVAILABLE = True
-        print("cssmin installed successfully")
-    except Exception as e:
-        print(f"Failed to install cssmin: {e}")
-        print("Proceeding without CSS minification...")
-        MINIFY_AVAILABLE = False
 
 print("\n" + "="*60)
 print("EMBED_HTML.PY SCRIPT STARTED!")
@@ -33,35 +15,26 @@ def strip_html_comments(content):
     # DOTALL flag makes . match newlines for multiline comments
     return re.sub(r'<!--(?!\[if)(?!<!).*?-->', '', content, flags=re.DOTALL)
 
-def minify_and_compress(content, content_type, filename):
-    """Minify CSS and gzip compress all content"""
+def gzip_compress(content, content_type, filename):
+    """Strip HTML comments and gzip compress content"""
     original_size = len(content.encode('utf-8'))
 
     # Strip HTML comments (safe operation that won't break code)
     if content_type == 'html':
         content = strip_html_comments(content)
 
-    # Only CSS minification is used (HTML/JS minifiers break code)
-    if MINIFY_AVAILABLE and content_type == 'css':
-        try:
-            content = cssmin(content)
-        except Exception as e:
-            print(f"  Warning: Failed to minify {filename}: {e}")
-    
-    minified_size = len(content.encode('utf-8'))
-    
+    processed_size = len(content.encode('utf-8'))
+
     # Gzip compress
     compressed_data = gzip.compress(content.encode('utf-8'), compresslevel=9)
     compressed_size = len(compressed_data)
-    
+
     # Calculate savings
-    minify_saving = ((original_size - minified_size) / original_size * 100) if original_size > 0 else 0
-    gzip_saving = ((minified_size - compressed_size) / minified_size * 100) if minified_size > 0 else 0
+    gzip_saving = ((processed_size - compressed_size) / processed_size * 100) if processed_size > 0 else 0
     total_saving = ((original_size - compressed_size) / original_size * 100) if original_size > 0 else 0
-    
-    print(f"    {filename}: {original_size}B → {minified_size}B → {compressed_size}B "
-          f"(minify: -{minify_saving:.1f}%, gzip: -{gzip_saving:.1f}%, total: -{total_saving:.1f}%)")
-    
+
+    print(f"    {filename}: {original_size}B → {compressed_size}B (gzip: -{gzip_saving:.1f}%, total: -{total_saving:.1f}%)")
+
     return compressed_data
 
 def write_compressed_constant(f, const_name, compressed_data):
@@ -226,7 +199,7 @@ def process_html_files(source, target, env):
             const_name = f"HTML_{html_file.stem.upper()}"
 
             # Minify and compress
-            compressed_data = minify_and_compress(content, 'html', html_file.name)
+            compressed_data = gzip_compress(content, 'html', html_file.name)
             
             # Write compressed constant
             write_compressed_constant(f, const_name, compressed_data)
@@ -234,7 +207,7 @@ def process_html_files(source, target, env):
         # Write CSS constant
         if css_content:
             print(f"  Processing style.css")
-            compressed_data = minify_and_compress(css_content, 'css', 'style.css')
+            compressed_data = gzip_compress(css_content, 'css', 'style.css')
             write_compressed_constant(f, 'CSS_STYLE', compressed_data)
         
         # Write JS constants
@@ -249,7 +222,7 @@ def process_html_files(source, target, env):
                 const_name = f"JS_{name_for_const.upper()}"
 
                 # Minify and compress
-                compressed_data = minify_and_compress(js_content, 'js', js_file.name)
+                compressed_data = gzip_compress(js_content, 'js', js_file.name)
 
                 # Write compressed constant
                 write_compressed_constant(f, const_name, compressed_data)

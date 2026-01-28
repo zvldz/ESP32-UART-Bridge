@@ -27,6 +27,20 @@ static bool writeJsonToFile(JsonDocument& doc) {
     return false;
 }
 
+// Validate string contains only printable ASCII (JSON-safe)
+static bool isValidAsciiString(const char* str, size_t maxLen) {
+    if (!str || str[0] == '\0') return false;
+    for (size_t i = 0; i < maxLen && str[i] != '\0'; i++) {
+        unsigned char c = str[i];
+        if (c < 32 || c > 126) return false;
+    }
+    return true;
+}
+
+// RTC validation limits (garbage detection after power loss)
+static const uint32_t MAX_VALID_UPTIME = 31536000;  // 1 year in seconds
+static const uint32_t MAX_VALID_HEAP = 1048576;     // 1MB
+
 // RTC variables for crash logging (survive reset but not power loss)
 RTC_NOINIT_ATTR uint32_t g_last_heap;
 RTC_NOINIT_ATTR uint32_t g_last_uptime;
@@ -97,12 +111,14 @@ void crashlog_check_and_save() {
         JsonObject newEntry = entries.add<JsonObject>();
         newEntry["num"] = totalCrashes;
         newEntry["reason"] = crashlog_get_reset_reason_string(reason);
-        newEntry["uptime"] = g_last_uptime;
-        newEntry["heap"] = g_last_heap;
-        newEntry["min_heap"] = g_min_heap;
 
-        // Save firmware version at crash time (not current version)
-        if (g_last_version[0] != '\0') {
+        // Validate RTC values (garbage if crash before first update or after power loss)
+        newEntry["uptime"] = (g_last_uptime <= MAX_VALID_UPTIME) ? g_last_uptime : 0;
+        newEntry["heap"] = (g_last_heap <= MAX_VALID_HEAP) ? g_last_heap : 0;
+        newEntry["min_heap"] = (g_min_heap <= MAX_VALID_HEAP) ? g_min_heap : 0;
+
+        // Save firmware version at crash time (validate to prevent JSON corruption)
+        if (isValidAsciiString(g_last_version, sizeof(g_last_version))) {
             newEntry["version"] = g_last_version;
         }
 
@@ -116,8 +132,8 @@ void crashlog_check_and_save() {
             snprintf(pc_buf, sizeof(pc_buf), "0x%08x", summary.exc_pc);
             panic["pc"] = pc_buf;
 
-            // Task name
-            if (summary.exc_task[0] != '\0') {
+            // Task name (validate to prevent JSON corruption from garbage memory)
+            if (isValidAsciiString(summary.exc_task, sizeof(summary.exc_task))) {
                 panic["task"] = summary.exc_task;
             }
 
@@ -181,16 +197,22 @@ String crashlog_get_json() {
         return getFallbackJson();
     }
 
-    String json = file.readString();
+    // Parse and re-serialize to ensure clean JSON output
+    // (raw file may contain control characters that break browser JSON.parse)
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file);
     file.close();
 
-    // Validate it's valid JSON
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, json);
     if (error) {
+        // File is corrupted - delete it and return empty
+        LittleFS.remove(CRASHLOG_FILE_PATH);
+        log_msg(LOG_WARNING, "Crashlog file corrupted, deleted: %s", error.c_str());
         return getFallbackJson();
     }
 
+    // Re-serialize to get clean JSON
+    String json;
+    serializeJson(doc, json);
     return json;
 }
 
