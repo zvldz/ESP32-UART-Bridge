@@ -37,6 +37,7 @@ static Task tUdpLoggerTask(100, TASK_FOREVER, nullptr);
 Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitoring - exported for external control
 Task tSbusRouterTick(10, TASK_FOREVER, nullptr);  // Every 10ms - exported for external control
 static Task tBroadcastUpdate(3000, TASK_FOREVER, nullptr);  // Update broadcast IP every 3s
+static Task tHeapMonitor(5000, TASK_FOREVER, nullptr);  // TEST: Heap monitor for BLE+PSRAM testing
 
 // Simple snapshot for LED comparison (not atomic)
 struct LedSnapshot {
@@ -164,6 +165,15 @@ void initializeScheduler() {
         }
     });
 
+#ifdef DEBUG
+    // TEST: Heap monitor for BLE+PSRAM testing
+    tHeapMonitor.set(5000, TASK_FOREVER, []{
+        // forceSerialLog("HEAP: %u/%u (min=%u) | PSRAM: %u/%u",
+        //     ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMinFreeHeap(),
+        //     ESP.getFreePsram(), ESP.getPsramSize());
+    });
+#endif
+
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
 
@@ -264,10 +274,12 @@ void initializeScheduler() {
     taskScheduler.addTask(tLedMonitor);
     taskScheduler.addTask(tSbusRouterTick);
     taskScheduler.addTask(tBroadcastUpdate);
+    taskScheduler.addTask(tHeapMonitor);
 
     // Enable basic tasks that run in all modes
     tSystemDiagnostics.enable();
     tCrashlogUpdate.enable();
+    tHeapMonitor.enable();  // TEST: BLE+PSRAM heap monitoring
 
     // Distribute tasks over time to prevent simultaneous execution
     // This prevents all tasks from running at t=0, t=30s, t=60s, etc.

@@ -1,6 +1,51 @@
 # CHANGELOG
 
+## v2.18.14
+
+### BLE Support
+- **NimBLE NUS**: BLE Nordic UART Service for S3 boards (`BLE_ENABLED` flag)
+  - New build environments: `zero_ble_production`, `zero_ble_debug`
+  - GATT server with NUS TX (notify) and RX (write) characteristics
+  - WiFi + BLE coexistence with staged init
+- **MP Plugin**: BLE device scan/select/connect via WinRT API
+  - DTR/RTS fix for ESP32-S3 native USB CDC (prevented reboot on port close)
+
+### Fixes
+- **Crashlog hardening**: RTC variable validation, ASCII string checks, JSON re-serialization
+- **embed_html.py**: Removed cssmin dependency, simplified to gzip-only compression
+- **Boot optimization**: Skip 500ms delay on normal boot (no click detected)
+- **Memory diagnostics**: New format `HEAP: free/total (min=X) | PSRAM: free/total`
+
+---
+
+## v2.18.13
+
+### MiniKit Build Split
+- **BT/no-BT variants**: MiniKit now has separate builds
+  - `minikit_bt_*` — with Classic Bluetooth SPP
+  - `minikit_*` — without Bluetooth (more free RAM for WiFi)
+- **New flag**: `MINIKIT_BT_ENABLED` for conditional BT compilation
+
+### Build System
+- **sdkconfig reorganization**: Moved to `sdkconfig/` directory for cleaner structure
+
+### Web UI Fixes
+- **Flow Control checkbox**: Fixed auto-enabling bug (string '0' was truthy)
+- **Type consistency**: All select/number fields now use strings for Alpine.js x-model compatibility
+- **MAVLink Routing checkbox**: Fixed visibility when switching to MAVLink protocol
+- **Dirty checking**: Fixed false positives from type mismatches (string vs number)
+- **Crash History**: Fixed "Loading..." text centering
+
+---
+
 ## v2.18.12
+
+### Web UI
+- **Alpine.js refactoring**: Complete rewrite using Alpine.js framework
+  - Reactive stores for app config, status, SBUS, crash history
+  - Cleaner code: 97 getElementById calls → ~15
+  - Split API: `/api/config` (static) + `/api/status` (polled)
+  - JSON body for POST requests (was form-urlencoded)
 
 ### SBUS Conversion
 - **OpenTX/EdgeTX compatible formula**: SBUS→µs conversion now matches radio display

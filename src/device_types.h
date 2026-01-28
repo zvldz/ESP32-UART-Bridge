@@ -60,8 +60,8 @@ enum Device4Role {
     D4_SBUS_UDP_RX = 4      // UDP→SBUS only
 };
 
-// Device 5 role (Bluetooth SPP - MiniKit with BT enabled)
-#if defined(MINIKIT_BT_ENABLED)
+// Device 5 role (Bluetooth - Classic SPP on MiniKit, BLE on S3)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
 enum Device5Role {
     D5_NONE = 0,
     D5_BT_BRIDGE = 1,      // Bluetooth bridge (Raw/MAVLink per protocolOptimization)
@@ -97,10 +97,10 @@ struct Device4Config {
     uint8_t udpSendRate;       // Send rate in Hz (10-70, default 50) for D4_SBUS_UDP_TX
 };
 
-// Device 5 Configuration (Bluetooth SPP - MiniKit with BT enabled)
+// Device 5 Configuration (Bluetooth - Classic SPP on MiniKit, BLE on S3)
 // Note: BT device name uses mDNS hostname (config.mdns_hostname)
-// Uses SSP "Just Works" pairing (no PIN required)
-#if defined(MINIKIT_BT_ENABLED)
+// Uses "Just Works" pairing (no PIN required)
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
 struct Device5Config {
     uint8_t role;           // Device5Role
     uint8_t btSendRate;     // Send rate in Hz for SBUS Text mode (10-70, default 50)
@@ -164,8 +164,8 @@ typedef struct {
     // SBUS settings
     bool sbusTimingKeeper;
 
-#if defined(MINIKIT_BT_ENABLED)
-    // Device 5 - Bluetooth SPP
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
+    // Device 5 - Bluetooth (Classic SPP or BLE)
     Device5Config device5_config;
 #endif
 } Config;

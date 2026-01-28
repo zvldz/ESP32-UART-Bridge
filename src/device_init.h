@@ -19,9 +19,14 @@ void initDevice3(uint8_t role);
 void initDevice2SBUS();
 void initDevice3SBUS();
 
-// Bluetooth SPP initialization (MiniKit only)
-#if defined(BOARD_MINIKIT_ESP32)
+// Bluetooth SPP initialization (MiniKit with BT enabled)
+#if defined(MINIKIT_BT_ENABLED)
 void initDevice5Bluetooth();
+#endif
+
+// BLE initialization (S3 boards with BLE enabled)
+#if defined(BLE_ENABLED)
+void initDevice5BLE();
 #endif
 
 // Initialize and log device configuration

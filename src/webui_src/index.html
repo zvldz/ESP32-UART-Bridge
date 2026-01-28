@@ -143,7 +143,7 @@
                     <span style="user-select: none; font-size: 18px;" x-text="$store.ui.crash ? '▼' : '▶'"></span>
                 </span>
             </h4>
-            <div x-show="$store.ui.crash" x-collapse x-init="if ($store.ui.crash) setTimeout(() => $store.crash.fetchAll(), 100)" style="overflow: hidden; margin-top: 10px;">
+            <div x-show="$store.ui.crash" x-collapse x-effect="if ($store.ui.crash && !$store.crash.loaded) $store.crash.fetchAll()" style="overflow: hidden; margin-top: 10px;">
                 <!-- Crash table (populated by CrashLog.updateTable) -->
                 <div class="log-container" style="height: auto; max-height: 400px;">
                     <table style="width: 100%; font-size: 12px;">
@@ -586,10 +586,10 @@
                                 </select>
                             </td>
                         </tr>
-                        <!-- Device 5 (MiniKit only) -->
+                        <!-- Device 5 (MiniKit BT or S3 BLE) -->
                         <tr x-show="$store.app.showDevice5" x-cloak>
                             <td><strong>Device 5</strong></td>
-                            <td>Bluetooth</td>
+                            <td x-text="$store.app.bleSupported ? 'BLE' : 'Bluetooth'">Bluetooth</td>
                             <td>
                                 <select name="device5_role" id="device5_role"
                                         x-model="$store.app.device5Role"
@@ -802,7 +802,7 @@
                                    style="text-transform: lowercase;"
                                    placeholder="esp-bridge-xxxx">
                             <small class="hint">ℹ️ Access via <strong><span x-text="$store.app.mdnsHostname || 'hostname'"></span>.local</strong> (a-z, 0-9, - only)</small>
-                            <small class="hint" x-show="$store.app.isMiniKit" style="margin-top: 0;">📶 Also used as Bluetooth device name (MiniKit)</small>
+                            <small class="hint" x-show="$store.app.btSupported || $store.app.bleSupported" style="margin-top: 0;">📶 Also used as <span x-text="$store.app.bleSupported ? 'BLE' : 'Bluetooth'"></span> device name</small>
                             <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
                         </div>
                     </div>

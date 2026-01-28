@@ -126,6 +126,21 @@
   - List of client IP addresses
   - IP of current web interface user
 
+- [ ] **Captive Portal redirect to mDNS** 🟡 MEDIUM PRIORITY
+  - Сейчас: Windows открывает msftconnecttest.com, редирект на `/`
+  - Проблема: URL в браузере остаётся msftconnecttest.com
+  - Решение: редирект на `http://{mdns_hostname}.local/`
+  - Файл: web_interface.cpp, handleNotFound()
+  - Нюанс: mDNS может не работать на старых устройствах, fallback на IP
+
+- [ ] **Browser Time Sync for Crashlog** 🟡 MEDIUM PRIORITY
+  - Get current time from browser when web UI is opened
+  - Store synced timestamp + millis() reference point
+  - Implement getCurrentTime() to calculate current time based on millis() delta
+  - Record real timestamp in crashlog (or 0 if browser was never opened)
+  - Useful for debugging crashes with actual date/time instead of just uptime
+  - No RTC required — time is "good enough" after first browser connection
+
 - [x] **Web UI Refactoring with Alpine.js** ✅ COMPLETED
 
   **Completed migration**:
@@ -266,10 +281,61 @@
   - [ ] GATT characteristic subscription for SBUS data
   - [ ] Parse SBUS/Text format → RC_CHANNELS_OVERRIDE
 
-  **Memory considerations:**
-  - S3 boards: ~70-76KB free → with NimBLE ~45-55KB free
-  - May require Scenario C (no WebServer in runtime) for stability
-  - Alternative: separate builds with/without BLE (`zero_ble_production`)
+  **Memory measurements (ESP32-S3 Zero, zero_ble_debug):**
+  ```
+  Baseline (no BLE, no WiFi):         ~143KB free heap (app only)
+  BLE only (standalone, no WiFi):     ~104KB free heap (BLE ~39KB)
+  WiFi + Web (no BLE, D5=NONE):       ~70KB free heap  (WiFi+Web ~73KB)
+  WiFi + BLE (coexistence):           ~3-4KB free heap (coex overhead ~28KB extra)
+  ```
+  - WiFi + BLE leaves insufficient memory for AsyncWebServer (~25KB needed)
+  - **Solution**: Skip BLE init during temporary AP mode (triple click)
+
+  **Staged init test results** (BLE first → 2s delay → WiFi):
+  ```
+  Heap during runtime:  ~8KB (stable)
+  Min heap recorded:    127 bytes (during init, recovers after)
+  PSRAM:               ~2.4KB used of 2MB (coexistence requires internal RAM)
+  ```
+  - WiFi+BLE coexistence **работает** — система стабильна после init
+  - Init — критический момент (heap падает до 127 байт, потом восстанавливается)
+  - Crash при совпадении нескольких аллокаций (веб-запрос + WiFi log + ...) — 8KB недостаточно
+  - WiFi driver при логировании падает если heap < ~300 байт (OOM при создании mutex)
+  - PSRAM практически не используется — WiFi/BLE требуют internal RAM
+
+  **Next steps** (оптимизация coexistence):
+  - [ ] Увеличить стабильный heap до ~20KB (сейчас ~8KB)
+  - [ ] Уменьшить min heap при init (сейчас 127 байт — слишком рискованно)
+  - [ ] Заменить фиксированную паузу 2s на proper wait (ble_on_sync callback)
+    - Текущий hack: `vTaskDelay(2000)` - работает но не гарантировано
+    - Proper fix: семафор/флаг `bleReady` который ble_on_sync() устанавливает
+    - В setup(): `while (!bleReady) vTaskDelay(10);` вместо фиксированной паузы
+    - Это даст точное ожидание готовности BLE перед стартом WiFi
+  - [ ] Профилировать что именно съедает память при init
+  - [ ] Fallback: отключить WiFi при активном BLE если оптимизация не поможет
+
+  **Web Interface Memory Optimization** (универсально для всех сборок):
+  - [ ] Уменьшить lwIP TCP буферы: `CONFIG_LWIP_TCP_SND_BUF_DEFAULT=1460`, `CONFIG_LWIP_TCP_WND_DEFAULT=1460`
+  - [ ] Inline JS в HTML: alpine.min.js + app.js встроить в index.html (embed_html.py)
+  - Эффект: ~24KB → ~3KB heap при загрузке web interface
+  - Минус: незначительное замедление первой загрузки (~50-100ms)
+  - Причина: браузер открывает 3-4 параллельных TCP соединения, каждое ~6KB lwIP буферов
+
+  **Staged init experiment** (для теста coexistence):
+  - Идея: инициализировать BLE первым, дать стабилизироваться, потом WiFi+Web
+  - Текущий порядок: WiFi → delay(500ms) → BLE
+  - Тестовый порядок: BLE → delay(2000ms) → WiFi+Web
+  - Цель: избежать пиков памяти от перекрывающихся инициализаций
+  - После init() NimBLE запускает фоновую задачу, ble_on_sync() вызывается асинхронно
+  - Delay нужен чтобы дать BLE полностью стабилизироваться перед WiFi
+    - Triple click → WiFi + Web works (BLE disabled) → configure device
+    - Normal boot → BLE works (WiFi disabled) → standalone SBUS bridge
+    - Permanent network + BLE → headless mode (UDP works, web unavailable)
+
+  **Likely restriction** (даже если WiFi+BLE стартуют):
+  - При активном D5 (BLE) блокировать D4 в веб-интерфейсе
+  - Автоматически отключать D4 если D5 != NONE
+  - BLE и UDP network вряд ли смогут работать одновременно — памяти на UDP буферы не хватит
 
   **Note**: Requires custom GCS plugin — no virtual COM port like Classic SPP.
   Plugin already needed for RC Override, adding BLE transport is incremental work.
@@ -323,6 +389,9 @@ lib_deps =
     arkhipenko/TaskScheduler@^4.0.3   # Task scheduling
     ESP32Async/ESPAsyncWebServer@^3.9.1  # Async web server
     ESP32Async/AsyncTCP@^3.4.9        # TCP support for async server
+
+# BLE builds only (zero_ble_*, supermini_ble_*, xiao_ble_*):
+    h2zero/NimBLE-Arduino@^2.3.2      # BLE stack for Nordic UART Service
 ```
 
 

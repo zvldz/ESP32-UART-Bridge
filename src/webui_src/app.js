@@ -45,6 +45,8 @@ document.addEventListener('alpine:init', () => {
         usbHostSupported: false,
         uart2Available: true,
         sbusMavlinkEnabled: false,
+        btSupported: false,
+        bleSupported: false,
 
         // Device roles (from saved config)
         device1Role: '0',
@@ -182,9 +184,9 @@ document.addEventListener('alpine:init', () => {
             return this.boardType === 'minikit' || this.boardType === 'minikit_bt';
         },
 
-        // Computed: show Device 5 row (MiniKit BT only)
+        // Computed: show Device 5 row (BT Classic or BLE enabled)
         get showDevice5() {
-            return this.boardType === 'minikit_bt';
+            return this.btSupported || this.bleSupported;
         },
 
         // Computed: show Auto Broadcast checkbox (Client mode + TX role)
@@ -432,6 +434,8 @@ document.addEventListener('alpine:init', () => {
                 this.usbHostSupported = data.usbHostSupported ?? true;
                 this.uart2Available = data.uart2Available ?? true;
                 this.sbusMavlinkEnabled = data.sbusMavlinkEnabled ?? false;
+                this.btSupported = data.btSupported ?? false;
+                this.bleSupported = data.bleSupported ?? false;
 
                 // Device roles
                 this.device1Role = String(data.device1Role ?? '0');
@@ -886,7 +890,9 @@ document.addEventListener('alpine:init', () => {
                 's3supermini': 'ESP32-S3 Super Mini',
                 'minikit': 'ESP32 MiniKit',
                 'minikit_bt': 'ESP32 MiniKit BT',
-                's3zero': 'ESP32-S3-Zero'
+                'minikit_ble': 'ESP32 MiniKit BLE',
+                's3zero': 'ESP32-S3-Zero',
+                's3zero_ble': 'ESP32-S3-Zero BLE'
             };
             return names[boardType] || 'ESP32-S3-Zero';
         },

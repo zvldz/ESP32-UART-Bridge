@@ -23,6 +23,11 @@
 #include <esp_mac.h>
 #endif
 
+#if defined(BLE_ENABLED)
+#include "bluetooth/bluetooth_ble.h"
+#include <esp_mac.h>
+#endif
+
 // External objects from main.cpp
 extern Config config;
 
@@ -385,6 +390,49 @@ void initDevice5Bluetooth() {
 }
 #endif
 
+#if defined(BLE_ENABLED)
+// Initialize Device 5 as BLE (Nordic UART Service)
+void initDevice5BLE() {
+    // forceSerialLog("BLE: initDevice5BLE() called, role=%d", config.device5_config.role);
+
+    if (config.device5_config.role == D5_NONE) {
+        // forceSerialLog("BLE: role=D5_NONE, skipping");
+        return;
+    }
+
+    // TEST: Skip BLE during temporary AP mode to save memory for WebServer
+    // (WiFi + BLE together leave only ~3KB free, not enough for AsyncWebServer)
+    extern SystemState systemState;
+    if (systemState.isTemporaryNetwork) {
+        // forceSerialLog("BLE: temp AP mode, skipping");
+        return;
+    }
+
+    // Use mDNS hostname for BLE name (same name across network and BLE)
+    String bleName = config.mdns_hostname;
+    if (bleName.isEmpty()) {
+        // Fallback: generate from MAC if mDNS hostname not set
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_BT);
+        char name[32];
+        snprintf(name, sizeof(name), "esp-bridge-%02x%02x", mac[4], mac[5]);
+        bleName = name;
+    }
+
+    // Create and initialize BLE NUS ("Just Works" pairing)
+    // forceSerialLog("BLE: calling init(%s)", bleName.c_str());
+    bluetoothBLE = new BluetoothBLE();
+    if (bluetoothBLE->init(bleName.c_str())) {
+        const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";
+        log_msg(LOG_INFO, "Device 5 BLE initialized: %s (role: %s)", bleName.c_str(), roleStr);
+    } else {
+        delete bluetoothBLE;
+        bluetoothBLE = nullptr;
+        log_msg(LOG_ERROR, "Failed to initialize Device 5 BLE");
+    }
+}
+#endif
+
 // Helper to check if any SBUS device is configured
 bool hasSbusDevice() {
     return (config.device1.role == D1_SBUS_IN ||
@@ -470,16 +518,31 @@ void registerSbusOutputs() {
     }
 
 #if defined(MINIKIT_BT_ENABLED)
-    // Register Device5 Bluetooth SBUS text output
+    // Register Device5 Bluetooth SPP SBUS text output
     if (config.device5_config.role == D5_BT_SBUS_TEXT) {
         PacketSender* sender = pipeline->getSender(IDX_DEVICE5);
         if (sender) {
             router->registerOutput(sender);
             // Pre-allocate conversion buffer early (before WiFi fully active)
             router->allocateConvertBuffer();
-            log_msg(LOG_INFO, "Device5 BT SBUS text output registered");
+            log_msg(LOG_INFO, "Device5 BT SPP SBUS text output registered");
         } else {
             log_msg(LOG_ERROR, "Failed to get Device5 sender for BT SBUS output");
+        }
+    }
+#endif
+
+#if defined(BLE_ENABLED)
+    // Register Device5 BLE SBUS text output
+    if (config.device5_config.role == D5_BT_SBUS_TEXT) {
+        PacketSender* sender = pipeline->getSender(IDX_DEVICE5);
+        if (sender) {
+            router->registerOutput(sender);
+            // Pre-allocate conversion buffer early (before WiFi fully active)
+            router->allocateConvertBuffer();
+            log_msg(LOG_INFO, "Device5 BLE SBUS text output registered");
+        } else {
+            log_msg(LOG_ERROR, "Failed to get Device5 sender for BLE SBUS output");
         }
     }
 #endif
@@ -516,12 +579,23 @@ void initDevices() {
     }
 #endif
 
+#if defined(BLE_ENABLED)
+    // Device 5 (BLE)
+    if (config.device5_config.role != D5_NONE) {
+        const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";
+        log_msg(LOG_INFO, "- Device 5: BLE (%s)", roleStr);
+    } else {
+        log_msg(LOG_INFO, "- Device 5: Disabled");
+    }
+#endif
+
     // Log logging configuration
     log_msg(LOG_INFO, "Logging configuration:");
     log_msg(LOG_INFO, "- Web logs: %s", getLogLevelName(config.log_level_web));
     log_msg(LOG_INFO, "- UART logs: %s%s", getLogLevelName(config.log_level_uart),
             config.device3.role == D3_UART3_LOG ? " (Device 3)" : " (inactive)");
-    log_msg(LOG_INFO, "- Network logs: %s (future)", getLogLevelName(config.log_level_network));
+    log_msg(LOG_INFO, "- Network logs: %s%s", getLogLevelName(config.log_level_network),
+            config.device4.role == D4_LOG_NETWORK ? " (Device 4)" : " (inactive)");
 
     // Initialize SBUS Router if any SBUS device is configured
     if (hasSbusDevice()) {
