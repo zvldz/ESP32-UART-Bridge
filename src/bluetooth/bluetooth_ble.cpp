@@ -22,11 +22,19 @@ extern "C" bool btInUse() { return true; }
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
+#include "store/config/ble_store_config.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
 // GATT service definitions (in C file for NimBLE compatibility)
 #include "bluetooth_ble_gatt.h"
+
+// Not declared in public header, but required for NVS bond persistence
+// (same approach as official ESP-IDF bleprph example)
+extern "C" void ble_store_config_init(void);
+
+// Static passkey for BLE pairing (displayed on "screen" / known to user)
+#define BLE_STATIC_PASSKEY 1234
 
 // Global instance
 BluetoothBLE* bluetoothBLE = nullptr;
@@ -48,8 +56,10 @@ static void ble_rx_callback_wrapper(const uint8_t* data, size_t len) {
 static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT:
+            log_msg(LOG_INFO, "BLE: Connect event, status=%d", event->connect.status);
             if (event->connect.status == 0) {
-                // Connected
+                // Bonded devices restore encryption automatically via stored keys
+                // security_initiate() is not needed and causes race conditions
                 if (bluetoothBLE) {
                     bluetoothBLE->onConnect(event->connect.conn_handle);
                 }
@@ -60,6 +70,7 @@ static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
             break;
 
         case BLE_GAP_EVENT_DISCONNECT:
+            log_msg(LOG_INFO, "BLE: Disconnect, reason=%d", event->disconnect.reason);
             if (bluetoothBLE) {
                 bluetoothBLE->onDisconnect(event->disconnect.conn.conn_handle,
                                            event->disconnect.reason);
@@ -76,13 +87,40 @@ static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
             break;
 
         case BLE_GAP_EVENT_SUBSCRIBE:
-            // log_msg in NimBLE callbacks disabled for WiFi+BLE stability test
-            // log_msg(LOG_DEBUG, "BLE: Subscribe event, cur_notify=%d", event->subscribe.cur_notify);
+        case BLE_GAP_EVENT_MTU:
             break;
 
-        case BLE_GAP_EVENT_MTU:
-            // log_msg(LOG_DEBUG, "BLE: MTU updated to %d", event->mtu.value);
+        case BLE_GAP_EVENT_ENC_CHANGE:
+            log_msg(LOG_INFO, "BLE: Encryption change, status=%d", event->enc_change.status);
             break;
+
+        case BLE_GAP_EVENT_PASSKEY_ACTION: {
+            // Client requests pairing — provide static passkey
+            struct ble_sm_io pkey = {0};
+            pkey.action = event->passkey.params.action;
+            log_msg(LOG_DEBUG, "BLE: Passkey action=%d", pkey.action);
+
+            if (pkey.action == BLE_SM_IOACT_DISP) {
+                // Display passkey for user to enter on the client
+                pkey.passkey = BLE_STATIC_PASSKEY;
+                int rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
+                log_msg(LOG_DEBUG, "BLE: Passkey inject rc=%d", rc);
+            } else if (pkey.action == BLE_SM_IOACT_NUMCMP) {
+                // Numeric comparison — auto-confirm
+                pkey.numcmp_accept = 1;
+                ble_sm_inject_io(event->passkey.conn_handle, &pkey);
+                log_msg(LOG_DEBUG, "BLE: Numcmp auto-accepted");
+            }
+            break;
+        }
+
+        case BLE_GAP_EVENT_REPEAT_PAIRING: {
+            // Already bonded device wants to re-pair — delete old bond and allow
+            struct ble_gap_conn_desc desc;
+            ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+            ble_store_util_delete_peer(&desc.peer_id_addr);
+            return BLE_GAP_REPEAT_PAIRING_RETRY;
+        }
 
         default:
             break;
@@ -95,8 +133,6 @@ static void ble_advertise(void) {
     struct ble_gap_adv_params adv_params;
     struct ble_hs_adv_fields fields;
     int rc;
-
-    // forceSerialLog("BLE: ble_advertise() called");
 
     memset(&fields, 0, sizeof(fields));
 
@@ -114,7 +150,6 @@ static void ble_advertise(void) {
     fields.name_is_complete = 1;
 
     rc = ble_gap_adv_set_fields(&fields);
-    // forceSerialLog("BLE: adv_set_fields rc=%d", rc);
     if (rc != 0) {
         return;
     }
@@ -128,17 +163,21 @@ static void ble_advertise(void) {
 
     rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
                            &adv_params, ble_gap_event_handler, NULL);
-    // forceSerialLog("BLE: adv_start rc=%d", rc);
+    log_msg(LOG_DEBUG, "BLE: adv_start rc=%d", rc);
 }
 
 // Called when BLE host syncs with controller
 static void ble_on_sync(void) {
-    // forceSerialLog("BLE: ble_on_sync() called");
+    log_msg(LOG_DEBUG, "BLE: ble_on_sync() called");
+
+    // Log bond count restored from NVS
+    int bond_count = 0;
+    ble_store_util_count(BLE_STORE_OBJ_TYPE_OUR_SEC, &bond_count);
+    log_msg(LOG_INFO, "BLE: on_sync, %d bonds in NVS", bond_count);
 
     // Infer best address type to use
     uint8_t own_addr_type;
     int rc = ble_hs_id_infer_auto(0, &own_addr_type);
-    // forceSerialLog("BLE: infer_auto rc=%d", rc);
     if (rc != 0) {
         return;
     }
@@ -149,12 +188,11 @@ static void ble_on_sync(void) {
 
 // Called on BLE host reset
 static void ble_on_reset(int reason) {
-    // forceSerialLog("BLE: on_reset reason=%d", reason);
+    log_msg(LOG_WARNING, "BLE: on_reset reason=%d", reason);
 }
 
 // NimBLE host task
 static void ble_host_task(void* param) {
-    // forceSerialLog("BLE: host_task started");
     (void)param;
     nimble_port_run();  // This returns only when nimble_port_stop() is called
     nimble_port_freertos_deinit();
@@ -191,14 +229,14 @@ bool BluetoothBLE::init(const char* name) {
         log_msg(LOG_ERROR, "BLE: NVS init failed, err=%d", ret);
         return false;
     }
-    // forceSerialLog("BLE: NVS ok, target=%s", CONFIG_IDF_TARGET);
+    log_msg(LOG_INFO, "BLE: NVS ok, target=%s", CONFIG_IDF_TARGET);
 
     // ESP32 (WROOM): btInUse() override above prevents Arduino from releasing BT memory
     // nimble_port_init() will handle controller init internally
 
     // Initialize NimBLE (handles controller init internally)
     ret = nimble_port_init();
-    // forceSerialLog("BLE: nimble_port_init ret=%d", ret);
+    log_msg(LOG_INFO, "BLE: nimble_port_init ret=%d", ret);
     if (ret != ESP_OK) {
         log_msg(LOG_ERROR, "BLE: nimble_port_init failed, err=%d", ret);
         return false;
@@ -207,6 +245,15 @@ bool BluetoothBLE::init(const char* name) {
     // Configure host callbacks
     ble_hs_cfg.sync_cb = ble_on_sync;
     ble_hs_cfg.reset_cb = ble_on_reset;
+    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+
+    // Security Manager: require PIN pairing (MITM protection)
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_DISP_ONLY;
+    ble_hs_cfg.sm_bonding = 1;
+    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_sc = 1;
+    ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 
     // Initialize GAP and GATT services
     ble_svc_gap_init();
@@ -231,15 +278,20 @@ bool BluetoothBLE::init(const char* name) {
         return false;
     }
 
+    // Initialize NVS bond persistence and register storage callbacks
+    // (restores saved bonds from NVS and sets read/write/delete callbacks)
+    ble_store_config_init();
+    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
+
     // Start NimBLE host task
     nimble_port_freertos_init(ble_host_task);
-    // forceSerialLog("BLE: nimble_port_freertos_init done");
+    log_msg(LOG_DEBUG, "BLE: nimble_port_freertos_init done");
 
     // Store TX handle for notifications (from C file)
     txAttrHandle = g_nus_tx_attr_handle;
 
     initialized = true;
-    // forceSerialLog("BLE: init() completed");
+    log_msg(LOG_INFO, "BLE: init() completed");
 
     return true;
 }
@@ -266,8 +318,6 @@ void BluetoothBLE::deinit() {
 void BluetoothBLE::onConnect(uint16_t handle) {
     connHandle = handle;
     connected = true;
-    // log_msg in NimBLE callbacks disabled for WiFi+BLE stability test
-    // log_msg(LOG_INFO, "BLE: Client connected (handle=%d)", handle);
 }
 
 void BluetoothBLE::onDisconnect(uint16_t handle, int reason) {
@@ -275,18 +325,9 @@ void BluetoothBLE::onDisconnect(uint16_t handle, int reason) {
     (void)reason;
     connected = false;
     connHandle = 0;
-    // log_msg in NimBLE callbacks disabled for WiFi+BLE stability test
-    // log_msg(LOG_INFO, "BLE: Client disconnected (reason=%d)", reason);
 }
 
 void BluetoothBLE::onRxData(const uint8_t* data, size_t len) {
-    // TODO: remove after full BLE bridge implementation
-    // // Ping/pong test
-    // if (len == 4 && memcmp(data, "ping", 4) == 0) {
-    //     write((const uint8_t*)"pong", 4);
-    //     return;
-    // }
-
     rxBytes += len;
 
     // Use external buffer if set (pipeline integration)
@@ -307,7 +348,6 @@ void BluetoothBLE::onRxData(const uint8_t* data, size_t len) {
             rxBuffer[rxHead] = data[i];
             rxHead = nextHead;
         } else {
-            // log_msg in NimBLE callbacks disabled for WiFi+BLE stability test
             // log_msg(LOG_WARNING, "BLE: RX buffer full, dropped %zu bytes", len - i);
             break;
         }
@@ -325,7 +365,6 @@ size_t BluetoothBLE::write(const uint8_t* data, size_t len) {
 
         struct os_mbuf* om = ble_hs_mbuf_from_flat(data + totalSent, chunkSize);
         if (om == NULL) {
-            // log_msg in NimBLE callbacks disabled for WiFi+BLE stability test
             // log_msg(LOG_ERROR, "BLE: Failed to allocate mbuf");
             break;
         }

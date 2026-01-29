@@ -1,6 +1,10 @@
 // RcOverride_v2_BLE.cs
 // Mission Planner plugin: read "RC <16 pwm values>" from COM port, UDP or BLE
 // and send RC_OVERRIDE via MAVLink.
+//
+// WARNING: This plugin uses Windows.Devices.Bluetooth (WinRT) for BLE support.
+// It must be compiled as a DLL with WinRT SDK references.
+// Copying this .cs file directly to Mission Planner plugins folder will NOT work.
 
 using System;
 using System.Drawing;
@@ -56,6 +60,7 @@ namespace RcOverride_BLE
         private static readonly Guid NUS_RX_CHAR_UUID = new Guid("6E400002-B5A3-F393-E0A9-E50E24DCCA9E");  // Write (PC->ESP)
 
         private BluetoothLEDevice _bleDevice;
+        private GattDeviceService _bleService;
         private GattCharacteristic _bleTxCharacteristic;
         private string _selectedBleDeviceId;
         private List<DeviceInformation> _bleDevices = new List<DeviceInformation>();
@@ -137,6 +142,9 @@ namespace RcOverride_BLE
                 return true;
             }
 
+            // Update LED before vehicle check (so LED blinks even without telemetry)
+            UpdateLed(DateTime.UtcNow);
+
             if (!IsVehicleReady())
                 return true;
 
@@ -212,7 +220,6 @@ namespace RcOverride_BLE
             string incoming = _port.ReadExisting();
             if (!string.IsNullOrEmpty(incoming))
             {
-                Console.WriteLine("[RC] Serial RX: {0} bytes", incoming.Length);
                 _buffer.Append(incoming);
                 _lastDataTime = DateTime.UtcNow;
 
@@ -344,23 +351,35 @@ namespace RcOverride_BLE
 
             if (!connected)
             {
-                SetLedColor(Color.Red);
+                // Check if there's something to connect to
+                bool hasTarget = false;
+                if (_sourceMode == SourceMode.BLE)
+                    hasTarget = !string.IsNullOrEmpty(_selectedBleDeviceId);
+                else if (_sourceMode == SourceMode.UDP)
+                    hasTarget = true;
+                else
+                    hasTarget = !string.IsNullOrEmpty(_currentPortName) &&
+                                !string.Equals(_currentPortName, "No ports", StringComparison.OrdinalIgnoreCase);
+
+                if (hasTarget)
+                {
+                    // Trying to connect — blink red (~1Hz)
+                    bool blink = (now.Millisecond / 500) % 2 == 0;
+                    SetLedColor(blink ? Color.Red : Color.DarkGray);
+                }
+                else
+                {
+                    // Nothing to connect to
+                    SetLedColor(Color.DarkGray);
+                }
                 return;
             }
 
-            // Green if we received a packet within LED_TIMEOUT_MS, otherwise red
+            // Connected: green if data flowing, orange if connected but no data, red stays for errors
             if (_lastPacketTime != DateTime.MinValue && (now - _lastPacketTime).TotalMilliseconds < LED_TIMEOUT_MS)
-            {
                 SetLedColor(Color.LimeGreen);
-            }
             else
-            {
-                SetLedColor(Color.Red);
-            }
-
-            // Lock port/source selection when connected (prevent accidental changes)
-            if (_cmbPort != null) _cmbPort.Enabled = !connected;
-            if (_cmbSource != null) _cmbSource.Enabled = !connected;
+                SetLedColor(Color.Orange);
         }
 
         // ---------------------------------------------------------------
@@ -603,19 +622,13 @@ namespace RcOverride_BLE
                 return;
 
             if (string.IsNullOrEmpty(_selectedBleDeviceId))
-            {
-                Console.WriteLine("[RC] BLE: EnsureBle - no device selected (_selectedBleDeviceId is null/empty)");
                 return;
-            }
 
             // Rate limit connection attempts
             var now = DateTime.UtcNow;
             var elapsed = (now - _lastPortOpenAttempt).TotalMilliseconds;
             if (elapsed < PORT_RETRY_INTERVAL_MS)
-            {
-                Console.WriteLine("[RC] BLE: EnsureBle - rate limited, elapsed={0}ms", elapsed);
                 return;
-            }
             _lastPortOpenAttempt = now;
 
             Console.WriteLine("[RC] BLE: EnsureBle - attempting connection to " + _selectedBleDeviceId);
@@ -645,10 +658,10 @@ namespace RcOverride_BLE
                     return;
                 }
 
-                var nusService = servicesResult.Services[0];
+                _bleService = servicesResult.Services[0];
 
                 // Get TX characteristic (notifications from ESP)
-                var charsResult = await nusService.GetCharacteristicsForUuidAsync(NUS_TX_CHAR_UUID);
+                var charsResult = await _bleService.GetCharacteristicsForUuidAsync(NUS_TX_CHAR_UUID);
                 if (charsResult.Status != GattCommunicationStatus.Success || charsResult.Characteristics.Count == 0)
                 {
                     Console.WriteLine("[RC] BLE: TX characteristic not found");
@@ -713,7 +726,21 @@ namespace RcOverride_BLE
                 if (_bleTxCharacteristic != null)
                 {
                     _bleTxCharacteristic.ValueChanged -= BleCharacteristic_ValueChanged;
+
+                    // Unsubscribe from notifications (fire-and-forget, Dispose handles disconnect)
+                    try
+                    {
+                        _ = _bleTxCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                            GattClientCharacteristicConfigurationDescriptorValue.None);
+                    }
+                    catch { }
                 }
+            }
+            catch { }
+
+            try
+            {
+                _bleService?.Dispose();
             }
             catch { }
 
@@ -725,6 +752,7 @@ namespace RcOverride_BLE
             finally
             {
                 _bleTxCharacteristic = null;
+                _bleService = null;
                 _bleDevice = null;
             }
         }
@@ -736,36 +764,42 @@ namespace RcOverride_BLE
 
             try
             {
-                Console.WriteLine("[RC] BLE: Scanning for BLE devices...");
+                Console.WriteLine("[RC] BLE: Looking for paired BLE devices...");
 
-                // Find all paired and unpaired BLE devices
-                // GetDeviceSelectorFromPairingState(false) = unpaired, true = paired
-                // We search both to find ESP device
-                string selectorPaired = BluetoothLEDevice.GetDeviceSelectorFromPairingState(true);
-                string selectorUnpaired = BluetoothLEDevice.GetDeviceSelectorFromPairingState(false);
-
-                var pairedDevices = await DeviceInformation.FindAllAsync(selectorPaired);
-                var unpairedDevices = await DeviceInformation.FindAllAsync(selectorUnpaired);
+                // Only show paired devices that have NUS service
+                string selector = BluetoothLEDevice.GetDeviceSelectorFromPairingState(true);
+                var pairedDevices = await DeviceInformation.FindAllAsync(selector);
 
                 foreach (var device in pairedDevices)
                 {
-                    if (!string.IsNullOrEmpty(device.Name))
+                    if (string.IsNullOrEmpty(device.Name))
+                        continue;
+
+                    // Check if device has NUS service
+                    try
                     {
-                        _bleDevices.Add(device);
-                        Console.WriteLine("[RC] BLE: Found paired " + device.Name + " (" + device.Id + ")");
+                        using (var bleDevice = await BluetoothLEDevice.FromIdAsync(device.Id))
+                        {
+                            if (bleDevice == null) continue;
+                            var services = await bleDevice.GetGattServicesForUuidAsync(NUS_SERVICE_UUID);
+                            if (services.Status != GattCommunicationStatus.Success || services.Services.Count == 0)
+                            {
+                                Console.WriteLine("[RC] BLE: Skipping " + device.Name + " (no NUS service)");
+                                continue;
+                            }
+                        }
                     }
+                    catch
+                    {
+                        Console.WriteLine("[RC] BLE: Skipping " + device.Name + " (unreachable)");
+                        continue;
+                    }
+
+                    _bleDevices.Add(device);
+                    Console.WriteLine("[RC] BLE: Found " + device.Name + " (" + device.Id + ")");
                 }
 
-                foreach (var device in unpairedDevices)
-                {
-                    if (!string.IsNullOrEmpty(device.Name))
-                    {
-                        _bleDevices.Add(device);
-                        Console.WriteLine("[RC] BLE: Found unpaired " + device.Name + " (" + device.Id + ")");
-                    }
-                }
-
-                Console.WriteLine("[RC] BLE: Scan complete, found " + _bleDevices.Count + " devices");
+                Console.WriteLine("[RC] BLE: Found " + _bleDevices.Count + " NUS devices");
             }
             catch (Exception ex)
             {
@@ -926,10 +960,10 @@ namespace RcOverride_BLE
             _cmbBle.TabStop = false;
             _cmbBle.Location = new System.Drawing.Point(_cmbSource.Right + 5, 2);
             _cmbBle.Visible = false;  // Hidden by default (COM mode)
-            _cmbBle.Items.Add("Scan...");
+            _cmbBle.Items.Add("Refresh");
             _cmbBle.SelectedIndex = 0;
 
-            // Scan only when "Scan..." is selected (not on every dropdown open)
+            // Scan only when "Refresh" is selected (not on every dropdown open)
             _cmbBle.SelectedIndexChanged += (s, e) =>
             {
                 try
@@ -941,7 +975,7 @@ namespace RcOverride_BLE
                     int idx = _cmbBle.SelectedIndex;
                     Console.WriteLine("[RC] BLE: ComboBox idx=" + idx + ", _bleDevices.Count=" + _bleDevices.Count);
 
-                    // If "Scan..." selected, start scanning
+                    // If "Refresh" selected, start scanning
                     if (idx == 0)
                     {
                         if (_bleScanning) return;
@@ -950,8 +984,8 @@ namespace RcOverride_BLE
                         Console.WriteLine("[RC] BLE: Starting scan...");
                         _selectedBleDeviceId = null;
 
-                        // Show "Scanning..." while in progress
-                        _cmbBle.Items[0] = "Scanning...";
+                        // Show "Loading..." while in progress
+                        _cmbBle.Items[0] = "Loading...";
 
                         Task.Run(async () =>
                         {
@@ -976,7 +1010,7 @@ namespace RcOverride_BLE
                         return;
                     }
 
-                    var device = _bleDevices[idx - 1];  // -1 because first item is "Scan..."
+                    var device = _bleDevices[idx - 1];  // -1 because first item is "Refresh"
                     _selectedBleDeviceId = device.Id;
                     Console.WriteLine("[RC] BLE: Selected " + device.Name + " id=" + device.Id);
                     CloseBle();
@@ -1134,7 +1168,7 @@ namespace RcOverride_BLE
                 string currentSelection = _selectedBleDeviceId;
 
                 _cmbBle.Items.Clear();
-                _cmbBle.Items.Add("Scan...");
+                _cmbBle.Items.Add("Refresh");
 
                 if (_bleDevices.Count == 0)
                 {
@@ -1150,7 +1184,7 @@ namespace RcOverride_BLE
                     _cmbBle.Items.Add(name);
 
                     if (device.Id == currentSelection)
-                        selectedIdx = i + 1;  // +1 because "Scan..." is at index 0
+                        selectedIdx = i + 1;  // +1 because "Refresh" is at index 0
                 }
 
                 _cmbBle.SelectedIndex = selectedIdx;
