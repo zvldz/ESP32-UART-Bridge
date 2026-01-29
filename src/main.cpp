@@ -218,17 +218,7 @@ void setup() {
 #endif
 
 #if defined(BLE_ENABLED)
-    // TEST: Staged init - BLE first, then WiFi
-    // TEST: Initialize BLE before WiFi to avoid memory spikes from overlapping init
     initDevice5BLE();
-
-    // TEST: Wait for BLE to stabilize before WiFi init
-    // (NimBLE starts background task, ble_on_sync() called asynchronously)
-    log_msg(LOG_INFO, "TEST: Waiting 2s for BLE stabilization before WiFi...");
-    vTaskDelay(pdMS_TO_TICKS(2000));
-#ifdef DEBUG
-    // forceSerialLog("TEST: After BLE init, heap=%u (min=%u)", ESP.getFreeHeap(), ESP.getMinFreeHeap());
-#endif
 #endif
 
     // Initialize TaskScheduler
@@ -426,17 +416,6 @@ void detectWiFiMode() {
         systemState.clickCount = 0;
         return;
     }
-
-#if defined(BLE_ENABLED) && !defined(BLE_WIFI_COEXIST_TEST)
-    // BLE and WiFi mutual exclusion (coexistence requires memory optimization)
-    // Checked AFTER triple-click and temp_net so user can always force network mode
-    // (initDevice5BLE() will skip BLE when isTemporaryNetwork is set)
-    if (config.device5_config.role != D5_NONE) {
-        log_msg(LOG_INFO, "BLE enabled - skipping WiFi (mutual exclusion)");
-        bridgeMode = BRIDGE_STANDALONE;
-        return;
-    }
-#endif
 
     log_msg(LOG_INFO, "Entering standalone mode");
     bridgeMode = BRIDGE_STANDALONE;

@@ -234,12 +234,17 @@
                 </div>
 
                 <div class="success" style="margin-top: 15px;">
-                    <strong>📶 Device 5 - Bluetooth SPP (MiniKit only):</strong><br>
-                    - <strong>Bridge:</strong> MAVLink/Raw telemetry to Android apps (QGC, Tower)<br>
+                    <strong>📶 Device 5 - Bluetooth</strong> (requires BLE or BT firmware variant)<strong>:</strong><br>
+                    - <strong>Bridge:</strong> MAVLink/Raw telemetry to Android apps (QGC, Tower, Mission Planner)<br>
                     - <strong>SBUS Text Output:</strong> Text format for Mission Planner RC Override plugin<br>
-                    - Uses SSP "Just Works" pairing (no PIN required)<br>
-                    - BT device name matches mDNS hostname<br>
-                    - Available only on MiniKit (WROOM-32 has Bluetooth Classic)
+                    - Device name matches mDNS hostname<br><br>
+                    <strong>BLE (all boards):</strong><br>
+                    - NUS (Nordic UART Service) — hardcoded passkey 1234<br>
+                    - Works together with WiFi<br>
+                    - Firmware update via USB may erase bonds (re-pairing required). OTA preserves bonds.<br><br>
+                    <strong>Bluetooth Classic SPP (MiniKit only):</strong><br>
+                    - SSP "Just Works" pairing (no PIN)<br>
+                    - ⚠️ Classic BT disables WiFi (mutual exclusion on WROOM-32). Use BLE build for BT + WiFi.
                 </div>
             </div>
         </div>

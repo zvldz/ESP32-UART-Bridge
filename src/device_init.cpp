@@ -393,20 +393,16 @@ void initDevice5Bluetooth() {
 #if defined(BLE_ENABLED)
 // Initialize Device 5 as BLE (Nordic UART Service)
 void initDevice5BLE() {
-    // forceSerialLog("BLE: initDevice5BLE() called, role=%d", config.device5_config.role);
-
     if (config.device5_config.role == D5_NONE) {
-        // forceSerialLog("BLE: role=D5_NONE, skipping");
         return;
     }
 
-    // TEST: Skip BLE during temporary AP mode to save memory for WebServer
-    // (WiFi + BLE together leave only ~3KB free, not enough for AsyncWebServer)
-    extern SystemState systemState;
-    if (systemState.isTemporaryNetwork) {
-        // forceSerialLog("BLE: temp AP mode, skipping");
-        return;
-    }
+    // BLE+WiFi coexistence confirmed on all platforms (S3: ~36KB min, MiniKit: ~16KB min)
+    // Uncomment to skip BLE during temp AP if memory issues arise on low-RAM boards
+    // if (quickResetDetected()) {
+    //     log_msg(LOG_INFO, "BLE: quick reset detected, skipping for temp AP");
+    //     return;
+    // }
 
     // Use mDNS hostname for BLE name (same name across network and BLE)
     String bleName = config.mdns_hostname;
@@ -419,8 +415,6 @@ void initDevice5BLE() {
         bleName = name;
     }
 
-    // Create and initialize BLE NUS ("Just Works" pairing)
-    // forceSerialLog("BLE: calling init(%s)", bleName.c_str());
     bluetoothBLE = new BluetoothBLE();
     if (bluetoothBLE->init(bleName.c_str())) {
         const char* roleStr = (config.device5_config.role == D5_BT_BRIDGE) ? "Bridge" : "SBUS Text";

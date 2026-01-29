@@ -3,12 +3,32 @@
 ## v2.18.14
 
 ### BLE Support
-- **NimBLE NUS**: BLE Nordic UART Service for S3 boards (`BLE_ENABLED` flag)
-  - New build environments: `zero_ble_production`, `zero_ble_debug`
+- **NimBLE NUS**: BLE Nordic UART Service for all boards (`BLE_ENABLED` flag)
+  - Build environments: `zero_ble_*`, `supermini_ble_*`, `xiao_ble_*`, `minikit_ble_*`
   - GATT server with NUS TX (notify) and RX (write) characteristics
-  - WiFi + BLE coexistence with staged init
-- **MP Plugin**: BLE device scan/select/connect via WinRT API
+  - WiFi + BLE coexistence confirmed on ESP32-S3 (heap ~36KB min) and ESP32 MiniKit (heap ~16KB min)
+- **Security**: PIN pairing with hardcoded passkey 1234 (MITM protection)
+  - GATT characteristics require encryption + authentication
+  - Bond persistence in NVS (up to 10 bonds), repeat pairing auto-handled
+- **MiniKit BLE**: NimBLE ported to ESP32-WROOM-32 (BLE-only controller mode)
+  - Separate sdkconfig with LWIP/WiFi memory optimization for low-RAM environment
+- **MP Plugin**: BLE device scan/select/connect via WinRT API (compiled as DLL)
+  - Device list filtered by NUS service (only paired ESP-Bridge devices shown)
+  - LED: blink red (connecting), orange (no data), green (active), gray (no target)
+  - Proper BLE cleanup (service dispose, notification unsubscribe)
   - DTR/RTS fix for ESP32-S3 native USB CDC (prevented reboot on port close)
+
+### Code Cleanup
+- **BLE+WiFi coexistence**: Always enabled, mutual exclusion removed. Fallback skip commented in `device_init.cpp`
+- **BLE diagnostics**: Replaced `forceSerialLog` with `log_msg` at appropriate levels
+- **Removed**: `ble_dump_bonds()` debug function, `BLE_WIFI_COEXIST_TEST` flag
+- **Heap monitor**: Disabled by default, kept under `#ifdef DEBUG` for quick re-enable
+- **Build flags**: `-D DEBUG` commented out in all builds (uncomment for forceSerialLog)
+
+### Build & Release
+- **GitHub Actions**: Release includes `bootloader.bin`, `partitions.bin`, `firmware.bin` + `.elf` for each board
+- **BLE builds added**: `zero-ble`, `supermini-ble`, `xiao-ble`, `minikit-ble` (9 builds total)
+- **New sdkconfig files**: `supermini_ble_*`, `xiao_ble_*` (production + debug)
 
 ### Fixes
 - **Crashlog hardening**: RTC variable validation, ASCII string checks, JSON re-serialization

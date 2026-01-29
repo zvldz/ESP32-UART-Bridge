@@ -36,21 +36,7 @@ note.txt
 # Other
 old
 dependencies.lock
-sdkconfig.defaults
-sdkconfig.supermini_debug
-sdkconfig.supermini_production
-sdkconfig.zero_debug
-sdkconfig.zero_production
-sdkconfig.xiao_debug
-sdkconfig.xiao_production
-sdkconfig.minikit_debug
-sdkconfig.minikit_production
-sdkconfig.minikit_bt_debug
-sdkconfig.minikit_bt_production
-sdkconfig.minikit_ble_debug
-sdkconfig.minikit_ble_production
-sdkconfig.zero_ble_debug
-sdkconfig.zero_ble_production
+/sdkconfig.*
 managed_components
 src/CMakeLists.txt
 src/webui_gen/
