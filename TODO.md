@@ -2,7 +2,21 @@
 
 ## ACTIVE TASKS 🔄
 
-### PLATFORM SUPPORT - Before Final Cleanup 🟠
+### Build & Release 🔴 HIGH PRIORITY
+
+- [x] **GitHub Release: добавить все бинарники для полной прошивки**
+  - Добавлены `bootloader.bin` и `partitions.bin` для каждой сборки
+  - Добавлены BLE сборки: zero-ble, supermini-ble, xiao-ble, minikit-ble
+  - Workflow обновлён: цикл по всем env вместо ручного копирования
+
+### Before Final Cleanup 🟠
+
+- [x] Проверить `vTaskDelay(2000)` TEST hack в main.cpp — убран
+- [x] Code cleanup: убрать диагностические forceSerialLog (ble_dump_bonds и т.д.)
+- [x] Убрать `BLE_WIFI_COEXIST_TEST` — коэксистенция подтверждена, mutual exclusion удалён
+- [ ] После cleanup: проверить UART функциональность (регрессия)
+
+### PLATFORM SUPPORT 🟠
 
 #### ESP32-S3 Super Mini Support 🟡 PARTIALLY TESTED
 
@@ -26,6 +40,7 @@
   - [ ] Test SBUS with hardware inverter (critical for RC)
   - [ ] Check power consumption
   - [ ] Full protocol testing (MAVLink, SBUS, etc.)
+  - [ ] BLE: тестирование (сборка `supermini_ble_*` добавлена, аппаратно идентичен Zero)
 
 **Status**: Super Mini support implemented but not fully tested. Basic functionality (WiFi, web, LEDs, UDP logs) confirmed working. UART and SBUS functionality requires hardware testing with actual devices.
 
@@ -60,6 +75,7 @@
   - [ ] Check power consumption (important for small board)
   - [ ] Full protocol testing (MAVLink, SBUS, etc.)
   - [ ] Thermal testing (compact board heat dissipation)
+  - [ ] BLE: тестирование (сборка `xiao_ble_*` добавлена, аппаратно идентичен Zero)
 
 **Status**: XIAO ESP32-S3 support fully implemented and basic configuration tested (Device1 UART Bridge + Device2 USB working with flight controller and Mission Planner). Pin mapping verified: all GPIO pins are available on castellated edge holes. Web interface correctly displays D-pin names (D3/D4 for Device1, D8/D9 for Device2, D6/D7 for Device3). LED blink-only mode working. Need extended testing for Device3, RTS/CTS, network modes, and protocols.
 
@@ -141,32 +157,6 @@
   - Useful for debugging crashes with actual date/time instead of just uptime
   - No RTC required — time is "good enough" after first browser connection
 
-- [x] **Web UI Refactoring with Alpine.js** ✅ COMPLETED
-
-  **Completed migration**:
-  - Alpine.js + Collapse + Persist plugins integrated
-  - All device configuration logic moved to Alpine stores
-  - Status updates, SBUS controls, protocol stats via reactive stores
-  - help.html migrated to Alpine (collapsible sections with $persist)
-  - Removed: device-config.js, status-updates.js (dead code cleanup)
-
-  **Results achieved**:
-  | Metric | Before | After |
-  |--------|--------|-------|
-  | JS files | 6 files | 4 files (app.js, utils.js, form-utils.js, crash-log.js) |
-  | getElementById | 97 calls | ~15 calls (legacy crash-log, form-utils) |
-  | x-model bindings | 0 | 44 |
-  | $store references | 0 | 201 |
-
-  **Follow-up tasks**:
-  1. ~~**Split API endpoints**~~ ✅ DONE — `/api/config` + `/api/status` implemented
-  2. ~~**JSON body for POST**~~ ✅ DONE — switched to JSON body, `handleSaveJson()` (~560 → ~486 lines)
-     - JS sends JSON via `Content-Type: application/json`
-     - C++ uses ArduinoJson for parsing (cleaner than manual string parsing)
-     - Fixed log level selects disabled state (UART/Network logs react to device roles)
-
-  **Status**: Alpine.js refactoring complete, all follow-up tasks done
-
 #### Advanced Protocol Management
 
 - [ ] **Protocol Conversion Features**
@@ -234,9 +224,6 @@
     - socat and ser2net for network transport
     - Any device that can send/receive 25-byte SBUS frames over standard UART
 
-  - [x] SBUS over WiFi/UDP with frame filtering and validation (implemented)
-  - [x] Configurable UDP source timeout for Timing Keeper (100-5000ms, default 1000ms) ✅ v2.18.12
-  - [x] Configurable UDP send rate (10-70 Hz, default 50 Hz) for SBUS Output over WiFi ✅ v2.18.12
   - [ ] Configurable send rate for binary SBUS output (D2_SBUS_OUT, D3_SBUS_OUT, D4_SBUS_UDP_TX binary)
     - Currently binary SBUS outputs at native 70 Hz (14ms frame timing)
     - Some FC or receivers may benefit from throttled rate (50 Hz typical)
@@ -245,100 +232,24 @@
 
 ### Future Considerations (Low Priority)
 
-#### BLE SBUS for ESP32-S3 🔵 FUTURE
+#### BLE Remaining Tasks
 
-- [ ] **BLE GATT SBUS Output (ESP32-S3 only)**
+  - [ ] **LOW**: Проверка шифрования перед отправкой нотификаций (`desc.sec_state.encrypted`)
+  - [ ] **LOW**: Сохранение последнего BLE устройства в настройках MP плагина
 
-  **Why**: ESP32-S3 has BLE but no Bluetooth Classic. BLE enables wireless SBUS to GCS with custom plugins.
+  **Reference**: BLE GATT SBUS (NUS + PIN pairing + bond persistence + WiFi coexistence) — реализовано.
+  Heap: S3 ~60KB free (min ~38KB), MiniKit ~42KB free (min ~16KB). WiFi + BLE + UDP + WebServer работают одновременно.
 
-  **Use case**: SBUS from RC receiver to Mission Planner/QGC via BLE
-  ```
-  [SBUS RX] → [ESP32-S3] → BLE GATT notify → [MP/QGC Plugin]
-  ```
+#### MP Plugin Improvements
 
-  **Advantages over WiFi:**
-  - Phone/PC keeps WiFi for internet
-  - Lower latency than Classic SPP (7.5-30ms vs 20-100ms)
-  - Works on all S3 boards (Zero, SuperMini, XIAO)
-
-  **Technical details:**
-  - NimBLE stack (~20-30KB static RAM, lighter than Bluedroid)
-  - GATT Server with SBUS characteristic
-  - Notifications (ESP → Client), no pairing required for unencrypted data
-  - SBUS frame (25 bytes) fits in single BLE packet (MTU ≥ 25)
-  - Throughput ~20KB/s — sufficient for SBUS (70Hz × 25 bytes = 1.75KB/s)
-
-  **Implementation (ESP side):**
-  - [ ] Add NimBLE to sdkconfig for S3 boards
-  - [ ] BluetoothBLE class (bluetooth/bluetooth_ble.h/.cpp)
-  - [ ] SBUS GATT service and characteristic
-  - [ ] Integration with protocol pipeline (SENDER_BLE)
-  - [ ] D5_BLE_SBUS role for S3 boards
-
-  **Implementation (GCS side):**
-  - [ ] MP Plugin: BLE transport using Windows.Devices.Bluetooth API
-  - [ ] Device discovery and connection UI
-  - [ ] GATT characteristic subscription for SBUS data
-  - [ ] Parse SBUS/Text format → RC_CHANNELS_OVERRIDE
-
-  **Memory measurements (ESP32-S3 Zero, zero_ble_debug):**
-  ```
-  Baseline (no BLE, no WiFi):         ~143KB free heap (app only)
-  BLE only (standalone, no WiFi):     ~104KB free heap (BLE ~39KB)
-  WiFi + Web (no BLE, D5=NONE):       ~70KB free heap  (WiFi+Web ~73KB)
-  WiFi + BLE (coexistence):           ~3-4KB free heap (coex overhead ~28KB extra)
-  ```
-  - WiFi + BLE leaves insufficient memory for AsyncWebServer (~25KB needed)
-  - **Solution**: Skip BLE init during temporary AP mode (triple click)
-
-  **Staged init test results** (BLE first → 2s delay → WiFi):
-  ```
-  Heap during runtime:  ~8KB (stable)
-  Min heap recorded:    127 bytes (during init, recovers after)
-  PSRAM:               ~2.4KB used of 2MB (coexistence requires internal RAM)
-  ```
-  - WiFi+BLE coexistence **работает** — система стабильна после init
-  - Init — критический момент (heap падает до 127 байт, потом восстанавливается)
-  - Crash при совпадении нескольких аллокаций (веб-запрос + WiFi log + ...) — 8KB недостаточно
-  - WiFi driver при логировании падает если heap < ~300 байт (OOM при создании mutex)
-  - PSRAM практически не используется — WiFi/BLE требуют internal RAM
-
-  **Next steps** (оптимизация coexistence):
-  - [ ] Увеличить стабильный heap до ~20KB (сейчас ~8KB)
-  - [ ] Уменьшить min heap при init (сейчас 127 байт — слишком рискованно)
-  - [ ] Заменить фиксированную паузу 2s на proper wait (ble_on_sync callback)
-    - Текущий hack: `vTaskDelay(2000)` - работает но не гарантировано
-    - Proper fix: семафор/флаг `bleReady` который ble_on_sync() устанавливает
-    - В setup(): `while (!bleReady) vTaskDelay(10);` вместо фиксированной паузы
-    - Это даст точное ожидание готовности BLE перед стартом WiFi
-  - [ ] Профилировать что именно съедает память при init
-  - [ ] Fallback: отключить WiFi при активном BLE если оптимизация не поможет
-
-  **Web Interface Memory Optimization** (универсально для всех сборок):
-  - [ ] Уменьшить lwIP TCP буферы: `CONFIG_LWIP_TCP_SND_BUF_DEFAULT=1460`, `CONFIG_LWIP_TCP_WND_DEFAULT=1460`
-  - [ ] Inline JS в HTML: alpine.min.js + app.js встроить в index.html (embed_html.py)
-  - Эффект: ~24KB → ~3KB heap при загрузке web interface
-  - Минус: незначительное замедление первой загрузки (~50-100ms)
-  - Причина: браузер открывает 3-4 параллельных TCP соединения, каждое ~6KB lwIP буферов
-
-  **Staged init experiment** (для теста coexistence):
-  - Идея: инициализировать BLE первым, дать стабилизироваться, потом WiFi+Web
-  - Текущий порядок: WiFi → delay(500ms) → BLE
-  - Тестовый порядок: BLE → delay(2000ms) → WiFi+Web
-  - Цель: избежать пиков памяти от перекрывающихся инициализаций
-  - После init() NimBLE запускает фоновую задачу, ble_on_sync() вызывается асинхронно
-  - Delay нужен чтобы дать BLE полностью стабилизироваться перед WiFi
-    - Triple click → WiFi + Web works (BLE disabled) → configure device
-    - Normal boot → BLE works (WiFi disabled) → standalone SBUS bridge
-    - Permanent network + BLE → headless mode (UDP works, web unavailable)
-
-  **Likely restriction** (даже если WiFi+BLE стартуют):
-  - При активном D5 (BLE) блокировать D4 в веб-интерфейсе
-  - Автоматически отключать D4 если D5 != NONE
-  - BLE и UDP network вряд ли смогут работать одновременно — памяти на UDP буферы не хватит
-
-  **Note**: Requires custom GCS plugin — no virtual COM port like Classic SPP.
-  Plugin already needed for RC Override, adding BLE transport is incremental work.
+  - [ ] **LED индикация: отдельный цвет для "дрон не готов"**
+    - Сейчас: при отсутствии телеметрии LED мигает разными цветами, причина не ясна
+    - Проблема: UpdateLed() отражает только связь с ESP, не учитывает IsVehicleReady()
+    - Нужно: добавить проверку IsVehicleReady() в UpdateLed(), отдельный цвет для "ESP ok, vehicle not ready"
+    - Текущие состояния: DarkGray (off), Red blink (connecting), LimeGreen (all ok), Orange (no data)
+    - Новое состояние: ESP data flowing + vehicle not ready → отдельный цвет (не Orange, не Green)
+    - Цвет: TBD (Yellow слабо виден, Orange уже занят, нужен контрастный — возможно DodgerBlue)
+    - Файл: `plugins/RcOverride_v2_BLE.cs`, метод `UpdateLed()`
 
 #### New Protocol Support 🔵 LOW PRIORITY
 

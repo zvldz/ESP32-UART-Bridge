@@ -28,6 +28,9 @@ Universal UART to USB bridge with web configuration interface for any serial com
   - **Client Mode**: Connect to existing WiFi networks
   - **Permanent Mode**: Always-on WiFi without timeout
   - **Temporary Mode**: Triple-click activation with 20-minute timeout
+- **Bluetooth Connectivity**:
+  - **Classic SPP** (MiniKit): Wireless serial bridge for Android GCS apps
+  - **BLE NUS** (all boards): Low-power wireless telemetry with passkey pairing
 - **Visual Feedback**: RGB LED shows data flow and system status
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
@@ -365,10 +368,17 @@ Requires active Wi-Fi connection. Can be configured as:
 - **SBUS Text Output**: Send SBUS as text format `RC 1500,...\r\n` over UDP
 - **SBUS Input**: Receive SBUS from WiFi with failover support
 
-### Device 5 - Bluetooth SPP (MiniKit only)
-Available only on ESP32 MiniKit (WROOM-32 has Bluetooth Classic, S3 boards do not). Uses SSP "Just Works" pairing (no PIN required). BT device name matches mDNS hostname.
+### Device 5 - Bluetooth
+Wireless serial bridge via Bluetooth. Requires BLE or BT firmware variant (see [Build Environments](#build-environments)).
+- **All boards**: BLE with NUS (Nordic UART Service) — hardcoded passkey 1234
+- **MiniKit only**: Also supports Bluetooth Classic SPP — SSP "Just Works" pairing (no PIN)
+  - ⚠️ Classic BT disables WiFi (mutual exclusion on WROOM-32). Use BLE build for BT + WiFi together.
+
+⚠️ **BLE re-pairing**: Firmware updates via USB (PlatformIO) may erase NVS bond storage, requiring re-pairing on the client. OTA updates via web interface preserve bonds.
+
+Device name matches mDNS hostname. Modes:
 - **Disabled**: Bluetooth off
-- **Bridge**: MAVLink/Raw telemetry to Android apps (QGC, Tower)
+- **Bridge**: MAVLink/Raw telemetry to Android apps (QGC, Tower, Mission Planner)
 - **SBUS Text Output**: Text format `RC 1500,...\r\n` for Mission Planner RC Override plugin
 
 ### Network Configuration for Device 4
@@ -487,8 +497,23 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 ### Build Environments
 
+Each board has multiple build variants:
+
+| Board | Environments | Bluetooth |
+|-------|-------------|-----------|
+| **Zero** | `zero_production`, `zero_debug` | WiFi only |
+| **Zero BLE** | `zero_ble_production`, `zero_ble_debug` | WiFi + BLE |
+| **SuperMini** | `supermini_production`, `supermini_debug` | WiFi only |
+| **SuperMini BLE** | `supermini_ble_production`, `supermini_ble_debug` | WiFi + BLE |
+| **XIAO** | `xiao_production`, `xiao_debug` | WiFi only |
+| **XIAO BLE** | `xiao_ble_production`, `xiao_ble_debug` | WiFi + BLE |
+| **MiniKit** | `minikit_production`, `minikit_debug` | WiFi only |
+| **MiniKit BT** | `minikit_bt_production`, `minikit_bt_debug` | WiFi + BT Classic SPP |
+| **MiniKit BLE** | `minikit_ble_production`, `minikit_ble_debug` | WiFi + BLE |
+
 - **production**: Standard firmware with maximum performance
 - **debug**: Includes crash diagnostics and debug logging for troubleshooting
+- **BLE/BT variants**: Include Bluetooth stack (Device 5), slightly larger firmware size
 
 ## Application Compatibility Notes
 

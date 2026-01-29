@@ -70,14 +70,14 @@ const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 // TX Characteristic (ESP -> Client, Notify)
                 .uuid = &NUS_CHAR_TX_UUID.u,
                 .access_cb = ble_gatt_chr_access,
-                .flags = BLE_GATT_CHR_F_NOTIFY,
+                .flags = BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_READ_AUTHEN,
                 .val_handle = &g_nus_tx_attr_handle,
             },
             {
                 // RX Characteristic (Client -> ESP, Write)
                 .uuid = &NUS_CHAR_RX_UUID.u,
                 .access_cb = ble_gatt_chr_access,
-                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE_ENC | BLE_GATT_CHR_F_WRITE_AUTHEN,
             },
             {
                 0,  // End of characteristics

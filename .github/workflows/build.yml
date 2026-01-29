@@ -28,21 +28,32 @@ jobs:
           pip install platformio
 
       - name: Build all production firmware
-        run: pio run -e zero_production -e supermini_production -e xiao_production -e minikit_production -e minikit_bt_production
+        run: |
+          pio run -e zero_production -e zero_ble_production \
+                  -e supermini_production -e supermini_ble_production \
+                  -e xiao_production -e xiao_ble_production \
+                  -e minikit_production -e minikit_bt_production -e minikit_ble_production
 
       - name: Prepare release zip
         run: |
           mkdir -p tmp
-          cp .pio/build/zero_production/firmware.bin tmp/firmware-zero.bin
-          cp .pio/build/zero_production/firmware.elf tmp/firmware-zero.elf
-          cp .pio/build/supermini_production/firmware.bin tmp/firmware-supermini.bin
-          cp .pio/build/supermini_production/firmware.elf tmp/firmware-supermini.elf
-          cp .pio/build/xiao_production/firmware.bin tmp/firmware-xiao.bin
-          cp .pio/build/xiao_production/firmware.elf tmp/firmware-xiao.elf
-          cp .pio/build/minikit_production/firmware.bin tmp/firmware-minikit.bin
-          cp .pio/build/minikit_production/firmware.elf tmp/firmware-minikit.elf
-          cp .pio/build/minikit_bt_production/firmware.bin tmp/firmware-minikit-bt.bin
-          cp .pio/build/minikit_bt_production/firmware.elf tmp/firmware-minikit-bt.elf
+          for env_board in \
+            "zero_production:zero" \
+            "zero_ble_production:zero-ble" \
+            "supermini_production:supermini" \
+            "supermini_ble_production:supermini-ble" \
+            "xiao_production:xiao" \
+            "xiao_ble_production:xiao-ble" \
+            "minikit_production:minikit" \
+            "minikit_bt_production:minikit-bt" \
+            "minikit_ble_production:minikit-ble"; do
+            env="${env_board%%:*}"
+            board="${env_board##*:}"
+            cp ".pio/build/${env}/firmware.bin" "tmp/firmware-${board}.bin"
+            cp ".pio/build/${env}/firmware.elf" "tmp/firmware-${board}.elf"
+            cp ".pio/build/${env}/bootloader.bin" "tmp/bootloader-${board}.bin"
+            cp ".pio/build/${env}/partitions.bin" "tmp/partitions-${board}.bin"
+          done
           cd tmp && zip -r ../firmware-${{ github.ref_name }}.zip .
 
       - name: Extract changelog for version
