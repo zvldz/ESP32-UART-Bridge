@@ -59,10 +59,11 @@ namespace RcOverridePlugin
         private TextBox _txtUdpPort;    // UDP port input
         private CheckBox _chkEnable;
         private Panel _ledPanel;
+        private ToolTip _ledToolTip;
 
         public override string Name => "RC Override";
         public override string Author => "ACh / mod";
-        public override string Version => "2.0.2";
+        public override string Version => "2.0.3";
 
         private StringBuilder _buffer = new StringBuilder(256);
 
@@ -269,13 +270,16 @@ namespace RcOverridePlugin
                 _buffer.Append(bufStr);
         }
 
-        private void SetLedColor(Color color)
+        private void SetLedColor(Color color, string tooltip = null)
         {
             if (_ledPanel == null)
                 return;
 
             if (_ledPanel.BackColor != color)
                 _ledPanel.BackColor = color;
+
+            if (tooltip != null && _ledToolTip != null)
+                _ledToolTip.SetToolTip(_ledPanel, tooltip);
         }
 
         private void UpdateLed(DateTime now)
@@ -286,7 +290,7 @@ namespace RcOverridePlugin
             // If RC override is disabled, LED is gray and controls unlocked
             if (_chkEnable == null || !_chkEnable.Checked)
             {
-                SetLedColor(Color.DarkGray);
+                SetLedColor(Color.DarkGray, "Disabled");
                 if (_cmbPort != null) _cmbPort.Enabled = true;
                 if (_cmbSource != null) _cmbSource.Enabled = true;
                 return;
@@ -305,19 +309,32 @@ namespace RcOverridePlugin
 
             if (!connected)
             {
-                SetLedColor(Color.Red);
+                bool hasTarget = false;
+                if (_sourceMode == SourceMode.UDP)
+                    hasTarget = true;
+                else
+                    hasTarget = !string.IsNullOrEmpty(_currentPortName) &&
+                                !string.Equals(_currentPortName, "No ports", StringComparison.OrdinalIgnoreCase);
+
+                if (hasTarget)
+                {
+                    bool blink = (now.Millisecond / 500) % 2 == 0;
+                    SetLedColor(blink ? Color.Red : Color.DarkGray, "Connecting...");
+                }
+                else
+                {
+                    SetLedColor(Color.DarkGray, "No target selected");
+                }
                 return;
             }
 
-            // Green if we received a packet within LED_TIMEOUT_MS, otherwise red
-            if (_lastPacketTime != DateTime.MinValue && (now - _lastPacketTime).TotalMilliseconds < LED_TIMEOUT_MS)
-            {
-                SetLedColor(Color.LimeGreen);
-            }
+            // Connected — check vehicle telemetry and data flow
+            if (!IsVehicleReady())
+                SetLedColor(Color.Orange, "Connected, no vehicle telemetry");
+            else if (_lastPacketTime != DateTime.MinValue && (now - _lastPacketTime).TotalMilliseconds < LED_TIMEOUT_MS)
+                SetLedColor(Color.LimeGreen, "Connected, data OK");
             else
-            {
-                SetLedColor(Color.Red);
-            }
+                SetLedColor(Color.Orange, "Connected, no data from ESP");
 
             // Lock port/source selection when connected (prevent accidental changes)
             if (_cmbPort != null) _cmbPort.Enabled = !connected;
@@ -483,9 +500,13 @@ namespace RcOverridePlugin
                 Console.WriteLine("[RC] Opening port {0} at {1} baud...", _currentPortName, BAUD);
                 _port = new SerialPort(_currentPortName, BAUD, Parity.None, 8, StopBits.One);
                 _port.ReadTimeout = 5;
-                _port.DtrEnable = false;  // Prevent ESP32-S3 reset on port open/close
-                _port.RtsEnable = false;  // ESP32-S3 native USB CDC is sensitive to these signals
+                _port.DtrEnable = false;
+                // ESP32-S3 USB Serial/JTAG resets on RTS transition during Open().
+                // Handshake.RequestToSend makes OS control RTS (no explicit toggle),
+                // then switch back to None after Open(). Same trick as MP's espFix.
+                _port.Handshake = Handshake.RequestToSend;
                 _port.Open();
+                _port.Handshake = Handshake.None;
 
                 _lastDataTime = DateTime.UtcNow;
 
@@ -713,6 +734,8 @@ namespace RcOverridePlugin
             _ledPanel.BorderStyle = BorderStyle.FixedSingle;
             _ledPanel.BackColor = Color.DarkGray;
             _ledPanel.Location = new System.Drawing.Point(_chkEnable.Right + 5, 5);
+            _ledToolTip = new ToolTip();
+            _ledToolTip.SetToolTip(_ledPanel, "Disabled");
 
             _uiPanel.Controls.Add(_cmbSource);
             _uiPanel.Controls.Add(_cmbPort);
