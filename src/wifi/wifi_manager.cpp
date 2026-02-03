@@ -11,6 +11,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "mdns.h"
 
@@ -48,6 +49,16 @@ static String targetSSID;
 static String targetPassword;
 static bool mdnsInitNeeded = false;
 static String clientIP;
+
+// Deferred WiFi reconnect (avoid blocking event handler)
+static esp_timer_handle_t reconnect_timer = NULL;
+
+static void wifi_reconnect_timer_cb(void* arg) {
+    connectInProgress = true;
+    lastConnectAttempt = millis();
+    esp_wifi_connect();
+    log_msg(LOG_INFO, "Deferred retry to %s", targetSSID.c_str());
+}
 
 // Helper: Reset auth failed flags (called on config change)
 void wifiResetAuthFlags() {
@@ -269,18 +280,15 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                 }
                             }
                             else if (targetNetworkFound && perNetworkRetryCount[currentNetworkIndex] < WIFI_CLIENT_MAX_RETRIES) {
-                                // Network is still available, retry same network
-                                log_msg(LOG_DEBUG, "Retrying connection in %dms...", WIFI_RECONNECT_DELAY_MS);
-
-                                vTaskDelay(pdMS_TO_TICKS(WIFI_RECONNECT_DELAY_MS));
-
+                                // Network is still available, retry via deferred timer
+                                // (never block event handler with vTaskDelay — causes mutex assert)
+                                log_msg(LOG_DEBUG, "Scheduling retry in %dms...", WIFI_RECONNECT_DELAY_MS);
                                 systemState.wifiClientState = CLIENT_CONNECTING;
-                                connectInProgress = true;
-                                lastConnectAttempt = millis();
 
-                                esp_wifi_connect();
-                                log_msg(LOG_INFO, "Retry attempt #%d to %s",
-                                        perNetworkRetryCount[currentNetworkIndex] + 1, targetSSID.c_str());
+                                if (reconnect_timer) {
+                                    esp_timer_start_once(reconnect_timer,
+                                        WIFI_RECONNECT_DELAY_MS * 1000);  // us
+                                }
                             }
                             else {
                                 // Network not found or other error - scan for alternatives
@@ -460,6 +468,16 @@ esp_err_t wifiInit() {
     ret = esp_wifi_init(&wifiConfig);
 
     if (handleEspError(ret, "init WiFi", true) != ESP_OK) return ret;
+
+    // Create deferred reconnect timer (non-blocking retry from event handler)
+    const esp_timer_create_args_t timer_args = {
+        .callback = wifi_reconnect_timer_cb,
+        .arg = NULL,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "wifi_reconnect",
+        .skip_unhandled_events = true,
+    };
+    esp_timer_create(&timer_args, &reconnect_timer);
 
     // Register event handlers
     ret = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);

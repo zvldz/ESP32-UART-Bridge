@@ -7,16 +7,23 @@
   - Build environments: `zero_ble_*`, `supermini_ble_*`, `xiao_ble_*`, `minikit_ble_*`
   - GATT server with NUS TX (notify) and RX (write) characteristics
   - WiFi + BLE coexistence confirmed on ESP32-S3 (heap ~36KB min) and ESP32 MiniKit (heap ~16KB min)
-- **Security**: PIN pairing with hardcoded passkey 1234 (MITM protection)
+- **Security**: Just Works pairing with bonding (no PIN prompt)
   - GATT characteristics require encryption + authentication
   - Bond persistence in NVS (up to 10 bonds), repeat pairing auto-handled
+  - Changed from PIN pairing due to Android compatibility issues with static passkey
 - **MiniKit BLE**: NimBLE ported to ESP32-WROOM-32 (BLE-only controller mode)
   - Separate sdkconfig with LWIP/WiFi memory optimization for low-RAM environment
 - **MP Plugin**: BLE device scan/select/connect via WinRT API (compiled as DLL)
   - Device list filtered by NUS service (only paired ESP-Bridge devices shown)
-  - LED: blink red (connecting), orange (no data), green (active), gray (no target)
+  - LED tooltips: hover shows status (Disabled, Connecting, Connected data OK, no telemetry, etc.)
+  - BLE auth failure detection: stops retries on pairing rejection (DarkRed LED)
+  - BLE device list auto-refresh on first switch to BLE mode
+  - General failure counter (5 consecutive failures → stop retries)
   - Proper BLE cleanup (service dispose, notification unsubscribe)
-  - DTR/RTS fix for ESP32-S3 native USB CDC (prevented reboot on port close)
+  - **espFix**: `Handshake.RequestToSend` during port Open() prevents ESP32-S3 USB Serial/JTAG reset
+    - Root cause: `ARDUINO_USB_MODE=1` (HWCDC) has hardware auto-reset on RTS transition
+    - Same approach as MissionPlanner's `CHK_rtsresetesp32` setting
+    - Applied to both v2 (COM/UDP) and v2_BLE plugins
 
 ### Code Cleanup
 - **BLE+WiFi coexistence**: Always enabled, mutual exclusion removed. Fallback skip commented in `device_init.cpp`
@@ -31,6 +38,9 @@
 - **New sdkconfig files**: `supermini_ble_*`, `xiao_ble_*` (production + debug)
 
 ### Fixes
+- **WiFi event handler crash fix**: Replaced blocking `vTaskDelay()` with `esp_timer` for reconnect retry
+  - Root cause: `vTaskDelay` inside event handler blocks `sys_evt` task with mutex held → assert failure
+  - Crash manifested as `IllegalInstruction` at 0x00000000 when WiFi Client mode without AP available
 - **Crashlog hardening**: RTC variable validation, ASCII string checks, JSON re-serialization
 - **embed_html.py**: Removed cssmin dependency, simplified to gzip-only compression
 - **Boot optimization**: Skip 500ms delay on normal boot (no click detected)
