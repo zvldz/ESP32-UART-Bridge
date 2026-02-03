@@ -33,9 +33,6 @@ extern "C" bool btInUse() { return true; }
 // (same approach as official ESP-IDF bleprph example)
 extern "C" void ble_store_config_init(void);
 
-// Static passkey for BLE pairing (displayed on "screen" / known to user)
-#define BLE_STATIC_PASSKEY 1234
-
 // Global instance
 BluetoothBLE* bluetoothBLE = nullptr;
 
@@ -95,21 +92,14 @@ static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
             break;
 
         case BLE_GAP_EVENT_PASSKEY_ACTION: {
-            // Client requests pairing — provide static passkey
+            // Just Works: no user interaction needed, but handle if triggered
             struct ble_sm_io pkey = {0};
             pkey.action = event->passkey.params.action;
-            log_msg(LOG_DEBUG, "BLE: Passkey action=%d", pkey.action);
+            log_msg(LOG_DEBUG, "BLE: Passkey action=%d (unexpected for Just Works)", pkey.action);
 
-            if (pkey.action == BLE_SM_IOACT_DISP) {
-                // Display passkey for user to enter on the client
-                pkey.passkey = BLE_STATIC_PASSKEY;
-                int rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-                log_msg(LOG_DEBUG, "BLE: Passkey inject rc=%d", rc);
-            } else if (pkey.action == BLE_SM_IOACT_NUMCMP) {
-                // Numeric comparison — auto-confirm
+            if (pkey.action == BLE_SM_IOACT_NUMCMP) {
                 pkey.numcmp_accept = 1;
                 ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-                log_msg(LOG_DEBUG, "BLE: Numcmp auto-accepted");
             }
             break;
         }
@@ -247,10 +237,11 @@ bool BluetoothBLE::init(const char* name) {
     ble_hs_cfg.reset_cb = ble_on_reset;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
-    // Security Manager: require PIN pairing (MITM protection)
-    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_DISP_ONLY;
+    // Security Manager: Just Works pairing with bonding and encryption
+    // No PIN prompt — pairing is automatic, keys stored in NVS
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
     ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_mitm = 0;
     ble_hs_cfg.sm_sc = 1;
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
