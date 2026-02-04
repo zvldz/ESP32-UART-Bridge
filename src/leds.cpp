@@ -21,6 +21,12 @@ extern Config config;
 // Internal variables
 static LedMode currentLedMode = LED_MODE_OFF;
 
+// Combined mode tracking
+static LedMode currentWifiMode = LED_MODE_OFF;  // Base WiFi state
+#if defined(BLE_ENABLED)
+static bool bleIsActive = false;                 // BLE active/connected
+#endif
+
 // LED state tracking
 static volatile bool ledUpdateNeeded = false;
 static volatile uint32_t pendingColorValue = 0;  // Store as uint32_t instead of CRGB
@@ -42,6 +48,7 @@ enum BlinkType {
     BLINK_CLIENT_ERROR,
     BLINK_SAFE_MODE,
     BLINK_BT_CONNECTED,
+    BLINK_BLE_ONLY,         // Fast blink for BLE only (single-color)
     BLINK_MAX
 };
 
@@ -50,26 +57,49 @@ struct BlinkState {
     bool active;
     int count;              // -1 for infinite
     int onTime;             // milliseconds
-    int offTime;            // milliseconds
+    int offTime;            // milliseconds (gap between blinks for multi-blink)
+    int pauseTime;          // milliseconds (pause after pattern, 0 for simple blinks)
+    int blinksInPattern;    // 1 for simple, 2 for double, 3 for triple
+    int currentBlink;       // current blink in pattern (0 to blinksInPattern-1)
     unsigned long nextTime;
     bool isOn;
     uint32_t colorValue;    // Store as uint32_t for thread safety
 };
 
+// RGB fade state for combined WiFi+BLE modes
+#if !defined(LED_TYPE_SINGLE_COLOR)
+struct FadeState {
+    bool active;
+    CRGB color1;           // First color (WiFi color)
+    CRGB color2;           // Second color (BLE color = Purple)
+    uint8_t position;      // 0-255 blend position
+    int8_t direction;      // +1 or -1
+    unsigned long nextStep;
+};
+static FadeState fadeState = {false, CRGB::Black, CRGB::Black, 0, 1, 0};  // Not volatile - accessed under mutex
+
+// Fade timing
+#define FADE_STEP_MS 20      // Time between fade steps (50 fps)
+#define FADE_STEP_SIZE 5     // Position increment per step (full cycle ~2 seconds)
+#endif
+
 // Consolidated blink states - entire array is volatile
+// Fields: active, count, onTime, offTime, pauseTime, blinksInPattern, currentBlink, nextTime, isOn, colorValue
 static volatile BlinkState blinkStates[BLINK_MAX] = {
-    // BLINK_RAPID
-    {false, 0, 0, 0, 0, false, (uint32_t)CRGB::Purple},
-    // BLINK_BUTTON
-    {false, 0, 0, 0, 0, false, (uint32_t)CRGB::White},
-    // BLINK_CLIENT_SEARCH
-    {false, -1, 0, 0, 0, false, (uint32_t)CRGB::Orange},
-    // BLINK_CLIENT_ERROR
-    {false, -1, 0, 0, 0, false, (uint32_t)CRGB::Red},
-    // BLINK_SAFE_MODE
-    {false, -1, 500, 4500, 0, false, (uint32_t)CRGB::Red},
-    // BLINK_BT_CONNECTED (MiniKit only - uses single color LED)
-    {false, -1, LED_BT_CONNECTED_BLINK_MS, LED_BT_CONNECTED_BLINK_MS, 0, false, (uint32_t)CRGB::Blue}
+    // BLINK_RAPID - simple blink
+    {false, 0, 0, 0, 0, 1, 0, 0, false, (uint32_t)CRGB::Purple},
+    // BLINK_BUTTON - simple blink
+    {false, 0, 0, 0, 0, 1, 0, 0, false, (uint32_t)CRGB::White},
+    // BLINK_CLIENT_SEARCH - simple blink
+    {false, -1, 0, 0, 0, 1, 0, 0, false, (uint32_t)CRGB::Orange},
+    // BLINK_CLIENT_ERROR - simple blink
+    {false, -1, 0, 0, 0, 1, 0, 0, false, (uint32_t)CRGB::Red},
+    // BLINK_SAFE_MODE - simple blink
+    {false, -1, 500, 4500, 0, 1, 0, 0, false, (uint32_t)CRGB::Red},
+    // BLINK_BT_CONNECTED - simple blink (MiniKit only)
+    {false, -1, LED_BT_CONNECTED_BLINK_MS, LED_BT_CONNECTED_BLINK_MS, 0, 1, 0, 0, false, (uint32_t)CRGB::Blue},
+    // BLINK_BLE_ONLY - fast blink for BLE only (single-color)
+    {false, -1, LED_BLE_FAST_BLINK_MS, LED_BLE_FAST_BLINK_MS, 0, 1, 0, 0, false, (uint32_t)CRGB::Purple}
 };
 
 // Safe millis() comparison that handles wrap-around correctly
@@ -78,11 +108,12 @@ static inline bool time_reached(unsigned long now, unsigned long deadline) {
 }
 
 // Universal blink processor - assumes mutex already taken!
+// Supports simple blinks (blinksInPattern=1) and multi-blinks (double=2, triple=3)
 static bool processBlinkPatternUnderMutex(BlinkType type) {
     volatile BlinkState& blink = blinkStates[type];
-    
+
     if (!blink.active) return false;
-    
+
     unsigned long now = millis();
     if (time_reached(now, blink.nextTime)) {
         // NO mutex take here - already held by caller!
@@ -99,13 +130,37 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
             FastLED.show();
 #endif
             blink.isOn = false;
-            blink.nextTime = now + blink.offTime;
-            
-            // Handle count
-            if (blink.count > 0) {
-                blink.count = blink.count - 1;
-                if (blink.count == 0) {
-                    blink.active = false;
+
+            // Multi-blink pattern handling
+            if (blink.blinksInPattern > 1) {
+                // More blinks in this pattern?
+                if (blink.currentBlink < blink.blinksInPattern - 1) {
+                    // Short gap before next blink
+                    blink.nextTime = now + blink.offTime;
+                    blink.currentBlink = blink.currentBlink + 1;
+                } else {
+                    // Last blink done, long pause before pattern repeats
+                    blink.nextTime = now + blink.pauseTime;
+                    blink.currentBlink = 0;
+
+                    // Handle count for multi-blink (count = pattern repetitions)
+                    if (blink.count > 0) {
+                        blink.count = blink.count - 1;
+                        if (blink.count == 0) {
+                            blink.active = false;
+                        }
+                    }
+                }
+            } else {
+                // Simple blink - original behavior
+                blink.nextTime = now + blink.offTime;
+
+                // Handle count
+                if (blink.count > 0) {
+                    blink.count = blink.count - 1;
+                    if (blink.count == 0) {
+                        blink.active = false;
+                    }
                 }
             }
         } else {
@@ -124,7 +179,7 @@ static bool processBlinkPatternUnderMutex(BlinkType type) {
             blink.nextTime = now + blink.onTime;
         }
     }
-    
+
     return blink.active;  // Still processing
 }
 
@@ -347,12 +402,63 @@ void led_notify_device3_rx() {
     device3RxCounter = device3RxCounter + 1;
 }
 
+// Forward declaration (defined below)
+static void clearAllBlinks();
+
+// Process fade animation (RGB only, call under mutex)
+#if !defined(LED_TYPE_SINGLE_COLOR)
+static bool processFadeUnderMutex() {
+    if (!fadeState.active) return false;
+
+    unsigned long now = millis();
+    if (!time_reached(now, fadeState.nextStep)) return true;
+
+    // Update position
+    int16_t newPos = fadeState.position + (fadeState.direction * FADE_STEP_SIZE);
+
+    // Reverse direction at boundaries
+    if (newPos >= 255) {
+        newPos = 255;
+        fadeState.direction = -1;
+    } else if (newPos <= 0) {
+        newPos = 0;
+        fadeState.direction = 1;
+    }
+    fadeState.position = (uint8_t)newPos;
+
+    // Blend colors and display
+    CRGB blended = blend(fadeState.color1, fadeState.color2, fadeState.position);
+    leds[0] = blended;
+    FastLED.show();
+
+    fadeState.nextStep = now + FADE_STEP_MS;
+    return true;
+}
+
+// Start fade animation (RGB only)
+static void startFade(CRGB color1, CRGB color2) {
+    if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        clearAllBlinks();
+        fadeState.active = true;
+        fadeState.color1 = color1;
+        fadeState.color2 = color2;
+        fadeState.position = 0;
+        fadeState.direction = 1;
+        fadeState.nextStep = millis();
+        xSemaphoreGive(ledMutex);
+    }
+}
+#endif
+
 // Clear all blink states (call under mutex)
 static void clearAllBlinks() {
     for (int i = 0; i < BLINK_MAX; i++) {
         blinkStates[i].active = false;
         blinkStates[i].isOn = false;
     }
+#if !defined(LED_TYPE_SINGLE_COLOR)
+    fadeState.active = false;
+#endif
 }
 
 // Clear other blinks except specified type (call under mutex) 
@@ -383,14 +489,20 @@ static void setStaticLED(CRGB color) {
     }
 }
 
-// Universal blink starter
-static void startBlink(BlinkType type, CRGB color, int count, int onMs, int offMs) {
+// Universal blink starter (supports simple and multi-blink patterns)
+// For simple blinks: blinksInPattern=1, pauseMs=0
+// For multi-blink: blinksInPattern=2 or 3, pauseMs=pause after pattern
+static void startBlink(BlinkType type, CRGB color, int count, int onMs, int offMs,
+                       int pauseMs = 0, int blinksInPattern = 1) {
     if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         volatile BlinkState& blink = blinkStates[type];
         blink.active = true;
         blink.count = count;
         blink.onTime = onMs;
         blink.offTime = offMs;
+        blink.pauseTime = pauseMs;
+        blink.blinksInPattern = blinksInPattern;
+        blink.currentBlink = 0;
         blink.nextTime = millis();
         blink.isOn = false;
         blink.colorValue = (uint32_t)color;
@@ -466,11 +578,36 @@ void led_process_updates() {
     }
 #endif
 
-    // Network mode check - unchanged
+#if defined(LED_TYPE_SINGLE_COLOR)
+  #if defined(BLE_ENABLED)
+    // BLE only mode: fast blink (single-color only)
+    if (currentLedMode == LED_MODE_BLE_ONLY) {
+        if (processBlinkPatternUnderMutex(BLINK_BLE_ONLY)) {
+            xSemaphoreGive(ledMutex);
+            return;
+        }
+    }
+  #endif
+    // Note: WiFi+BLE combined modes use solid ON for single-color (no blink processing needed)
+#else
+  #if defined(BLE_ENABLED)
+    // RGB LED: fade animation for combined WiFi+BLE modes
+    if (currentLedMode == LED_MODE_WIFI_AP_BLE ||
+        currentLedMode == LED_MODE_WIFI_CLIENT_BLE) {
+        if (processFadeUnderMutex()) {
+            xSemaphoreGive(ledMutex);
+            return;
+        }
+    }
+  #endif
+#endif
+
+    // Network mode check
     if (bridgeMode == BRIDGE_NET) {
         bool rapidActive = processBlinkPatternUnderMutex(BLINK_RAPID);
         if (!rapidActive && !blinkStates[BLINK_RAPID].active) {
-            // Keep LED constant (purple for RGB, just ON for single color)
+            // Keep LED constant (blue for RGB AP, just ON for single color AP)
+            // Note: Client and BLE modes are handled by their specific blink patterns above
 #if defined(LED_TYPE_SINGLE_COLOR)
   #if defined(LED_ACTIVE_HIGH)
             digitalWrite(LED_PIN1, HIGH);  // ON (normal logic)
@@ -478,7 +615,7 @@ void led_process_updates() {
             digitalWrite(LED_PIN1, LOW);   // ON (inverted)
   #endif
 #else
-            leds[0] = CRGB::Purple;
+            leds[0] = CRGB::Blue;
             FastLED.show();
 #endif
         }
@@ -498,6 +635,52 @@ void led_process_updates() {
     xSemaphoreGive(ledMutex);
 }
 
+// Compute combined LED mode based on WiFi and BLE states
+static LedMode computeCombinedMode() {
+    // WiFi transient states (searching/error) take priority - show the problem
+    if (currentWifiMode == LED_MODE_WIFI_CLIENT_SEARCHING ||
+        currentWifiMode == LED_MODE_WIFI_CLIENT_ERROR) {
+        return currentWifiMode;
+    }
+
+#if defined(BLE_ENABLED)
+    if (bleIsActive) {
+        // BLE is active - check WiFi state for combined mode
+        switch (currentWifiMode) {
+            case LED_MODE_WIFI_ON:
+                return LED_MODE_WIFI_AP_BLE;
+            case LED_MODE_WIFI_CLIENT_CONNECTED:
+                return LED_MODE_WIFI_CLIENT_BLE;
+            default:
+                // WiFi not active (OFF state)
+                return LED_MODE_BLE_ONLY;
+        }
+    }
+#endif
+    // BLE not active (or BLE disabled)
+    if (currentWifiMode == LED_MODE_OFF && bridgeMode == BRIDGE_STANDALONE) {
+        // Standalone mode - show data activity
+        return LED_MODE_DATA_FLASH;
+    }
+    return currentWifiMode;
+}
+
+// Set WiFi-related LED mode (coordinates with BLE state)
+void led_set_wifi_mode(LedMode wifiMode) {
+    currentWifiMode = wifiMode;
+    LedMode combined = computeCombinedMode();
+    led_set_mode(combined);
+}
+
+// Set BLE active state (coordinates with WiFi state)
+#if defined(BLE_ENABLED)
+void led_set_ble_active(bool active) {
+    bleIsActive = active;
+    LedMode combined = computeCombinedMode();
+    led_set_mode(combined);
+}
+#endif
+
 // Set LED mode (implementation)
 void led_set_mode(LedMode mode) {
     currentLedMode = mode;
@@ -508,11 +691,19 @@ void led_set_mode(LedMode mode) {
             break;
             
         case LED_MODE_WIFI_ON:
-            setStaticLED(CRGB::Purple);
+            // WiFi AP mode: Blue for RGB, solid ON for single-color
+            setStaticLED(CRGB::Blue);
             break;
-            
+
         case LED_MODE_WIFI_CLIENT_CONNECTED:
-            setStaticLED(CRGB::Orange);
+#if defined(LED_TYPE_SINGLE_COLOR)
+            // Single-color: solid ON (same as AP - "stable connection")
+            setStaticLED(CRGB::White);
+            log_msg(LOG_DEBUG, "LED set to WiFi Client Connected - solid ON");
+#else
+            // RGB: static green
+            setStaticLED(CRGB::Green);
+#endif
             break;
             
         case LED_MODE_WIFI_CLIENT_SEARCHING:
@@ -553,6 +744,49 @@ void led_set_mode(LedMode mode) {
             startBlink(BLINK_BT_CONNECTED, CRGB::Blue, -1,
                       LED_BT_CONNECTED_BLINK_MS, LED_BT_CONNECTED_BLINK_MS);
             log_msg(LOG_DEBUG, "LED set to BT Connected - blinking");
+            break;
+#endif
+
+#if defined(BLE_ENABLED)
+        case LED_MODE_BLE_ONLY:
+#if defined(LED_TYPE_SINGLE_COLOR)
+            // Single-color: fast blink
+            if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+                clearOtherBlinks(BLINK_BLE_ONLY);
+                xSemaphoreGive(ledMutex);
+            }
+            startBlink(BLINK_BLE_ONLY, CRGB::Purple, -1,
+                      LED_BLE_FAST_BLINK_MS, LED_BLE_FAST_BLINK_MS);
+            log_msg(LOG_DEBUG, "LED set to BLE Only - fast blink");
+#else
+            // RGB: static purple
+            setStaticLED(CRGB::Purple);
+            log_msg(LOG_DEBUG, "LED set to BLE Only - purple");
+#endif
+            break;
+
+        case LED_MODE_WIFI_AP_BLE:
+#if defined(LED_TYPE_SINGLE_COLOR)
+            // Single-color: solid ON (stable = all good)
+            setStaticLED(CRGB::White);
+            log_msg(LOG_DEBUG, "LED set to WiFi AP + BLE - solid ON");
+#else
+            // RGB: fade blue↔purple
+            startFade(CRGB::Blue, CRGB::Purple);
+            log_msg(LOG_DEBUG, "LED set to WiFi AP + BLE - blue/purple fade");
+#endif
+            break;
+
+        case LED_MODE_WIFI_CLIENT_BLE:
+#if defined(LED_TYPE_SINGLE_COLOR)
+            // Single-color: solid ON (stable = all good)
+            setStaticLED(CRGB::White);
+            log_msg(LOG_DEBUG, "LED set to WiFi Client + BLE - solid ON");
+#else
+            // RGB: fade green↔purple
+            startFade(CRGB::Green, CRGB::Purple);
+            log_msg(LOG_DEBUG, "LED set to WiFi Client + BLE - green/purple fade");
+#endif
             break;
 #endif
 

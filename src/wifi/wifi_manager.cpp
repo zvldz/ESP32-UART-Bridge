@@ -266,7 +266,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                 if (allNetworksAuthFailed()) {
                                     log_msg(LOG_WARNING, "All configured networks have auth failures - stopping");
                                     systemState.wifiClientState = CLIENT_WRONG_PASSWORD;
-                                    led_set_mode(LED_MODE_WIFI_CLIENT_ERROR);
+                                    led_set_wifi_mode(LED_MODE_WIFI_CLIENT_ERROR);
                                     tLedMonitor.enable();
                                     targetNetworkFound = false;
                                 }
@@ -376,7 +376,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         // No configured network found in scan
                         targetNetworkFound = false;
                         systemState.wifiClientState = CLIENT_NO_SSID;
-                        led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
+                        led_set_wifi_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
 
                         // Enable LED task for searching animation
                         tLedMonitor.enable();
@@ -409,7 +409,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
                     // Set network connected bit
                     xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
-                    led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+                    led_set_wifi_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
 
                     // Disable LED task - stable connection, no animation needed
                     tLedMonitor.disable();
@@ -556,7 +556,7 @@ esp_err_t wifiStartClient() {
 
     // Start with a scan to find available networks
     systemState.wifiClientState = CLIENT_SCANNING;
-    led_set_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
+    led_set_wifi_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
 
     // Enable LED task for searching animation
     tLedMonitor.enable();
@@ -613,7 +613,7 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     // Initialize mDNS for AP mode (allows hostname.local access)
     initMdnsService(true);
 
-    led_set_mode(LED_MODE_WIFI_ON);
+    led_set_wifi_mode(LED_MODE_WIFI_ON);
 
     // Disable LED task - AP mode is stable
     tLedMonitor.disable();
