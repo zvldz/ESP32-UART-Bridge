@@ -2,6 +2,20 @@
 
 ## v2.18.14
 
+### LED Indication
+- **BLE + WiFi combined modes**: Visual feedback for all connection states
+  - RGB LED (Zero, SuperMini): Color fade animation for combined modes
+    - WiFi AP + BLE: Blue↔Purple fade (~2s cycle)
+    - WiFi Client + BLE: Green↔Purple fade (~2s cycle)
+    - BLE only: Static purple
+  - Single-color LED (XIAO, MiniKit): Simplified "solid = working, blink = problem"
+    - Stable states (AP, Client, AP+BLE, Client+BLE): Solid ON
+    - BLE only (no WiFi): Fast blink (150ms)
+    - WiFi transient states always visible (searching/error blinks)
+- **New LED modes**: `LED_MODE_BLE_ONLY`, `LED_MODE_WIFI_AP_BLE`, `LED_MODE_WIFI_CLIENT_BLE`
+- **Coordination API**: `led_set_wifi_mode()` and `led_set_ble_active()` for combined state management
+- **Code cleanup**: Removed unused blink patterns (`BLINK_WIFI_CLIENT`, `BLINK_DOUBLE`, `BLINK_TRIPLE`) and timing constants
+
 ### BLE Support
 - **NimBLE NUS**: BLE Nordic UART Service for all boards (`BLE_ENABLED` flag)
   - Build environments: `zero_ble_*`, `supermini_ble_*`, `xiao_ble_*`, `minikit_ble_*`
