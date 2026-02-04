@@ -11,6 +11,9 @@
 #define LED_WIFI_ERROR_BLINK_MS  500  // Fast blink for WiFi errors
 #define LED_BT_CONNECTED_BLINK_MS 500 // Bluetooth connected blink interval (MiniKit)
 
+// Single-color LED patterns for BLE modes
+#define LED_BLE_FAST_BLINK_MS 150     // Fast blink for BLE only mode
+
 // LED colors for Device 3
 #define COLOR_MAGENTA   0xFF00FF  // Device 3 TX
 #define COLOR_YELLOW    0xFFFF00  // Device 3 RX (Bridge mode)
@@ -33,6 +36,10 @@ enum ActivityType {
 // LED control interface
 void leds_init();
 void led_set_mode(LedMode mode);
+void led_set_wifi_mode(LedMode wifiMode);  // Coordinates WiFi+BLE combined modes
+#if defined(BLE_ENABLED)
+void led_set_ble_active(bool active);       // Coordinates WiFi+BLE combined modes
+#endif
 void led_process_updates();
 void led_notify_uart_rx();
 void led_notify_usb_rx();

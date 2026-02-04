@@ -295,11 +295,8 @@ void loop() {
     static bool lastBleConnected = false;
     bool bleConnected = (bluetoothBLE != nullptr && bluetoothBLE->isConnected());
     if (bleConnected != lastBleConnected) {
-        if (bleConnected) {
-            led_set_mode(LED_MODE_BT_CONNECTED);
-        } else if (bridgeMode == BRIDGE_STANDALONE) {
-            led_set_mode(LED_MODE_DATA_FLASH);
-        }
+        // Use led_set_ble_active() to coordinate with WiFi state
+        led_set_ble_active(bleConnected);
         lastBleConnected = bleConnected;
     }
 #endif
@@ -514,7 +511,7 @@ void initNetworkMode() {
     if (systemState.tempForceApMode) {
         log_msg(LOG_INFO, "Starting temporary WiFi AP mode (forced by triple click)");
         wifiStartAP(config.ssid, config.password);
-        led_set_mode(LED_MODE_WIFI_ON);
+        led_set_wifi_mode(LED_MODE_WIFI_ON);
         systemState.tempForceApMode = false;
     } else if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         log_msg(LOG_INFO, "Starting WiFi Client mode");
@@ -522,7 +519,7 @@ void initNetworkMode() {
     } else {
         log_msg(LOG_INFO, "Starting WiFi AP mode");
         wifiStartAP(config.ssid, config.password);
-        led_set_mode(LED_MODE_WIFI_ON);
+        led_set_wifi_mode(LED_MODE_WIFI_ON);
     }
 
     // Set network as active
@@ -814,8 +811,8 @@ void createTasks() {
 void on_wifi_connected() {
     log_msg(LOG_INFO, "WiFi Manager: Client connected successfully");
 
-    // Set LED mode for connected client
-    led_set_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+    // Set LED mode for connected client (coordinates with BLE state)
+    led_set_wifi_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
 
     // Set network event group bit for Device 4 synchronization
     if (networkEventGroup) {
