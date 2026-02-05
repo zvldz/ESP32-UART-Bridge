@@ -631,7 +631,7 @@
                         <span class="section-arrow" x-text="$store.ui.wifiConfig ? '▼' : '▶'"></span>
                     </h4>
                     <div x-show="$store.ui.wifiConfig" x-collapse>
-                        <!-- WiFi Mode Selection with Permanent checkbox -->
+                        <!-- WiFi Mode Selection -->
                         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label for="wifi_mode" style="margin: 0; white-space: nowrap;">WiFi Mode:</label>
@@ -640,11 +640,15 @@
                                     <option value="1">Client (Connect to Network)</option>
                                 </select>
                             </div>
-                            <label class="checkbox-label" title="Keep WiFi always on (applies to both AP and Client modes)">
-                                <input type="checkbox" name="permanent_wifi" id="permanent_wifi" value="1"
-                                       x-model="$store.app.permanentWifi">
-                                <span>Permanent</span>
-                            </label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="wifi_ap_mode" style="margin: 0; white-space: nowrap;">At Boot:</label>
+                                <select name="wifi_ap_mode" id="wifi_ap_mode" x-model="$store.app.wifiApMode"
+                                        title="Disabled: WiFi only via button. Temporary: WiFi on for 5 min then off. Always On: WiFi always active.">
+                                    <option value="0">Disabled</option>
+                                    <option value="1">Temporary (5 min)</option>
+                                    <option value="2">Always On</option>
+                                </select>
+                            </div>
                         </div>
 
                         <!-- AP Mode settings -->

@@ -10,6 +10,13 @@ enum BridgeWiFiMode {
     BRIDGE_WIFI_MODE_AP_STA = 2
 };
 
+// WiFi AP mode at boot
+enum WifiApMode {
+    WIFI_AP_DISABLED = 0,   // No WiFi at boot (buttons still work)
+    WIFI_AP_TEMPORARY = 1,  // WiFi at boot, auto-disable after timeout
+    WIFI_AP_ALWAYS_ON = 2   // WiFi always on
+};
+
 // USB modes
 enum UsbMode {
     USB_MODE_DEVICE = 0,
@@ -128,7 +135,7 @@ typedef struct {
     // WiFi settings
     String ssid;
     String password;
-    bool permanent_network_mode;
+    WifiApMode wifi_ap_mode;
     
     // WiFi mode selection
     BridgeWiFiMode wifi_mode;

@@ -76,11 +76,11 @@ void initializeScheduler() {
         extern SystemState systemState;
         if (systemState.firmwareUpdateInProgress) {
             log_msg(LOG_INFO, "WiFi timeout skipped - firmware update in progress");
-            return;  // Don't reboot during firmware update
+            return;  // Don't stop WiFi during firmware update
         }
 
-        log_msg(LOG_INFO, "WiFi timeout - switching to standalone mode");
-        ESP.restart();
+        log_msg(LOG_INFO, "WiFi timeout - auto-disabling WiFi");
+        wifiStop();  // Stop WiFi instead of reboot
     });
 
 
@@ -351,11 +351,24 @@ void disableAllTasks() {
 }
 
 void startWiFiTimeout() {
+    // Use shorter timeout for TEMPORARY mode (5 min), longer for button-activated (20 min)
+    unsigned long timeout = (config.wifi_ap_mode == WIFI_AP_TEMPORARY)
+                            ? WIFI_AP_AUTO_DISABLE_MS
+                            : WIFI_TIMEOUT;
+    tWiFiTimeout.setInterval(timeout);
     tWiFiTimeout.restartDelayed();
 }
 
 void cancelWiFiTimeout() {
     tWiFiTimeout.disable();
+}
+
+void resetWiFiTimeout() {
+    // Reset timeout on web activity (for Client mode with TEMPORARY)
+    // Only reset if timer is active (TEMPORARY mode and not yet connected permanently)
+    if (tWiFiTimeout.isEnabled() && config.wifi_ap_mode == WIFI_AP_TEMPORARY) {
+        tWiFiTimeout.restartDelayed();
+    }
 }
 
 void scheduleReboot(unsigned long delayMs) {

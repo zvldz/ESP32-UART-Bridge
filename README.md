@@ -26,8 +26,8 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Dual WiFi Modes**:
   - **Access Point**: Create hotspot for direct configuration
   - **Client Mode**: Connect to existing WiFi networks
-  - **Permanent Mode**: Always-on WiFi without timeout
-  - **Temporary Mode**: Triple-click activation with 20-minute timeout
+  - **WiFi "At Boot" Options**: Disabled, Temporary (auto-disable), Always On
+  - **Triple-click Activation**: Manual WiFi start from standalone mode
 - **Bluetooth Connectivity**:
   - **Classic SPP** (MiniKit): Wireless serial bridge for Android GCS apps
   - **BLE NUS** (all boards): Low-power wireless telemetry with passkey pairing
@@ -129,16 +129,16 @@ Universal UART to USB bridge with web configuration interface for any serial com
 3. **Configure**:
 
    **Option A: Temporary Setup (traditional method)**
-   - **Zero/SuperMini/XIAO**: Triple-click BOOT button (LED turns solid purple)
+   - **Zero/SuperMini/XIAO**: Triple-click BOOT button (LED turns solid blue)
    - **MiniKit**: Triple-press RESET button quickly (always activates AP mode, LED turns solid)
    - Connect to WiFi network "ESP-Bridge" (password: 12345678)
    - Open web browser to 192.168.4.1
    - Configure settings and click "Save & Reboot"
    - Device returns to standalone mode after timeout
-   
-   **Option B: Permanent Network Mode**
+
+   **Option B: Always-On Network Mode**
    - Use temporary setup to access web interface
-   - Enable "Permanent Network Mode" checkbox in WiFi Configuration
+   - Set "At Boot" to "Always On" in WiFi Configuration
    - Set your UART parameters and WiFi credentials
    - Click "Save & Reboot"
    - Device will maintain Wi-Fi connection permanently for remote access
@@ -158,7 +158,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 ## WiFi Operation Modes
 
-The device supports two WiFi connection modes that can operate in temporary or permanent configurations:
+The device supports two WiFi connection modes with configurable "At Boot" behavior:
 
 ### WiFi Access Point (AP) Mode
 - **Default Mode**: Creates WiFi hotspot "ESP-Bridge-xxxx" with unique MAC-based suffix (password: 12345678)
@@ -181,27 +181,33 @@ The device supports two WiFi connection modes that can operate in temporary or p
   - Unlimited reconnection attempts after successful initial connection
   - Automatic recovery from temporary network outages
 
-### Network Mode Duration
+### WiFi "At Boot" Options
 
-**Temporary Mode (Triple-Click Activation)**
-- Activated by triple-clicking BOOT button from any mode
-- Wi-Fi active for limited time with automatic timeout
-- Returns to standalone mode automatically after timeout
-- **Mode Selection**: 
-  - From Standalone: Activates saved WiFi mode (AP or Client)
-  - From WiFi Client: Forces temporary AP mode for reconfiguration
+**Disabled**
+- WiFi does not start automatically at boot
+- Activate via triple-click BOOT button when needed
+- Returns to standalone mode after timeout or manual disable
 
-**Permanent Network Mode**
-- Configured via web interface "Permanent Network Mode" checkbox
-- Wi-Fi remains active indefinitely until manually disabled
+**Temporary (Default)**
+- WiFi starts at boot automatically
+- Auto-disables after 5 minutes if no activity (AP: no clients, Client: no web access)
+- Ideal for quick configuration without draining battery
+
+**Always On**
+- WiFi remains active indefinitely
 - Maintains connection across reboots
 - **Benefits**: Always-on remote access, continuous network logging
+
+### Triple-Click Behavior
+- **From Standalone**: Activates saved WiFi mode (AP or Client)
+- **From WiFi Client**: Forces temporary AP mode for reconfiguration
+- Useful when can't access current network or need to change settings
 
 ### Mode Switching
 - **Standalone → Network**: Triple-click BOOT button (uses saved WiFi mode)
 - **WiFi Client → AP**: Triple-click BOOT button (temporary AP for reconfiguration)
-- **Enable Permanent**: Check box in web interface WiFi configuration
-- **Disable Network**: Uncheck permanent mode via web interface
+- **Change "At Boot"**: Select Disabled/Temporary/Always On in web interface
+- **Disable Network**: Set "At Boot" to Disabled or let Temporary mode auto-disable
 
 ### mDNS (Local Network Discovery)
 - **Easy Access**: Connect to device using `hostname.local` instead of IP address
@@ -218,10 +224,10 @@ The device implements intelligent connection management with different behaviors
    - **LED**: Orange slow blink (2 second intervals)
    - Continues until network is found or mode is changed
 2. **Connection Attempts**: When network found, up to 5 password retries
-   - **LED**: Orange solid during connection attempts
+   - **LED**: Orange slow blink continues during attempts
    - On failure, tries next configured SSID (if available)
 3. **Success**: Connection established and IP address obtained
-   - **LED**: Orange solid (connected)
+   - **LED**: Green solid (connected)
    - Device ready for remote access
 4. **Authentication Failure**: Wrong password on all configured networks
    - **LED**: Red fast blink (500ms intervals)
@@ -327,7 +333,7 @@ The web interface allows configuration of:
 - **WiFi Settings**: Choose AP or Client mode, configure up to 5 networks for Client mode
 - **WiFi TX Power**: Adjustable transmit power (2-20 dBm) for range/power optimization
 - **USB Mode**: Device (default) or Host mode
-- **Network Mode**: Temporary setup or permanent Wi-Fi operation
+- **WiFi "At Boot"**: Disabled, Temporary (auto-disable), or Always On
 - **Device Roles**: Configure Device 1, 2, 3, and 4 functionality (including SBUS modes)
 - **Protocol Optimization**: Choose RAW (timing-based), MAVLink (packet-aware), or SBUS (frame-based) optimization
 
@@ -439,13 +445,24 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 *XIAO/MiniKit: Any data activity shows as LED blink*
 
-### WiFi Network Status  
+### WiFi Network Status
 | Color | Pattern | Meaning | Details |
 |-------|---------|---------|---------|
-| Purple | Solid | WiFi AP mode active | Hotspot "ESP-Bridge" ready for connections |
+| Blue | Solid | WiFi AP mode active | Hotspot "ESP-Bridge" ready for connections |
 | Orange | Slow blink (2s) | WiFi Client searching | Scanning for configured network every 15s |
-| Orange | Solid | WiFi Client connected | Successfully connected to WiFi network |
+| Green | Solid | WiFi Client connected | Successfully connected to WiFi network |
 | Red | Fast blink (500ms) | WiFi Client error | Wrong password after 5 attempts - restart required |
+
+*XIAO/MiniKit: Solid ON for AP or Client connected, slow blink for searching, fast blink for error*
+
+### Bluetooth Status (BLE firmware only)
+| Color | Pattern | Meaning | Details |
+|-------|---------|---------|---------|
+| Purple | Solid | BLE only | Bluetooth active, WiFi disabled |
+| Blue↔Purple | Fade | WiFi AP + BLE | Both connections available |
+| Green↔Purple | Fade | WiFi Client + BLE | Both connections available |
+
+*XIAO/MiniKit: Fast blink (150ms) for BLE only, solid ON for WiFi + BLE*
 
 ### System Status
 | Color | Pattern | Meaning |
@@ -571,9 +588,11 @@ nc -u -l 14560
 | Problem | Solution |
 |---------|----------|
 | No data activity | Check TX/RX connections, verify baud rate matches device |
-| LED solid purple | WiFi AP mode active - connect to "ESP-Bridge" network |
+| LED solid blue | WiFi AP mode active - connect to "ESP-Bridge" network |
 | LED orange slow blink | WiFi Client searching - check SSID spelling and network availability |
-| LED solid orange | WiFi Client connected successfully |
+| LED solid green | WiFi Client connected successfully |
+| LED solid purple | BLE only mode - Bluetooth active, no WiFi |
+| LED fade animation | WiFi + BLE active - both connections available |
 | LED red fast blink | Wrong WiFi password - restart device or triple-click to change mode |
 | Forgot WiFi password | Hold BOOT button 5+ seconds to reset to defaults (MiniKit: triple RESET for AP, then Factory Reset in web UI) |
 | Can't connect to WiFi | Check network name, password, and 2.4GHz band (5GHz not supported) |
@@ -585,7 +604,7 @@ nc -u -l 14560
 | Partial or corrupted data | Check baud rate settings, verify wire quality and grounding |
 | "UART FIFO overflow" messages | This indicates USB cannot keep up with UART data rate. Only appears when COM port is open. Check adaptive buffer size matches your baud rate, consider enabling flow control, or reduce baud rate. |
 | "USB: Dropping data - port not connected" | Normal behavior when COM port is not opened. Data is discarded to prevent buffer overflow. Open a serial terminal to receive data. |
-| Can't access permanent network | Triple-click BOOT to enter temporary mode, then reconfigure |
+| Can't access WiFi network | Triple-click BOOT to enter temporary AP mode, then reconfigure |
 | Network takes long to connect | Normal - device scans every 15s and attempts 5 connections when found |
 
 ## Performance Notes

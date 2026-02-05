@@ -18,6 +18,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MissionPlanner;
+using MissionPlanner.Utilities;
 using MissionPlanner.Plugin;
 
 // BLE support (Windows 10+)
@@ -38,6 +39,8 @@ namespace RcOverride_BLE
         private const int DATA_TIMEOUT_MS = 3000;
         private const int BUFFER_MAX_SIZE = 4096;
         private const int PORT_RETRY_INTERVAL_MS = 2000;  // Wait 2s between open attempts (for BT ports)
+        private const int BLE_FAST_FAIL_THRESHOLD_MS = 5000;  // Failures faster than this indicate auth problem
+        private const int BLE_FAST_FAIL_COUNT_FOR_AUTH = 5;   // N consecutive fast failures = auth error
 
         // --- Serial config ---
         private const string PORT_DEFAULT = "COM14";
@@ -45,6 +48,12 @@ namespace RcOverride_BLE
 
         // --- UDP config ---
         private const int UDP_PORT_DEFAULT = 14552;
+
+        // --- Settings keys (stored in MP config.xml) ---
+        private const string SETTING_SOURCE_MODE = "RcOverride_SourceMode";
+        private const string SETTING_COM_PORT = "RcOverride_ComPort";
+        private const string SETTING_UDP_PORT = "RcOverride_UdpPort";
+        private const string SETTING_BLE_DEVICE_ID = "RcOverride_BleDeviceId";
 
         // --- Source mode ---
         private enum SourceMode { COM, UDP, BLE }
@@ -66,10 +75,12 @@ namespace RcOverride_BLE
         private List<DeviceInformation> _bleDevices = new List<DeviceInformation>();
         private bool _bleScanning = false;
         private bool _refreshingBleList = false;  // Prevent SelectedIndexChanged from triggering scan during refresh
-        private bool _bleAuthFailed = false;      // Pairing rejected by device, stop retrying
+        private bool _bleAuthFailed = false;      // Pairing rejected by device, stop retrying and uncheck
+        private string _bleAuthReason = null;     // Reason for auth failure (for tooltip)
+        private bool _bleConnected = false;       // True only after full connection (notifications subscribed)
         private DateTime _bleConnectedAt = DateTime.MinValue;
-        private int _bleFailCount = 0;            // Consecutive connection failures (any reason)
-        private const int BLE_MAX_RETRIES = 5;
+        private int _bleFailCount = 0;            // Consecutive connection failures (for diagnostics only)
+        private int _bleFastFailCount = 0;        // Consecutive fast failures (< 5s) for timing-based auth detection
 
         // --- State ---
         private SerialPort _port;
@@ -93,7 +104,7 @@ namespace RcOverride_BLE
 
         public override string Name => "RC Override";
         public override string Author => "P Team";
-        public override string Version => "2.2.3";
+        public override string Version => "2.2.4";
 
         private StringBuilder _buffer = new StringBuilder(256);
 
@@ -114,6 +125,7 @@ namespace RcOverride_BLE
         {
             _running = true;
             Console.WriteLine("[RC] Plugin v{0} loaded", Version);
+            LoadSettings();
             SetupUiPanel();
             return true;
         }
@@ -163,7 +175,7 @@ namespace RcOverride_BLE
                             ", connStatus=" + (_bleDevice?.ConnectionStatus.ToString() ?? "null"));
 
                         CloseBle();
-                        OnBleConnectFailed();
+                        OnBleConnectFailed(0);  // No timing data for data timeout
                         _lastDataTime = DateTime.MinValue;
                     }
                 }
@@ -355,7 +367,16 @@ namespace RcOverride_BLE
             // If RC override is disabled, LED is gray and controls unlocked
             if (_chkEnable == null || !_chkEnable.Checked)
             {
-                SetLedColor(Color.DarkGray, "Disabled");
+                // Show auth error even when disabled (user needs to know why it stopped)
+                if (_sourceMode == SourceMode.BLE && _bleAuthFailed)
+                {
+                    string tip = _bleAuthReason?.StartsWith("Possible") == true
+                        ? "BLE: Possible auth failure. Try re-pairing."
+                        : "BLE: Auth failed. Re-pair device, then enable.";
+                    SetLedColor(Color.DarkRed, tip);
+                }
+                else
+                    SetLedColor(Color.DarkGray, "Disabled");
                 if (_cmbPort != null) _cmbPort.Enabled = true;
                 if (_cmbSource != null) _cmbSource.Enabled = true;
                 return;
@@ -365,7 +386,7 @@ namespace RcOverride_BLE
             bool connected = false;
             if (_sourceMode == SourceMode.BLE)
             {
-                connected = (_bleDevice != null && _bleTxCharacteristic != null);
+                connected = _bleConnected;  // True only after full connection (notifications subscribed)
             }
             else if (_sourceMode == SourceMode.UDP)
             {
@@ -391,13 +412,19 @@ namespace RcOverride_BLE
                 if (_sourceMode == SourceMode.BLE && _bleAuthFailed)
                 {
                     // BLE auth failed — solid dark red, user must re-pair and re-enable
-                    SetLedColor(Color.DarkRed, "BLE: Auth failed. Re-pair device, then re-enable.");
+                    string tip = _bleAuthReason?.StartsWith("Possible") == true
+                        ? "BLE: Possible auth failure. Try re-pairing."
+                        : "BLE: Auth failed. Re-pair device, then enable.";
+                    SetLedColor(Color.DarkRed, tip);
                 }
                 else if (hasTarget)
                 {
                     // Trying to connect — blink red (~1Hz)
                     bool blink = (now.Millisecond / 500) % 2 == 0;
-                    SetLedColor(blink ? Color.Red : Color.DarkGray, "Connecting...");
+                    string tip = _sourceMode == SourceMode.BLE
+                        ? "BLE: Searching for device... (attempt " + (_bleFailCount + 1) + ")"
+                        : "Connecting...";
+                    SetLedColor(blink ? Color.Red : Color.DarkGray, tip);
                 }
                 else
                 {
@@ -673,23 +700,28 @@ namespace RcOverride_BLE
                 return;
             _lastPortOpenAttempt = now;
 
-            Console.WriteLine("[RC] BLE: EnsureBle - attempting connection to " + _selectedBleDeviceId);
+            Console.WriteLine("[RC] BLE [{0:ss.fff}]: Starting connection attempt to {1}",
+                DateTime.UtcNow, _selectedBleDeviceId);
             // Connect asynchronously
             Task.Run(async () => await ConnectBleAsync());
         }
 
         private async Task ConnectBleAsync()
         {
+            var attemptStart = DateTime.UtcNow;
+            int elapsed;
             try
             {
-                Console.WriteLine("[RC] BLE: Connecting to " + _selectedBleDeviceId +
-                    " (attempt " + (_bleFailCount + 1) + "/" + BLE_MAX_RETRIES + ")");
+                Console.WriteLine("[RC] BLE [{0:ss.fff}]: Connecting to {1} (attempt {2})",
+                    attemptStart, _selectedBleDeviceId, _bleFailCount + 1);
 
                 _bleDevice = await BluetoothLEDevice.FromIdAsync(_selectedBleDeviceId);
                 if (_bleDevice == null)
                 {
-                    Console.WriteLine("[RC] BLE: Failed to get device");
-                    OnBleConnectFailed();
+                    elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
+                    Console.WriteLine("[RC] BLE [{0:ss.fff}]: Failed to get device (took {1}ms)",
+                        DateTime.UtcNow, elapsed);
+                    OnBleConnectFailed(elapsed);
                     return;
                 }
 
@@ -700,12 +732,15 @@ namespace RcOverride_BLE
                 var servicesResult = await _bleDevice.GetGattServicesForUuidAsync(NUS_SERVICE_UUID);
                 if (servicesResult.Status != GattCommunicationStatus.Success || servicesResult.Services.Count == 0)
                 {
+                    elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
                     bool auth = IsGattAuthError(servicesResult.Status);
-                    Console.WriteLine("[RC] BLE: Service discovery failed, status=" + servicesResult.Status +
-                        (auth ? " → auth error, stopping retries" : " → will retry"));
-                    if (auth) _bleAuthFailed = true;
+                    Console.WriteLine("[RC] BLE [{0:ss.fff}]: Service discovery failed, status={1} (took {2}ms){3}",
+                        DateTime.UtcNow, servicesResult.Status, elapsed, auth ? " → auth error" : " → will retry");
                     CloseBle();
-                    OnBleConnectFailed();
+                    if (auth)
+                        OnBleAuthFailed("Service discovery: " + servicesResult.Status);
+                    else
+                        OnBleConnectFailed(elapsed);
                     return;
                 }
 
@@ -715,12 +750,15 @@ namespace RcOverride_BLE
                 var charsResult = await _bleService.GetCharacteristicsForUuidAsync(NUS_TX_CHAR_UUID);
                 if (charsResult.Status != GattCommunicationStatus.Success || charsResult.Characteristics.Count == 0)
                 {
+                    elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
                     bool auth = IsGattAuthError(charsResult.Status);
-                    Console.WriteLine("[RC] BLE: Characteristic discovery failed, status=" + charsResult.Status +
-                        (auth ? " → auth error, stopping retries" : " → will retry"));
-                    if (auth) _bleAuthFailed = true;
+                    Console.WriteLine("[RC] BLE [{0:ss.fff}]: Characteristic discovery failed, status={1} (took {2}ms){3}",
+                        DateTime.UtcNow, charsResult.Status, elapsed, auth ? " → auth error" : " → will retry");
                     CloseBle();
-                    OnBleConnectFailed();
+                    if (auth)
+                        OnBleAuthFailed("Characteristic discovery: " + charsResult.Status);
+                    else
+                        OnBleConnectFailed(elapsed);
                     return;
                 }
 
@@ -732,38 +770,68 @@ namespace RcOverride_BLE
 
                 if (status != GattCommunicationStatus.Success)
                 {
+                    elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
                     bool auth = IsGattAuthError(status);
-                    Console.WriteLine("[RC] BLE: Notification subscribe failed, status=" + status +
-                        (auth ? " → auth error, stopping retries" : " → will retry"));
-                    if (auth) _bleAuthFailed = true;
+                    Console.WriteLine("[RC] BLE [{0:ss.fff}]: Notification subscribe failed, status={1} (took {2}ms){3}",
+                        DateTime.UtcNow, status, elapsed, auth ? " → auth error" : " → will retry");
                     CloseBle();
-                    OnBleConnectFailed();
+                    if (auth)
+                        OnBleAuthFailed("Notification subscribe: " + status);
+                    else
+                        OnBleConnectFailed(elapsed);
                     return;
                 }
 
                 _bleTxCharacteristic.ValueChanged += BleCharacteristic_ValueChanged;
                 _lastDataTime = DateTime.UtcNow;
                 _bleFailCount = 0;
+                _bleFastFailCount = 0;
+                _bleConnected = true;
 
-                Console.WriteLine("[RC] BLE: Connected and subscribed to notifications");
+                elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
+                Console.WriteLine("[RC] BLE [{0:ss.fff}]: Connected and subscribed (took {1}ms)",
+                    DateTime.UtcNow, elapsed);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("[RC] BLE: Connection failed - " + ex.Message);
+                elapsed = (int)(DateTime.UtcNow - attemptStart).TotalMilliseconds;
+                Console.WriteLine("[RC] BLE [{0:ss.fff}]: Connection failed (took {1}ms) - {2}",
+                    DateTime.UtcNow, elapsed, ex.Message);
                 CloseBle();
-                OnBleConnectFailed();
+                OnBleConnectFailed(elapsed);
             }
         }
 
-        private void OnBleConnectFailed()
+        private void OnBleConnectFailed(int elapsedMs)
         {
             _bleFailCount++;
-            if (_bleFailCount >= BLE_MAX_RETRIES && !_bleAuthFailed)
+
+            // Timing-based auth detection: fast failures indicate device is online but rejecting auth
+            // Offline device takes ~7-8s, auth failure takes 0.5-2s
+            if (elapsedMs > 0 && elapsedMs < BLE_FAST_FAIL_THRESHOLD_MS)
             {
-                Console.WriteLine("[RC] BLE: " + BLE_MAX_RETRIES +
-                    " consecutive failures → stopping retries");
-                _bleAuthFailed = true;
+                _bleFastFailCount++;
+                Console.WriteLine("[RC] BLE: Failure #{0}, elapsed={1}ms (fast #{2}/{3})",
+                    _bleFailCount, elapsedMs, _bleFastFailCount, BLE_FAST_FAIL_COUNT_FOR_AUTH);
+
+                if (_bleFastFailCount >= BLE_FAST_FAIL_COUNT_FOR_AUTH)
+                {
+                    OnBleAuthFailed("Possible auth (timing): " + _bleFastFailCount + " fast failures (<" +
+                        BLE_FAST_FAIL_THRESHOLD_MS + "ms)");
+                    return;
+                }
             }
+            else
+            {
+                // Slow failure (device offline) - reset fast fail counter
+                if (_bleFastFailCount > 0)
+                    Console.WriteLine("[RC] BLE: Failure #{0}, elapsed={1}ms (slow, reset fast count from {2})",
+                        _bleFailCount, elapsedMs, _bleFastFailCount);
+                else
+                    Console.WriteLine("[RC] BLE: Failure #{0}, elapsed={1}ms", _bleFailCount, elapsedMs);
+                _bleFastFailCount = 0;
+            }
+            // (auth failures are handled separately via _bleAuthFailed)
         }
 
         private void BleCharacteristic_ValueChanged(GattCharacteristic sender, GattValueChangedEventArgs args)
@@ -795,19 +863,18 @@ namespace RcOverride_BLE
         {
             if (sender.ConnectionStatus == BluetoothConnectionStatus.Disconnected)
             {
-                var uptime = (DateTime.UtcNow - _bleConnectedAt).TotalMilliseconds;
-                Console.WriteLine("[RC] BLE: ConnectionStatusChanged → Disconnected after " + (int)uptime +
-                    "ms, failCount=" + _bleFailCount);
+                var uptime = (int)(DateTime.UtcNow - _bleConnectedAt).TotalMilliseconds;
+                Console.WriteLine("[RC] BLE [{0:ss.fff}]: Disconnected after {1}ms, failCount={2}",
+                    DateTime.UtcNow, uptime, _bleFailCount);
 
                 // Rapid disconnect after connect = auth/bond failure
-                if (uptime < PORT_RETRY_INTERVAL_MS)
-                {
-                    Console.WriteLine("[RC] BLE: Rapid disconnect (<" + PORT_RETRY_INTERVAL_MS +
-                        "ms) → auth failure, stopping retries");
-                    _bleAuthFailed = true;
-                }
+                bool isAuthFailure = uptime < PORT_RETRY_INTERVAL_MS;
 
                 CloseBle();
+
+                if (isAuthFailure)
+                    OnBleAuthFailed("Rapid disconnect after " + uptime + "ms");
+                // Normal disconnect (device went offline) - will auto-retry
             }
         }
 
@@ -851,6 +918,7 @@ namespace RcOverride_BLE
             catch { }
             finally
             {
+                _bleConnected = false;
                 _bleTxCharacteristic = null;
                 _bleService = null;
                 _bleDevice = null;
@@ -861,6 +929,24 @@ namespace RcOverride_BLE
         {
             return status == GattCommunicationStatus.AccessDenied ||
                    status == GattCommunicationStatus.ProtocolError;
+        }
+
+        // Called when auth fails - uncheck the enable checkbox to signal user
+        private void OnBleAuthFailed(string reason)
+        {
+            _bleAuthFailed = true;
+            _bleAuthReason = reason;
+            Console.WriteLine("[RC] BLE [{0:ss.fff}]: AUTH FAILED - {1}, unchecking enable",
+                DateTime.UtcNow, reason);
+
+            // Uncheck on UI thread
+            if (_chkEnable != null && !_chkEnable.IsDisposed)
+            {
+                if (_chkEnable.InvokeRequired)
+                    _chkEnable.Invoke(new Action(() => { _chkEnable.Checked = false; }));
+                else
+                    _chkEnable.Checked = false;
+            }
         }
 
         private async Task GetPairedNusDevicesAsync()
@@ -918,6 +1004,60 @@ namespace RcOverride_BLE
         }
 
         // ---------------------------------------------------------------
+        // Settings persistence (stored in MP config.xml)
+        // ---------------------------------------------------------------
+
+        private void SaveSettings()
+        {
+            try
+            {
+                Settings.Instance[SETTING_SOURCE_MODE] = _sourceMode.ToString();
+                Settings.Instance[SETTING_COM_PORT] = _currentPortName ?? "";
+                Settings.Instance[SETTING_UDP_PORT] = _udpPort.ToString();
+                Settings.Instance[SETTING_BLE_DEVICE_ID] = _selectedBleDeviceId ?? "";
+                Console.WriteLine("[RC] Settings saved: mode={0}, port={1}, udp={2}, ble={3}",
+                    _sourceMode, _currentPortName, _udpPort, _selectedBleDeviceId ?? "null");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[RC] Failed to save settings: " + ex.Message);
+            }
+        }
+
+        private void LoadSettings()
+        {
+            try
+            {
+                // Load source mode
+                string modeStr = Settings.Instance[SETTING_SOURCE_MODE];
+                if (!string.IsNullOrEmpty(modeStr) && Enum.TryParse(modeStr, out SourceMode mode))
+                    _sourceMode = mode;
+
+                // Load COM port (will be validated against available ports later)
+                string comPort = Settings.Instance[SETTING_COM_PORT];
+                if (!string.IsNullOrEmpty(comPort))
+                    _currentPortName = comPort;
+
+                // Load UDP port
+                string udpStr = Settings.Instance[SETTING_UDP_PORT];
+                if (!string.IsNullOrEmpty(udpStr) && int.TryParse(udpStr, out int udp) && udp > 0 && udp <= 65535)
+                    _udpPort = udp;
+
+                // Load BLE device ID (will be validated against paired devices later)
+                string bleId = Settings.Instance[SETTING_BLE_DEVICE_ID];
+                if (!string.IsNullOrEmpty(bleId))
+                    _selectedBleDeviceId = bleId;
+
+                Console.WriteLine("[RC] Settings loaded: mode={0}, port={1}, udp={2}, ble={3}",
+                    _sourceMode, _currentPortName, _udpPort, _selectedBleDeviceId ?? "null");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[RC] Failed to load settings: " + ex.Message);
+            }
+        }
+
+        // ---------------------------------------------------------------
         // Vehicle state check
         // ---------------------------------------------------------------
 
@@ -966,7 +1106,7 @@ namespace RcOverride_BLE
             _cmbSource.Margin = new Padding(0);
             _cmbSource.TabStop = false;
             _cmbSource.Items.AddRange(new object[] { "COM", "UDP", "BLE" });
-            _cmbSource.SelectedIndex = 0;
+            _cmbSource.SelectedIndex = (int)_sourceMode;  // Restore from settings
             _cmbSource.Location = new System.Drawing.Point(0, 2);
 
             _cmbSource.SelectedIndexChanged += (s, e) =>
@@ -1053,7 +1193,7 @@ namespace RcOverride_BLE
             // UDP port input
             _txtUdpPort = new TextBox();
             _txtUdpPort.Width = 55;
-            _txtUdpPort.Text = UDP_PORT_DEFAULT.ToString();
+            _txtUdpPort.Text = _udpPort.ToString();  // Restore from settings
             _txtUdpPort.Margin = new Padding(0);
             _txtUdpPort.TabStop = false;
             _txtUdpPort.Location = new System.Drawing.Point(_cmbSource.Right + 5, 2);
@@ -1138,6 +1278,7 @@ namespace RcOverride_BLE
                     _selectedBleDeviceId = device.Id;
                     Console.WriteLine("[RC] BLE: Selected " + device.Name + " id=" + device.Id);
                     _bleAuthFailed = false;
+                    _bleAuthReason = null;
                     _bleFailCount = 0;
                     CloseBle();
                 }
@@ -1156,10 +1297,18 @@ namespace RcOverride_BLE
             _chkEnable.TabStop = false;
             _chkEnable.Location = new System.Drawing.Point(_cmbPort.Right + 5, 4);
             _chkEnable.CheckedChanged += (s, e) => {
-                _bleAuthFailed = false;
-                _bleFailCount = 0;
-                if (!_chkEnable.Checked)
+                if (_chkEnable.Checked)
                 {
+                    // User enabled - save settings and reset auth failure state
+                    SaveSettings();
+                    _bleAuthFailed = false;
+                    _bleAuthReason = null;
+                    _bleFailCount = 0;
+                    _bleFastFailCount = 0;
+                }
+                else
+                {
+                    // User disabled (or auto-disabled on auth fail) - cleanup connections
                     try { ClearRcOverride(); } catch { }
                     ClosePort();
                     CloseUdp();
@@ -1214,6 +1363,27 @@ namespace RcOverride_BLE
             };
 
             _uiPanel.BringToFront();
+
+            // Show correct source selector based on loaded settings
+            UpdateSourceUi();
+
+            // Auto-scan BLE devices if BLE mode was restored from settings
+            if (_sourceMode == SourceMode.BLE && !_bleScanning)
+            {
+                _bleScanning = true;
+                _cmbBle.Items[0] = "Loading...";
+                Task.Run(async () =>
+                {
+                    await GetPairedNusDevicesAsync();
+                    if (_cmbBle != null && !_cmbBle.IsDisposed)
+                    {
+                        if (_cmbBle.InvokeRequired)
+                            _cmbBle.Invoke(new Action(() => RefreshBleList()));
+                        else
+                            RefreshBleList();
+                    }
+                });
+            }
         }
 
         private void UpdateSourceUi()

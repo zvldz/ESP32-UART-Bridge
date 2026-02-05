@@ -140,7 +140,7 @@ static void populateApiConfig(JsonDocument& doc) {
     // WiFi configuration
     doc["ssid"] = config.ssid;
     doc["password"] = config.password;
-    doc["permanentWifi"] = config.permanent_network_mode;
+    doc["wifiApMode"] = (int)config.wifi_ap_mode;  // 0=Disabled, 1=Temporary, 2=Always On
     doc["wifiMode"] = config.wifi_mode;
     doc["wifiTxPower"] = config.wifi_tx_power;
     doc["wifiApChannel"] = config.wifi_ap_channel;
@@ -337,6 +337,11 @@ void handleApiConfig(AsyncWebServerRequest *request) {
 
 // Handle /api/status - runtime status (polled periodically)
 void handleApiStatus(AsyncWebServerRequest *request) {
+    // Reset WiFi auto-disable timer on web activity (Client mode)
+    if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
+        resetWiFiTimeout();
+    }
+
     JsonDocument doc;
     populateApiStatus(doc);
 
@@ -691,12 +696,13 @@ void handleSaveJson(AsyncWebServerRequest *request) {
         }
     }
 
-    if (doc.containsKey("permanent_wifi")) {
-        bool newVal = doc["permanent_wifi"];
-        if (newVal != config.permanent_network_mode) {
-            config.permanent_network_mode = newVal;
+    if (doc.containsKey("wifi_ap_mode")) {
+        int newVal = doc["wifi_ap_mode"];
+        if (newVal >= WIFI_AP_DISABLED && newVal <= WIFI_AP_ALWAYS_ON && newVal != config.wifi_ap_mode) {
+            config.wifi_ap_mode = (WifiApMode)newVal;
             configChanged = true;
-            log_msg(LOG_INFO, "Permanent WiFi: %s", newVal ? "enabled" : "disabled");
+            const char* modeNames[] = {"Disabled", "Temporary", "Always On"};
+            log_msg(LOG_INFO, "WiFi AP mode: %s", modeNames[newVal]);
         }
     }
 

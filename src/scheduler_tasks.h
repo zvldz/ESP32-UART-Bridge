@@ -30,6 +30,7 @@ void disableAllTasks();
 // WiFi timeout control
 void startWiFiTimeout();
 void cancelWiFiTimeout();
+void resetWiFiTimeout();  // Reset timeout on web activity (Client mode)
 
 // Scheduled reboot
 void scheduleReboot(unsigned long delayMs = 3000);

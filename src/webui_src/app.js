@@ -14,7 +14,7 @@ const DEFAULT_SBUS_RATE = '50';
 const TRACKED_FIELDS = [
     'device1Role', 'device2Role', 'device3Role', 'device4Role', 'device5Role',
     'baudrate', 'databits', 'parity', 'stopbits', 'flowcontrol',
-    'wifiMode', 'ssid', 'password', 'permanentWifi', 'wifiTxPower', 'wifiApChannel', 'mdnsHostname',
+    'wifiMode', 'ssid', 'password', 'wifiApMode', 'wifiTxPower', 'wifiApChannel', 'mdnsHostname',
     'wifiNetwork0Ssid', 'wifiNetwork0Pass', 'wifiNetwork1Ssid', 'wifiNetwork1Pass',
     'wifiNetwork2Ssid', 'wifiNetwork2Pass', 'wifiNetwork3Ssid', 'wifiNetwork3Pass',
     'wifiNetwork4Ssid', 'wifiNetwork4Pass',
@@ -77,9 +77,9 @@ document.addEventListener('alpine:init', () => {
         wifiMode: '0',
         ssid: '',
         password: '',
-        permanentWifi: false,
-        wifiTxPower: '20',
-        wifiApChannel: '1',
+        wifiApMode: '',    // Loaded from API
+        wifiTxPower: '',   // Loaded from API
+        wifiApChannel: '',
         mdnsHostname: '',
 
         // WiFi client networks (5 slots: primary + 4 additional)
@@ -466,9 +466,9 @@ document.addEventListener('alpine:init', () => {
                 this.wifiMode = String(data.wifiMode ?? 0);
                 this.ssid = data.ssid || '';
                 this.password = data.password || '';
-                this.permanentWifi = data.permanentWifi ?? false;
-                this.wifiTxPower = String(data.wifiTxPower ?? 20);
-                this.wifiApChannel = String(data.wifiApChannel ?? 1);
+                this.wifiApMode = String(data.wifiApMode ?? 1);  // Fallback for migration from old config
+                this.wifiTxPower = String(data.wifiTxPower);
+                this.wifiApChannel = String(data.wifiApChannel);
                 this.mdnsHostname = data.mdnsHostname || '';
 
                 // WiFi client networks (from array to individual fields)
@@ -572,7 +572,7 @@ document.addEventListener('alpine:init', () => {
                 wifi_mode: parseInt(this.wifiMode),
                 ssid: this.ssid,
                 password: this.password,
-                permanent_wifi: this.permanentWifi,
+                wifi_ap_mode: parseInt(this.wifiApMode),
                 wifi_tx_power: parseInt(this.wifiTxPower),
                 wifi_ap_channel: parseInt(this.wifiApChannel),
                 mdns_hostname: this.mdnsHostname,
@@ -900,18 +900,20 @@ document.addEventListener('alpine:init', () => {
         // Computed: WiFi mode text
         get wifiModeText() {
             const app = Alpine.store('app');
-            if (this.tempNetworkMode) {
-                return `Temporary AP (${app.ssid})`;
-            }
-            if (app.wifiMode === '0') {
-                return `Access Point (${app.ssid})`;
-            }
+            const tempIcon = this.tempNetworkMode ? ' ⏳' : '';
             // Client mode
-            if (this.wifiClientConnected) {
-                return `Client (${this.connectedSSID || 'Unknown'})`;
+            if (app.wifiMode === '1') {
+                if (this.wifiClientConnected) {
+                    return `Client (${this.connectedSSID || 'Unknown'})${tempIcon}`;
+                }
+                const primaryNetwork = app.wifiNetwork0Ssid || 'N/A';
+                return `Client (Searching: ${primaryNetwork})${tempIcon}`;
             }
-            const primaryNetwork = app.wifiNetwork0Ssid || 'N/A';
-            return `Client (Searching: ${primaryNetwork})`;
+            // AP mode
+            if (this.tempNetworkMode) {
+                return `Temporary AP (${app.ssid}) ⏳`;
+            }
+            return `Access Point (${app.ssid})`;
         },
 
         // Computed: show IP row (client mode connected)

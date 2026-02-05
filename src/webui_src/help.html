@@ -51,16 +51,17 @@
                     - Automatic fallback to next network on connection failure<br>
                     - <strong>Smart Connection:</strong> Scans every 15s, 5 password retries then tries next SSID (if configured)<br>
                     - Unlimited reconnection after successful initial connection<br><br>
-                    <strong>Operation Duration:</strong><br>
-                    - <strong>Temporary:</strong> Triple-click activation, 20-minute timeout<br>
-                    - <strong>Permanent:</strong> Always-on via web checkbox, no timeout
+                    <strong>WiFi "At Boot" Options:</strong><br>
+                    - <strong>Disabled:</strong> WiFi off at startup (activate via triple-click)<br>
+                    - <strong>Temporary:</strong> WiFi starts, auto-disables after 5 min if no activity<br>
+                    - <strong>Always On:</strong> WiFi remains active indefinitely
                 </div>
                 <div class="warning">
                     <strong>💡 WiFi Mode Tips:</strong><br>
-                    - <strong>LED Indicators:</strong> Purple (AP), Orange blink (Client searching), Orange solid (connected), Red blink (wrong password)<br>
+                    - <strong>LED Indicators:</strong> Blue (AP), Orange blink (Client searching), Green solid (connected), Red blink (wrong password)<br>
                     - <strong>Triple-click logic:</strong> Standalone→saved mode, Client→temporary AP<br>
                     - <strong>Recovery:</strong> Hold BOOT 5s to reset (S3), or Factory Reset via web UI (MiniKit)<br>
-                    - <strong>Remote access:</strong> Use permanent mode for always-on connectivity
+                    - <strong>Remote access:</strong> Use "Always On" boot mode for always-on connectivity
                 </div>
                 <div class="success" style="margin-top: 15px;">
                     <strong>⚙️ WiFi Advanced Settings:</strong><br><br>
@@ -73,7 +74,7 @@
                     - Adjustable from 2dBm (minimum) to 20dBm (maximum)<br>
                     - Lower power reduces interference and power consumption<br>
                     - Higher power increases range but may cause instability<br>
-                    - Default: 5dBm (Low) - good balance for most setups<br><br>
+                    - Default: 13dBm (Medium) - good balance for most setups<br><br>
                     <strong>📻 AP Channel (AP mode only):</strong><br>
                     - Select WiFi channel 1-13 for Access Point mode<br>
                     - Use WiFi analyzer app to find least congested channel<br>
@@ -262,10 +263,14 @@
                     - <strong>Green flashes</strong> - Data from computer (USB RX)<br>
                     - <strong>Cyan flashes</strong> - Bidirectional data transfer<br><br>
                     <strong>🌐 WiFi Network Status:</strong><br>
-                    - <strong>Purple solid</strong> - WiFi AP mode active<br>
+                    - <strong>Blue solid</strong> - WiFi AP mode active<br>
                     - <strong>Orange slow blink (2s)</strong> - WiFi Client searching<br>
-                    - <strong>Orange solid</strong> - WiFi Client connected<br>
+                    - <strong>Green solid</strong> - WiFi Client connected<br>
                     - <strong>Red fast blink (500ms)</strong> - WiFi Client error<br><br>
+                    <strong>📶 Bluetooth (BLE firmware):</strong><br>
+                    - <strong>Purple solid</strong> - BLE only (no WiFi)<br>
+                    - <strong>Blue↔Purple fade</strong> - WiFi AP + BLE active<br>
+                    - <strong>Green↔Purple fade</strong> - WiFi Client + BLE active<br><br>
                     <strong>🔘 System Status:</strong><br>
                     - <strong>White blinks</strong> - Button click feedback<br>
                     - <strong>Purple rapid blink</strong> - WiFi reset confirmation<br>
@@ -275,9 +280,11 @@
                 <table>
                     <tr><th>Context</th><th>LED State</th><th>Description</th></tr>
                     <tr><td>Data Activity</td><td>Blue/Green/Cyan flashes</td><td>50ms flash per data activity</td></tr>
-                    <tr><td>WiFi AP Mode</td><td>Purple solid</td><td>Hotspot active</td></tr>
-                    <tr><td>WiFi Client</td><td>Orange blink → Orange solid</td><td>Searching → Connected</td></tr>
+                    <tr><td>WiFi AP Mode</td><td>Blue solid</td><td>Hotspot active</td></tr>
+                    <tr><td>WiFi Client</td><td>Orange blink → Green solid</td><td>Searching → Connected</td></tr>
                     <tr><td>WiFi Error</td><td>Red fast blink</td><td>Wrong password (5 attempts failed)</td></tr>
+                    <tr><td>BLE Only</td><td>Purple solid</td><td>Bluetooth active, no WiFi</td></tr>
+                    <tr><td>WiFi + BLE</td><td>Fade animation</td><td>Blue↔Purple (AP) or Green↔Purple (Client)</td></tr>
                     <tr><td>Button Feedback</td><td>White blinks</td><td>Shows click count</td></tr>
                 </table>
 
@@ -285,9 +292,10 @@
                     <strong>XIAO ESP32-S3 / MiniKit - Single-color LED (blink-only mode):</strong><br>
                     - <strong>Blinks</strong> indicate data activity (no color differentiation)<br>
                     - <strong>Three quick blinks</strong> - Boot sequence<br>
-                    - <strong>Solid ON</strong> - WiFi AP mode active<br>
-                    - <strong>Slow blink</strong> - WiFi Client searching<br>
-                    - <strong>Fast blink</strong> - WiFi Client error<br>
+                    - <strong>Solid ON</strong> - WiFi AP mode active, WiFi Client connected, or WiFi + BLE<br>
+                    - <strong>Slow blink (2s)</strong> - WiFi Client searching<br>
+                    - <strong>Fast blink (500ms)</strong> - WiFi Client error<br>
+                    - <strong>Very fast blink (150ms)</strong> - BLE only (no WiFi)<br>
                     - <strong>OFF</strong> - Idle, no data transfer
                 </div>
             </div>
@@ -353,9 +361,11 @@
                     <tr><td>LED not flashing</td><td>No data activity - check connections and device settings</td></tr>
                     <tr><td>Unstable connection</td><td>Enable Flow Control, check wire quality</td></tr>
                     <tr><td>No WiFi mode</td><td>Triple-click BOOT button (S3) or triple RESET (MiniKit), check LED</td></tr>
-                    <tr><td>LED purple solid</td><td>WiFi AP mode active - connect to "ESP-Bridge-xxxx"</td></tr>
+                    <tr><td>LED blue solid</td><td>WiFi AP mode active - connect to "ESP-Bridge-xxxx"</td></tr>
                     <tr><td>LED orange blinking</td><td>WiFi Client searching - check network availability</td></tr>
-                    <tr><td>LED orange solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
+                    <tr><td>LED green solid</td><td>WiFi Client connected - access via assigned IP</td></tr>
+                    <tr><td>LED purple solid</td><td>BLE only mode - Bluetooth active, no WiFi</td></tr>
+                    <tr><td>LED fade animation</td><td>WiFi + BLE active - both connections available</td></tr>
                     <tr><td>LED red blinking</td><td>WiFi Client error - wrong password (restart required)</td></tr>
                     <tr><td>Can't access WiFi Client</td><td>Triple-click BOOT (S3) for temp AP, or triple RESET (MiniKit, always AP)</td></tr>
                     <tr><td>WiFi takes long to connect</td><td>Normal - scans every 15s, tries 5x when network found</td></tr>

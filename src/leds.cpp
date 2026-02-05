@@ -79,8 +79,8 @@ struct FadeState {
 static FadeState fadeState = {false, CRGB::Black, CRGB::Black, 0, 1, 0};  // Not volatile - accessed under mutex
 
 // Fade timing
-#define FADE_STEP_MS 20      // Time between fade steps (50 fps)
-#define FADE_STEP_SIZE 5     // Position increment per step (full cycle ~2 seconds)
+#define FADE_STEP_MS 30      // Time between fade steps (~33 fps)
+#define FADE_STEP_SIZE 4     // Position increment per step (full cycle ~4 seconds)
 #endif
 
 // Consolidated blink states - entire array is volatile
@@ -352,7 +352,8 @@ void leds_init() {
   #endif
 #else
     // Zero/SuperMini: FastLED for RGB LED
-    FastLED.addLeds<WS2812B, LED_PIN1, GRB>(leds, NUM_LEDS);
+    // Note: Some WS2812 variants use RGB order instead of standard GRB
+    FastLED.addLeds<WS2812B, LED_PIN1, RGB>(leds, NUM_LEDS);
     FastLED.setBrightness(LED_BRIGHTNESS);
     FastLED.setMaxPowerInVoltsAndMilliamps(5, 100); // Limit power consumption
 
@@ -473,19 +474,28 @@ static void clearOtherBlinks(BlinkType keepActive) {
 
 // Set static LED color and clear all blinks
 static void setStaticLED(CRGB color) {
-    if (ledMutex && xSemaphoreTake(ledMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    if (!ledMutex) return;
+
+    // Use longer timeout to ensure LED state is set reliably
+    // This is called from event handlers where timing matters
+    if (xSemaphoreTake(ledMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // Clear blinks FIRST to prevent race with led_process_updates
+        clearAllBlinks();
+
 #if defined(LED_TYPE_SINGLE_COLOR)
   #if defined(LED_ACTIVE_HIGH)
         digitalWrite(LED_PIN1, (color == CRGB::Black) ? LOW : HIGH);   // normal logic
   #else
         digitalWrite(LED_PIN1, (color == CRGB::Black) ? HIGH : LOW);   // inverted
   #endif
+        log_msg(LOG_DEBUG, "setStaticLED: single-color %s", (color == CRGB::Black) ? "OFF" : "ON");
 #else
         leds[0] = color;
         FastLED.show();
 #endif
-        clearAllBlinks();
         xSemaphoreGive(ledMutex);
+    } else {
+        log_msg(LOG_WARNING, "setStaticLED mutex timeout");
     }
 }
 
@@ -602,23 +612,11 @@ void led_process_updates() {
   #endif
 #endif
 
-    // Network mode check
+    // Network mode check - only handle rapid blink, static colors are set by led_set_mode()
     if (bridgeMode == BRIDGE_NET) {
-        bool rapidActive = processBlinkPatternUnderMutex(BLINK_RAPID);
-        if (!rapidActive && !blinkStates[BLINK_RAPID].active) {
-            // Keep LED constant (blue for RGB AP, just ON for single color AP)
-            // Note: Client and BLE modes are handled by their specific blink patterns above
-#if defined(LED_TYPE_SINGLE_COLOR)
-  #if defined(LED_ACTIVE_HIGH)
-            digitalWrite(LED_PIN1, HIGH);  // ON (normal logic)
-  #else
-            digitalWrite(LED_PIN1, LOW);   // ON (inverted)
-  #endif
-#else
-            leds[0] = CRGB::Blue;
-            FastLED.show();
-#endif
-        }
+        processBlinkPatternUnderMutex(BLINK_RAPID);
+        // Static LED colors (AP blue, Client green, BLE modes) are already set by led_set_mode()
+        // Don't override them here
         xSemaphoreGive(ledMutex);
         return;
     }
@@ -683,13 +681,19 @@ void led_set_ble_active(bool active) {
 
 // Set LED mode (implementation)
 void led_set_mode(LedMode mode) {
+    LedMode prevMode = currentLedMode;
     currentLedMode = mode;
-    
+
+    // Log mode transitions for debugging
+    if (prevMode != mode) {
+        log_msg(LOG_DEBUG, "LED mode: %d -> %d", prevMode, mode);
+    }
+
     switch(mode) {
         case LED_MODE_OFF:
             setStaticLED(CRGB::Black);
             break;
-            
+
         case LED_MODE_WIFI_ON:
             // WiFi AP mode: Blue for RGB, solid ON for single-color
             setStaticLED(CRGB::Blue);
@@ -699,7 +703,6 @@ void led_set_mode(LedMode mode) {
 #if defined(LED_TYPE_SINGLE_COLOR)
             // Single-color: solid ON (same as AP - "stable connection")
             setStaticLED(CRGB::White);
-            log_msg(LOG_DEBUG, "LED set to WiFi Client Connected - solid ON");
 #else
             // RGB: static green
             setStaticLED(CRGB::Green);
