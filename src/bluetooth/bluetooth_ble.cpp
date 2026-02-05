@@ -5,6 +5,7 @@
 #include "../logging.h"
 #include "../diagnostics.h"
 #include "../circular_buffer.h"
+#include "../device_stats.h"
 #include "nvs_flash.h"
 
 // ESP32 (WROOM) needs explicit BT controller init
@@ -320,6 +321,7 @@ void BluetoothBLE::onDisconnect(uint16_t handle, int reason) {
 
 void BluetoothBLE::onRxData(const uint8_t* data, size_t len) {
     rxBytes += len;
+    g_deviceStats.device5.rxBytes.fetch_add(len, std::memory_order_relaxed);
 
     // Use external buffer if set (pipeline integration)
     if (externalInputBuffer) {

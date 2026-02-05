@@ -15,7 +15,8 @@ struct DeviceStatistics {
     DeviceCounter device2;
     DeviceCounter device3;
     DeviceCounter device4;
-    
+    DeviceCounter device5;  // Bluetooth (BLE or Classic SPP)
+
     std::atomic<unsigned long> systemStartTime{0};
     std::atomic<unsigned long> lastGlobalActivity{0};
 };

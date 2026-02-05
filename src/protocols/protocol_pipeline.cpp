@@ -1136,16 +1136,22 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 // SBUS specific statistics
                 parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
                 parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
-                
+
                 // Find SBUS parser in any flow (not just first)
                 for (size_t i = 0; i < activeFlows; i++) {
-                    if (flows[i].parser && 
+                    if (flows[i].parser &&
                         strcmp(flows[i].parser->getName(), "SBUS_Fast") == 0) {
-                        
+
                         // Cast to SbusFastParser to get specific stats
                         SbusFastParser* sbusParser = static_cast<SbusFastParser*>(flows[i].parser);
                         parserStats["validFrames"] = sbusParser->getValidFrames();
                         parserStats["invalidFrames"] = sbusParser->getInvalidFrames();
+
+                        // SBUS fast path has its own lastFrameTime (bypasses protocol.stats)
+                        uint32_t sbusLastTime = sbusParser->getLastFrameTime();
+                        if (sbusLastTime > 0) {
+                            parserStats["lastActivityMs"] = (long)(millis() - sbusLastTime);
+                        }
                         break;
                     }
                 }
@@ -1159,14 +1165,16 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                                        0 : ctx->protocol.stats->minPacketSize;
         parserStats["maxPacketSize"] = ctx->protocol.stats->maxPacketSize;
         
-        // Calculate time since last activity
-        unsigned long currentMillis = millis();
-        long lastActivityMs = -1;  // -1 means never had packets
-        if (ctx->protocol.stats->lastPacketTime > 0 &&
-            currentMillis >= ctx->protocol.stats->lastPacketTime) {
-            lastActivityMs = currentMillis - ctx->protocol.stats->lastPacketTime;
+        // Calculate time since last activity (SBUS sets its own in the switch above)
+        if (!parserStats.containsKey("lastActivityMs")) {
+            unsigned long currentMillis = millis();
+            long lastActivityMs = -1;  // -1 means never had packets
+            if (ctx->protocol.stats->lastPacketTime > 0 &&
+                currentMillis >= ctx->protocol.stats->lastPacketTime) {
+                lastActivityMs = currentMillis - ctx->protocol.stats->lastPacketTime;
+            }
+            parserStats["lastActivityMs"] = lastActivityMs;
         }
-        parserStats["lastActivityMs"] = lastActivityMs;
     } else {
         // Stats not available yet
         JsonObject parserStats = stats["parser"].to<JsonObject>();

@@ -71,17 +71,17 @@
 
 #### Web Interface Improvements
 
-- [ ] **MEDIUM**: Device 5 (Bluetooth) statistics in web UI
-  - Add `device5` counter to `DeviceStatistics` structure (device_stats.h)
-  - Track tx/rx in bluetooth_sender.h / bluetooth_ble_sender.h
-  - Add to status API response (web_api.cpp)
-  - Add to app.js (device5TxBytes, device5RxBytes, etc.)
-  - Add to index.html status panel
-
 - [ ] **Show connected clients info in AP mode**
   - Number of connected stations
   - List of client IP addresses
   - IP of current web interface user
+
+- [ ] **Unify AP SSID and mDNS hostname** 🟡 MEDIUM PRIORITY
+  - Currently: AP SSID and mDNS hostname are separate settings
+  - Proposal: use mDNS hostname for AP SSID (removes one setting)
+  - Format: `{hostname}` for both AP SSID and `{hostname}.local`
+  - Simplifies mental model: one name = one device
+  - Consider: AP SSID max 32 chars, hostname max 63 chars (but .local adds 6)
 
 - [ ] **Navigation via mDNS hostname (`.local`)** 🟡 MEDIUM PRIORITY
 
