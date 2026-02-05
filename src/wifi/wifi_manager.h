@@ -27,6 +27,7 @@
 esp_err_t wifiInit();
 esp_err_t wifiStartClient();
 esp_err_t wifiStartAP(const String& ssid, const String& password);
+void wifiStop();     // Stop WiFi radio (Stage 1: esp_wifi_stop only)
 void wifiProcess();  // Called from main loop
 
 // Status functions

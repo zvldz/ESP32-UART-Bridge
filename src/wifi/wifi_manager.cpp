@@ -29,6 +29,7 @@ extern SystemState systemState;
 static esp_netif_t* sta_netif = NULL;
 static esp_netif_t* ap_netif = NULL;
 static bool wifi_initialized = false;
+static volatile bool wifiStopping = false;  // Flag to prevent event handler work during stop
 
 // Client connection state
 static unsigned long lastScanTime = 0;
@@ -226,6 +227,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_STA_DISCONNECTED:
                 {
+                    // Skip processing if WiFi is stopping (prevents stack overflow)
+                    if (wifiStopping) break;
+
                     wifi_event_sta_disconnected_t* event = static_cast<wifi_event_sta_disconnected_t*>(event_data);
                     log_msg(LOG_WARNING, "WiFi disconnected: Disconnect reason: %d", event->reason);
 
@@ -374,13 +378,55 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     }
                     else if (foundNetworkIndex < 0) {
                         // No configured network found in scan
-                        targetNetworkFound = false;
-                        systemState.wifiClientState = CLIENT_NO_SSID;
-                        led_set_wifi_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
+                        // But only change state if not already connected (race condition protection)
+                        if (systemState.wifiClientState != CLIENT_CONNECTED) {
+                            targetNetworkFound = false;
+                            systemState.wifiClientState = CLIENT_NO_SSID;
+                            led_set_wifi_mode(LED_MODE_WIFI_CLIENT_SEARCHING);
 
-                        // Enable LED task for searching animation
-                        tLedMonitor.enable();
-                        log_msg(LOG_DEBUG, "No configured networks found in scan");
+                            // Enable LED task for searching animation
+                            tLedMonitor.enable();
+                            log_msg(LOG_DEBUG, "No configured networks found in scan");
+                        }
+                    }
+                }
+                break;
+
+            case WIFI_EVENT_AP_STACONNECTED:
+                {
+                    // Skip processing if WiFi is stopping
+                    if (wifiStopping) break;
+
+                    wifi_event_ap_staconnected_t* event = static_cast<wifi_event_ap_staconnected_t*>(event_data);
+                    log_msg(LOG_INFO, "AP client connected, MAC: %02x:%02x:%02x:%02x:%02x:%02x",
+                            event->mac[0], event->mac[1], event->mac[2],
+                            event->mac[3], event->mac[4], event->mac[5]);
+
+                    // Cancel auto-disable timer when client connects (TEMPORARY mode)
+                    extern void cancelWiFiTimeout();
+                    cancelWiFiTimeout();
+                }
+                break;
+
+            case WIFI_EVENT_AP_STADISCONNECTED:
+                {
+                    // Skip processing if WiFi is stopping (prevents stack overflow)
+                    if (wifiStopping) break;
+
+                    wifi_event_ap_stadisconnected_t* event = static_cast<wifi_event_ap_stadisconnected_t*>(event_data);
+                    log_msg(LOG_INFO, "AP client disconnected, MAC: %02x:%02x:%02x:%02x:%02x:%02x",
+                            event->mac[0], event->mac[1], event->mac[2],
+                            event->mac[3], event->mac[4], event->mac[5]);
+
+                    // Restart auto-disable timer if no clients left (TEMPORARY mode)
+                    if (config.wifi_ap_mode == WIFI_AP_TEMPORARY) {
+                        wifi_sta_list_t sta_list;
+                        esp_wifi_ap_get_sta_list(&sta_list);
+                        if (sta_list.num == 0) {
+                            extern void startWiFiTimeout();
+                            startWiFiTimeout();
+                            log_msg(LOG_INFO, "No clients left, restarting auto-disable timer");
+                        }
                     }
                 }
                 break;
@@ -410,6 +456,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     // Set network connected bit
                     xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
                     led_set_wifi_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
+
+                    // Cancel auto-disable timer - we're connected
+                    extern void cancelWiFiTimeout();
+                    cancelWiFiTimeout();
 
                     // Disable LED task - stable connection, no animation needed
                     tLedMonitor.disable();
@@ -621,7 +671,57 @@ esp_err_t wifiStartAP(const String& ssid, const String& password) {
     return ESP_OK;
 }
 
+void wifiStop() {
+    if (!wifi_initialized) {
+        log_msg(LOG_WARNING, "wifiStop: WiFi not initialized");
+        return;
+    }
+
+    log_msg(LOG_INFO, "Stopping WiFi (auto-disable timeout)");
+
+    // Set flag BEFORE stopping to prevent event handlers from doing work
+    wifiStopping = true;
+
+    // Disable network tasks BEFORE stopping WiFi (prevents race conditions)
+    disableAllTasks();
+
+    // Stop WiFi radio (Stage 1: memory stays allocated for potential restart)
+    esp_err_t ret = esp_wifi_stop();
+    if (ret != ESP_OK) {
+        log_msg(LOG_ERROR, "esp_wifi_stop failed: %s", esp_err_to_name(ret));
+    }
+
+    // Clean up DNS server
+    if (dnsServer) {
+        dnsServer->stop();
+        delete dnsServer;
+        dnsServer = nullptr;
+    }
+
+    // Clean up mDNS
+    mdns_free();
+    mdnsInitialized = false;
+
+    // Clear flag after WiFi is fully stopped
+    wifiStopping = false;
+
+    // Update LED to show WiFi is off
+    led_set_wifi_mode(LED_MODE_OFF);
+
+    // Switch to standalone mode
+    extern BridgeMode bridgeMode;
+    bridgeMode = BRIDGE_STANDALONE;
+
+    // Enable standalone tasks (includes LED monitoring)
+    enableStandaloneTasks();
+
+    log_msg(LOG_INFO, "WiFi stopped, switched to standalone mode");
+}
+
 void wifiProcess() {
+    // Skip if WiFi is not running
+    if (!wifi_initialized || wifiStopping) return;
+
     // Initialize mDNS if needed (safely outside event handler)
     initMdnsService();
 
@@ -682,6 +782,9 @@ void wifiProcess() {
 }
 
 bool wifiIsReady() {
+    // Not ready if WiFi not initialized or stopping
+    if (!wifi_initialized || wifiStopping) return false;
+
     if (config.wifi_mode == BRIDGE_WIFI_MODE_CLIENT) {
         // Client mode - check if connected to AP
         return systemState.wifiClientConnected;

@@ -99,11 +99,7 @@ void config_init(Config* config) {
     config->flowcontrol = false;
     config->ssid = "";  // Empty = auto-generate unique SSID on first AP start
     config->password = DEFAULT_AP_PASSWORD;
-#ifdef DEFAULT_PERMANENT_AP
-    config->permanent_network_mode = true;  // AP always available on fresh firmware
-#else
-    config->permanent_network_mode = false;
-#endif
+    config->wifi_ap_mode = WIFI_AP_TEMPORARY;  // Default: WiFi on at boot, auto-disable after 5 min
 
     // WiFi Client mode defaults
     config->wifi_mode = BRIDGE_WIFI_MODE_AP;  // Default to AP mode
@@ -257,7 +253,16 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     if (doc["wifi"].is<JsonObject>()) {
         config->ssid = doc["wifi"]["ssid"] | "";  // Empty = auto-generate unique SSID
         config->password = doc["wifi"]["password"] | DEFAULT_AP_PASSWORD;
-        config->permanent_network_mode = doc["wifi"]["permanent"] | false;
+
+        // Load wifi_ap_mode with migration from old "permanent" field
+        if (doc["wifi"].containsKey("ap_mode")) {
+            config->wifi_ap_mode = (WifiApMode)(doc["wifi"]["ap_mode"] | WIFI_AP_DISABLED);
+        } else if (doc["wifi"].containsKey("permanent")) {
+            // Migration: permanent=true → ALWAYS_ON, permanent=false → DISABLED
+            config->wifi_ap_mode = doc["wifi"]["permanent"].as<bool>() ? WIFI_AP_ALWAYS_ON : WIFI_AP_DISABLED;
+        } else {
+            config->wifi_ap_mode = WIFI_AP_DISABLED;
+        }
 
         // Load WiFi mode
         config->wifi_mode = (BridgeWiFiMode)(doc["wifi"]["mode"] | BRIDGE_WIFI_MODE_AP);
@@ -419,7 +424,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     // WiFi settings
     doc["wifi"]["ssid"] = config->ssid;
     doc["wifi"]["password"] = config->password;
-    doc["wifi"]["permanent"] = config->permanent_network_mode;
+    doc["wifi"]["ap_mode"] = (int)config->wifi_ap_mode;
 
     // WiFi mode and client networks
     doc["wifi"]["mode"] = config->wifi_mode;

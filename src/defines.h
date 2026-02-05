@@ -136,7 +136,8 @@ Hardware: ESP32-WROOM-32 based development board
 #endif
 
 // WiFi settings
-#define WIFI_TIMEOUT            1200000 // 20 minutes in milliseconds
+#define WIFI_TIMEOUT            1200000 // 20 minutes for button-activated WiFi
+#define WIFI_AP_AUTO_DISABLE_MS 300000  // 5 minutes for WIFI_AP_TEMPORARY mode
 #define WIFI_ACTIVATION_CLICKS  3
 #define CLICK_TIMEOUT           3000    // 3 seconds between clicks
 

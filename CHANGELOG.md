@@ -27,17 +27,22 @@
   - Changed from PIN pairing due to Android compatibility issues with static passkey
 - **MiniKit BLE**: NimBLE ported to ESP32-WROOM-32 (BLE-only controller mode)
   - Separate sdkconfig with LWIP/WiFi memory optimization for low-RAM environment
-- **MP Plugin**: BLE device scan/select/connect via WinRT API (compiled as DLL)
+- **MP Plugin (RcOverride_v2_BLE)**: BLE device scan/select/connect via WinRT API (compiled as DLL)
   - Device list filtered by NUS service (only paired ESP-Bridge devices shown)
   - LED tooltips: hover shows status (Disabled, Connecting, Connected data OK, no telemetry, etc.)
   - BLE auth failure detection: stops retries on pairing rejection (DarkRed LED)
   - BLE device list auto-refresh on first switch to BLE mode
   - General failure counter (5 consecutive failures → stop retries)
   - Proper BLE cleanup (service dispose, notification unsubscribe)
+  - **Settings persistence**: Source type (COM/BLE/UDP), port, device ID saved to MP config.xml
+  - **Auto-scan on load**: BLE devices scanned automatically if BLE mode was saved
   - **espFix**: `Handshake.RequestToSend` during port Open() prevents ESP32-S3 USB Serial/JTAG reset
     - Root cause: `ARDUINO_USB_MODE=1` (HWCDC) has hardware auto-reset on RTS transition
     - Same approach as MissionPlanner's `CHK_rtsresetesp32` setting
     - Applied to both v2 (COM/UDP) and v2_BLE plugins
+- **MP Plugins crash fix**: Image disposal (`ArgumentException in Image.get_RawFormat`)
+  - VideoTX_Perun: clone MP resources instead of direct use, dispose in Exit()
+  - FuseSwitch_Perun: dispose icon in Exit()
 
 ### Code Cleanup
 - **BLE+WiFi coexistence**: Always enabled, mutual exclusion removed. Fallback skip commented in `device_init.cpp`
@@ -51,7 +56,19 @@
 - **BLE builds added**: `zero-ble`, `supermini-ble`, `xiao-ble`, `minikit-ble` (9 builds total)
 - **New sdkconfig files**: `supermini_ble_*`, `xiao_ble_*` (production + debug)
 
+### WiFi
+- **WiFi AP Mode: Temporary mode** (new default)
+  - New `WifiApMode` enum: `DISABLED`, `TEMPORARY`, `ALWAYS_ON`
+  - `TEMPORARY`: WiFi starts at boot, auto-disables after 5 min with no clients
+  - Timer cancelled when client connects, restarted when last client disconnects
+  - Config migration from old `permanent` boolean field
+  - Prevents lockout when ESP inside TX module bay (buttons inaccessible)
+
 ### Fixes
+- **WiFi Client mode stability**:
+  - Race condition fix: don't change state to `CLIENT_NO_SSID` if already connected
+  - `wifiStopping` flag prevents event handler work during WiFi stop (crash fix)
+  - AP client connect/disconnect event handling improved
 - **WiFi event handler crash fix**: Replaced blocking `vTaskDelay()` with `esp_timer` for reconnect retry
   - Root cause: `vTaskDelay` inside event handler blocks `sys_evt` task with mutex held → assert failure
   - Crash manifested as `IllegalInstruction` at 0x00000000 when WiFi Client mode without AP available

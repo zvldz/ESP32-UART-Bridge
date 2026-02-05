@@ -385,13 +385,20 @@ void detectWiFiMode() {
         return;
     }
 
-    // Check for permanent network mode configuration
-    if (config.permanent_network_mode) {
-        log_msg(LOG_INFO, "Permanent network mode enabled - entering network mode");
+    // Check for WiFi AP mode at boot
+    if (config.wifi_ap_mode == WIFI_AP_ALWAYS_ON) {
+        log_msg(LOG_INFO, "WiFi AP Always On - entering network mode");
         bridgeMode = BRIDGE_NET;
-        systemState.isTemporaryNetwork = false;  // Permanent network mode
+        systemState.isTemporaryNetwork = false;  // No timeout
         return;
     }
+    if (config.wifi_ap_mode == WIFI_AP_TEMPORARY) {
+        log_msg(LOG_INFO, "WiFi AP Temporary - entering network mode with auto-disable");
+        bridgeMode = BRIDGE_NET;
+        systemState.isTemporaryNetwork = true;  // Will auto-disable after timeout
+        return;
+    }
+    // WIFI_AP_DISABLED - continue to check for button clicks
 
     log_msg(LOG_DEBUG, "Click count at startup: %d", systemState.clickCount);
 
