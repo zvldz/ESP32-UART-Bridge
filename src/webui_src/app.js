@@ -729,11 +729,13 @@ document.addEventListener('alpine:init', () => {
         device2RoleName: '-',
         device3RoleName: '-',
         device4RoleName: '-',
+        device5RoleName: '-',
 
         // Device roles (numeric, from status)
         device2Role: 0,
         device3Role: 0,
         device4Role: 0,
+        device5Role: 0,
 
         // Device statistics
         device1Rx: 0,
@@ -748,7 +750,8 @@ document.addEventListener('alpine:init', () => {
             device1Rx: 0, device1Tx: 0,
             device2Rx: 0, device2Tx: 0,
             device3Rx: 0, device3Tx: 0,
-            device4RxBytes: 0, device4TxBytes: 0
+            device4RxBytes: 0, device4TxBytes: 0,
+            device5RxBytes: 0, device5TxBytes: 0
         },
 
         // Device 4 statistics
@@ -756,6 +759,10 @@ document.addEventListener('alpine:init', () => {
         device4TxPackets: 0,
         device4RxBytes: 0,
         device4RxPackets: 0,
+
+        // Device 5 statistics (Bluetooth)
+        device5TxBytes: 0,
+        device5RxBytes: 0,
 
         // Total
         totalTraffic: 0,
@@ -930,6 +937,8 @@ document.addEventListener('alpine:init', () => {
         get device3TxActive() { return this.device3Tx > this._prev.device3Tx; },
         get device4RxActive() { return this.device4RxBytes > this._prev.device4RxBytes; },
         get device4TxActive() { return this.device4TxBytes > this._prev.device4TxBytes; },
+        get device5RxActive() { return this.device5RxBytes > this._prev.device5RxBytes; },
+        get device5TxActive() { return this.device5TxBytes > this._prev.device5TxBytes; },
 
         // Start polling
         startPolling() {
@@ -961,6 +970,8 @@ document.addEventListener('alpine:init', () => {
                 this._prev.device3Tx = this.device3Tx;
                 this._prev.device4RxBytes = this.device4RxBytes;
                 this._prev.device4TxBytes = this.device4TxBytes;
+                this._prev.device5RxBytes = this.device5RxBytes;
+                this._prev.device5TxBytes = this.device5TxBytes;
 
                 this.uptime = data.uptime ?? 0;
                 this.freeRam = data.freeRam ?? 0;
@@ -985,11 +996,13 @@ document.addEventListener('alpine:init', () => {
                 this.device2RoleName = data.device2RoleName || '-';
                 this.device3RoleName = data.device3RoleName || '-';
                 this.device4RoleName = data.device4RoleName || '-';
+                this.device5RoleName = data.device5RoleName || '-';
 
                 // Device roles (numeric)
                 this.device2Role = parseInt(data.device2Role) || 0;
                 this.device3Role = parseInt(data.device3Role) || 0;
                 this.device4Role = parseInt(data.device4Role) || 0;
+                this.device5Role = parseInt(data.device5Role) || 0;
 
                 // Device stats
                 this.device1Rx = data.device1Rx ?? 0;
@@ -1004,6 +1017,10 @@ document.addEventListener('alpine:init', () => {
                 this.device4TxPackets = data.device4TxPackets ?? 0;
                 this.device4RxBytes = data.device4RxBytes ?? 0;
                 this.device4RxPackets = data.device4RxPackets ?? 0;
+
+                // Device 5 (Bluetooth)
+                this.device5TxBytes = data.device5TxBytes ?? 0;
+                this.device5RxBytes = data.device5RxBytes ?? 0;
 
                 // Total
                 this.totalTraffic = data.totalTraffic ?? 0;
@@ -1044,6 +1061,8 @@ document.addEventListener('alpine:init', () => {
                 this.device4TxBytes = 0;
                 this.device4RxPackets = 0;
                 this.device4TxPackets = 0;
+                this.device5RxBytes = 0;
+                this.device5TxBytes = 0;
                 this.totalTraffic = 0;
                 this.lastActivity = 'Never';
 

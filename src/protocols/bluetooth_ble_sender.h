@@ -8,6 +8,7 @@
 #include "sbus_router.h"
 #include "../bluetooth/bluetooth_ble.h"
 #include "../device_types.h"
+#include "../device_stats.h"
 #include "../types.h"
 #include "../logging.h"
 #include <cstring>
@@ -94,7 +95,7 @@ public:
 
         size_t sent = bluetoothBLE->write(sendData, sendSize);
         if (sent > 0) {
-            // Update stats for Device 5
+            g_deviceStats.device5.txBytes.fetch_add(sent, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
         }
         return sent;
@@ -136,6 +137,7 @@ public:
 
         if (sent > 0) {
             resetBackoff();
+            g_deviceStats.device5.txBytes.fetch_add(sent, std::memory_order_relaxed);
             g_deviceStats.lastGlobalActivity.store(millis(), std::memory_order_relaxed);
             commitPackets(1);
         } else {

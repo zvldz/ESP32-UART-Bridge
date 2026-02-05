@@ -17,13 +17,15 @@ private:
     uint8_t sourceId;           // CRITICAL: Store source ID for this parser
     uint32_t invalidFrames;     // Statistics
     uint32_t validFrames;
+    uint32_t lastFrameTime;     // millis() of last valid frame
 
 public:
     // CRITICAL: Constructor with source ID
     explicit SbusFastParser(uint8_t src = SBUS_SOURCE_DEVICE1) :
         sourceId(src),
         invalidFrames(0),
-        validFrames(0) {
+        validFrames(0),
+        lastFrameTime(0) {
 
         // Get singleton router instance
         router = SbusRouter::getInstance();
@@ -60,6 +62,7 @@ public:
         buffer->consume(25);
 
         validFrames++;
+        lastFrameTime = millis();
 
         // Route through singleton router
         // Router will handle:
@@ -90,6 +93,7 @@ public:
     void reset() override {
         invalidFrames = 0;
         validFrames = 0;
+        lastFrameTime = 0;
     }
 
     const char* getName() const override {
@@ -103,6 +107,7 @@ public:
     // Getters for statistics
     uint32_t getValidFrames() const { return validFrames; }
     uint32_t getInvalidFrames() const { return invalidFrames; }
+    uint32_t getLastFrameTime() const { return lastFrameTime; }
 };
 
 #endif

@@ -297,6 +297,23 @@
                             </td>
                         </tr>
 
+                        <!-- Device 5 (if role != 0) - Bluetooth stats -->
+                        <tr x-show="$store.status.device5Role">
+                            <td><strong>Device 5 (<span x-text="$store.status.device5RoleName"></span>):</strong></td>
+                            <td>
+                                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.9em;">
+                                    <span>
+                                        <span :style="{ color: $store.status.device5RxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device5RxActive ? '●' : '○'"></span>
+                                        ↓ <strong x-text="$store.status.formatBytes($store.status.device5RxBytes)"></strong>
+                                    </span>
+                                    <span>
+                                        <strong x-text="$store.status.formatBytes($store.status.device5TxBytes)"></strong>
+                                        ↑ <span :style="{ color: $store.status.device5TxActive ? '#28a745' : '#6c757d' }" x-text="$store.status.device5TxActive ? '●' : '○'"></span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+
                         <tr><td colspan="2" style="border-top: 1px solid #ddd; padding-top: 5px;"></td></tr>
 
                         <tr>

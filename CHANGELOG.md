@@ -16,6 +16,13 @@
 - **Coordination API**: `led_set_wifi_mode()` and `led_set_ble_active()` for combined state management
 - **Code cleanup**: Removed unused blink patterns (`BLINK_WIFI_CLIENT`, `BLINK_DOUBLE`, `BLINK_TRIPLE`) and timing constants
 
+### Web Interface
+- **Device 5 (BLE) statistics**: TX/RX byte counters in Device Statistics panel
+  - Shows only when Device 5 role is active (SBUS_OUT_TEXT or SBUS_OUT_BIN)
+  - Tracks both sendDirect (fast path) and queue-based transmissions
+- **SBUS Fast Path fix**: Last Activity and Success Rate now work correctly
+  - Added `lastFrameTime` tracking to `SbusFastParser` (was always showing "Never")
+
 ### BLE Support
 - **NimBLE NUS**: BLE Nordic UART Service for all boards (`BLE_ENABLED` flag)
   - Build environments: `zero_ble_*`, `supermini_ble_*`, `xiao_ble_*`, `minikit_ble_*`

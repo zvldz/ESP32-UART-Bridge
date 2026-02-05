@@ -31,7 +31,12 @@ void resetDeviceStatistics(DeviceStatistics& stats, unsigned long currentTimeMs)
     stats.device4.txBytes.store(0, std::memory_order_relaxed);
     stats.device4.rxPackets.store(0, std::memory_order_relaxed);
     stats.device4.txPackets.store(0, std::memory_order_relaxed);
-    
+
+    stats.device5.rxBytes.store(0, std::memory_order_relaxed);
+    stats.device5.txBytes.store(0, std::memory_order_relaxed);
+    stats.device5.rxPackets.store(0, std::memory_order_relaxed);
+    stats.device5.txPackets.store(0, std::memory_order_relaxed);
+
     stats.lastGlobalActivity.store(0, std::memory_order_relaxed);
     stats.systemStartTime.store(currentTimeMs, std::memory_order_relaxed);
 }
