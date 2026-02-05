@@ -570,7 +570,7 @@ document.addEventListener('alpine:init', () => {
 
                 // WiFi config
                 wifi_mode: parseInt(this.wifiMode),
-                ssid: this.ssid,
+                ssid: this.mdnsHostname,  // AP SSID = hostname (unified naming)
                 password: this.password,
                 wifi_ap_mode: parseInt(this.wifiApMode),
                 wifi_tx_power: parseInt(this.wifiTxPower),
@@ -610,10 +610,10 @@ document.addEventListener('alpine:init', () => {
         // Validate form before submission
         // Returns null if valid, error message string if invalid
         validate() {
-            // AP mode validation
+            // AP mode validation (AP SSID = mdnsHostname)
             if (this.wifiMode === '0') {
-                if (!this.ssid || this.ssid.trim() === '') {
-                    return 'AP SSID required';
+                if (!this.mdnsHostname || this.mdnsHostname.trim() === '') {
+                    return 'Device name (hostname) required for AP mode';
                 }
                 if (this.password && this.password.length > 0 && this.password.length < 8) {
                     return 'AP password: min 8 chars';
@@ -916,11 +916,11 @@ document.addEventListener('alpine:init', () => {
                 const primaryNetwork = app.wifiNetwork0Ssid || 'N/A';
                 return `Client (Searching: ${primaryNetwork})${tempIcon}`;
             }
-            // AP mode
+            // AP mode (SSID = hostname)
             if (this.tempNetworkMode) {
-                return `Temporary AP (${app.ssid}) ⏳`;
+                return `Temporary AP (${app.mdnsHostname}) ⏳`;
             }
-            return `Access Point (${app.ssid})`;
+            return `Access Point (${app.mdnsHostname})`;
         },
 
         // Computed: show IP row (client mode connected)

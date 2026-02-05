@@ -22,6 +22,10 @@
   - Tracks both sendDirect (fast path) and queue-based transmissions
 - **SBUS Fast Path fix**: Last Activity and Success Rate now work correctly
   - Added `lastFrameTime` tracking to `SbusFastParser` (was always showing "Never")
+- **Unified device naming**: AP SSID now uses mDNS hostname (one name everywhere)
+  - "Device Name" field (max 32 chars) sets: mDNS hostname, AP SSID, BLE device name
+  - AP SSID field is read-only, auto-filled from Device Name
+  - Simplifies configuration: one name = one device identity
 
 ### BLE Support
 - **NimBLE NUS**: BLE Nordic UART Service for all boards (`BLE_ENABLED` flag)
