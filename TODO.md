@@ -76,13 +76,6 @@
   - List of client IP addresses
   - IP of current web interface user
 
-- [ ] **Unify AP SSID and mDNS hostname** 🟡 MEDIUM PRIORITY
-  - Currently: AP SSID and mDNS hostname are separate settings
-  - Proposal: use mDNS hostname for AP SSID (removes one setting)
-  - Format: `{hostname}` for both AP SSID and `{hostname}.local`
-  - Simplifies mental model: one name = one device
-  - Consider: AP SSID max 32 chars, hostname max 63 chars (but .local adds 6)
-
 - [ ] **Navigation via mDNS hostname (`.local`)** 🟡 MEDIUM PRIORITY
 
   Goal: `{hostname}.local` as unified ESP address in all WiFi modes and during mode switches.

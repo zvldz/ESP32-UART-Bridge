@@ -672,7 +672,9 @@
                         <div id="apModeSettings" x-show="$store.app.wifiMode === '0'">
                             <!--<h5>Access Point Settings</h5>-->
                             <label for="ssid">AP Name (SSID):</label>
-                            <input type="text" name="ssid" id="ssid" maxlength="32" x-model="$store.app.ssid">
+                            <input type="text" name="ssid" id="ssid" maxlength="32" readonly
+                                   :value="$store.app.mdnsHostname" class="readonly-field">
+                            <small class="hint" style="margin-top: 2px;">🔗 Uses mDNS hostname (edit below in Network Settings)</small>
                             <label for="password">AP Password:</label>
                             <div class="section-content" x-data="{ show: false }">
                                 <input :type="show ? 'text' : 'password'" name="password" id="password" maxlength="64" class="section-content-padded"
@@ -816,14 +818,14 @@
 
                         <!-- mDNS Hostname -->
                         <div class="mt-15">
-                            <label for="mdns_hostname">mDNS Hostname:</label>
-                            <input type="text" name="mdns_hostname" id="mdns_hostname" maxlength="63"
+                            <label for="mdns_hostname">Device Name:</label>
+                            <input type="text" name="mdns_hostname" id="mdns_hostname" maxlength="32"
                                    x-model="$store.app.mdnsHostname"
                                    pattern="[a-z0-9][a-z0-9\-]*[a-z0-9]|[a-z0-9]"
                                    style="text-transform: lowercase;"
                                    placeholder="esp-bridge-xxxx">
                             <small class="hint">ℹ️ Access via <strong><span x-text="$store.app.mdnsHostname || 'hostname'"></span>.local</strong> (a-z, 0-9, - only)</small>
-                            <small class="hint" x-show="$store.app.btSupported || $store.app.bleSupported" style="margin-top: 0;">📶 Also used as <span x-text="$store.app.bleSupported ? 'BLE' : 'Bluetooth'"></span> device name</small>
+                            <small class="hint" style="margin-top: 0;">📡 Also used as AP SSID<span x-show="$store.app.btSupported || $store.app.bleSupported"> and <span x-text="$store.app.bleSupported ? 'BLE' : 'Bluetooth'"></span> device name</span></small>
                             <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
                         </div>
                     </div>

@@ -45,6 +45,12 @@ input, select {
     box-sizing: border-box;
 }
 
+input.readonly-field, input:read-only:not([type="checkbox"]) {
+    background-color: #f5f5f5;
+    color: #666;
+    cursor: not-allowed;
+}
+
 button {
     background-color: #4CAF50;
     color: white;
