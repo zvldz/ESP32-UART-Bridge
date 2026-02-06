@@ -521,7 +521,7 @@
                                 <select id="device2_sbus_rate" name="device2_sbus_rate"
                                         x-model="$store.app.device2SbusRate"
                                         x-show="$store.app.showDevice2SbusRate"
-                                        class="w-100">
+                                        class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
                                     <option value="30">30 Hz</option>
@@ -550,7 +550,7 @@
                                 <select id="device3_sbus_rate" name="device3_sbus_rate"
                                         x-model="$store.app.device3SbusRate"
                                         x-show="$store.app.showDevice3SbusRate"
-                                        class="w-100">
+                                        class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
                                     <option value="30">30 Hz</option>
@@ -592,7 +592,7 @@
                                 <select id="device4_sbus_rate" name="device4_sbus_rate"
                                         x-model="$store.app.device4SbusRate"
                                         x-show="$store.app.showDevice4SbusRate"
-                                        class="w-100">
+                                        class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
                                     <option value="30">30 Hz</option>
@@ -622,7 +622,7 @@
                                 <select id="bt_send_rate" name="bt_send_rate"
                                         x-model="$store.app.btSendRate"
                                         x-show="$store.app.showDevice5SbusRate"
-                                        class="w-100">
+                                        class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
                                     <option value="30">30 Hz</option>
@@ -826,7 +826,7 @@
                                    placeholder="esp-bridge-xxxx">
                             <small class="hint">ℹ️ Access via <strong><span x-text="$store.app.mdnsHostname || 'hostname'"></span>.local</strong> (a-z, 0-9, - only)</small>
                             <small class="hint" style="margin-top: 0;">📡 Also used as AP SSID<span x-show="$store.app.btSupported || $store.app.bleSupported"> and <span x-text="$store.app.bleSupported ? 'BLE' : 'Bluetooth'"></span> device name</span></small>
-                            <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS works only on Private networks (not Public)</small>
+                            <small class="hint" style="margin-top: 0;">⚠️ Windows: mDNS may not work on Public networks</small>
                         </div>
                     </div>
                 </div>
@@ -1045,10 +1045,11 @@
                 </div>
 
                 <div style="text-align: center; margin-top: 20px;"
-                     x-data="{ saving: false, success: false, error: null, countdown: 0, noChanges: false }">
+                     x-data="{ saving: false, error: null, noChanges: false, reconnecting: false }">
                     <button id="saveButton" type="button" class="btn-large"
-                            :disabled="saving || success"
-                            :style="{ backgroundColor: success ? '#4CAF50' : error ? '#f44336' : noChanges ? '#ff9800' : '' }"
+                            x-show="!reconnecting"
+                            :disabled="saving"
+                            :style="{ backgroundColor: error ? '#f44336' : noChanges ? '#ff9800' : '' }"
                             @click="
                                 const validationError = $store.app.validate();
                                 if (validationError) {
@@ -1067,15 +1068,16 @@
                                 $store.app.save()
                                     .then(() => {
                                         saving = false;
-                                        success = true;
-                                        countdown = 10;
-                                        const timer = setInterval(() => {
-                                            countdown--;
-                                            if (countdown <= 0) {
-                                                clearInterval(timer);
-                                                window.location.reload();
-                                            }
-                                        }, 1000);
+                                        reconnecting = true;
+                                        if (window.location.hostname.endsWith('.local')) {
+                                            // Browsing via mDNS - reconnect to (possibly new) hostname
+                                            const mdns = $store.app.mdnsHostname;
+                                            const target = mdns ? `http://${mdns}.local/` : null;
+                                            Utils.startReconnect({ targetUrl: target, statusText: $refs.saveStatus });
+                                        } else {
+                                            // Browsing via IP - simple reload
+                                            Utils.startReconnect({ statusText: $refs.saveStatus });
+                                        }
                                     })
                                     .catch(err => {
                                         saving = false;
@@ -1083,14 +1085,16 @@
                                         setTimeout(() => error = null, 5000);
                                     });
                             "
-                            x-text="saving ? 'Saving...' : success ? 'Saved! Reconnecting in ' + countdown + 's...' : error ? 'Error: ' + error : noChanges ? 'No changes to save' : 'Save & Reboot'">
+                            x-text="saving ? 'Saving...' : error ? 'Error: ' + error : noChanges ? 'No changes to save' : 'Save & Reboot'">
                         Save & Reboot
                     </button>
                     <button type="button" class="btn-large" style="margin-left: 10px; background: #6c757d;"
-                            x-show="$store.app.isDirty"
+                            x-show="$store.app.isDirty && !reconnecting"
                             @click="$store.app.reset()">
                         Reset
                     </button>
+                    <div x-ref="saveStatus" x-show="reconnecting"
+                         style="padding: 10px; font-size: 16px; color: #2196F3;"></div>
                 </div>
             </div>
         </form>
