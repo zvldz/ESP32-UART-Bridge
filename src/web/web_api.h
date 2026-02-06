@@ -29,5 +29,6 @@ void handleTestCrash(AsyncWebServerRequest *request);
 // New split API endpoints (Alpine.js refactoring)
 void handleApiConfig(AsyncWebServerRequest *request);
 void handleApiStatus(AsyncWebServerRequest *request);
+void handleTimeSync(AsyncWebServerRequest *request);
 
 #endif // WEB_API_H

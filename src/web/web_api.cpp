@@ -878,6 +878,21 @@ void handleClearCrashLog(AsyncWebServerRequest *request) {
     sendJsonOk(request);
 }
 
+// Handle browser time sync (once per boot)
+void handleTimeSync(AsyncWebServerRequest *request) {
+    if (!request->hasParam("epoch")) {
+        sendJsonError(request, 400, "Missing epoch parameter");
+        return;
+    }
+    uint32_t epoch = request->getParam("epoch")->value().toInt();
+    if (epoch < 1700000000) {  // ~Nov 2023 sanity check
+        sendJsonError(request, 400, "Invalid epoch");
+        return;
+    }
+    crashlog_sync_time(epoch);
+    sendJsonOk(request);
+}
+
 // Handle test crash request - triggers intentional crash for coredump testing
 void handleTestCrash(AsyncWebServerRequest *request) {
     log_msg(LOG_WARNING, "Test crash requested via web interface");

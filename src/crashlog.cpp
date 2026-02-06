@@ -45,7 +45,13 @@ static const uint32_t MAX_VALID_HEAP = 1048576;     // 1MB
 RTC_NOINIT_ATTR uint32_t g_last_heap;
 RTC_NOINIT_ATTR uint32_t g_last_uptime;
 RTC_NOINIT_ATTR uint32_t g_min_heap;
-RTC_NOINIT_ATTR char g_last_version[16];  // Store version string at crash time
+RTC_NOINIT_ATTR uint32_t g_last_timestamp;  // Unix epoch at last update (0 = no sync)
+RTC_NOINIT_ATTR char g_last_version[16];    // Store version string at crash time
+
+// Browser time sync state (RAM only, lost on reboot)
+static uint32_t s_time_epoch = 0;        // Browser epoch at sync moment
+static uint32_t s_time_sync_millis = 0;  // millis() at sync moment
+static bool s_time_synced = false;        // Accept only first sync per boot
 
 // Check reset reason and save crash if needed
 void crashlog_check_and_save() {
@@ -116,6 +122,10 @@ void crashlog_check_and_save() {
         newEntry["uptime"] = (g_last_uptime <= MAX_VALID_UPTIME) ? g_last_uptime : 0;
         newEntry["heap"] = (g_last_heap <= MAX_VALID_HEAP) ? g_last_heap : 0;
         newEntry["min_heap"] = (g_min_heap <= MAX_VALID_HEAP) ? g_min_heap : 0;
+
+        // Timestamp from browser sync (0 = no sync happened before crash)
+        static const uint32_t MIN_VALID_EPOCH = 1700000000;  // ~Nov 2023
+        newEntry["time"] = (g_last_timestamp >= MIN_VALID_EPOCH) ? g_last_timestamp : 0;
 
         // Save firmware version at crash time (validate to prevent JSON corruption)
         if (isValidAsciiString(g_last_version, sizeof(g_last_version))) {
@@ -251,6 +261,11 @@ void crashlog_update_variables() {
     g_last_heap = ESP.getFreeHeap();
     g_last_uptime = millis() / 1000;
 
+    // Compute current timestamp from browser sync reference
+    if (s_time_synced) {
+        g_last_timestamp = s_time_epoch + (millis() - s_time_sync_millis) / 1000;
+    }
+
     // Track minimum heap
     if (g_last_heap < g_min_heap) {
         g_min_heap = g_last_heap;
@@ -259,4 +274,14 @@ void crashlog_update_variables() {
     // Store current firmware version for crash logging
     strncpy(g_last_version, DEVICE_VERSION, sizeof(g_last_version) - 1);
     g_last_version[sizeof(g_last_version) - 1] = '\0';
+}
+
+// Sync time from browser (once per boot)
+void crashlog_sync_time(uint32_t browser_epoch) {
+    if (s_time_synced) return;
+    s_time_epoch = browser_epoch;
+    s_time_sync_millis = millis();
+    s_time_synced = true;
+    g_last_timestamp = browser_epoch;
+    log_msg(LOG_INFO, "Time synced from browser: %u", browser_epoch);
 }

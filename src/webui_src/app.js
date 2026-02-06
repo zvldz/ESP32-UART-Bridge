@@ -509,6 +509,9 @@ document.addEventListener('alpine:init', () => {
                 // Snapshot original values for dirty checking
                 this._takeSnapshot();
 
+                // Sync browser time to ESP (once per boot, fire-and-forget)
+                fetch('/api/time?epoch=' + Math.floor(Date.now() / 1000)).catch(() => {});
+
                 this.loading = false;
             } catch (err) {
                 this.error = err.message;
