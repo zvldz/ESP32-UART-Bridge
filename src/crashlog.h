@@ -9,6 +9,7 @@
 extern uint32_t g_last_heap;
 extern uint32_t g_last_uptime;
 extern uint32_t g_min_heap;
+extern uint32_t g_last_timestamp;   // Unix epoch at last update (0 = no browser sync)
 extern char g_last_version[16];
 
 // Public interface
@@ -21,5 +22,8 @@ String crashlog_get_reset_reason_string(esp_reset_reason_t reason);
 
 // Update RTC variables periodically
 void crashlog_update_variables();
+
+// Browser time sync (called once per boot from web API)
+void crashlog_sync_time(uint32_t browser_epoch);
 
 #endif // CRASHLOG_H

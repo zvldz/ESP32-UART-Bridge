@@ -12,6 +12,10 @@
   - Factory reset: shows alert with default AP name (MAC-based), captive portal handles reconnect
 - **`defaultHostname` in API**: MAC-based hostname (`esp-bridge-XXYY`) always available from `/api/status`
 - **Mobile responsive fixes**: Frequency dropdown overflow fixed (`w-80`), compact table cells and font sizes on small screens, WiFi mode dropdown width constrained
+- **Browser time sync for crashlog**: Real date/time in crash log entries
+  - Browser sends epoch on page load (`/api/time`), ESP tracks via millis() delta
+  - Once per boot sync, survives in RTC until next reboot
+  - New "Date" column: `YYYY-MM-DD HH:MM` (local timezone) or `—` if no sync
 
 ### LED Indication
 - **BLE + WiFi combined modes**: Visual feedback for all connection states

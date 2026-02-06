@@ -76,14 +76,6 @@
   - List of client IP addresses
   - IP of current web interface user
 
-- [ ] **Browser Time Sync for Crashlog** 🟡 MEDIUM PRIORITY
-  - Get current time from browser when web UI is opened
-  - Store synced timestamp + millis() reference point
-  - Implement getCurrentTime() to calculate current time based on millis() delta
-  - Record real timestamp in crashlog (or 0 if browser was never opened)
-  - Useful for debugging crashes with actual date/time instead of just uptime
-  - No RTC required — time is "good enough" after first browser connection
-
 #### Advanced Protocol Management
 
 - [ ] **Protocol Conversion Features**

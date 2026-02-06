@@ -73,6 +73,7 @@ const CrashLog = {
                     <tr${heapClass} ${clickHandler} style="${cursorStyle}" data-entry-index="${index}">
                         <td>${entry.num}</td>
                         <td class="${typeClass}">${this.formatReason(entry.reason)}</td>
+                        <td>${this.formatTime(entry.time)}</td>
                         <td>${Utils.formatUptime(entry.uptime)}</td>
                         <td>${Utils.formatBytes(entry.heap)}</td>
                         <td class="crash-min-heap">${Utils.formatBytes(entry.min_heap)}</td>
@@ -84,7 +85,7 @@ const CrashLog = {
                 if (hasPanic) {
                     html += `
                         <tr id="crash-details-${index}" class="crash-details-row" style="display: none;">
-                            <td colspan="6" style="padding: 10px; background: #f5f5f5; border-left: 3px solid #f44336;">
+                            <td colspan="7" style="padding: 10px; background: #f5f5f5; border-left: 3px solid #f44336;">
                                 ${this.renderPanicDetails(entry.panic, entry.version)}
                             </td>
                         </tr>
@@ -111,7 +112,7 @@ const CrashLog = {
                 });
             });
         } else {
-            this.elements.tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No crashes recorded</td></tr>';
+            this.elements.tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No crashes recorded</td></tr>';
         }
     },
 
@@ -282,6 +283,13 @@ const CrashLog = {
         }, 2000);
     },
     
+    formatTime(epoch) {
+        if (!epoch || epoch === 0) return '—';
+        const d = new Date(epoch * 1000);
+        const pad = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
     formatReason(reason) {
         // Make crash reasons more readable
         const reasonMap = {
