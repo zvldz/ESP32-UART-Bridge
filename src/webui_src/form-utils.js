@@ -61,19 +61,19 @@ const FormUtils = {
             resetButton.textContent = 'Resetting...';
         }
 
+        // After factory reset, device reboots into AP mode with default hostname
+        // Captive portal will auto-open when user reconnects to new AP
+        const app = typeof Alpine !== 'undefined' ? Alpine.store('app') : null;
+        const apName = app?.defaultHostname || app?.mdnsHostname || 'esp-bridge-XXXX';
+
+        const onReset = () => {
+            alert(`Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ${apName}`);
+        };
+
         Utils.fetchWithReboot('/config/reset', { method: 'POST' })
-            .then(data => {
-                if (data.status === 'ok') {
-                    alert('Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ESP-Bridge-xxxx');
-                    Utils.startReconnect({ button: resetButton, waitSeconds: 8 });
-                }
-            })
+            .then(data => { if (data.status === 'ok') onReset(); })
             .catch(error => {
-                if (error.isReboot) {
-                    alert('Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ESP-Bridge-xxxx');
-                    Utils.startReconnect({ button: resetButton, waitSeconds: 8 });
-                    return;
-                }
+                if (error.isReboot) { onReset(); return; }
                 alert('Factory reset failed: ' + error.message);
                 if (resetButton) {
                     resetButton.disabled = false;

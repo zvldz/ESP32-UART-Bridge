@@ -243,8 +243,14 @@ void handleSuccess(AsyncWebServerRequest *request) {
 }
 
 // Handle not found - redirect to main page (Captive Portal)
+// Redirect to mDNS hostname (.local) so browser URL shows device name
 void handleNotFound(AsyncWebServerRequest *request) {
-    request->redirect("/");
+    if (!config.mdns_hostname.isEmpty()) {
+        String url = "http://" + config.mdns_hostname + ".local/";
+        request->redirect(url.c_str());
+    } else {
+        request->redirect("/");
+    }
 }
 
 // Handle reboot request

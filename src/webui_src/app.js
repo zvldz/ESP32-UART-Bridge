@@ -81,6 +81,7 @@ document.addEventListener('alpine:init', () => {
         wifiTxPower: '',   // Loaded from API
         wifiApChannel: '',
         mdnsHostname: '',
+        defaultHostname: '',  // MAC-based hostname (read-only, from API)
 
         // WiFi client networks (5 slots: primary + 4 additional)
         wifiNetwork0Ssid: '',
@@ -470,6 +471,7 @@ document.addEventListener('alpine:init', () => {
                 this.wifiTxPower = String(data.wifiTxPower);
                 this.wifiApChannel = String(data.wifiApChannel);
                 this.mdnsHostname = data.mdnsHostname || '';
+                this.defaultHostname = data.defaultHostname || '';
 
                 // WiFi client networks (from array to individual fields)
                 const networks = data.wifiNetworks || [];

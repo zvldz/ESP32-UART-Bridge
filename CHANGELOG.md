@@ -2,6 +2,17 @@
 
 ## v2.18.14
 
+### Web Interface
+- **mDNS navigation**: Captive portal redirects to `{hostname}.local` instead of raw IP
+  - Smart reconnect after Save: 3 retry rounds (5s countdown + parallel probe)
+  - Probes mDNS target URL and current origin in parallel (`Promise.any`), first wins
+  - Handles hostname changes: probes new `.local` name, skips stale cached old name
+  - Fallback UI: clickable links (mDNS, current IP, 192.168.4.1) after 3 failed attempts
+  - URL-aware logic: mDNS reconnect only when browsing via `.local`, IP mode uses simple reload
+  - Factory reset: shows alert with default AP name (MAC-based), captive portal handles reconnect
+- **`defaultHostname` in API**: MAC-based hostname (`esp-bridge-XXYY`) always available from `/api/status`
+- **Mobile responsive fixes**: Frequency dropdown overflow fixed (`w-80`), compact table cells and font sizes on small screens, WiFi mode dropdown width constrained
+
 ### LED Indication
 - **BLE + WiFi combined modes**: Visual feedback for all connection states
   - RGB LED (Zero, SuperMini): Color fade animation for combined modes

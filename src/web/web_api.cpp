@@ -23,6 +23,7 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include "esp_wifi.h"
 #include "esp_system.h"           // for esp_get_idf_version()
 #include "esp_arduino_version.h"  // for ESP_ARDUINO_VERSION_STR
 #include "esp_heap_caps.h"        // for PSRAM allocation
@@ -145,6 +146,13 @@ static void populateApiConfig(JsonDocument& doc) {
     doc["wifiTxPower"] = config.wifi_tx_power;
     doc["wifiApChannel"] = config.wifi_ap_channel;
     doc["mdnsHostname"] = config.mdns_hostname;
+
+    // Default hostname from MAC (always the same for this device)
+    uint8_t mac[6];
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    char defaultHostname[20];
+    snprintf(defaultHostname, sizeof(defaultHostname), "esp-bridge-%02x%02x", mac[4], mac[5]);
+    doc["defaultHostname"] = defaultHostname;
 
     // WiFi networks array
     JsonArray networks = doc["wifiNetworks"].to<JsonArray>();

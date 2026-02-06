@@ -302,6 +302,23 @@ pre {
     h3 {
         font-size: 18px;
     }
+
+    /* Device config table: reduce padding to fit 4 columns */
+    .device-table td,
+    .device-table th {
+        padding: 4px;
+        font-size: 13px;
+    }
+
+    .device-table select {
+        padding: 4px;
+        font-size: 13px;
+    }
+
+    /* WiFi section: limit dropdown width on narrow screens */
+    #wifi_mode {
+        width: 160px !important;
+    }
 }
 
 /* Collapsible sections (used in help.html) */
