@@ -19,6 +19,7 @@ struct ImportData {
 
 // Web server interface
 void webserver_init(Config* config, SystemState* state);
+void webserver_stop();  // Stop web server and free memory (Stage 2 WiFi cleanup)
 
 // Page handlers
 void handleRoot(AsyncWebServerRequest *request);

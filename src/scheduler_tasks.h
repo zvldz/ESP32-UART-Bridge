@@ -25,7 +25,7 @@ void initializeScheduler();
 // Task control functions
 void enableStandaloneTasks();      // Enable tasks for standalone mode
 void enableNetworkTasks(bool temporaryNetwork);  // Enable tasks for network mode
-void disableAllTasks();
+void disableNetworkTasks();           // Disable network-only tasks before WiFi shutdown
 
 // WiFi timeout control
 void startWiFiTimeout();

@@ -6,6 +6,7 @@
 #include "leds.h"
 #include "diagnostics.h"
 #include "scheduler_tasks.h"
+#include "../web/web_interface.h"
 
 // ESP-IDF headers
 #include "esp_wifi.h"
@@ -677,32 +678,70 @@ void wifiStop() {
         return;
     }
 
-    log_msg(LOG_INFO, "Stopping WiFi (auto-disable timeout)");
+    uint32_t heapBefore = ESP.getFreeHeap();
+    log_msg(LOG_INFO, "Stopping WiFi and releasing memory (heap: %u)", heapBefore);
 
     // Set flag BEFORE stopping to prevent event handlers from doing work
     wifiStopping = true;
 
-    // Disable network tasks BEFORE stopping WiFi (prevents race conditions)
-    disableAllTasks();
+    // 1. Disable network tasks (prevents race conditions with senders/listeners)
+    disableNetworkTasks();
 
-    // Stop WiFi radio (Stage 1: memory stays allocated for potential restart)
-    esp_err_t ret = esp_wifi_stop();
-    if (ret != ESP_OK) {
-        log_msg(LOG_ERROR, "esp_wifi_stop failed: %s", esp_err_to_name(ret));
+    // 2. Stop web server and free memory (~15-30 KB)
+    webserver_stop();
+
+    // 3. Close UDP transport (stop listener, UdpSender has wifiIsReady() guard)
+    extern AsyncUDP* udpTransport;
+    if (udpTransport) {
+        udpTransport->close();
     }
 
-    // Clean up DNS server
+    // 4. Clean up DNS server
     if (dnsServer) {
         dnsServer->stop();
         delete dnsServer;
         dnsServer = nullptr;
     }
 
-    // Clean up mDNS
+    // 5. Clean up mDNS
     mdns_free();
     mdnsInitialized = false;
 
-    // Clear flag after WiFi is fully stopped
+    // 6. Stop WiFi radio
+    esp_err_t ret = esp_wifi_stop();
+    if (ret != ESP_OK) {
+        log_msg(LOG_ERROR, "esp_wifi_stop failed: %s", esp_err_to_name(ret));
+    }
+
+    // 7. Stop reconnect timer (prevent pending callbacks)
+    if (reconnect_timer) {
+        esp_timer_stop(reconnect_timer);
+        esp_timer_delete(reconnect_timer);
+        reconnect_timer = NULL;
+    }
+
+    // 8. Unregister event handlers before deinit
+    esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
+    esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler);
+
+    // 9. Full WiFi deinit — release WiFi stack memory (~40-50 KB)
+    ret = esp_wifi_deinit();
+    if (ret != ESP_OK) {
+        log_msg(LOG_ERROR, "esp_wifi_deinit failed: %s", esp_err_to_name(ret));
+    }
+
+    // 10. Destroy network interfaces
+    if (ap_netif) {
+        esp_netif_destroy(ap_netif);
+        ap_netif = NULL;
+    }
+    if (sta_netif) {
+        esp_netif_destroy(sta_netif);
+        sta_netif = NULL;
+    }
+
+    // Mark WiFi as fully deinitialized (cannot restart without reboot)
+    wifi_initialized = false;
     wifiStopping = false;
 
     // Update LED to show WiFi is off
@@ -715,7 +754,8 @@ void wifiStop() {
     // Enable standalone tasks (includes LED monitoring)
     enableStandaloneTasks();
 
-    log_msg(LOG_INFO, "WiFi stopped, switched to standalone mode");
+    uint32_t heapAfter = ESP.getFreeHeap();
+    log_msg(LOG_INFO, "WiFi stopped, freed %u bytes (heap: %u)", heapAfter - heapBefore, heapAfter);
 }
 
 void wifiProcess() {

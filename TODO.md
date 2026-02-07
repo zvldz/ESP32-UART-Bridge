@@ -69,6 +69,14 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
+#### Device 3 Logger Role
+
+- [ ] **Return D3_UART3_LOG as selectable role in web UI**
+  - Backend code already exists (device_types.h, logging.cpp, device_init.cpp)
+  - Was removed from UI because USB was considered always occupied
+  - Useful for debugging via UART3 when USB Device is in bridge mode
+  - Need to add option back to Device 3 role dropdown in web interface
+
 #### Web Interface Improvements
 
 - [ ] **Show connected clients info in AP mode**
@@ -148,6 +156,30 @@
     - Some FC or receivers may benefit from throttled rate (50 Hz typical)
     - D4 binary (format=0) also needs rate control — currently only text format (format=1) has it
     - Reuse existing rate selector UI (10-70 Hz)
+
+#### WiFi Temporary Mode: Stage 2 — Memory Release ✅ DONE
+
+  **Implemented** in `wifiStop()` — full cleanup sequence:
+  - [x] `disableNetworkTasks()` — stop network-only scheduler tasks
+  - [x] `webserver_stop()` — server->end() + delete
+  - [x] `udpTransport->close()` — close UDP socket (UdpSender has wifiIsReady() guard)
+  - [x] DNS server + mDNS cleanup
+  - [x] `esp_wifi_stop()` — stop radio
+  - [x] `reconnect_timer` stop + delete
+  - [x] Unregister WiFi/IP event handlers
+  - [x] `esp_wifi_deinit()` — release WiFi stack
+  - [x] `esp_netif_destroy()` — destroy sta/ap interfaces
+  - [x] `wifi_initialized = false` — prevent WiFi API usage
+
+  Also fixed: `disableAllTasks()` renamed to `disableNetworkTasks()` — now only disables
+  actual network tasks (DNS, WiFi timeout, broadcast, UDP logger) instead of incorrectly
+  disabling standalone tasks (bridge activity, diagnostics, stats).
+
+  **Test results (S3 Zero BLE, AP Temporary mode):**
+  - [x] Before: 69,911 bytes free → After: 119,743 bytes free → **Freed: ~50 KB**
+  - [x] No crashes after esp_wifi_deinit()
+  - [x] Heap stable after cleanup (no drift)
+  - [x] USB SBUS + BLE SBUS continue working normally
 
 ### Future Considerations (Low Priority)
 

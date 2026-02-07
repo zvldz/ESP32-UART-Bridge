@@ -224,6 +224,17 @@ void webserver_init(Config* config, SystemState* state) {
     webServerInitialized = true;
 }
 
+// Stop web server and free memory (WiFi Stage 2 cleanup)
+void webserver_stop() {
+    if (!webServerInitialized || !server) return;
+
+    log_msg(LOG_INFO, "Stopping web server");
+    server->end();
+    delete server;
+    server = nullptr;
+    webServerInitialized = false;
+}
+
 // Handle help page with gzip compression
 void handleHelp(AsyncWebServerRequest *request) {
     AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML_HELP_GZ, HTML_HELP_GZ_LEN);

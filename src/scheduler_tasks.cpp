@@ -341,13 +341,14 @@ void enableNetworkTasks(bool temporaryNetwork) {
     }
 }
 
-void disableAllTasks() {
-    // Disable all tasks except basic ones
-    tBridgeActivity.disable();
-    tAllStacksDiagnostics.disable();
-    tDroppedDataStats.disable();
+void disableNetworkTasks() {
+    // AP mode tasks
     tDnsProcess.disable();
     tWiFiTimeout.disable();
+    // Client mode tasks
+    tBroadcastUpdate.disable();
+    // Device 4 network tasks (both modes)
+    tUdpLoggerTask.disable();
 }
 
 void startWiFiTimeout() {
