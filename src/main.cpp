@@ -457,24 +457,37 @@ void initCommonDevices() {
     }
 
     // Create USB interface based on configuration (only if Device 2 uses USB)
-    if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT) {
-        switch(config.usb_mode) {
+    if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT ||
+        config.device2.role == D2_USB_LOG) {
+
+        // USB Logger always uses Device mode (no Host mode for log output)
+        if (config.device2.role == D2_USB_LOG) {
+            log_msg(LOG_INFO, "Creating USB Device interface for logging");
+            usbInterface = createUsbDevice(config.baudrate);
+        } else {
+            switch(config.usb_mode) {
 #if !defined(BOARD_MINIKIT_ESP32)
-            case USB_MODE_HOST:
-                log_msg(LOG_INFO, "Creating USB Host interface");
-                usbInterface = createUsbHost(config.baudrate);
-                break;
+                case USB_MODE_HOST:
+                    log_msg(LOG_INFO, "Creating USB Host interface");
+                    usbInterface = createUsbHost(config.baudrate);
+                    break;
 #endif
-            case USB_MODE_DEVICE:
-            default:
-                log_msg(LOG_INFO, "Creating USB Device interface");
-                usbInterface = createUsbDevice(config.baudrate);
-                break;
+                case USB_MODE_DEVICE:
+                default:
+                    log_msg(LOG_INFO, "Creating USB Device interface");
+                    usbInterface = createUsbDevice(config.baudrate);
+                    break;
+            }
         }
 
         if (usbInterface) {
             usbInterface->init();
             log_msg(LOG_INFO, "USB interface initialized");
+
+            // Initialize USB logging if in logger mode
+            if (config.device2.role == D2_USB_LOG) {
+                logging_init_usb(usbInterface);
+            }
         } else {
             log_msg(LOG_ERROR, "Failed to create USB interface");
         }

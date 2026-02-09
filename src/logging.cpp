@@ -33,6 +33,9 @@ static LogConfig logConfig;
 // UART logger interface - now using UartInterface instead of HardwareSerial
 static UartInterface* logSerial = nullptr;
 
+// USB logger interface (for D2_USB_LOG mode)
+static UsbInterface* logUsb = nullptr;
+
 // Helper function to get short level name
 const char* getLogLevelName(LogLevel level) {
     switch(level) {
@@ -100,6 +103,21 @@ void logging_init_uart() {
         log_msg(LOG_INFO, "UART logging using existing Device 3 interface (D3_UART3_LOG mode)");
     } else {
         log_msg(LOG_ERROR, "Device 3 UART interface not available for logging");
+    }
+}
+
+// Initialize USB logging on Device 2
+void logging_init_usb(UsbInterface* usb) {
+    if (config.device2.role != D2_USB_LOG) {
+        return;
+    }
+
+    logUsb = usb;
+
+    if (logUsb) {
+        log_msg(LOG_INFO, "USB logging using Device 2 interface (D2_USB_LOG mode)");
+    } else {
+        log_msg(LOG_ERROR, "USB interface not available for logging");
     }
 }
 
@@ -171,6 +189,26 @@ void log_msg(LogLevel level, const char* fmt, ...) {
         }
     }
     
+    // USB logging (non-blocking, same format as UART)
+    if (logUsb && config.device2.role == D2_USB_LOG &&
+        config.log_level_uart != LOG_OFF && level <= config.log_level_uart) {
+
+        char usbBuf[320];
+        unsigned long uptimeMs = millis();
+        unsigned long seconds = uptimeMs / 1000;
+        unsigned long ms = uptimeMs % 1000;
+
+        int usbLen = snprintf(usbBuf, sizeof(usbBuf),
+                              "[%lu.%lus][%s] %s\r\n",
+                              seconds, ms/100, getLogLevelName(level), msgBuf);
+
+        if (usbLen > 0 && usbLen < (int)sizeof(usbBuf)) {
+            if (logUsb->availableForWrite() > usbLen) {
+                logUsb->write(reinterpret_cast<const uint8_t*>(usbBuf), usbLen);
+            }
+        }
+    }
+
     // Network logging
     if (systemState.networkActive &&
         config.device4.role == D4_LOG_NETWORK &&

@@ -29,6 +29,10 @@ void log_msg(LogLevel level, const char* fmt, ...) __attribute__((format(printf,
 // UART logging initialization
 void logging_init_uart();
 
+// USB logging initialization (D2_USB_LOG mode)
+class UsbInterface;  // Forward declaration
+void logging_init_usb(UsbInterface* usb);
+
 // Free UDP buffer if not needed (call after config_load)
 void logging_free_udp_if_unused();
 

@@ -1017,10 +1017,10 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label>UART Logs:</label>
+                                    <label>USB/UART Logs:</label>
                                     <select name="log_level_uart" id="log_level_uart" class="w-120"
                                             x-model="$store.app.logLevelUart"
-                                            :disabled="$store.app.device3Role !== '3'">
+                                            :disabled="$store.app.device3Role !== '3' && $store.app.device2Role !== '6'">
                                         <option value="-1">OFF</option>
                                         <option value="0">ERROR</option>
                                         <option value="1">WARNING</option>

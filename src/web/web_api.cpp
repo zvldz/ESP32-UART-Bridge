@@ -490,7 +490,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 
     if (doc.containsKey("device2_role")) {
         int role = doc["device2_role"];
-        if (role >= D2_NONE && role <= D2_USB_SBUS_TEXT && role != config.device2.role) {
+        if (role >= D2_NONE && role <= D2_USB_LOG && role != config.device2.role) {
             config.device2.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 2 role: %d", role);

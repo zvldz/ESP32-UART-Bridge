@@ -45,7 +45,8 @@ enum Device2Role {
     D2_USB = 2,
     D2_SBUS_IN = 3,        // SBUS input from RC receiver (UART2)
     D2_SBUS_OUT = 4,       // SBUS output to servos (UART2)
-    D2_USB_SBUS_TEXT = 5   // SBUS text output via USB (for MiniKit)
+    D2_USB_SBUS_TEXT = 5,  // SBUS text output via USB (for MiniKit)
+    D2_USB_LOG = 6         // USB logger output (Device mode only)
 };
 
 // Device 3 role

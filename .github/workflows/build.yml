@@ -62,12 +62,26 @@ jobs:
           VERSION="${{ github.ref_name }}"
           # Extract section for current version until next version header
           # awk state machine: start printing after version header, stop at next version
-          BODY=$(awk "/^## ${VERSION}[ (]/{found=1; next} /^## v[0-9]/{found=0} found" CHANGELOG.md)
+          BODY=$(awk "/^## ${VERSION}([ (]|$)/{found=1; next} /^## v[0-9]/{found=0} found" CHANGELOG.md)
           if [ -z "$BODY" ]; then
             BODY="Release ${VERSION}"
           fi
-          # Save to file to preserve multiline
-          echo "$BODY" > release_notes.md
+          # Save raw content, then wrap ### sections in collapsible <details> blocks
+          echo "$BODY" > release_notes_raw.md
+          awk '
+          /^---$/ { next }
+          /^### / {
+              if (d) print "\n</details>"
+              t = substr($0, 5)
+              print "<details>"
+              print "<summary><h3>" t "</h3></summary>"
+              print ""
+              d = 1
+              next
+          }
+          { print }
+          END { if (d) print "\n</details>" }
+          ' release_notes_raw.md > release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

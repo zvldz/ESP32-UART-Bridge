@@ -70,7 +70,7 @@ Hardware: ESP32-WROOM-32 based development board
 
 // Device identification
 #define DEVICE_NAME "ESP32 UART Bridge"
-#define DEVICE_VERSION "2.18.14"
+#define DEVICE_VERSION "2.18.15"
 
 // Hardware pins - Device 1 (Main UART)
 #if defined(BOARD_MINIKIT_ESP32)
