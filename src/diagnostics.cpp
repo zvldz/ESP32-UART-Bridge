@@ -61,28 +61,7 @@ void printBootInfo() {
     }
 }
 
-// System diagnostics - memory stats, uptime
-void systemDiagnostics() {
-    uint32_t freeHeap = ESP.getFreeHeap();
-    uint32_t totalHeap = ESP.getHeapSize();
-    uint32_t minFreeHeap = ESP.getMinFreeHeap();
-
-    // PSRAM stats (if available)
-    size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-
-    // Critical memory conditions - format: free/total (min=X)
-    if (freeHeap < 10000) {
-        log_msg(LOG_ERROR, "CRITICAL: HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
-                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
-    } else if (freeHeap < 20000) {
-        log_msg(LOG_WARNING, "Low mem: HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
-                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
-    } else {
-        log_msg(LOG_DEBUG, "HEAP: %u/%u (min=%u) | PSRAM: %zu/%zu",
-                freeHeap, totalHeap, minFreeHeap, psramFree, psramTotal);
-    }
-}
+// System diagnostics - merged into runAllStacksDiagnostics() (called every 10s)
 
 // Helper function for device1 role names
 const char* getDevice1RoleName(uint8_t role) {
@@ -246,47 +225,45 @@ void runDroppedDataStats() {
 }
 
 void runAllStacksDiagnostics() {
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t minFreeHeap = ESP.getMinFreeHeap();
+
+    // Determine log level based on memory thresholds
+    LogLevel logLevel = LOG_DEBUG;
+    if (freeHeap < 10000) logLevel = LOG_ERROR;
+    else if (freeHeap < 20000) logLevel = LOG_WARNING;
+
     char msg[256];
     int offset = 0;
 
-    // Current task (main loop)
+    // Stack watermarks
     UBaseType_t currentStack = uxTaskGetStackHighWaterMark(NULL);
-    offset += snprintf(msg + offset, sizeof(msg) - offset, "Stack free: Main=%dB", currentStack);
+    offset += snprintf(msg + offset, sizeof(msg) - offset, "Main=%dB", currentStack);
 
-    // UART bridge task
     extern TaskHandle_t uartBridgeTaskHandle;
     if (uartBridgeTaskHandle) {
         UBaseType_t uartStack = uxTaskGetStackHighWaterMark(uartBridgeTaskHandle);
         offset += snprintf(msg + offset, sizeof(msg) - offset, " UART=%dB", uartStack);
     }
 
-    // AsyncWebServer monitoring (runs in WiFi/TCP context)
     if (bridgeMode == BRIDGE_NET) {
-        offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Active");
-        // Monitor WiFi task which handles AsyncWebServer requests
         TaskHandle_t wifiTask = xTaskGetHandle("wifi");
         if (wifiTask) {
-            UBaseType_t wifiStack = uxTaskGetStackHighWaterMark(wifiTask);
-            offset += snprintf(msg + offset, sizeof(msg) - offset, ",WiFi=%dB", wifiStack);
+            offset += snprintf(msg + offset, sizeof(msg) - offset, " WiFi=%dB",
+                               (int)uxTaskGetStackHighWaterMark(wifiTask));
         }
-        // Monitor TCP/IP task
-        TaskHandle_t tcpipTask = xTaskGetHandle("tcpip_thread");
-        if (tcpipTask) {
-            UBaseType_t tcpipStack = uxTaskGetStackHighWaterMark(tcpipTask);
-            offset += snprintf(msg + offset, sizeof(msg) - offset, ",TCP=%dB", tcpipStack);
-        }
-    } else {
-        offset += snprintf(msg + offset, sizeof(msg) - offset, " Web=Off");
     }
 
-    // Add heap info including PSRAM
+    // Heap + PSRAM
     size_t psramFree = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
 
-    snprintf(msg + offset, sizeof(msg) - offset, ", Heap=%dB, MaxBlock=%dB, PSRAM=%zu/%zuKB",
-             ESP.getFreeHeap(), ESP.getMaxAllocHeap(), psramFree/1024, psramTotal/1024);
+    snprintf(msg + offset, sizeof(msg) - offset,
+             " | Heap=%u/%u (min=%u) MaxBlk=%dB | PSRAM=%zu/%zuKB",
+             freeHeap, ESP.getHeapSize(), minFreeHeap,
+             ESP.getMaxAllocHeap(), psramFree/1024, psramTotal/1024);
 
-    log_msg(LOG_DEBUG, "%s", msg);
+    log_msg(logLevel, "%s", msg);
 }
 
 // Log DMA statistics for a UART interface

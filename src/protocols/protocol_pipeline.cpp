@@ -1137,22 +1137,24 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 parserStats["framesDetected"] = ctx->protocol.stats->packetsDetected;
                 parserStats["framingErrors"] = ctx->protocol.stats->detectionErrors;
 
-                // Find SBUS parser in any flow (not just first)
+                // Find most recently active SBUS parser (by lastFrameTime)
+                SbusFastParser* bestParser = nullptr;
+                uint32_t bestTime = 0;
                 for (size_t i = 0; i < activeFlows; i++) {
                     if (flows[i].parser &&
                         strcmp(flows[i].parser->getName(), "SBUS_Fast") == 0) {
-
-                        // Cast to SbusFastParser to get specific stats
-                        SbusFastParser* sbusParser = static_cast<SbusFastParser*>(flows[i].parser);
-                        parserStats["validFrames"] = sbusParser->getValidFrames();
-                        parserStats["invalidFrames"] = sbusParser->getInvalidFrames();
-
-                        // SBUS fast path has its own lastFrameTime (bypasses protocol.stats)
-                        uint32_t sbusLastTime = sbusParser->getLastFrameTime();
-                        if (sbusLastTime > 0) {
-                            parserStats["lastActivityMs"] = (long)(millis() - sbusLastTime);
+                        SbusFastParser* sp = static_cast<SbusFastParser*>(flows[i].parser);
+                        if (sp->getLastFrameTime() > bestTime) {
+                            bestTime = sp->getLastFrameTime();
+                            bestParser = sp;
                         }
-                        break;
+                    }
+                }
+                if (bestParser) {
+                    parserStats["validFrames"] = bestParser->getValidFrames();
+                    parserStats["invalidFrames"] = bestParser->getInvalidFrames();
+                    if (bestTime > 0) {
+                        parserStats["lastActivityMs"] = (long)(millis() - bestTime);
                     }
                 }
                 break;

@@ -76,6 +76,8 @@
 - **Removed**: `ble_dump_bonds()` debug function, `BLE_WIFI_COEXIST_TEST` flag
 - **Heap monitor**: Disabled by default, kept under `#ifdef DEBUG` for quick re-enable
 - **Build flags**: `-D DEBUG` commented out in all builds (uncomment for forceSerialLog)
+- **Merged diagnostics**: `systemDiagnostics()` + `runAllStacksDiagnostics()` → single function (10s interval)
+  - One log line: stacks + heap (free/total/min) + MaxBlock + PSRAM + memory thresholds
 
 ### Build & Release
 - **GitHub Actions**: Release includes `bootloader.bin`, `partitions.bin`, `firmware.bin` + `.elf` for each board
@@ -89,8 +91,21 @@
   - Timer cancelled when client connects, restarted when last client disconnects
   - Config migration from old `permanent` boolean field
   - Prevents lockout when ESP inside TX module bay (buttons inaccessible)
+- **WiFi Stage 2: Full memory release** on temporary mode timeout
+  - `wifiStop()` now performs complete cleanup: webserver, UDP, DNS, mDNS, esp_wifi_deinit, esp_netif_destroy
+  - Frees ~50 KB (tested: 69K → 120K free heap on S3 Zero BLE)
+  - One-way shutdown (reboot required to re-enable WiFi) — fits "save = reboot" model
+  - Fixed `disableAllTasks()` → `disableNetworkTasks()`: was incorrectly disabling standalone tasks
 
 ### Fixes
+- **SBUS Fast Path statistics display**: With multiple SBUS inputs, web UI showed stats from first parser (Device 1) even if inactive
+  - SBUS routing and data flow worked correctly — only statistics display was affected
+  - Now picks most recently active parser by `lastFrameTime`
+- **WiFi Client + Temporary timeout**: Timer was killed on IP_EVENT, browser polling couldn't restart it
+  - WiFi never auto-disabled in Client mode with "At Boot: Temporary"
+  - Fix: restart timer on IP event, `resetWiFiTimeout()` now uses `startWiFiTimeout()` (re-enables disabled timer)
+- **Device 5 (BLE) build fix**: `device5_config` references in `populateApiStatus` missing `#ifdef BLE_ENABLED` guard
+- **Crashlog date column**: Wider Date field (22% → 26%) for full datetime display
 - **WiFi Client mode stability**:
   - Race condition fix: don't change state to `CLIENT_NO_SSID` if already connected
   - `wifiStopping` flag prevents event handler work during WiFi stop (crash fix)

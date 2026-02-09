@@ -69,13 +69,13 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
-#### Device 3 Logger Role
+#### Device 2 USB Logger Role
 
-- [ ] **Return D3_UART3_LOG as selectable role in web UI**
-  - Backend code already exists (device_types.h, logging.cpp, device_init.cpp)
-  - Was removed from UI because USB was considered always occupied
-  - Useful for debugging via UART3 when USB Device is in bridge mode
-  - Need to add option back to Device 3 role dropdown in web interface
+- [ ] **Add D2_USB_LOG as selectable role for Device 2**
+  - Output log messages to USB Serial (like `forceSerialLog` but as a proper role)
+  - Useful for debugging when USB is not needed for bridge/SBUS
+  - D3_UART3_LOG already exists for Device 3 — same concept for USB
+  - Need to add enum value, web UI dropdown option, and init logic
 
 #### Web Interface Improvements
 
@@ -156,30 +156,6 @@
     - Some FC or receivers may benefit from throttled rate (50 Hz typical)
     - D4 binary (format=0) also needs rate control — currently only text format (format=1) has it
     - Reuse existing rate selector UI (10-70 Hz)
-
-#### WiFi Temporary Mode: Stage 2 — Memory Release ✅ DONE
-
-  **Implemented** in `wifiStop()` — full cleanup sequence:
-  - [x] `disableNetworkTasks()` — stop network-only scheduler tasks
-  - [x] `webserver_stop()` — server->end() + delete
-  - [x] `udpTransport->close()` — close UDP socket (UdpSender has wifiIsReady() guard)
-  - [x] DNS server + mDNS cleanup
-  - [x] `esp_wifi_stop()` — stop radio
-  - [x] `reconnect_timer` stop + delete
-  - [x] Unregister WiFi/IP event handlers
-  - [x] `esp_wifi_deinit()` — release WiFi stack
-  - [x] `esp_netif_destroy()` — destroy sta/ap interfaces
-  - [x] `wifi_initialized = false` — prevent WiFi API usage
-
-  Also fixed: `disableAllTasks()` renamed to `disableNetworkTasks()` — now only disables
-  actual network tasks (DNS, WiFi timeout, broadcast, UDP logger) instead of incorrectly
-  disabling standalone tasks (bridge activity, diagnostics, stats).
-
-  **Test results (S3 Zero BLE, AP Temporary mode):**
-  - [x] Before: 69,911 bytes free → After: 119,743 bytes free → **Freed: ~50 KB**
-  - [x] No crashes after esp_wifi_deinit()
-  - [x] Heap stable after cleanup (no drift)
-  - [x] USB SBUS + BLE SBUS continue working normally
 
 ### Future Considerations (Low Priority)
 
@@ -280,9 +256,37 @@
 #### New Protocol Support 🔵 LOW PRIORITY
 
 - [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
-  - RC channel monitoring for automated switching (video frequencies, ELRS bands)
-  - Telemetry data extraction (RSSI, link quality, GPS, voltage, current)
-  - Integration with VTX control (SmartAudio/IRC Tramp)
+
+  **Use case**: RC TX → ELRS TX module → UART → ESP → BLE/WiFi/UART (same pipeline as SBUS)
+
+  **Architecture** (mirrors SBUS pipeline):
+
+  Phase 1 — RC channels text output:
+  - [ ] `CrsfParser` — frame parser (analog of `SbusFastParser`)
+  - [ ] Device roles: `D1_CRSF_IN`, `D3_CRSF_IN` (inputs), `D2_CRSF_OUT`, `D3_CRSF_OUT` (outputs)
+  - [ ] BLE output: text channel format (like `D5_BT_SBUS_TEXT`)
+  - [ ] USB output: text channel format (like `D2_USB_SBUS_TEXT`)
+  - [ ] Routing via `SbusRouter` or separate `CrsfRouter`
+
+  Phase 2 — binary passthrough & telemetry:
+  - [ ] Raw CRSF frame forwarding (all frame types, transparent relay)
+  - [ ] Telemetry extraction: battery, GPS, link stats, attitude
+
+  **Protocol reference:**
+  - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**
+  - Frame: `[0xC8][Length][Type][Payload...][CRC8]`, variable length 4-64 bytes
+  - RC Channels (type 0x16): 16 channels × 11 bit, 22 byte payload (same as SBUS)
+  - CRC8: polynomial 0xD5 (DVB-S2), covers Type + Payload
+  - Full-duplex on RX↔FC segment (relevant to us), half-duplex inside RC TX (not relevant)
+  - Failsafe: absence of frames = failsafe (no flag bits like SBUS)
+
+  **Key differences from SBUS:**
+  - Non-inverted (standard UART, no hardware hacks)
+  - Variable frame length (CRC required for validation)
+  - Bidirectional telemetry (battery, GPS, RSSI, LQ)
+  - Baudrate 420000 vs 100000
+
+  **Reference**: Betaflight `crsf.c`, ExpressLRS `crsf_protocol.h`, TBS spec
 - [ ] **Per-device protocol configuration** - Independent protocol selection for each Device
 - [ ] **Independent protocol detectors** - Separate MAVLink/SBUS/Raw detection per interface
 
