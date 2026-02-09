@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v2.18.15
+
+### New Feature
+- **USB Logger (D2_USB_LOG)**: New Device 2 role — log output via USB Serial
+  - Same format as UART3 Logger: `[timestamp][LEVEL] message`
+  - Shares log level setting with UART Logger (USB/UART Logs)
+  - USB Device mode only (Host mode ignored for logger)
+  - Non-blocking write with `availableForWrite()` check
+  - Can work simultaneously with D3_UART3_LOG (independent devices)
+
+### Build & Release
+- **GitHub Actions fix**: Changelog extraction regex now matches version headers without description suffix
+- **Collapsible release notes**: `### sections` auto-wrapped in `<details>` blocks on GitHub releases
+
+---
+
 ## v2.18.14
 
 ### Web Interface

@@ -69,13 +69,12 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
-#### Device 2 USB Logger Role
+#### Device 2 USB Logger Role ✅ DONE (v2.18.15)
 
-- [ ] **Add D2_USB_LOG as selectable role for Device 2**
-  - Output log messages to USB Serial (like `forceSerialLog` but as a proper role)
-  - Useful for debugging when USB is not needed for bridge/SBUS
-  - D3_UART3_LOG already exists for Device 3 — same concept for USB
-  - Need to add enum value, web UI dropdown option, and init logic
+- [x] **D2_USB_LOG role implemented**
+  - Log output via USB Serial, same format as UART3 Logger
+  - Shares log level with UART Logger (USB/UART Logs setting)
+  - USB Device mode only, non-blocking write
 
 #### Web Interface Improvements
 

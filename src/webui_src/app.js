@@ -338,7 +338,8 @@ document.addEventListener('alpine:init', () => {
                 { value: '2', label: 'USB', disabled: false },
                 { value: '3', label: 'SBUS Input', disabled: !this.uart2Available },
                 { value: '4', label: 'SBUS Output', disabled: !this.uart2Available },
-                { value: '5', label: 'USB SBUS Text Output', disabled: false }
+                { value: '5', label: 'USB SBUS Text Output', disabled: false },
+                { value: '6', label: 'USB Logger', disabled: false }
             ];
             return opts;
         },
