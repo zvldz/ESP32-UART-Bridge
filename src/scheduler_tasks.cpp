@@ -25,10 +25,9 @@ extern BridgeMode bridgeMode;
 Scheduler taskScheduler;
 
 // All task declarations (static to keep them local)
-static Task tSystemDiagnostics(10000, TASK_FOREVER, nullptr);
 static Task tCrashlogUpdate(5000, TASK_FOREVER, nullptr);
 static Task tBridgeActivity(30000, TASK_FOREVER, nullptr);
-static Task tAllStacksDiagnostics(5000, TASK_FOREVER, nullptr);
+static Task tAllStacksDiagnostics(10000, TASK_FOREVER, nullptr);
 static Task tDroppedDataStats(5000, TASK_FOREVER, nullptr);
 static Task tWiFiTimeout(WIFI_TIMEOUT, TASK_ONCE, nullptr);
 static Task tDnsProcess(150, TASK_FOREVER, nullptr);
@@ -51,10 +50,6 @@ static LedSnapshot ledPrevSnapshot;
 
 void initializeScheduler() {
     // Set all callbacks
-    tSystemDiagnostics.set(10000, TASK_FOREVER, []{
-        systemDiagnostics();
-    });
-
     tCrashlogUpdate.set(5000, TASK_FOREVER, []{
         crashlog_update_variables();
     });
@@ -262,7 +257,6 @@ void initializeScheduler() {
     taskScheduler.init();
 
     // Add all tasks to scheduler
-    taskScheduler.addTask(tSystemDiagnostics);
     taskScheduler.addTask(tCrashlogUpdate);
     taskScheduler.addTask(tBridgeActivity);
     taskScheduler.addTask(tAllStacksDiagnostics);
@@ -277,7 +271,6 @@ void initializeScheduler() {
     taskScheduler.addTask(tHeapMonitor);
 
     // Enable basic tasks that run in all modes
-    tSystemDiagnostics.enable();
     tCrashlogUpdate.enable();
     // tHeapMonitor.enable();  // DEBUG: uncomment to enable heap monitoring via Serial
 
@@ -365,10 +358,9 @@ void cancelWiFiTimeout() {
 }
 
 void resetWiFiTimeout() {
-    // Reset timeout on web activity (for Client mode with TEMPORARY)
-    // Only reset if timer is active (TEMPORARY mode and not yet connected permanently)
-    if (tWiFiTimeout.isEnabled() && config.wifi_ap_mode == WIFI_AP_TEMPORARY) {
-        tWiFiTimeout.restartDelayed();
+    // Restart timeout on web activity (browser polling keeps WiFi alive)
+    if (config.wifi_ap_mode == WIFI_AP_TEMPORARY) {
+        startWiFiTimeout();
     }
 }
 

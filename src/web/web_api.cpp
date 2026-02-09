@@ -259,14 +259,18 @@ static void populateApiStatus(JsonDocument& doc) {
     doc["device2Role"] = String(config.device2.role);
     doc["device3Role"] = String(config.device3.role);
     doc["device4Role"] = String(config.device4.role);
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
     doc["device5Role"] = String(config.device5_config.role);
+#endif
 
     // Device role names (for labels in Device Statistics)
     doc["device1RoleName"] = getDevice1RoleName(config.device1.role);
     doc["device2RoleName"] = getDevice2RoleName(config.device2.role);
     doc["device3RoleName"] = getDevice3RoleName(config.device3.role);
     doc["device4RoleName"] = getDevice4RoleName(config.device4.role);
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
     doc["device5RoleName"] = getDevice5RoleName(config.device5_config.role);
+#endif
 
     // Device statistics
     doc["device1Rx"] = g_deviceStats.device1.rxBytes.load(std::memory_order_relaxed);
@@ -284,11 +288,13 @@ static void populateApiStatus(JsonDocument& doc) {
         doc["device4RxPackets"] = g_deviceStats.device4.rxPackets.load(std::memory_order_relaxed);
     }
 
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
     // Device5 statistics (Bluetooth)
     if (config.device5_config.role != D5_NONE) {
         doc["device5TxBytes"] = g_deviceStats.device5.txBytes.load(std::memory_order_relaxed);
         doc["device5RxBytes"] = g_deviceStats.device5.rxBytes.load(std::memory_order_relaxed);
     }
+#endif
 
     // Total traffic
     unsigned long totalTraffic =

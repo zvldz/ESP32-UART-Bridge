@@ -458,9 +458,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                     xEventGroupSetBits(networkEventGroup, NETWORK_CONNECTED_BIT);
                     led_set_wifi_mode(LED_MODE_WIFI_CLIENT_CONNECTED);
 
-                    // Cancel auto-disable timer - we're connected
-                    extern void cancelWiFiTimeout();
-                    cancelWiFiTimeout();
+                    // Restart auto-disable timer - give 5 min for browser access
+                    extern void resetWiFiTimeout();
+                    resetWiFiTimeout();
 
                     // Disable LED task - stable connection, no animation needed
                     tLedMonitor.disable();

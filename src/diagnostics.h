@@ -6,8 +6,7 @@
 // Print boot information
 void printBootInfo();
 
-// System diagnostics (memory stats)
-void systemDiagnostics();
+// System diagnostics - merged into runAllStacksDiagnostics()
 
 // Helper functions for device role names
 const char* getDevice1RoleName(uint8_t role);
