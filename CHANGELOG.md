@@ -10,6 +10,19 @@
   - Non-blocking write with `availableForWrite()` check
   - Can work simultaneously with D3_UART3_LOG (independent devices)
 
+### Bug Fix
+- **sys_evt stack overflow crash**: Increased `CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE` from 2304 to 3072
+  - Root cause: `log_msg()` stack buffers (~600B) + WiFi/mDNS events exceeded default 2304B stack
+  - Crash was intermittent — FreeRTOS only detects overflow on context switch
+  - Applied to all 18 sdkconfig files
+
+### Diagnostics
+- **SysEvt stack monitoring**: Added sys_evt task to stack watermark diagnostics
+
+### Documentation
+- **Help page**: Added Device 2 and Device 3 role descriptions (previously only Device 4/5 were documented)
+- **README**: Added USB Logger to Device 2 roles
+
 ### Build & Release
 - **GitHub Actions fix**: Changelog extraction regex now matches version headers without description suffix
 - **Collapsible release notes**: `### sections` auto-wrapped in `<details>` blocks on GitHub releases

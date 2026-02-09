@@ -256,36 +256,86 @@
 
 - [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
 
-  **Use case**: RC TX → ELRS TX module → UART → ESP → BLE/WiFi/UART (same pipeline as SBUS)
+  **Primary use case**: ELRS RX → UART → ESP → WiFi/USB → Raspberry Pi (binary RC data)
+  **Secondary**: text output for debugging/visualization and GCS plugin compatibility
 
-  **Architecture** (mirrors SBUS pipeline):
+  **Connection notes:**
+  - UART between ELRS RX and ESP is full-duplex (separate TX/RX wires)
+  - For RX-only (RC channels from ELRS RX): single wire sufficient, no need to send anything back
+  - ELRS RX sends RC frames at constant rate regardless of whether it receives telemetry
+  - No ACK mechanism in CRSF — all data is fire-and-forget
+  - Telemetry on the radio screen is lost without reverse channel, but irrelevant if GCS provides it via MAVLink
+  - Each CRSF frame has exactly one type — no mixed-type frames, safe for line-based filtering
 
-  Phase 1 — RC channels text output:
-  - [ ] `CrsfParser` — frame parser (analog of `SbusFastParser`)
-  - [ ] Device roles: `D1_CRSF_IN`, `D3_CRSF_IN` (inputs), `D2_CRSF_OUT`, `D3_CRSF_OUT` (outputs)
-  - [ ] BLE output: text channel format (like `D5_BT_SBUS_TEXT`)
-  - [ ] USB output: text channel format (like `D2_USB_SBUS_TEXT`)
-  - [ ] Routing via `SbusRouter` or separate `CrsfRouter`
+  **Architecture — configurable filters instead of separate roles:**
 
-  Phase 2 — binary passthrough & telemetry:
-  - [ ] Raw CRSF frame forwarding (all frame types, transparent relay)
-  - [ ] Telemetry extraction: battery, GPS, link stats, attitude
+  Instead of `D1_CRSF_IN`/`D2_CRSF_OUT` etc., use one CRSF input role per device
+  with a bitmask filter selecting which frame groups to forward/convert:
+
+  | Bit | Group | Frame types | Description |
+  |-----|-------|-------------|-------------|
+  | 0 | RC Channels | 0x16 | 16ch x 11bit, 26 bytes (27 with ELRS 4.0+ armStatus) |
+  | 1 | Link Stats | 0x14 | RSSI, SNR, LQ, TX power |
+  | 2 | Flight Telemetry | 0x08,0x09,0x1E,0x21 | Battery, baro, attitude, flight mode |
+  | 3 | Sensors | 0x02,0x07,0x0A,0x0C,0x0D,0x0E | GPS, vario, airspeed, RPM, temp, cells |
+  | 4 | VTX/MSP | 0x32,0x7A-0x7C | VTX control, MSP passthrough |
+  | 5 | Config | 0x28-0x2E | Device ping/info, param read/write, ELRS status |
+  | 6 | Reserved | | |
+  | 7 | Passthrough | | Forward all frames raw (overrides other bits) |
+
+  Filter stored as `uint8_t crsfFilter` in config.
+  Multiple filters can be active simultaneously (e.g., RC + Link Stats + Battery).
+
+  **Text output format** (for debugging and GCS plugin compatibility):
+  Each frame type uses a unique line prefix. Consumers filter by prefix, ignore unknown lines.
+  Compatible with existing SBUS text plugins (RC Override ignores non-`RC` lines).
+  ```
+  RC 1500,1500,1000,1500,1500,1500,1500,1500,992,992,992,992,172,172,172,172\r\n
+  LQ 99,-45,8,250\r\n
+  BAT 16.2,12.5,1450,85\r\n
+  ATT 15.2,-3.1,180.0\r\n
+  GPS 49.123456,16.654321,250,12.5,180\r\n
+  FM ACRO\r\n
+  ```
+  Multiple filter groups active = interleaved lines of different types in one stream.
+
+  Phase 1 — RC channels (parser + both output formats):
+  - [ ] `CrsfParser` — frame parser (sync 0xC8, len, type, CRC8 validation)
+  - [ ] CRSF input role for Device 1 / Device 3 (RX-only, single wire)
+  - [ ] Text output: `RC 1500,1500,...\r\n` (SBUS text compatible, useful for visualization/debugging)
+  - [ ] Binary output: raw CRSF frames forwarded as-is (primary use case for Raspberry Pi)
+  - [ ] WiFi/UDP and USB forwarding
+  Text first for easy testing and visualization, binary is simpler (raw forward) but needs a receiver.
+
+  Phase 2 — filters and telemetry:
+  - [ ] Filter bitmask UI (checkboxes in web interface)
+  - [ ] Text output for additional frame types (LQ, BAT, GPS, ATT, FM prefixes)
+  - [ ] Link stats monitoring (LQ/RSSI in web UI or forwarded)
+  - [ ] Telemetry extraction: battery, GPS, attitude
+
+  Phase 3 — VTX and bidirectional:
+  - [ ] VTX control via MSP-over-CRSF (band/channel/power)
+  - [ ] Reverse channel: forward telemetry from FC back to ELRS RX (optional)
 
   **Protocol reference:**
   - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**
-  - Frame: `[0xC8][Length][Type][Payload...][CRC8]`, variable length 4-64 bytes
-  - RC Channels (type 0x16): 16 channels × 11 bit, 22 byte payload (same as SBUS)
+  - Frame: `[0xC8][Length][Type][Payload...][CRC8]`, max 64 bytes total
+  - RC Channels (type 0x16): 16ch x 11bit = 22 byte payload, total 26 bytes
+  - Channel range: 0-1984 (172=988us, 992=1500us, 1811=2012us)
+  - ELRS 4.0+: optional armStatus byte (len=0x19, total 27 bytes)
   - CRC8: polynomial 0xD5 (DVB-S2), covers Type + Payload
-  - Full-duplex on RX↔FC segment (relevant to us), half-duplex inside RC TX (not relevant)
+  - RC frames sent at constant rate (50-1000Hz depending on ELRS config)
+  - Full-duplex on RX-to-FC segment, half-duplex inside RC TX (not relevant)
   - Failsafe: absence of frames = failsafe (no flag bits like SBUS)
 
   **Key differences from SBUS:**
   - Non-inverted (standard UART, no hardware hacks)
   - Variable frame length (CRC required for validation)
-  - Bidirectional telemetry (battery, GPS, RSSI, LQ)
+  - Bidirectional telemetry (battery, GPS, RSSI, LQ) — optional for our use case
   - Baudrate 420000 vs 100000
+  - Multiple frame types in one stream (vs SBUS = only RC channels)
 
-  **Reference**: Betaflight `crsf.c`, ExpressLRS `crsf_protocol.h`, TBS spec
+  **Reference**: [ExpressLRS crsf_protocol.h](https://github.com/ExpressLRS/ExpressLRS/blob/master/src/lib/CrsfProtocol/crsf_protocol.h), [CRSF wiki](https://github.com/crsf-wg/crsf/wiki), [TBS spec](https://github.com/tbs-fpv/tbs-crsf-spec), Betaflight `crsf.c`
 - [ ] **Per-device protocol configuration** - Independent protocol selection for each Device
 - [ ] **Independent protocol detectors** - Separate MAVLink/SBUS/Raw detection per interface
 

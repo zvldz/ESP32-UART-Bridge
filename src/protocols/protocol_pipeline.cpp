@@ -65,7 +65,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
 
 
         flows[activeFlows++] = f;
-        log_msg(LOG_INFO, "Device1 SBUS_IN flow created - FIRST TIME Device1 is not UART bridge!");
+        log_msg(LOG_INFO, "Device1 SBUS_IN flow created");
     }
 
     // Device2 SBUS_IN flow
