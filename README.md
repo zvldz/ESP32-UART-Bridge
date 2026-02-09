@@ -354,6 +354,7 @@ Can be configured as:
 - **SBUS Input**: Second SBUS source for failover
 - **SBUS Output**: Send SBUS to flight controller (binary format)
 - **USB SBUS Text Output**: Text format `RC 1500,...\r\n` via USB (MiniKit)
+- **USB Logger**: Stream system logs via USB (same format as UART Logger)
 
 ### Device 3 - Auxiliary UART
 Can be configured as:

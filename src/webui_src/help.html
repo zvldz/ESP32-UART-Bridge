@@ -224,6 +224,26 @@
                 </div>
 
                 <div class="success" style="margin-top: 15px;">
+                    <strong>🔌 Device 2 - Secondary Channel:</strong><br>
+                    - <strong>UART2:</strong> Additional UART on GPIO 8/9 (not available on MiniKit)<br>
+                    - <strong>USB:</strong> USB device or host mode<br>
+                    - <strong>SBUS Input:</strong> Second SBUS source for failover<br>
+                    - <strong>SBUS Output:</strong> Send SBUS to flight controller (binary format)<br>
+                    - <strong>USB SBUS Text Output:</strong> Text format via USB (MiniKit)<br>
+                    - <strong>USB Logger:</strong> Stream system logs via USB (same format as UART Logger)
+                </div>
+
+                <div class="success" style="margin-top: 15px;">
+                    <strong>🔗 Device 3 - Auxiliary UART:</strong><br>
+                    - <strong>Mirror:</strong> One-way copy of Device 1 data (TX only)<br>
+                    - <strong>Bridge:</strong> Full bidirectional UART bridge with Device 1<br>
+                    - <strong>Logger:</strong> Dedicated UART log output at 115200 baud<br>
+                    - <strong>SBUS Input:</strong> Third SBUS source for failover<br>
+                    - <strong>SBUS Output:</strong> Send SBUS to flight controller (binary format)<br>
+                    - <strong>SBUS Text Output:</strong> Text format via UART
+                </div>
+
+                <div class="success" style="margin-top: 15px;">
                     <strong>🌐 Device 4 - Network Channel:</strong><br>
                     - <strong>Network Logger:</strong> Stream system logs via UDP (port 14560)<br>
                     - <strong>Network Bridge:</strong> Bidirectional UART↔UDP conversion (port 14550)<br>

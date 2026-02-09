@@ -253,6 +253,11 @@ void runAllStacksDiagnostics() {
             offset += snprintf(msg + offset, sizeof(msg) - offset, " WiFi=%dB",
                                (int)uxTaskGetStackHighWaterMark(wifiTask));
         }
+        TaskHandle_t sysEvtTask = xTaskGetHandle("sys_evt");
+        if (sysEvtTask) {
+            offset += snprintf(msg + offset, sizeof(msg) - offset, " SysEvt=%dB",
+                               (int)uxTaskGetStackHighWaterMark(sysEvtTask));
+        }
     }
 
     // Heap + PSRAM
