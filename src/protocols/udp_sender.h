@@ -203,42 +203,46 @@ private:
     }
     
 public:
-    // Direct send without queue (for SBUS fast path)
+    // Direct send without queue (bypasses enqueue/processBatch path)
     size_t sendDirect(const uint8_t* data, size_t size) override {
         if (!udpTransport || !wifiIsReady()) return 0;
 
-        // Rate limiting check (if enabled via setSendRate)
+        // Rate limiting (SBUS output roles only, disabled for CRSF)
         if (sendRateIntervalMs > 0) {
             uint32_t now = millis();
             if ((now - lastSendMs) < sendRateIntervalMs) {
-                return 0;  // Skip frame (rate limited)
+                return 0;
             }
             lastSendMs = now;
         }
 
+        // Generic path: send immediately (CRSF text, future binary streams, etc.)
+        if (!(size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE)) {
+            sendUdpDatagram((uint8_t*)data, size);
+            totalSent++;
+            return size;
+        }
+
+        // --- SBUS-specific path: format conversion + batching ---
         const uint8_t* sendData = data;
         size_t sendSize = size;
 
-        // Convert SBUS binary based on output format setting
-        if (size == SBUS_FRAME_SIZE && data[0] == SBUS_START_BYTE) {
-            if (sbusOutputFormat == SBUS_FMT_TEXT) {
-                char* buf = SbusRouter::getInstance()->getConvertBuffer();
-                if (!buf) return 0;  // Buffer not allocated - skip
-                sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
-                if (sendSize == 0) return 0;  // Conversion failed
-                sendData = (const uint8_t*)buf;
-            }
-#ifdef SBUS_MAVLINK_SUPPORT
-            else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
-                char* buf = SbusRouter::getInstance()->getConvertBuffer();
-                if (!buf) return 0;  // Buffer not allocated - skip
-                sendSize = sbusFrameToMavlink(data, (uint8_t*)buf, SBUS_OUTPUT_BUFFER_SIZE);
-                if (sendSize == 0) return 0;  // Conversion failed
-                sendData = (const uint8_t*)buf;
-            }
-#endif
-            // SBUS_FMT_BINARY: sendData/sendSize unchanged (pass-through)
+        if (sbusOutputFormat == SBUS_FMT_TEXT) {
+            char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            if (!buf) return 0;
+            sendSize = sbusFrameToText(data, buf, SBUS_OUTPUT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;
+            sendData = (const uint8_t*)buf;
         }
+#ifdef SBUS_MAVLINK_SUPPORT
+        else if (sbusOutputFormat == SBUS_FMT_MAVLINK) {
+            char* buf = SbusRouter::getInstance()->getConvertBuffer();
+            if (!buf) return 0;
+            sendSize = sbusFrameToMavlink(data, (uint8_t*)buf, SBUS_OUTPUT_BUFFER_SIZE);
+            if (sendSize == 0) return 0;
+            sendData = (const uint8_t*)buf;
+        }
+#endif
 
         uint32_t now = millis();
 

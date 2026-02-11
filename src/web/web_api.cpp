@@ -544,7 +544,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 
     if (doc.containsKey("device4_role")) {
         int role = doc["device4_role"];
-        if (role >= D4_NONE && role <= D4_SBUS_UDP_RX && role != config.device4.role) {
+        if (role >= D4_NONE && role <= D4_CRSF_TEXT && role != config.device4.role) {
             config.device4.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 4 role: %d", role);
@@ -613,7 +613,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 #if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
     if (doc.containsKey("device5_role")) {
         int role = doc["device5_role"];
-        if (role >= D5_NONE && role <= D5_BT_SBUS_TEXT && role != config.device5_config.role) {
+        if (role >= D5_NONE && role <= D5_BT_CRSF_TEXT && role != config.device5_config.role) {
             config.device5_config.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 5 role: %d", role);

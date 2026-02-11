@@ -310,18 +310,25 @@
   - [x] CRSF statistics in web UI (validFrames, invalidFrames, crcErrors, lastActivity)
   - [x] Protocol optimization auto-detect (CRSF > SBUS > None)
   - [x] Alpine.js UI unification (all device selects use x-for with computed arrays)
-  Phase 1.5 — binary output:
+  Phase 1.5 — additional text outputs: ✅ DONE
+  - [x] UDP CRSF Text output (`D4_CRSF_TEXT = 5`) — sendDirect generic path in UdpSender
+  - [x] BLE CRSF Text output (`D5_BT_CRSF_TEXT = 3`) — BLE_ENABLED only
+  - [x] Per-output independent rate limiting (CrsfOutput struct, RC only, telemetry unrestricted)
+  - [x] Web UI: device4/5 options, outRate selectors, role validation
+  - [x] Network Logs selector restricted to D4_LOG_NETWORK role only
+
+  Phase 2 — binary output:
   - [ ] Raw CRSF forward (binary frames via USB/UDP, no text conversion)
 
-  Phase 2 — filters and additional outputs:
+  Phase 3 — filters and telemetry extraction:
   - [ ] Filter bitmask UI (checkboxes in web interface to select frame types)
-  - [ ] BLE CRSF Text output (`D5_CRSF_TEXT = 3`)
-  - [ ] UDP CRSF Text output (future)
   - [ ] Telemetry extraction: battery, GPS, attitude (structured data, not just text)
 
-  Phase 3 — VTX and bidirectional (requires both TX+RX wires, not single-wire):
-  - [ ] VTX control via MSP-over-CRSF (band/channel/power)
+  Phase 4 — Bidirectional communication:
   - [ ] Reverse channel: forward telemetry from FC back to ELRS RX (optional)
+
+  Phase 5 — VTX control (requires both TX+RX wires, not single-wire):
+  - [ ] VTX control via MSP-over-CRSF (band/channel/power)
 
   **Protocol reference:**
   - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**. Hardcode 420000 for Phase 1, configurable later

@@ -67,7 +67,8 @@ enum Device4Role {
     D4_NETWORK_BRIDGE = 1,  // Full bridge (MAVLink/Raw)
     D4_LOG_NETWORK = 2,     // Logger
     D4_SBUS_UDP_TX = 3,     // SBUS→UDP only
-    D4_SBUS_UDP_RX = 4      // UDP→SBUS only
+    D4_SBUS_UDP_RX = 4,     // UDP→SBUS only
+    D4_CRSF_TEXT = 5         // CRSF text output via UDP
 };
 
 // Device 5 role (Bluetooth - Classic SPP on MiniKit, BLE on S3)
@@ -75,7 +76,8 @@ enum Device4Role {
 enum Device5Role {
     D5_NONE = 0,
     D5_BT_BRIDGE = 1,      // Bluetooth bridge (Raw/MAVLink per protocolOptimization)
-    D5_BT_SBUS_TEXT = 2    // SBUS text format over Bluetooth
+    D5_BT_SBUS_TEXT = 2,   // SBUS text format over Bluetooth
+    D5_BT_CRSF_TEXT = 3    // CRSF text output over Bluetooth
 };
 #endif
 
