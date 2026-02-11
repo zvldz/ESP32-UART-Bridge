@@ -188,13 +188,13 @@ static void populateApiConfig(JsonDocument& doc) {
     doc["device4Port"] = config.device4_config.port;
     doc["device4AutoBroadcast"] = config.device4_config.auto_broadcast;
     doc["device4UdpTimeout"] = config.device4_config.udpSourceTimeout;
-    doc["device4SendRate"] = config.device4_config.udpSendRate;
+    doc["device4OutRate"] = config.device4_config.udpSendRate;
 
     // SBUS output format and rate options
     doc["device2SbusFormat"] = config.device2.sbusOutputFormat;
-    doc["device2SbusRate"] = config.device2.sbusRate;
+    doc["device2OutRate"] = config.device2.outRate;
     doc["device3SbusFormat"] = config.device3.sbusOutputFormat;
-    doc["device3SbusRate"] = config.device3.sbusRate;
+    doc["device3OutRate"] = config.device3.outRate;
     doc["device4SbusFormat"] = config.device4_config.sbusOutputFormat;
 
     // Log levels
@@ -481,7 +481,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
     // Device roles
     if (doc.containsKey("device1_role")) {
         int role = doc["device1_role"];
-        if (role >= D1_UART1 && role <= D1_SBUS_IN && role != config.device1.role) {
+        if (role >= D1_UART1 && role <= D1_CRSF_IN && role != config.device1.role) {
             config.device1.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 1 role: %d", role);
@@ -490,19 +490,19 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 
     if (doc.containsKey("device2_role")) {
         int role = doc["device2_role"];
-        if (role >= D2_NONE && role <= D2_USB_LOG && role != config.device2.role) {
+        if (role >= D2_NONE && role <= D2_USB_CRSF_TEXT && role != config.device2.role) {
             config.device2.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 2 role: %d", role);
         }
     }
 
-    if (doc.containsKey("device2_sbus_rate")) {
-        int rate = doc["device2_sbus_rate"];
-        if (rate >= 10 && rate <= 70 && rate != config.device2.sbusRate) {
-            config.device2.sbusRate = rate;
+    if (doc.containsKey("device2_out_rate")) {
+        int rate = doc["device2_out_rate"];
+        if (rate >= 10 && rate <= 70 && rate != config.device2.outRate) {
+            config.device2.outRate = rate;
             configChanged = true;
-            log_msg(LOG_INFO, "Device 2 SBUS rate: %d Hz", rate);
+            log_msg(LOG_INFO, "Device 2 output rate: %d Hz", rate);
         }
     }
 
@@ -533,12 +533,12 @@ void handleSaveJson(AsyncWebServerRequest *request) {
         }
     }
 
-    if (doc.containsKey("device3_sbus_rate")) {
-        int rate = doc["device3_sbus_rate"];
-        if (rate >= 10 && rate <= 70 && rate != config.device3.sbusRate) {
-            config.device3.sbusRate = rate;
+    if (doc.containsKey("device3_out_rate")) {
+        int rate = doc["device3_out_rate"];
+        if (rate >= 10 && rate <= 70 && rate != config.device3.outRate) {
+            config.device3.outRate = rate;
             configChanged = true;
-            log_msg(LOG_INFO, "Device 3 SBUS rate: %d Hz", rate);
+            log_msg(LOG_INFO, "Device 3 output rate: %d Hz", rate);
         }
     }
 
@@ -598,8 +598,8 @@ void handleSaveJson(AsyncWebServerRequest *request) {
         }
     }
 
-    if (doc.containsKey("device4_send_rate")) {
-        uint8_t rate = doc["device4_send_rate"];
+    if (doc.containsKey("device4_out_rate")) {
+        uint8_t rate = doc["device4_out_rate"];
         if (rate >= 10 && rate <= 70 && rate != config.device4_config.udpSendRate) {
             config.device4_config.udpSendRate = rate;
             configChanged = true;

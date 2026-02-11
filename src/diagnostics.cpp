@@ -68,6 +68,7 @@ const char* getDevice1RoleName(uint8_t role) {
   switch(role) {
     case D1_UART1: return "UART Bridge";
     case D1_SBUS_IN: return "SBUS Input";
+    case D1_CRSF_IN: return "CRSF Input";
     default: return "Unknown";
   }
 }
@@ -82,6 +83,7 @@ const char* getDevice2RoleName(uint8_t role) {
     case D2_SBUS_OUT: return "SBUS Output";
     case D2_USB_SBUS_TEXT: return "USB SBUS Text";
     case D2_USB_LOG: return "USB Logger";
+    case D2_USB_CRSF_TEXT: return "USB CRSF Text";
     default: return "Unknown";
   }
 }

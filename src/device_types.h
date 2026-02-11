@@ -35,7 +35,8 @@ enum LogLevel {
 // Device 1 role
 enum Device1Role {
     D1_UART1 = 0,       // Default: Normal UART bridge at configured baudrate
-    D1_SBUS_IN = 1      // SBUS input from RC receiver (100000 8E2 inverted)
+    D1_SBUS_IN = 1,     // SBUS input from RC receiver (100000 8E2 inverted)
+    D1_CRSF_IN = 2      // CRSF/ELRS input (420000 8N1 non-inverted)
 };
 
 // Device 2 role
@@ -46,7 +47,8 @@ enum Device2Role {
     D2_SBUS_IN = 3,        // SBUS input from RC receiver (UART2)
     D2_SBUS_OUT = 4,       // SBUS output to servos (UART2)
     D2_USB_SBUS_TEXT = 5,  // SBUS text output via USB (for MiniKit)
-    D2_USB_LOG = 6         // USB logger output (Device mode only)
+    D2_USB_LOG = 6,        // USB logger output (Device mode only)
+    D2_USB_CRSF_TEXT = 7   // CRSF/ELRS text output via USB
 };
 
 // Device 3 role
@@ -91,7 +93,7 @@ enum SbusOutputFormat : uint8_t {
 typedef struct {
     uint8_t role;
     uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK
-    uint8_t sbusRate;          // Send rate in Hz for SBUS output modes (10-70, default 50)
+    uint8_t outRate;           // Text output rate in Hz (10-70, default 50)
 } DeviceConfig;
 
 // Device 4 Configuration

@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## v2.19.0
+
+### New Feature
+- **CRSF/ELRS Protocol Support (Phase 1)**: Device 1 CRSF Input mode for ExpressLRS receivers
+  - `CrsfParser`: frame validation (sync address, length, CRC8 DVB-S2), RC channels + Link Stats
+  - `D1_CRSF_IN`: UART1 at 420000 baud, 8N1, non-inverted (single RX wire)
+  - `D2_USB_CRSF_TEXT`: text output via USB — `RC 1500,1500,...` and `LQ rssi_ant=... lq=...`
+  - Output rate limiter via `outRate` field (configurable 10-70 Hz)
+  - CRSF/ELRS Statistics in web UI (valid frames, invalid frames, CRC errors, last activity)
+  - Three-mode architecture: UART Bridge / SBUS / CRSF — mutually exclusive on Device 1
+
+### Improvement
+- **Unified output rate field**: renamed `sbusRate` → `outRate` across all devices
+  - Shared by SBUS Text and CRSF Text output modes
+  - Backwards-compatible config loading (old `device2_sbus_rate` key still accepted)
+- **UI role constraints**: incompatible device roles auto-disabled when Device 1 is in input mode
+  - D2 plain USB and UART2 blocked when D1 = SBUS_IN or CRSF_IN (no telemetry flow)
+  - D3 Mirror and Bridge blocked when D1 = SBUS_IN or CRSF_IN
+  - Automatic cleanup resets dependent roles when D1 mode changes
+
+### Bug Fix
+- **Device 2 Pins column**: USB-based roles (USB Logger, USB CRSF Text) now correctly show "USB" instead of "N/A"
+
+---
+
 ## v2.18.15
 
 ### New Feature

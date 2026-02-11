@@ -8,7 +8,7 @@
  */
 
 // Default SBUS text output rate (Hz) - string for x-model compatibility
-const DEFAULT_SBUS_RATE = '50';
+const DEFAULT_OUT_RATE = '50';
 
 // Fields tracked for dirty checking (used in isDirty and _takeSnapshot)
 const TRACKED_FIELDS = [
@@ -21,7 +21,7 @@ const TRACKED_FIELDS = [
     'protocolOptimization', 'mavlinkRouting', 'sbusTimingKeeper',
     'device4TargetIP', 'device4TargetPort', 'device4SbusFormat',
     'device4AutoBroadcast', 'device4UdpTimeout', 'udpBatching',
-    'device2SbusRate', 'device3SbusRate', 'device4SbusRate', 'btSendRate',
+    'device2OutRate', 'device3OutRate', 'device4OutRate', 'btSendRate',
     'logLevelWeb', 'logLevelUart', 'logLevelNetwork',
     'usbMode'
 ];
@@ -105,11 +105,11 @@ document.addEventListener('alpine:init', () => {
         logLevelUart: '1',
         logLevelNetwork: '-1',
 
-        // SBUS text output rates (Hz, 10-70)
-        device2SbusRate: DEFAULT_SBUS_RATE,
-        device3SbusRate: DEFAULT_SBUS_RATE,
-        device4SbusRate: DEFAULT_SBUS_RATE,
-        btSendRate: DEFAULT_SBUS_RATE,
+        // Text output rates (Hz, 10-70)
+        device2OutRate: DEFAULT_OUT_RATE,
+        device3OutRate: DEFAULT_OUT_RATE,
+        device4OutRate: DEFAULT_OUT_RATE,
+        btSendRate: DEFAULT_OUT_RATE,
 
         // UI state
         logDisplayCount: 30,
@@ -140,6 +140,11 @@ document.addEventListener('alpine:init', () => {
                    this.device4Role?.startsWith('3') ||  // D4_SBUS_UDP_TX
                    this.device4Role === '4' ||           // D4_SBUS_UDP_RX
                    this.device5Role === '2';             // D5_BT_SBUS_TEXT
+        },
+
+        // Computed: is CRSF/ELRS active on Device 1
+        get isCrsfActive() {
+            return this.device1Role === '2';  // D1_CRSF_IN
         },
 
         // Computed: has SBUS input
@@ -238,14 +243,14 @@ document.addEventListener('alpine:init', () => {
             if (this.device1Role === '0') {
                 return this._formatGpioPair(4, 5);
             }
-            return this._formatGpio(4) + ' (RX)';  // SBUS IN
+            return this._formatGpio(4) + ' (RX)';  // SBUS IN / CRSF IN
         },
 
         // Computed: Device 2 pins text
         get device2PinsText() {
             const role = this.device2Role;
             if (role === '1') return this._formatGpioPair(8, 9);  // UART2
-            if (role === '2' || role === '5') return 'USB';        // USB or USB SBUS Text
+            if (role === '2' || role === '5' || role === '6' || role === '7') return 'USB';
             if (role === '3') return this._formatGpio(8) + ' (RX)'; // SBUS IN
             if (role === '4') return this._formatGpio(9) + ' (TX)'; // SBUS OUT
             return 'N/A';
@@ -285,76 +290,82 @@ document.addEventListener('alpine:init', () => {
             return 'N/A';
         },
 
-        // Computed: Device 4 options based on SBUS context
-        // Uses _isSbusActiveOnD1D2D3 to avoid circular dependency
+        // Computed: Device 4 options based on SBUS/CRSF context
         get device4Options() {
-            if (this._isSbusActiveOnD1D2D3) {
-                return [
-                    { value: '0', label: 'Disabled' },
-                    { value: '2', label: 'UDP Logger' },
-                    { value: '3_0', label: 'SBUS Output' },
-                    { value: '3_1', label: 'SBUS Text Output' },
-                    { value: '4', label: 'SBUS Input' }
-                ];
-            }
+            const noSbusIn = !this.hasSbusInput;
+            const crsf = this.isCrsfActive;
+            const inputMode = this.isSbusActive || crsf;
             return [
-                { value: '0', label: 'Disabled' },
-                { value: '1', label: 'Bridge' },
-                { value: '2', label: 'UDP Logger' }
+                { value: '0', label: 'Disabled', disabled: false },
+                { value: '1', label: 'Bridge', disabled: inputMode },
+                { value: '2', label: 'UDP Logger', disabled: false },
+                { value: '3_0', label: 'SBUS Output', disabled: noSbusIn },
+                { value: '3_1', label: 'SBUS Text Output', disabled: noSbusIn },
+                { value: '4', label: 'SBUS Input', disabled: noSbusIn }
             ];
         },
 
-        // Computed: show Device 2 SBUS rate selector (USB SBUS Text mode)
-        get showDevice2SbusRate() {
-            return this.device2Role === '5';
+        // Computed: Device 5 options based on SBUS/CRSF context
+        get device5Options() {
+            const inputMode = this.isSbusActive || this.isCrsfActive;
+            const noSbusIn = !this.hasSbusInput;
+            return [
+                { value: '0', label: 'Disabled', disabled: false },
+                { value: '1', label: inputMode ? 'Bridge (input mode)' : 'Bridge', disabled: inputMode },
+                { value: '2', label: 'SBUS Text Output', disabled: noSbusIn }
+            ];
         },
 
-        // Computed: show Device 3 SBUS rate selector (SBUS Text Output)
-        get showDevice3SbusRate() {
+        // Computed: show Device 2 text rate selector (USB SBUS/CRSF Text mode)
+        get showDevice2OutRate() {
+            return this.device2Role === '5' || this.device2Role === '7';
+        },
+
+        // Computed: show Device 3 output rate selector (SBUS Text Output)
+        get showDevice3OutRate() {
             return this.device3Role === '5_1';
         },
 
-        // Computed: show Device 4 SBUS rate selector (SBUS Text Output)
-        get showDevice4SbusRate() {
+        // Computed: show Device 4 output rate selector (SBUS Text Output)
+        get showDevice4OutRate() {
             return this.device4Role === '3_1';
         },
 
-        // Computed: show Device 5 BT rate selector (SBUS Text Output)
-        get showDevice5SbusRate() {
+        // Computed: show Device 5 BT output rate selector
+        get showDevice5OutRate() {
             return this.device5Role === '2';
-        },
-
-        // Computed: is Device 5 Bridge option disabled (SBUS mode)
-        // Device 5 Bridge disabled when SBUS active on D1/D2/D3 (not D4/D5 itself)
-        get isDevice5BridgeDisabled() {
-            return this._isSbusActiveOnD1D2D3;
         },
 
         // Computed: Device 2 role options (some disabled for MiniKit or SBUS context)
         get device2Options() {
-            const opts = [
+            const isCrsf = this.isCrsfActive;
+            const noSbusIn = !this.hasSbusInput;
+            const d1IsInput = this.device1Role === '1' || isCrsf;  // D1 SBUS_IN or CRSF_IN
+            return [
                 { value: '0', label: 'Disabled', disabled: false },
-                { value: '1', label: 'UART2', disabled: !this.uart2Available || this.device1Role === '1' },
-                { value: '2', label: 'USB', disabled: false },
-                { value: '3', label: 'SBUS Input', disabled: !this.uart2Available },
-                { value: '4', label: 'SBUS Output', disabled: !this.uart2Available },
-                { value: '5', label: 'USB SBUS Text Output', disabled: false },
-                { value: '6', label: 'USB Logger', disabled: false }
+                { value: '1', label: 'UART2', disabled: !this.uart2Available || d1IsInput },
+                { value: '2', label: 'USB', disabled: d1IsInput },
+                { value: '6', label: 'USB Logger', disabled: false },
+                { value: '3', label: 'SBUS Input', disabled: !this.uart2Available || isCrsf },
+                { value: '4', label: 'SBUS Output', disabled: !this.uart2Available || isCrsf || noSbusIn },
+                { value: '5', label: 'USB SBUS Text Output', disabled: isCrsf || noSbusIn },
+                { value: '7', label: 'USB CRSF Text Output', disabled: !isCrsf }
             ];
-            return opts;
         },
 
         // Computed: Device 3 role options
         get device3Options() {
-            const d1SbusIn = this.device1Role === '1';
+            const d1SbusOrCrsf = this.device1Role === '1' || this.device1Role === '2';
+            const isCrsf = this.isCrsfActive;
+            const noSbusIn = !this.hasSbusInput;
             return [
                 { value: '0', label: 'Disabled', disabled: false },
-                { value: '1', label: 'UART3 Mirror', disabled: false },
-                { value: '2', label: 'UART3 Bridge', disabled: d1SbusIn },
+                { value: '1', label: 'UART3 Mirror', disabled: d1SbusOrCrsf },
+                { value: '2', label: 'UART3 Bridge', disabled: d1SbusOrCrsf },
                 { value: '3', label: 'UART3 Logger', disabled: false },
-                { value: '4', label: 'SBUS Input', disabled: false },
-                { value: '5_0', label: 'SBUS Output', disabled: false },
-                { value: '5_1', label: 'SBUS Text Output', disabled: false }
+                { value: '4', label: 'SBUS Input', disabled: isCrsf },
+                { value: '5_0', label: 'SBUS Output', disabled: isCrsf || noSbusIn },
+                { value: '5_1', label: 'SBUS Text Output', disabled: isCrsf || noSbusIn }
             ];
         },
 
@@ -365,41 +376,46 @@ document.addEventListener('alpine:init', () => {
         },
 
         _doCheckAutoSbusIn() {
-            // Check if D1/D2/D3 have SBUS role (for D4/D5 option switching)
-            const d1d2d3HasSbus = this._isSbusActiveOnD1D2D3;
-
-            // Check if any device (except D1) has SBUS role
-            const otherHasSbus = (
-                this.device2Role === '3' || this.device2Role === '4' || this.device2Role === '5' ||
-                this.device3Role === '4' || this.device3Role?.startsWith('5') ||
-                this.device4Role?.startsWith('3') || this.device4Role === '4' ||
-                this.device5Role === '2'
-            );
-
-            // Auto-set D1 to SBUS_IN when other devices have SBUS roles
-            if (otherHasSbus && this.device1Role !== '1') {
-                this.device1Role = '1';
-            }
-
-            // Reset D4 role if it's SBUS but no other SBUS source on D1/D2/D3
-            if (!d1d2d3HasSbus) {
+            // Reset SBUS output roles when no SBUS input source exists
+            if (!this.hasSbusInput) {
+                // Reset D2 SBUS output roles
+                if (this.device2Role === '4' || this.device2Role === '5') {
+                    this.device2Role = '0';
+                }
+                // Reset D3 SBUS output roles
+                if (this.device3Role?.startsWith('5')) {
+                    this.device3Role = '0';
+                }
+                // Reset D4 SBUS roles
                 const d4Base = this.device4Role?.split('_')[0];
                 if (d4Base === '3' || d4Base === '4') {
-                    // SBUS role no longer valid, reset to Disabled
                     this.device4Role = '0';
+                }
+                // Reset D5 SBUS Text
+                if (this.device5Role === '2') {
+                    this.device5Role = '0';
                 }
             }
 
-            // Reset D5 role if it's SBUS but no SBUS active on D1/D2/D3
-            if (!d1d2d3HasSbus && this.device5Role === '2') {
-                this.device5Role = '0';
+            // Reset incompatible roles when D1 is in input mode (SBUS/CRSF)
+            if (this.device1Role === '1' || this.isCrsfActive) {
+                // Plain USB and UART2 have no data path without telemetry flow
+                if (this.device2Role === '1' || this.device2Role === '2') {
+                    this.device2Role = '0';
+                }
+                // Mirror and Bridge need telemetry flow from D1
+                if (this.device3Role === '1' || this.device3Role === '2') {
+                    this.device3Role = '0';
+                }
             }
 
-            // Auto-set protocol to SBUS when SBUS roles are active
-            // Reset protocol to None when SBUS roles are removed
-            if (this.isSbusActive && this.protocolOptimization !== '2') {
+            // Auto-set protocol optimization based on active mode
+            if (this.isCrsfActive && this.protocolOptimization !== '3') {
+                this.protocolOptimization = '3';
+            } else if (this.isSbusActive && this.protocolOptimization !== '2') {
                 this.protocolOptimization = '2';
-            } else if (!this.isSbusActive && this.protocolOptimization === '2') {
+            } else if (!this.isSbusActive && !this.isCrsfActive &&
+                       (this.protocolOptimization === '2' || this.protocolOptimization === '3')) {
                 this.protocolOptimization = '0';
             }
         },
@@ -497,12 +513,12 @@ document.addEventListener('alpine:init', () => {
                 this.logLevelUart = String(data.logLevelUart ?? 1);
                 this.logLevelNetwork = String(data.logLevelNetwork ?? -1);
 
-                // SBUS rates (convert to string for x-model select compatibility)
+                // Output rates (convert to string for x-model select compatibility)
                 // Use || instead of ?? because 0 is invalid rate (valid range: 10-70)
-                this.device2SbusRate = String(data.device2SbusRate || DEFAULT_SBUS_RATE);
-                this.device3SbusRate = String(data.device3SbusRate || DEFAULT_SBUS_RATE);
-                this.device4SbusRate = String(data.device4SendRate || DEFAULT_SBUS_RATE);  // API: device4SendRate
-                this.btSendRate = String(data.btSendRate || DEFAULT_SBUS_RATE);
+                this.device2OutRate = String(data.device2OutRate || DEFAULT_OUT_RATE);
+                this.device3OutRate = String(data.device3OutRate || DEFAULT_OUT_RATE);
+                this.device4OutRate = String(data.device4OutRate || DEFAULT_OUT_RATE);
+                this.btSendRate = String(data.btSendRate || DEFAULT_OUT_RATE);
 
                 // UI
                 this.logDisplayCount = data.logDisplayCount ?? 30;
@@ -557,13 +573,13 @@ document.addEventListener('alpine:init', () => {
                 // Device roles
                 device1_role: parseInt(this.device1Role),
                 device2_role: parseInt(this.device2Role),
-                device2_sbus_rate: parseInt(this.device2SbusRate),
+                device2_out_rate: parseInt(this.device2OutRate),
                 device3_role: parseInt(d3.role),
                 device3_sbus_format: parseInt(d3.format),
-                device3_sbus_rate: parseInt(this.device3SbusRate),
+                device3_out_rate: parseInt(this.device3OutRate),
                 device4_role: parseInt(d4.role),
                 device4_sbus_format: parseInt(d4.format),
-                device4_send_rate: parseInt(this.device4SbusRate),
+                device4_out_rate: parseInt(this.device4OutRate),
                 device5_role: parseInt(this.device5Role),
                 bt_send_rate: parseInt(this.btSendRate),
 
@@ -784,7 +800,7 @@ document.addEventListener('alpine:init', () => {
 
         // Protocol name (computed)
         get protocolName() {
-            const NAMES = { 0: 'RAW Protocol', 1: 'MAVLink Protocol', 2: 'SBUS Protocol' };
+            const NAMES = { 0: 'RAW Protocol', 1: 'MAVLink Protocol', 2: 'SBUS Protocol', 3: 'CRSF Protocol' };
             return NAMES[this.protocolType] || 'Unknown Protocol';
         },
 
