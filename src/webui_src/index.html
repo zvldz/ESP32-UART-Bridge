@@ -436,6 +436,22 @@
                             </div>
                         </template>
 
+                        <!-- CRSF Protocol Stats -->
+                        <template x-if="$store.status.protocolType === 3">
+                            <div class="protocol-stats-grid">
+                                <div class="protocol-stats-card protocol-stats-card-wide">
+                                    <h5>CRSF/ELRS Statistics</h5>
+                                    <div class="stats-grid-2col">
+                                        <div>Valid Frames:</div><div><strong class="text-success" x-text="$store.status.protocolStats.parser?.validFrames || 0"></strong></div>
+                                        <div>Invalid Frames:</div><div><strong class="text-danger" x-text="$store.status.protocolStats.parser?.invalidFrames || 0"></strong></div>
+                                        <div>CRC Errors:</div><div><strong class="text-danger" x-text="$store.status.protocolStats.parser?.crcErrors || 0"></strong></div>
+                                        <div>Success Rate:</div><div><strong :class="$store.status.sbusSuccessRateClass" x-text="$store.status.sbusSuccessRate + '%'"></strong></div>
+                                        <div>Last Activity:</div><div><strong :class="$store.status.sbusActivityClass" x-text="$store.status.formatLastActivity($store.status.protocolStats.parser?.lastActivityMs)"></strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
                         <!-- Output Devices -->
                         <template x-if="$store.status.protocolStats.senders?.length > 0">
                             <div class="protocol-stats-card">
@@ -499,6 +515,7 @@
                                         class="w-full">
                                     <option value="0">UART Bridge</option>
                                     <option value="1">SBUS Input</option>
+                                    <option value="2">CRSF/ELRS Input</option>
                                 </select>
                             </td>
                             <td></td>
@@ -519,9 +536,9 @@
                                 </select>
                             </td>
                             <td>
-                                <select id="device2_sbus_rate" name="device2_sbus_rate"
-                                        x-model="$store.app.device2SbusRate"
-                                        x-show="$store.app.showDevice2SbusRate"
+                                <select id="device2_out_rate" name="device2_out_rate"
+                                        x-model="$store.app.device2OutRate"
+                                        x-show="$store.app.showDevice2OutRate"
                                         class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
@@ -548,9 +565,9 @@
                                 </select>
                             </td>
                             <td>
-                                <select id="device3_sbus_rate" name="device3_sbus_rate"
-                                        x-model="$store.app.device3SbusRate"
-                                        x-show="$store.app.showDevice3SbusRate"
+                                <select id="device3_out_rate" name="device3_out_rate"
+                                        x-model="$store.app.device3OutRate"
+                                        x-show="$store.app.showDevice3OutRate"
                                         class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
@@ -570,29 +587,16 @@
                                 <select name="device4_role" id="device4_role"
                                         x-model="$store.app.device4Role"
                                         @change="$store.app._checkAutoSbusIn()"
-                                        class="w-full"
-                                        x-effect="
-                                            const sbus = $store.app.protocolOptimization === '2';
-                                            $nextTick(() => {
-                                                $el.querySelectorAll('option').forEach(opt => {
-                                                    const v = opt.value;
-                                                    const hide = (v === '1' && sbus) || (['3_0', '3_1', '4'].includes(v) && !sbus);
-                                                    opt.style.display = hide ? 'none' : '';
-                                                });
-                                            });
-                                        ">
-                                    <option value="0">Disabled</option>
-                                    <option value="1">Bridge</option>
-                                    <option value="2">UDP Logger</option>
-                                    <option value="3_0">SBUS Output</option>
-                                    <option value="3_1">SBUS Text Output</option>
-                                    <option value="4">SBUS Input</option>
+                                        class="w-full">
+                                    <template x-for="opt in $store.app.device4Options" :key="opt.value">
+                                        <option :value="opt.value" :disabled="opt.disabled" x-text="opt.label"></option>
+                                    </template>
                                 </select>
                             </td>
                             <td>
-                                <select id="device4_sbus_rate" name="device4_sbus_rate"
-                                        x-model="$store.app.device4SbusRate"
-                                        x-show="$store.app.showDevice4SbusRate"
+                                <select id="device4_out_rate" name="device4_out_rate"
+                                        x-model="$store.app.device4OutRate"
+                                        x-show="$store.app.showDevice4OutRate"
                                         class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
@@ -613,16 +617,15 @@
                                         x-model="$store.app.device5Role"
                                         @change="$store.app._checkAutoSbusIn()"
                                         class="w-full">
-                                    <option value="0">Disabled</option>
-                                    <option value="1" :disabled="$store.app.isDevice5BridgeDisabled"
-                                            x-text="'Bridge' + ($store.app.isDevice5BridgeDisabled ? ' (SBUS mode)' : '')">Bridge</option>
-                                    <option value="2">SBUS Text Output</option>
+                                    <template x-for="opt in $store.app.device5Options" :key="opt.value">
+                                        <option :value="opt.value" :disabled="opt.disabled" x-text="opt.label"></option>
+                                    </template>
                                 </select>
                             </td>
                             <td>
                                 <select id="bt_send_rate" name="bt_send_rate"
                                         x-model="$store.app.btSendRate"
-                                        x-show="$store.app.showDevice5SbusRate"
+                                        x-show="$store.app.showDevice5OutRate"
                                         class="w-80">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
@@ -886,11 +889,11 @@
                                 <small class="hint" style="display: block; margin-top: 5px;">⏱️ Time before Timing Keeper stops repeating frames (failsafe trigger)</small>
                             </div>
                             <div id="device4_send_rate_group"
-                                 x-show="$store.app.showDevice4SbusRate"
+                                 x-show="$store.app.showDevice4OutRate"
                                  style="margin-top: 10px;">
                                 <label for="device4_send_rate">Send Rate:</label>
                                 <select id="device4_send_rate" name="device4_send_rate"
-                                        x-model="$store.app.device4SbusRate"
+                                        x-model="$store.app.device4OutRate"
                                         style="width: 180px;">
                                     <option value="10">10 Hz</option>
                                     <option value="20">20 Hz</option>
@@ -910,10 +913,11 @@
                             <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
                                 <select name="protocol_optimization" id="protocol_optimization" style="width: 150px;"
                                         x-model="$store.app.protocolOptimization"
-                                        :disabled="$store.app.isSbusActive">
+                                        :disabled="$store.app.isSbusActive || $store.app.isCrsfActive">
                                     <option value="0">None</option>
                                     <option value="1">MAVLink</option>
                                     <option value="2" x-show="$store.app.isSbusActive">SBUS</option>
+                                    <option value="3" x-show="$store.app.isCrsfActive">CRSF</option>
                                 </select>
                                 <div id="mavlink-routing-section" x-show="$store.app.showMavlinkRouting">
                                     <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">

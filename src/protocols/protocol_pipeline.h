@@ -12,6 +12,7 @@
 #include "usb_sender.h"
 #include "uart_sender.h"
 #include "udp_sender.h"
+#include "crsf_parser.h"
 #include "../types.h"
 #include "../circular_buffer.h"
 #include "../logging.h"
@@ -54,6 +55,9 @@ private:
     
     // Add shared router
     MavlinkRouter* sharedRouter;
+
+    // CRSF parser (stored for output registration in createSenders)
+    CrsfParser* crsfParser;
     
     // Data flows array
     DataFlow flows[MAX_FLOWS];

@@ -15,7 +15,8 @@
 ProtocolPipeline::ProtocolPipeline(BridgeContext* context) :
     activeFlows(0),
     ctx(context),
-    sharedRouter(nullptr) {
+    sharedRouter(nullptr),
+    crsfParser(nullptr) {
     // Initialize sender slots to nullptr
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         senders[i] = nullptr;
@@ -66,6 +67,28 @@ void ProtocolPipeline::setupFlows(Config* config) {
 
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "Device1 SBUS_IN flow created");
+    }
+
+    // Device1 CRSF_IN flow (ELRS/Crossfire input)
+    if (config->device1.role == D1_CRSF_IN && ctx->buffers.uart1InputBuffer) {
+        DataFlow f;
+        f.name = "Device1_CRSF_IN";
+        f.inputBuffer = ctx->buffers.uart1InputBuffer;
+        f.physInterface = PHYS_UART1;
+        f.source = SOURCE_DATA;
+        f.senderMask = 0;  // CrsfParser handles output directly via sendDirect
+        f.isInputFlow = true;
+        crsfParser = new CrsfParser();
+        f.parser = crsfParser;
+        f.router = nullptr;
+
+        // Set rate limit from config
+        if (config->device2.outRate > 0) {
+            crsfParser->setSendRate(config->device2.outRate);
+        }
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "Device1 CRSF_IN flow created (420000 baud)");
     }
 
     // Device2 SBUS_IN flow
@@ -146,7 +169,8 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_WARNING, "No telemetry destinations configured - data will be dropped");
     }
     
-    if (telemetryMask && ctx->buffers.uart1InputBuffer && config->device1.role != D1_SBUS_IN) {
+    if (telemetryMask && ctx->buffers.uart1InputBuffer &&
+        config->device1.role != D1_SBUS_IN && config->device1.role != D1_CRSF_IN) {
         DataFlow f;
         f.name = "Telemetry";
         f.inputBuffer = ctx->buffers.uart1InputBuffer;
@@ -667,15 +691,21 @@ void ProtocolPipeline::createSenders(Config* config) {
     }
     
     // Device2 - USB, UART2, or SBUS_OUT (mutually exclusive)
-    if ((config->device2.role == D2_USB || config->device2.role == D2_USB_SBUS_TEXT) &&
+    if ((config->device2.role == D2_USB || config->device2.role == D2_USB_SBUS_TEXT ||
+         config->device2.role == D2_USB_CRSF_TEXT) &&
         ctx->interfaces.usbInterface) {
         UsbSender* usbSender = new UsbSender(ctx->interfaces.usbInterface);
 
         // Set SBUS TEXT format and rate limit for USB SBUS Text role
         if (config->device2.role == D2_USB_SBUS_TEXT) {
             usbSender->setSbusOutputFormat(SBUS_FMT_TEXT);
-            usbSender->setSendRate(config->device2.sbusRate);
+            usbSender->setSendRate(config->device2.outRate);
             // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
+        }
+
+        // Register USB sender as CRSF text output
+        if (config->device2.role == D2_USB_CRSF_TEXT && crsfParser) {
+            crsfParser->registerOutput(usbSender);
         }
 
         senders[IDX_DEVICE2_USB] = usbSender;
@@ -1159,8 +1189,21 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                 }
                 break;
             }
+
+            case PROTOCOL_CRSF: {  // CRSF (3)
+                if (crsfParser) {
+                    parserStats["validFrames"] = crsfParser->getValidFrames();
+                    parserStats["invalidFrames"] = crsfParser->getInvalidFrames();
+                    parserStats["crcErrors"] = crsfParser->getCrcErrors();
+                    uint32_t lastTime = crsfParser->getLastFrameTime();
+                    if (lastTime > 0) {
+                        parserStats["lastActivityMs"] = (long)(millis() - lastTime);
+                    }
+                }
+                break;
+            }
         }
-        
+
         // Common metrics for all protocols
         parserStats["avgPacketSize"] = ctx->protocol.stats->avgPacketSize;
         parserStats["minPacketSize"] = (ctx->protocol.stats->minPacketSize == UINT32_MAX) ? 
@@ -1187,9 +1230,10 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
     JsonArray sendersArray = stats["senders"].to<JsonArray>();
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (senders[i]) {  // Check sender pointer
-            // Skip Device1 (UART1) when it's in SBUS_IN mode - it's an INPUT, not output
-            if (i == IDX_UART1 && ctx->system.config->device1.role == D1_SBUS_IN) {
-                continue;  // Don't show Device1 SBUS_IN in Output Devices
+            // Skip Device1 (UART1) when it's in SBUS_IN or CRSF_IN mode - it's an INPUT, not output
+            if (i == IDX_UART1 && (ctx->system.config->device1.role == D1_SBUS_IN ||
+                                    ctx->system.config->device1.role == D1_CRSF_IN)) {
+                continue;  // Don't show Device1 input role in Output Devices
             }
 
             JsonObject sender = sendersArray.createNestedObject();

@@ -170,22 +170,29 @@ void setup() {
     }
 
     // Auto-detect protocol optimization based on device roles
+    bool hasCRSFDevice = (config.device1.role == D1_CRSF_IN);
     bool hasSBUSDevice = (config.device1.role == D1_SBUS_IN ||
                          config.device2.role == D2_SBUS_IN || config.device2.role == D2_SBUS_OUT ||
                          config.device2.role == D2_USB_SBUS_TEXT ||
                          config.device3.role == D3_SBUS_IN || config.device3.role == D3_SBUS_OUT);
 
-    if (hasSBUSDevice) {
+    if (hasCRSFDevice) {
+        if (config.protocolOptimization != PROTOCOL_CRSF) {
+            config.protocolOptimization = PROTOCOL_CRSF;
+            log_msg(LOG_INFO, "Auto-detected CRSF device, forcing protocol optimization to CRSF");
+            config_save(&config);
+        }
+    } else if (hasSBUSDevice) {
         if (config.protocolOptimization != PROTOCOL_SBUS) {
             config.protocolOptimization = PROTOCOL_SBUS;
             log_msg(LOG_INFO, "Auto-detected SBUS devices, forcing protocol optimization to SBUS");
-            config_save(&config);  // Save the auto-detected setting
+            config_save(&config);
         }
     } else {
-        if (config.protocolOptimization == PROTOCOL_SBUS) {
+        if (config.protocolOptimization == PROTOCOL_SBUS || config.protocolOptimization == PROTOCOL_CRSF) {
             config.protocolOptimization = PROTOCOL_NONE;
-            log_msg(LOG_INFO, "No SBUS devices found, resetting protocol optimization to None");
-            config_save(&config);  // Save the corrected setting
+            log_msg(LOG_INFO, "No SBUS/CRSF devices found, resetting protocol optimization to None");
+            config_save(&config);
         }
     }
 
@@ -432,11 +439,11 @@ void initCommonDevices() {
 
     // Initialize UART DMA - always use DMA implementation
     if (!uartBridgeSerialDMA) {
-        if (config.device1.role == D1_SBUS_IN) {
-            // CRITICAL: Special DMA configuration for SBUS
+        if (config.device1.role == D1_SBUS_IN || config.device1.role == D1_CRSF_IN) {
+            // CRITICAL: Special DMA configuration for SBUS/CRSF (RX-only input)
             UartDMA::DmaConfig dmaCfg = {
-                .useEventTask = false,     // Polling mode for SBUS
-                .dmaRxBufSize = 512,       // Minimal RX buffer for SBUS
+                .useEventTask = false,     // Polling mode for SBUS/CRSF
+                .dmaRxBufSize = 512,       // Minimal RX buffer
                 .dmaTxBufSize = 0,         // NO TX BUFFER - critical for memory saving!
                 .ringBufSize = 1024,       // Small ring buffer
                 .eventTaskPriority = 0,    // Not used in polling mode
@@ -446,7 +453,8 @@ void initCommonDevices() {
             uartBridgeSerialDMA = new UartDMA(UART_NUM_1, dmaCfg);
             uartBridgeSerial = uartBridgeSerialDMA;
 
-            log_msg(LOG_INFO, "Device1 SBUS_IN: Special DMA config (no TX, minimal buffers)");
+            const char* modeName = (config.device1.role == D1_SBUS_IN) ? "SBUS_IN" : "CRSF_IN";
+            log_msg(LOG_INFO, "Device1 %s: Special DMA config (no TX, minimal buffers)", modeName);
         } else {
             // Normal DMA configuration for UART bridge
             UartDMA::DmaConfig dmaCfg = UartDMA::getDefaultDmaConfig();
@@ -458,11 +466,12 @@ void initCommonDevices() {
 
     // Create USB interface based on configuration (only if Device 2 uses USB)
     if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT ||
-        config.device2.role == D2_USB_LOG) {
+        config.device2.role == D2_USB_CRSF_TEXT || config.device2.role == D2_USB_LOG) {
 
-        // USB Logger always uses Device mode (no Host mode for log output)
-        if (config.device2.role == D2_USB_LOG) {
-            log_msg(LOG_INFO, "Creating USB Device interface for logging");
+        // USB Logger/CRSF Text always uses Device mode (no Host mode for text output)
+        if (config.device2.role == D2_USB_LOG || config.device2.role == D2_USB_CRSF_TEXT) {
+            const char* usbReason = (config.device2.role == D2_USB_LOG) ? "logging" : "CRSF text";
+            log_msg(LOG_INFO, "Creating USB Device interface for %s", usbReason);
             usbInterface = createUsbDevice(config.baudrate);
         } else {
             switch(config.usb_mode) {

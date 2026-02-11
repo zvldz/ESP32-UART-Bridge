@@ -85,6 +85,46 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
         return;
     }
 
+    // Initialize Device1 for CRSF/ELRS input mode
+    if (config->device1.role == D1_CRSF_IN) {
+        // Store USB interface pointer
+        g_usbInterface = usb;
+
+        // Configure GPIO for CRSF (non-inverted, standard logic)
+        pinMode(UART_RX_PIN, INPUT_PULLUP);
+
+        // CRSF configuration: 420000 8N1 (no inversion)
+        UartConfig crsfCfg = {
+            .baudrate = 420000,
+            .databits = UART_DATA_8_BITS,
+            .parity = UART_PARITY_DISABLE,
+            .stopbits = UART_STOP_BITS_1,
+            .flowcontrol = false
+        };
+
+        // Initialize DMA with CRSF configuration (RX only)
+        serial->begin(crsfCfg, UART_RX_PIN, -1);
+
+        log_msg(LOG_INFO, "Device1 CRSF_IN initialized: 420000 8N1 (DMA active)");
+
+        // Initialize other devices normally
+        if (config->device2.role == D2_UART2) {
+            initDevice2UART();
+        } else if (config->device2.role == D2_SBUS_IN || config->device2.role == D2_SBUS_OUT) {
+            initDevice2SBUS();
+        }
+
+        if (config->device3.role != D3_NONE) {
+            if (config->device3.role == D3_SBUS_IN || config->device3.role == D3_SBUS_OUT) {
+                initDevice3SBUS();
+            } else {
+                initDevice3(config->device3.role);
+            }
+        }
+
+        return;
+    }
+
     // Store USB interface pointer
     g_usbInterface = usb;
 

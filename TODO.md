@@ -254,7 +254,7 @@
 
 #### New Protocol Support 🔵 LOW PRIORITY
 
-- [ ] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
+- [~] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems (Phase 1 done)
 
   **Primary use case**: ELRS RX → UART → ESP → WiFi/USB → Raspberry Pi (binary RC data)
   **Secondary**: text output for debugging/visualization and GCS plugin compatibility
@@ -269,8 +269,8 @@
 
   **Architecture — configurable filters instead of separate roles:**
 
-  Instead of `D1_CRSF_IN`/`D2_CRSF_OUT` etc., use one CRSF input role per device
-  with a bitmask filter selecting which frame groups to forward/convert:
+  One CRSF input role per device (e.g. `D1_CRSF_IN`) — no need for separate roles per frame type.
+  Bitmask filter selects which frame groups to forward/convert:
 
   | Bit | Group | Frame types | Description |
   |-----|-------|-------------|-------------|
@@ -299,34 +299,49 @@
   ```
   Multiple filter groups active = interleaved lines of different types in one stream.
 
-  Phase 1 — RC channels (parser + both output formats):
-  - [ ] `CrsfParser` — frame parser (sync 0xC8, len, type, CRC8 validation)
-  - [ ] CRSF input role for Device 1 / Device 3 (RX-only, single wire)
-  - [ ] Text output: `RC 1500,1500,...\r\n` (SBUS text compatible, useful for visualization/debugging)
-  - [ ] Binary output: raw CRSF frames forwarded as-is (primary use case for Raspberry Pi)
-  - [ ] WiFi/UDP and USB forwarding
-  Text first for easy testing and visualization, binary is simpler (raw forward) but needs a receiver.
+  Phase 1 — text output (all frame types, no filters): ✅ DONE
+  - [x] `D1_CRSF_IN = 2` in Device1Role enum. UART1 at 420000 baud, 8N1, non-inverted. GPIO 4 RX
+  - [x] `D2_USB_CRSF_TEXT = 7` in Device2Role enum. Text CRSF output via USB
+  - [x] `CrsfParser` — frame parser (addr 0xC8, len, type, payload, CRC8 validation). Own code, no external libs
+  - [x] Text output for ALL parsed frame types (RC, LQ, BAT, GPS, ATT, FM, ALT)
+  - [x] Output rate limiter via `outRate` field (renamed from sbusRate, shared SBUS/CRSF)
+  - [x] Web UI: Device 1/2 dropdowns, role constraints (three-mode architecture: UART/SBUS/CRSF)
+  - [x] diagnostics.cpp role names, config.cpp load/save, web_api.cpp
+  - [x] CRSF statistics in web UI (validFrames, invalidFrames, crcErrors, lastActivity)
+  - [x] Protocol optimization auto-detect (CRSF > SBUS > None)
+  - [x] Alpine.js UI unification (all device selects use x-for with computed arrays)
+  Phase 1.5 — binary output:
+  - [ ] Raw CRSF forward (binary frames via USB/UDP, no text conversion)
 
-  Phase 2 — filters and telemetry:
-  - [ ] Filter bitmask UI (checkboxes in web interface)
-  - [ ] Text output for additional frame types (LQ, BAT, GPS, ATT, FM prefixes)
-  - [ ] Link stats monitoring (LQ/RSSI in web UI or forwarded)
-  - [ ] Telemetry extraction: battery, GPS, attitude
+  Phase 2 — filters and additional outputs:
+  - [ ] Filter bitmask UI (checkboxes in web interface to select frame types)
+  - [ ] BLE CRSF Text output (`D5_CRSF_TEXT = 3`)
+  - [ ] UDP CRSF Text output (future)
+  - [ ] Telemetry extraction: battery, GPS, attitude (structured data, not just text)
 
-  Phase 3 — VTX and bidirectional:
+  Phase 3 — VTX and bidirectional (requires both TX+RX wires, not single-wire):
   - [ ] VTX control via MSP-over-CRSF (band/channel/power)
   - [ ] Reverse channel: forward telemetry from FC back to ELRS RX (optional)
 
   **Protocol reference:**
-  - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**
-  - Frame: `[0xC8][Length][Type][Payload...][CRC8]`, max 64 bytes total
+  - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**. Hardcode 420000 for Phase 1, configurable later
+  - Frame: `[Addr][Length][Type][Payload...][CRC8]`, max 64 bytes total
+  - Addr = destination: 0xC8 (flight controller), 0xEE (CRSF RX). RX→FC traffic uses 0xC8
   - RC Channels (type 0x16): 16ch x 11bit = 22 byte payload, total 26 bytes
-  - Channel range: 0-1984 (172=988us, 992=1500us, 1811=2012us)
+  - Channel range: 0-2047 (11-bit). Typical: 172=988us, 992=1500us, 1811=2012us
   - ELRS 4.0+: optional armStatus byte (len=0x19, total 27 bytes)
   - CRC8: polynomial 0xD5 (DVB-S2), covers Type + Payload
   - RC frames sent at constant rate (50-1000Hz depending on ELRS config)
   - Full-duplex on RX-to-FC segment, half-duplex inside RC TX (not relevant)
   - Failsafe: absence of frames = failsafe (no flag bits like SBUS)
+
+  **Memory footprint:** ~340 bytes RAM (parser state + 64-byte frame buffer + CRC table).
+  No new heap allocations — reuses existing pipeline senders (UDP, USB, UART, BLE).
+  Text formatting uses stack buffers (~120 bytes, temporary). Fits all builds including BLE.
+
+  **Test bench:** Radio TX (internal ELRS module) → ELRS RX → ESP32 Zero (Device 1).
+  Wiring: GND, VCC (5V or 3.3V depending on RX), data TX→RX (+ optional RX→TX for Phase 3).
+  3.3V logic, non-inverted — no level shifter or inverter needed (unlike SBUS).
 
   **Key differences from SBUS:**
   - Non-inverted (standard UART, no hardware hacks)
