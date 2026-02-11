@@ -26,12 +26,13 @@ private:
     uint32_t crcErrors;
     uint32_t lastFrameTime;
 
-    // Registered text outputs (PacketSender* with sendDirect)
-    std::vector<PacketSender*> outputs;
-
-    // Rate limiting
-    uint32_t sendRateIntervalMs = 20;  // Default 50Hz
-    uint32_t lastRcSendMs = 0;
+    // Per-output rate limiting for RC channels (telemetry passes unrestricted)
+    struct CrsfOutput {
+        PacketSender* sender;
+        uint32_t rateIntervalMs;
+        uint32_t lastRcSendMs;
+    };
+    std::vector<CrsfOutput> outputs;
 
     // Text output buffer (allocated on first use)
     char textBuf[CRSF_TEXT_BUFFER_SIZE];
@@ -195,12 +196,26 @@ private:
         return (len > 0 && (size_t)len < sizeof(textBuf)) ? len : 0;
     }
 
-    // Send text to all registered outputs
+    // Send telemetry text to all outputs (no rate limiting)
     void sendToOutputs(size_t textLen) {
         if (textLen == 0 || outputs.empty()) return;
 
-        for (auto* sender : outputs) {
-            sender->sendDirect((const uint8_t*)textBuf, textLen);
+        for (auto& out : outputs) {
+            out.sender->sendDirect((const uint8_t*)textBuf, textLen);
+        }
+    }
+
+    // Send RC channels with per-output rate limiting
+    void sendRcToOutputs(size_t textLen) {
+        if (textLen == 0 || outputs.empty()) return;
+
+        uint32_t now = millis();
+        for (auto& out : outputs) {
+            if (out.rateIntervalMs > 0 && (now - out.lastRcSendMs) < out.rateIntervalMs) {
+                continue;
+            }
+            out.lastRcSendMs = now;
+            out.sender->sendDirect((const uint8_t*)textBuf, textLen);
         }
     }
 
@@ -210,14 +225,9 @@ private:
 
         switch (type) {
             case CRSF_TYPE_RC_CHANNELS: {
-                // Rate limit RC output
-                uint32_t now = millis();
-                if (sendRateIntervalMs > 0 && (now - lastRcSendMs) < sendRateIntervalMs) {
-                    return;  // Skip (rate limited)
-                }
-                lastRcSendMs = now;
                 textLen = formatRcChannels(payload, payloadLen);
-                break;
+                sendRcToOutputs(textLen);  // Per-output rate limiting
+                return;
             }
             case CRSF_TYPE_LINK_STATS:
                 textLen = formatLinkStats(payload, payloadLen);
@@ -254,21 +264,15 @@ public:
         log_msg(LOG_INFO, "CrsfParser created (420000 baud, CRC8 DVB-S2)");
     }
 
-    // Register output sender (called during pipeline setup)
-    void registerOutput(PacketSender* sender) {
+    // Register output sender with independent RC rate (called during pipeline setup)
+    void registerOutput(PacketSender* sender, uint8_t rateHz = 50) {
         if (!sender) return;
-        outputs.push_back(sender);
-        log_msg(LOG_INFO, "CRSF output registered: %s (total: %zu)", sender->getName(), outputs.size());
-    }
-
-    // Set output rate for RC channels (Hz)
-    void setSendRate(uint8_t rateHz) {
-        if (rateHz == 0 || rateHz > 100) {
-            sendRateIntervalMs = 0;  // Disabled
-        } else {
-            sendRateIntervalMs = 1000 / rateHz;
-        }
-        log_msg(LOG_INFO, "CRSF RC rate: %d Hz (%lu ms)", rateHz, sendRateIntervalMs);
+        CrsfOutput out;
+        out.sender = sender;
+        out.rateIntervalMs = (rateHz > 0 && rateHz <= 100) ? (1000 / rateHz) : 0;
+        out.lastRcSendMs = 0;
+        outputs.push_back(out);
+        log_msg(LOG_INFO, "CRSF output registered: %s (%d Hz, total: %zu)", sender->getName(), rateHz, outputs.size());
     }
 
     // Fast path: parse CRSF frames from circular buffer

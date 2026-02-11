@@ -109,6 +109,7 @@ const char* getDevice4RoleName(uint8_t role) {
     case D4_LOG_NETWORK: return "Network Logger";
     case D4_SBUS_UDP_TX: return "SBUS→UDP (TX only)";
     case D4_SBUS_UDP_RX: return "UDP→SBUS (RX only)";
+    case D4_CRSF_TEXT: return "CRSF Text Output";
     default: return "Unknown";
   }
 }
@@ -132,6 +133,7 @@ const char* getDevice5RoleName(uint8_t role) {
     case D5_NONE: return "Disabled";
     case D5_BT_BRIDGE: return "BLE Bridge";
     case D5_BT_SBUS_TEXT: return "BLE SBUS Text";
+    case D5_BT_CRSF_TEXT: return "BLE CRSF Text";
     default: return "Unknown";
   }
 }

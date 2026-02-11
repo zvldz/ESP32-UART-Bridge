@@ -4,12 +4,16 @@
 
 ### New Feature
 - **CRSF/ELRS Protocol Support (Phase 1)**: Device 1 CRSF Input mode for ExpressLRS receivers
-  - `CrsfParser`: frame validation (sync address, length, CRC8 DVB-S2), RC channels + Link Stats
+  - `CrsfParser`: frame validation (sync address, length, CRC8 DVB-S2), RC channels + telemetry
   - `D1_CRSF_IN`: UART1 at 420000 baud, 8N1, non-inverted (single RX wire)
-  - `D2_USB_CRSF_TEXT`: text output via USB — `RC 1500,1500,...` and `LQ rssi_ant=... lq=...`
-  - Output rate limiter via `outRate` field (configurable 10-70 Hz)
+  - `D2_USB_CRSF_TEXT`: text output via USB — RC, LQ, BAT, GPS, ATT, FM, ALT
   - CRSF/ELRS Statistics in web UI (valid frames, invalid frames, CRC errors, last activity)
   - Three-mode architecture: UART Bridge / SBUS / CRSF — mutually exclusive on Device 1
+- **CRSF Text Outputs (Phase 1.5)**: UDP and BLE output for CRSF text data
+  - `D4_CRSF_TEXT`: CRSF text via UDP (all frame types, compatible with RC Override plugin)
+  - `D5_BT_CRSF_TEXT`: CRSF text via BLE (S3 boards only)
+  - Per-output independent RC rate limiting (telemetry passes unrestricted)
+  - Generic sendDirect() path in UdpSender (non-SBUS data bypasses SBUS batching)
 
 ### Improvement
 - **Unified output rate field**: renamed `sbusRate` → `outRate` across all devices
@@ -19,6 +23,8 @@
   - D2 plain USB and UART2 blocked when D1 = SBUS_IN or CRSF_IN (no telemetry flow)
   - D3 Mirror and Bridge blocked when D1 = SBUS_IN or CRSF_IN
   - Automatic cleanup resets dependent roles when D1 mode changes
+- **Network Logs selector**: restricted to D4_LOG_NETWORK role only (was enabled for all D4 roles)
+- **Removed duplicate Send Rate** from Advanced Configuration (already in device table)
 
 ### Bug Fix
 - **Device 2 Pins column**: USB-based roles (USB Logger, USB CRSF Text) now correctly show "USB" instead of "N/A"

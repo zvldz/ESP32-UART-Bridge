@@ -284,7 +284,7 @@ document.addEventListener('alpine:init', () => {
         // Computed: Device 4 pins text
         get device4PinsText() {
             const baseRole = this.device4Role?.split('_')[0];
-            if (baseRole === '1' || baseRole === '2' || baseRole === '3' || baseRole === '4') {
+            if (baseRole === '1' || baseRole === '2' || baseRole === '3' || baseRole === '4' || baseRole === '5') {
                 return 'Network';
             }
             return 'N/A';
@@ -301,7 +301,8 @@ document.addEventListener('alpine:init', () => {
                 { value: '2', label: 'UDP Logger', disabled: false },
                 { value: '3_0', label: 'SBUS Output', disabled: noSbusIn },
                 { value: '3_1', label: 'SBUS Text Output', disabled: noSbusIn },
-                { value: '4', label: 'SBUS Input', disabled: noSbusIn }
+                { value: '4', label: 'SBUS Input', disabled: noSbusIn },
+                { value: '5', label: 'CRSF Text Output', disabled: !crsf }
             ];
         },
 
@@ -312,7 +313,8 @@ document.addEventListener('alpine:init', () => {
             return [
                 { value: '0', label: 'Disabled', disabled: false },
                 { value: '1', label: inputMode ? 'Bridge (input mode)' : 'Bridge', disabled: inputMode },
-                { value: '2', label: 'SBUS Text Output', disabled: noSbusIn }
+                { value: '2', label: 'SBUS Text Output', disabled: noSbusIn },
+                { value: '3', label: 'CRSF Text Output', disabled: !this.isCrsfActive }
             ];
         },
 
@@ -326,14 +328,14 @@ document.addEventListener('alpine:init', () => {
             return this.device3Role === '5_1';
         },
 
-        // Computed: show Device 4 output rate selector (SBUS Text Output)
+        // Computed: show Device 4 output rate selector (SBUS/CRSF Text Output)
         get showDevice4OutRate() {
-            return this.device4Role === '3_1';
+            return this.device4Role === '3_1' || this.device4Role === '5';
         },
 
-        // Computed: show Device 5 BT output rate selector
+        // Computed: show Device 5 BT output rate selector (SBUS/CRSF Text)
         get showDevice5OutRate() {
-            return this.device5Role === '2';
+            return this.device5Role === '2' || this.device5Role === '3';
         },
 
         // Computed: Device 2 role options (some disabled for MiniKit or SBUS context)

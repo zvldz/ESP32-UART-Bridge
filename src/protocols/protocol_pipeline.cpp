@@ -82,11 +82,6 @@ void ProtocolPipeline::setupFlows(Config* config) {
         f.parser = crsfParser;
         f.router = nullptr;
 
-        // Set rate limit from config
-        if (config->device2.outRate > 0) {
-            crsfParser->setSendRate(config->device2.outRate);
-        }
-
         flows[activeFlows++] = f;
         log_msg(LOG_INFO, "Device1 CRSF_IN flow created (420000 baud)");
     }
@@ -703,9 +698,9 @@ void ProtocolPipeline::createSenders(Config* config) {
             // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
         }
 
-        // Register USB sender as CRSF text output
+        // Register USB sender as CRSF text output (with independent RC rate)
         if (config->device2.role == D2_USB_CRSF_TEXT && crsfParser) {
-            crsfParser->registerOutput(usbSender);
+            crsfParser->registerOutput(usbSender, config->device2.outRate);
         }
 
         senders[IDX_DEVICE2_USB] = usbSender;
@@ -733,7 +728,8 @@ void ProtocolPipeline::createSenders(Config* config) {
     // Device4 - UDP sender (for all UDP TX roles)
     if ((config->device4.role == D4_NETWORK_BRIDGE ||
          config->device4.role == D4_LOG_NETWORK ||
-         config->device4.role == D4_SBUS_UDP_TX)) {
+         config->device4.role == D4_SBUS_UDP_TX ||
+         config->device4.role == D4_CRSF_TEXT)) {
         extern AsyncUDP* udpTransport;
         if (udpTransport) {
             UdpSender* udpSender = new UdpSender(
@@ -744,6 +740,11 @@ void ProtocolPipeline::createSenders(Config* config) {
             // Rate limiting only for SBUS Output roles
             if (config->device4.role == D4_SBUS_UDP_TX) {
                 udpSender->setSendRate(config->device4_config.udpSendRate);
+            }
+
+            // Register UDP sender as CRSF text output (with independent RC rate)
+            if (config->device4.role == D4_CRSF_TEXT && crsfParser) {
+                crsfParser->registerOutput(udpSender, config->device4_config.udpSendRate);
             }
 
             senders[IDX_DEVICE4] = udpSender;
@@ -792,6 +793,11 @@ void ProtocolPipeline::createSenders(Config* config) {
             bleSender->setSbusOutputFormat(SBUS_FMT_TEXT);
             bleSender->setSendRate(config->device5_config.btSendRate);
             // Note: conversion buffer allocated in device_init.cpp (earlier, before WiFi)
+        }
+
+        // Register BLE sender as CRSF text output (with independent RC rate)
+        if (config->device5_config.role == D5_BT_CRSF_TEXT && crsfParser) {
+            crsfParser->registerOutput(bleSender, config->device5_config.btSendRate);
         }
 
         senders[IDX_DEVICE5] = bleSender;

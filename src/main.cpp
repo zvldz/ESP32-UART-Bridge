@@ -561,7 +561,8 @@ void initNetworkMode() {
     if (config.device4.role == D4_NETWORK_BRIDGE ||
         config.device4.role == D4_LOG_NETWORK ||
         config.device4.role == D4_SBUS_UDP_TX ||
-        config.device4.role == D4_SBUS_UDP_RX) {
+        config.device4.role == D4_SBUS_UDP_RX ||
+        config.device4.role == D4_CRSF_TEXT) {
 
         udpTransport = new AsyncUDP();
 
