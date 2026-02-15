@@ -84,6 +84,7 @@ const char* getDevice2RoleName(uint8_t role) {
     case D2_USB_SBUS_TEXT: return "USB SBUS Text";
     case D2_USB_LOG: return "USB Logger";
     case D2_USB_CRSF_TEXT: return "USB CRSF Text";
+    case D2_USB_CRSF_BRIDGE: return "USB CRSF Bridge";
     default: return "Unknown";
   }
 }
@@ -97,6 +98,7 @@ const char* getDevice3RoleName(uint8_t role) {
     case D3_UART3_LOG: return "UART3 Logger";
     case D3_SBUS_IN: return "SBUS Input";
     case D3_SBUS_OUT: return "SBUS Output";
+    case D3_CRSF_BRIDGE: return "CRSF Bridge";
     default: return "Unknown";
   }
 }

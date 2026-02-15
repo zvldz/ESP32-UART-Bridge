@@ -465,6 +465,38 @@ void ProtocolPipeline::setupFlows(Config* config) {
     }
 #endif
 
+    // USB CRSF reverse flow (USB → UART1, raw passthrough for telemetry to ELRS RX)
+    if (config->device2.role == D2_USB_CRSF_BRIDGE && ctx->buffers.usbInputBuffer) {
+        DataFlow f;
+        f.name = "USB_CRSF_Reverse";
+        f.inputBuffer = ctx->buffers.usbInputBuffer;
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_USB;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
+        f.parser = new RawParser();
+        f.router = nullptr;
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "USB CRSF reverse flow created (USB → UART1)");
+    }
+
+    // UART3 CRSF reverse flow (UART3 → UART1, raw passthrough for telemetry to ELRS RX)
+    if (config->device3.role == D3_CRSF_BRIDGE && ctx->buffers.uart3InputBuffer) {
+        DataFlow f;
+        f.name = "UART3_CRSF_Reverse";
+        f.inputBuffer = ctx->buffers.uart3InputBuffer;
+        f.source = SOURCE_DATA;
+        f.physInterface = PHYS_UART3;
+        f.senderMask = (1 << IDX_UART1);
+        f.isInputFlow = true;
+        f.parser = new RawParser();
+        f.router = nullptr;
+
+        flows[activeFlows++] = f;
+        log_msg(LOG_INFO, "UART3 CRSF reverse flow created (UART3 → UART1)");
+    }
+
     // SBUS Input flow (SBUS → UART1)
     if (config->device2.role == D2_SBUS_IN && ctx->buffers.uart2InputBuffer) {
         
@@ -687,7 +719,7 @@ void ProtocolPipeline::createSenders(Config* config) {
     
     // Device2 - USB, UART2, or SBUS_OUT (mutually exclusive)
     if ((config->device2.role == D2_USB || config->device2.role == D2_USB_SBUS_TEXT ||
-         config->device2.role == D2_USB_CRSF_TEXT) &&
+         config->device2.role == D2_USB_CRSF_TEXT || config->device2.role == D2_USB_CRSF_BRIDGE) &&
         ctx->interfaces.usbInterface) {
         UsbSender* usbSender = new UsbSender(ctx->interfaces.usbInterface);
 
@@ -700,7 +732,12 @@ void ProtocolPipeline::createSenders(Config* config) {
 
         // Register USB sender as CRSF text output (with independent RC rate)
         if (config->device2.role == D2_USB_CRSF_TEXT && crsfParser) {
-            crsfParser->registerOutput(usbSender, config->device2.outRate);
+            crsfParser->registerTextOutput(usbSender, config->device2.outRate);
+        }
+
+        // Register USB sender as CRSF binary output (raw frames, no rate limiting)
+        if (config->device2.role == D2_USB_CRSF_BRIDGE && crsfParser) {
+            crsfParser->registerBinaryOutput(usbSender);
         }
 
         senders[IDX_DEVICE2_USB] = usbSender;
@@ -714,14 +751,22 @@ void ProtocolPipeline::createSenders(Config* config) {
         log_msg(LOG_INFO, "Created UART2 sender at index %d for role %d", IDX_DEVICE2_UART2, config->device2.role);
     }
     
-    // Device3 - UART3 (for MIRROR, BRIDGE, and SBUS_OUT modes)
+    // Device3 - UART3 (for MIRROR, BRIDGE, SBUS_OUT, and CRSF_BRIDGE modes)
     if ((config->device3.role == D3_UART3_MIRROR ||
          config->device3.role == D3_UART3_BRIDGE ||
-         config->device3.role == D3_SBUS_OUT) &&
+         config->device3.role == D3_SBUS_OUT ||
+         config->device3.role == D3_CRSF_BRIDGE) &&
         ctx->interfaces.device3Serial) {
-        senders[IDX_DEVICE3] = new Uart3Sender(
+        Uart3Sender* uart3Sender = new Uart3Sender(
             ctx->interfaces.device3Serial
         );
+
+        // Register UART3 sender as CRSF binary output (raw frames, no rate limiting)
+        if (config->device3.role == D3_CRSF_BRIDGE && crsfParser) {
+            crsfParser->registerBinaryOutput(uart3Sender);
+        }
+
+        senders[IDX_DEVICE3] = uart3Sender;
         log_msg(LOG_INFO, "Created UART3 sender at index %d for role %d", IDX_DEVICE3, config->device3.role);
     }
     
@@ -744,7 +789,7 @@ void ProtocolPipeline::createSenders(Config* config) {
 
             // Register UDP sender as CRSF text output (with independent RC rate)
             if (config->device4.role == D4_CRSF_TEXT && crsfParser) {
-                crsfParser->registerOutput(udpSender, config->device4_config.udpSendRate);
+                crsfParser->registerTextOutput(udpSender, config->device4_config.udpSendRate);
             }
 
             senders[IDX_DEVICE4] = udpSender;
@@ -797,7 +842,7 @@ void ProtocolPipeline::createSenders(Config* config) {
 
         // Register BLE sender as CRSF text output (with independent RC rate)
         if (config->device5_config.role == D5_BT_CRSF_TEXT && crsfParser) {
-            crsfParser->registerOutput(bleSender, config->device5_config.btSendRate);
+            crsfParser->registerTextOutput(bleSender, config->device5_config.btSendRate);
         }
 
         senders[IDX_DEVICE5] = bleSender;
@@ -1349,9 +1394,11 @@ void ProtocolPipeline::processSenders() {
     for (size_t i = 0; i < MAX_SENDERS; i++) {
         if (!senders[i]) continue;
 
-        // SBUS fast path uses sendDirect(), no queue
+        // sendDirect() path — no queue processing needed
         if (i == IDX_DEVICE2_UART2 && config.device2.role == D2_SBUS_OUT) continue;
+        if (i == IDX_DEVICE2_USB && config.device2.role == D2_USB_CRSF_BRIDGE) continue;
         if (i == IDX_DEVICE3 && config.device3.role == D3_SBUS_OUT) continue;
+        if (i == IDX_DEVICE3 && config.device3.role == D3_CRSF_BRIDGE) continue;
         if (i == IDX_DEVICE4 && config.device4.role == D4_SBUS_UDP_TX) continue;
 
         senders[i]->processSendQueue(bulkMode);

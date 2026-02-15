@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v2.19.0
+## v2.18.15
 
 ### New Feature
 - **CRSF/ELRS Protocol Support (Phase 1)**: Device 1 CRSF Input mode for ExpressLRS receivers
@@ -14,6 +14,20 @@
   - `D5_BT_CRSF_TEXT`: CRSF text via BLE (S3 boards only)
   - Per-output independent RC rate limiting (telemetry passes unrestricted)
   - Generic sendDirect() path in UdpSender (non-SBUS data bypasses SBUS batching)
+- **CRSF Binary Output (Phase 2)**: Raw CRSF frame forwarding via USB and UART3
+  - `D2_USB_CRSF_BRIDGE`: binary CRSF frames via USB (no rate limiting)
+  - `D3_CRSF_BRIDGE`: binary CRSF frames via UART3 at 420000 baud
+  - sendRawToOutputs() in CrsfParser: forwards raw frames before buffer consume (zero-copy)
+- **CRSF Bidirectional Bridge (Phase 3)**: Reverse channel for telemetry back to ELRS RX
+  - Device 1 CRSF_IN: TX pin enabled for bidirectional UART (was RX-only)
+  - Device 3 CRSF_BRIDGE: RX pin enabled for bidirectional UART3 (was TX-only)
+  - USB/UART3 → RawParser → Uart1Sender reverse flows (raw passthrough)
+- **USB Logger (D2_USB_LOG)**: New Device 2 role — log output via USB Serial
+  - Same format as UART3 Logger: `[timestamp][LEVEL] message`
+  - Shares log level setting with UART Logger (USB/UART Logs)
+  - USB Device mode only (Host mode ignored for logger)
+  - Non-blocking write with `availableForWrite()` check
+  - Can work simultaneously with D3_UART3_LOG (independent devices)
 
 ### Improvement
 - **Unified output rate field**: renamed `sbusRate` → `outRate` across all devices
@@ -23,25 +37,15 @@
   - D2 plain USB and UART2 blocked when D1 = SBUS_IN or CRSF_IN (no telemetry flow)
   - D3 Mirror and Bridge blocked when D1 = SBUS_IN or CRSF_IN
   - Automatic cleanup resets dependent roles when D1 mode changes
+- **Custom baudrate UI**: select dropdown with "Custom" option + text input for arbitrary values (e.g. 420000)
+- **UART Config display**: shows actual protocol parameters (SBUS: 100000/8E2, CRSF: 420000/8N1) instead of user config
+- **UDP Batching auto-control**: forced ON for SBUS UDP, forced OFF for CRSF Text UDP (role-dependent)
 - **Network Logs selector**: restricted to D4_LOG_NETWORK role only (was enabled for all D4 roles)
 - **Removed duplicate Send Rate** from Advanced Configuration (already in device table)
 
 ### Bug Fix
-- **Device 2 Pins column**: USB-based roles (USB Logger, USB CRSF Text) now correctly show "USB" instead of "N/A"
-
----
-
-## v2.18.15
-
-### New Feature
-- **USB Logger (D2_USB_LOG)**: New Device 2 role — log output via USB Serial
-  - Same format as UART3 Logger: `[timestamp][LEVEL] message`
-  - Shares log level setting with UART Logger (USB/UART Logs)
-  - USB Device mode only (Host mode ignored for logger)
-  - Non-blocking write with `availableForWrite()` check
-  - Can work simultaneously with D3_UART3_LOG (independent devices)
-
-### Bug Fix
+- **Device 2 Pins column**: USB-based roles (USB Logger, USB CRSF Text, USB CRSF Bridge) now correctly show "USB" instead of "N/A"
+- **RTS/CTS display**: hidden in System Status when Device 1 is in SBUS/CRSF mode (not applicable)
 - **sys_evt stack overflow crash**: Increased `CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE` from 2304 to 3072
   - Root cause: `log_msg()` stack buffers (~600B) + WiFi/mDNS events exceeded default 2304B stack
   - Crash was intermittent — FreeRTOS only detects overflow on context switch

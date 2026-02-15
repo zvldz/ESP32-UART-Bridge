@@ -239,13 +239,19 @@ static void populateApiStatus(JsonDocument& doc) {
     doc["btConnected"] = (bluetoothBLE != nullptr && bluetoothBLE->isConnected());
 #endif
 
-    // UART configuration string
+    // UART configuration string (show actual hardware settings for fixed-rate protocols)
     char uartConfigBuf[32];
-    snprintf(uartConfigBuf, sizeof(uartConfigBuf), "%d baud, %s%c%s",
-             config.baudrate,
-             word_length_to_string(config.databits),
-             parity_to_string(config.parity)[0],
-             stop_bits_to_string(config.stopbits));
+    if (config.device1.role == D1_SBUS_IN) {
+        snprintf(uartConfigBuf, sizeof(uartConfigBuf), "100000 baud, 8E2");
+    } else if (config.device1.role == D1_CRSF_IN) {
+        snprintf(uartConfigBuf, sizeof(uartConfigBuf), "420000 baud, 8N1");
+    } else {
+        snprintf(uartConfigBuf, sizeof(uartConfigBuf), "%d baud, %s%c%s",
+                 config.baudrate,
+                 word_length_to_string(config.databits),
+                 parity_to_string(config.parity)[0],
+                 stop_bits_to_string(config.stopbits));
+    }
     doc["uartConfig"] = uartConfigBuf;
 
     // Flow control status
@@ -490,7 +496,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 
     if (doc.containsKey("device2_role")) {
         int role = doc["device2_role"];
-        if (role >= D2_NONE && role <= D2_USB_CRSF_TEXT && role != config.device2.role) {
+        if (role >= D2_NONE && role <= D2_USB_CRSF_BRIDGE && role != config.device2.role) {
             config.device2.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 2 role: %d", role);
@@ -517,7 +523,7 @@ void handleSaveJson(AsyncWebServerRequest *request) {
 
     if (doc.containsKey("device3_role")) {
         int role = doc["device3_role"];
-        if (role >= D3_NONE && role <= D3_SBUS_OUT && role != config.device3.role) {
+        if (role >= D3_NONE && role <= D3_CRSF_BRIDGE && role != config.device3.role) {
             config.device3.role = role;
             configChanged = true;
             log_msg(LOG_INFO, "Device 3 role: %d", role);

@@ -1,6 +1,7 @@
-// CRSF/ELRS Frame Parser with text output
-// Parses CRSF frames from CircularBuffer, formats as text, sends to registered outputs
-// Phase 1: all frame types parsed and output as text, no filter bitmask
+// CRSF/ELRS Frame Parser with text and binary output
+// Parses CRSF frames from CircularBuffer, sends to registered outputs:
+//   - Text outputs: human-readable format with per-output RC rate limiting
+//   - Binary outputs: raw CRSF frames forwarded as-is (no rate limiting)
 #pragma once
 
 #include "protocol_parser.h"
@@ -32,9 +33,12 @@ private:
         uint32_t rateIntervalMs;
         uint32_t lastRcSendMs;
     };
-    std::vector<CrsfOutput> outputs;
+    std::vector<CrsfOutput> textOutputs;
 
-    // Text output buffer (allocated on first use)
+    // Binary outputs: raw CRSF frames forwarded without conversion (no rate limiting)
+    std::vector<PacketSender*> binaryOutputs;
+
+    // Text output buffer
     char textBuf[CRSF_TEXT_BUFFER_SIZE];
 
     // Format RC channels frame to text: "RC 1500,1500,...\r\n"
@@ -196,26 +200,35 @@ private:
         return (len > 0 && (size_t)len < sizeof(textBuf)) ? len : 0;
     }
 
-    // Send telemetry text to all outputs (no rate limiting)
-    void sendToOutputs(size_t textLen) {
-        if (textLen == 0 || outputs.empty()) return;
+    // Send telemetry text to all text outputs (no rate limiting)
+    void sendTextToOutputs(size_t textLen) {
+        if (textLen == 0 || textOutputs.empty()) return;
 
-        for (auto& out : outputs) {
+        for (auto& out : textOutputs) {
             out.sender->sendDirect((const uint8_t*)textBuf, textLen);
         }
     }
 
-    // Send RC channels with per-output rate limiting
-    void sendRcToOutputs(size_t textLen) {
-        if (textLen == 0 || outputs.empty()) return;
+    // Send RC channels text with per-output rate limiting
+    void sendTextRcToOutputs(size_t textLen) {
+        if (textLen == 0 || textOutputs.empty()) return;
 
         uint32_t now = millis();
-        for (auto& out : outputs) {
+        for (auto& out : textOutputs) {
             if (out.rateIntervalMs > 0 && (now - out.lastRcSendMs) < out.rateIntervalMs) {
                 continue;
             }
             out.lastRcSendMs = now;
             out.sender->sendDirect((const uint8_t*)textBuf, textLen);
+        }
+    }
+
+    // Send raw CRSF frame to all binary outputs (no rate limiting, full throughput)
+    void sendRawToOutputs(const uint8_t* data, size_t len) {
+        if (len == 0 || binaryOutputs.empty()) return;
+
+        for (auto* sender : binaryOutputs) {
+            sender->sendDirect(data, len);
         }
     }
 
@@ -226,7 +239,7 @@ private:
         switch (type) {
             case CRSF_TYPE_RC_CHANNELS: {
                 textLen = formatRcChannels(payload, payloadLen);
-                sendRcToOutputs(textLen);  // Per-output rate limiting
+                sendTextRcToOutputs(textLen);  // Per-output rate limiting
                 return;
             }
             case CRSF_TYPE_LINK_STATS:
@@ -252,7 +265,7 @@ private:
                 break;
         }
 
-        sendToOutputs(textLen);
+        sendTextToOutputs(textLen);
     }
 
 public:
@@ -264,15 +277,22 @@ public:
         log_msg(LOG_INFO, "CrsfParser created (420000 baud, CRC8 DVB-S2)");
     }
 
-    // Register output sender with independent RC rate (called during pipeline setup)
-    void registerOutput(PacketSender* sender, uint8_t rateHz = 50) {
+    // Register text output with independent RC rate (called during pipeline setup)
+    void registerTextOutput(PacketSender* sender, uint8_t rateHz = 50) {
         if (!sender) return;
         CrsfOutput out;
         out.sender = sender;
         out.rateIntervalMs = (rateHz > 0 && rateHz <= 100) ? (1000 / rateHz) : 0;
         out.lastRcSendMs = 0;
-        outputs.push_back(out);
-        log_msg(LOG_INFO, "CRSF output registered: %s (%d Hz, total: %zu)", sender->getName(), rateHz, outputs.size());
+        textOutputs.push_back(out);
+        log_msg(LOG_INFO, "CRSF text output: %s (%d Hz, total: %zu)", sender->getName(), rateHz, textOutputs.size());
+    }
+
+    // Register binary output for raw CRSF frame forwarding (no rate limiting)
+    void registerBinaryOutput(PacketSender* sender) {
+        if (!sender) return;
+        binaryOutputs.push_back(sender);
+        log_msg(LOG_INFO, "CRSF binary output: %s (total: %zu)", sender->getName(), binaryOutputs.size());
     }
 
     // Fast path: parse CRSF frames from circular buffer
@@ -328,6 +348,9 @@ public:
         uint8_t type = view.ptr[2];
         const uint8_t* payload = &view.ptr[3];
         size_t payloadLen = frameLen - 2;  // Subtract type and CRC
+
+        // Forward raw frame to binary outputs BEFORE consume (view.ptr still valid)
+        sendRawToOutputs(view.ptr, totalSize);
 
         // Consume frame from buffer
         buffer->consume(totalSize);

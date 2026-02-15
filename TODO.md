@@ -254,7 +254,7 @@
 
 #### New Protocol Support 🔵 LOW PRIORITY
 
-- [~] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems (Phase 1 done)
+- [~] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems (Phase 1+1.5+2+3 done)
 
   **Primary use case**: ELRS RX → UART → ESP → WiFi/USB → Raspberry Pi (binary RC data)
   **Secondary**: text output for debugging/visualization and GCS plugin compatibility
@@ -317,15 +317,22 @@
   - [x] Web UI: device4/5 options, outRate selectors, role validation
   - [x] Network Logs selector restricted to D4_LOG_NETWORK role only
 
-  Phase 2 — binary output:
-  - [ ] Raw CRSF forward (binary frames via USB/UDP, no text conversion)
+  Phase 2 — binary output: ✅ DONE
+  - [x] Raw CRSF forward (binary frames via USB/UART3, no text conversion)
+  - [x] `D2_USB_CRSF_BRIDGE = 8` — binary CRSF via USB (TX only, no rate limiting)
+  - [x] `D3_CRSF_BRIDGE = 6` — binary CRSF via UART3 at 420000 baud (TX only)
+  - [x] sendRawToOutputs() — raw frame forwarding before buffer consume (zero-copy)
+  - [x] processSenders skip for binary outputs (sendDirect path, no queue)
 
-  Phase 3 — filters and telemetry extraction:
+  Phase 3 — Bidirectional communication: ✅ DONE
+  - [x] Device 1 CRSF_IN: TX pin enabled (bidirectional UART)
+  - [x] Device 3 CRSF_BRIDGE: RX pin enabled (bidirectional UART3)
+  - [x] Input buffer allocation for D2_USB_CRSF_BRIDGE and D3_CRSF_BRIDGE
+  - [x] Reverse input flows: USB/UART3 → RawParser → Uart1Sender → ELRS RX
+
+  Phase 4 — filters and telemetry extraction:
   - [ ] Filter bitmask UI (checkboxes in web interface to select frame types)
   - [ ] Telemetry extraction: battery, GPS, attitude (structured data, not just text)
-
-  Phase 4 — Bidirectional communication:
-  - [ ] Reverse channel: forward telemetry from FC back to ELRS RX (optional)
 
   Phase 5 — VTX control (requires both TX+RX wires, not single-wire):
   - [ ] VTX control via MSP-over-CRSF (band/channel/power)
