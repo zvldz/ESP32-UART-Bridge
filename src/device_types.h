@@ -48,7 +48,8 @@ enum Device2Role {
     D2_SBUS_OUT = 4,       // SBUS output to servos (UART2)
     D2_USB_SBUS_TEXT = 5,  // SBUS text output via USB (for MiniKit)
     D2_USB_LOG = 6,        // USB logger output (Device mode only)
-    D2_USB_CRSF_TEXT = 7   // CRSF/ELRS text output via USB
+    D2_USB_CRSF_TEXT = 7,  // CRSF/ELRS text output via USB
+    D2_USB_CRSF_BRIDGE = 8 // CRSF/ELRS binary bridge via USB (bidirectional)
 };
 
 // Device 3 role
@@ -58,7 +59,8 @@ enum Device3Role {
     D3_UART3_BRIDGE = 2,
     D3_UART3_LOG = 3,
     D3_SBUS_IN = 4,    // SBUS input from RC receiver
-    D3_SBUS_OUT = 5    // SBUS output to servos
+    D3_SBUS_OUT = 5,   // SBUS output to servos
+    D3_CRSF_BRIDGE = 6 // CRSF/ELRS binary bridge via UART3 (bidirectional)
 };
 
 // Device 4 role

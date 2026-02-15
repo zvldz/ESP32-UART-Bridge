@@ -72,6 +72,7 @@ document.addEventListener('alpine:init', () => {
         parity: 'N',
         stopbits: '1',
         flowcontrol: false,  // Boolean for checkbox
+        _customBaudrate: false,  // User selected "Custom" in baudrate dropdown
 
         // WiFi config
         wifiMode: '0',
@@ -180,6 +181,12 @@ document.addEventListener('alpine:init', () => {
                    this.device3Role === '1';
         },
 
+        // Computed: is current baudrate a custom (non-standard) value
+        get baudrateIsCustom() {
+            return this._customBaudrate ||
+                !['9600','19200','38400','57600','115200','230400','460800','921600'].includes(String(this.baudrate));
+        },
+
         // Computed: show Device 4 network config
         get showDevice4Network() {
             return this.device4Role !== '0';  // Any role except disabled
@@ -250,7 +257,7 @@ document.addEventListener('alpine:init', () => {
         get device2PinsText() {
             const role = this.device2Role;
             if (role === '1') return this._formatGpioPair(8, 9);  // UART2
-            if (role === '2' || role === '5' || role === '6' || role === '7') return 'USB';
+            if (role === '2' || role === '5' || role === '6' || role === '7' || role === '8') return 'USB';
             if (role === '3') return this._formatGpio(8) + ' (RX)'; // SBUS IN
             if (role === '4') return this._formatGpio(9) + ' (TX)'; // SBUS OUT
             return 'N/A';
@@ -275,6 +282,10 @@ document.addEventListener('alpine:init', () => {
                 return isXiao ? this._formatGpio(44) + ' (RX)' : 'GPIO 11 (RX)';
             }
             if (role === '5' || role?.startsWith('5')) {  // SBUS OUT
+                if (isMiniKit) return 'GPIO 17 (TX)';
+                return isXiao ? this._formatGpio(43) + ' (TX)' : 'GPIO 12 (TX)';
+            }
+            if (role === '6') {  // CRSF Bridge (TX only for Phase 2)
                 if (isMiniKit) return 'GPIO 17 (TX)';
                 return isXiao ? this._formatGpio(43) + ' (TX)' : 'GPIO 12 (TX)';
             }
@@ -312,7 +323,7 @@ document.addEventListener('alpine:init', () => {
             const noSbusIn = !this.hasSbusInput;
             return [
                 { value: '0', label: 'Disabled', disabled: false },
-                { value: '1', label: inputMode ? 'Bridge (input mode)' : 'Bridge', disabled: inputMode },
+                { value: '1', label: 'Bridge', disabled: inputMode },
                 { value: '2', label: 'SBUS Text Output', disabled: noSbusIn },
                 { value: '3', label: 'CRSF Text Output', disabled: !this.isCrsfActive }
             ];
@@ -351,7 +362,8 @@ document.addEventListener('alpine:init', () => {
                 { value: '3', label: 'SBUS Input', disabled: !this.uart2Available || isCrsf },
                 { value: '4', label: 'SBUS Output', disabled: !this.uart2Available || isCrsf || noSbusIn },
                 { value: '5', label: 'USB SBUS Text Output', disabled: isCrsf || noSbusIn },
-                { value: '7', label: 'USB CRSF Text Output', disabled: !isCrsf }
+                { value: '7', label: 'USB CRSF Text Output', disabled: !isCrsf },
+                { value: '8', label: 'USB CRSF Bridge', disabled: !isCrsf }
             ];
         },
 
@@ -367,7 +379,8 @@ document.addEventListener('alpine:init', () => {
                 { value: '3', label: 'UART3 Logger', disabled: false },
                 { value: '4', label: 'SBUS Input', disabled: isCrsf },
                 { value: '5_0', label: 'SBUS Output', disabled: isCrsf || noSbusIn },
-                { value: '5_1', label: 'SBUS Text Output', disabled: isCrsf || noSbusIn }
+                { value: '5_1', label: 'SBUS Text Output', disabled: isCrsf || noSbusIn },
+                { value: '6', label: 'CRSF Bridge', disabled: !isCrsf }
             ];
         },
 
@@ -551,6 +564,7 @@ document.addEventListener('alpine:init', () => {
             Object.keys(this._original).forEach(key => {
                 this[key] = this._original[key];
             });
+            this._customBaudrate = false;
         },
 
         // Convert composite role value to base role and format

@@ -197,9 +197,9 @@
                         <tr>
                             <td><strong>UART Config:</strong></td>
                             <td>
-                                <span x-text="$store.status.uartConfig"></span>,
+                                <span x-text="$store.status.uartConfig"></span><template x-if="$store.app.device1Role === '0'">,
                                 <template x-if="$store.status.flowControl === 'Disabled'"><s>RTS/CTS</s></template>
-                                <template x-if="$store.status.flowControl !== 'Disabled'"><span>RTS/CTS</span></template>
+                                <template x-if="$store.status.flowControl !== 'Disabled'"><span>RTS/CTS</span></template></template>
                             </td>
                         </tr>
                         <tr>
@@ -866,7 +866,9 @@
                                 <div style="display: flex; flex-direction: column; gap: 2px; align-self: flex-end; align-items: flex-start; margin-bottom: 5px;">
                                     <label class="checkbox-label" title="Disable only if your GCS doesn't support batched packets">
                                         <input type="checkbox" name="udp_batching" id="udp_batching"
-                                               x-model="$store.app.udpBatching">
+                                               :checked="$store.app.device4Role === '3' ? true : $store.app.device4Role === '5' ? false : $store.app.udpBatching"
+                                               @change="$store.app.udpBatching = $event.target.checked"
+                                               :disabled="$store.app.device4Role === '3' || $store.app.device4Role === '5'">
                                         <span>Batching</span>
                                     </label>
                                     <label id="device4_auto_broadcast_group" class="checkbox-label"
@@ -930,16 +932,27 @@
                             <div id="uartConfigContent" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
                                 <div>
                                     <label for="baudrate">Baud Rate:</label>
-                                    <select name="baudrate" id="baudrate" style="width: 110px;" x-model="$store.app.baudrate">
-                                        <option value="9600">9600</option>
-                                        <option value="19200">19200</option>
-                                        <option value="38400">38400</option>
-                                        <option value="57600">57600</option>
-                                        <option value="115200">115200</option>
-                                        <option value="230400">230400</option>
-                                        <option value="460800">460800</option>
-                                        <option value="921600">921600</option>
-                                    </select>
+                                    <div style="display: flex; gap: 5px; align-items: center;">
+                                        <select style="width: 110px;"
+                                            :value="$store.app.baudrateIsCustom ? 'custom' : String($store.app.baudrate)"
+                                            @change="if($event.target.value==='custom'){$store.app._customBaudrate=true}else{$store.app._customBaudrate=false;$store.app.baudrate=$event.target.value}">
+                                            <option value="9600">9600</option>
+                                            <option value="19200">19200</option>
+                                            <option value="38400">38400</option>
+                                            <option value="57600">57600</option>
+                                            <option value="115200">115200</option>
+                                            <option value="230400">230400</option>
+                                            <option value="460800">460800</option>
+                                            <option value="921600">921600</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                        <input type="text" id="baudrate" name="baudrate"
+                                            x-show="$store.app.baudrateIsCustom"
+                                            style="width: 80px;"
+                                            inputmode="numeric"
+                                            x-model="$store.app.baudrate"
+                                            placeholder="420000">
+                                    </div>
                                 </div>
                                 <div>
                                     <label for="databits">Data:</label>

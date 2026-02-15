@@ -28,7 +28,7 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     // Input buffers for bidirectional pipeline
 
     // USB input buffer
-    if (config->device2.role == D2_USB) {
+    if (config->device2.role == D2_USB || config->device2.role == D2_USB_CRSF_BRIDGE) {
         size_t inputBufferSize = INPUT_BUFFER_SIZE;  // Use defined constant (4096)
         ctx->buffers.usbInputBuffer = new CircularBuffer();
         ctx->buffers.usbInputBuffer->init(inputBufferSize);
@@ -53,7 +53,7 @@ void initProtocolBuffers(BridgeContext* ctx, Config* config) {
     }
     
     // UART3 input buffer
-    if (config->device3.role == D3_UART3_BRIDGE || config->device3.role == D3_SBUS_IN) {
+    if (config->device3.role == D3_UART3_BRIDGE || config->device3.role == D3_SBUS_IN || config->device3.role == D3_CRSF_BRIDGE) {
         ctx->buffers.uart3InputBuffer = new CircularBuffer();
         size_t bufferSize;
         if (config->device3.role == D3_SBUS_IN) {

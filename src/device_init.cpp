@@ -102,10 +102,10 @@ void initMainUART(UartInterface* serial, Config* config, UsbInterface* usb) {
             .flowcontrol = false
         };
 
-        // Initialize DMA with CRSF configuration (RX only)
-        serial->begin(crsfCfg, UART_RX_PIN, -1);
+        // Initialize DMA with CRSF configuration (bidirectional for Phase 3 reverse channel)
+        serial->begin(crsfCfg, UART_RX_PIN, UART_TX_PIN);
 
-        log_msg(LOG_INFO, "Device1 CRSF_IN initialized: 420000 8N1 (DMA active)");
+        log_msg(LOG_INFO, "Device1 CRSF_IN initialized: 420000 8N1 bidirectional (DMA active)");
 
         // Initialize other devices normally
         if (config->device2.role == D2_UART2) {
@@ -316,6 +316,18 @@ void initDevice3(uint8_t role) {
             log_msg(LOG_INFO, "Device 3 Log mode initialized on GPIO%d (TX only) at 115200 baud (%s, DMA polling)",
                     DEVICE3_UART_TX_PIN, uartName);
             logging_init_uart();
+        } else if (role == D3_CRSF_BRIDGE) {
+            // CRSF bridge - 420000 8N1, bidirectional (forward + reverse channel)
+            UartConfig crsfCfg = {
+                .baudrate = 420000,
+                .databits = UART_DATA_8_BITS,
+                .parity = UART_PARITY_DISABLE,
+                .stopbits = UART_STOP_BITS_1,
+                .flowcontrol = false
+            };
+            device3Serial->begin(crsfCfg, DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN);
+            log_msg(LOG_INFO, "Device 3 CRSF Bridge initialized on GPIO%d/%d (bidirectional) at 420000 baud (%s, DMA polling)",
+                    DEVICE3_UART_RX_PIN, DEVICE3_UART_TX_PIN, uartName);
         }
     } else {
         log_msg(LOG_ERROR, "Failed to create Device 3 UART");

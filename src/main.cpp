@@ -466,11 +466,13 @@ void initCommonDevices() {
 
     // Create USB interface based on configuration (only if Device 2 uses USB)
     if (config.device2.role == D2_USB || config.device2.role == D2_USB_SBUS_TEXT ||
-        config.device2.role == D2_USB_CRSF_TEXT || config.device2.role == D2_USB_LOG) {
+        config.device2.role == D2_USB_CRSF_TEXT || config.device2.role == D2_USB_CRSF_BRIDGE ||
+        config.device2.role == D2_USB_LOG) {
 
-        // USB Logger/CRSF Text always uses Device mode (no Host mode for text output)
-        if (config.device2.role == D2_USB_LOG || config.device2.role == D2_USB_CRSF_TEXT) {
-            const char* usbReason = (config.device2.role == D2_USB_LOG) ? "logging" : "CRSF text";
+        // USB Logger/CRSF always uses Device mode (no Host mode for text/binary output)
+        if (config.device2.role == D2_USB_LOG || config.device2.role == D2_USB_CRSF_TEXT ||
+            config.device2.role == D2_USB_CRSF_BRIDGE) {
+            const char* usbReason = (config.device2.role == D2_USB_LOG) ? "logging" : "CRSF bridge";
             log_msg(LOG_INFO, "Creating USB Device interface for %s", usbReason);
             usbInterface = createUsbDevice(config.baudrate);
         } else {
