@@ -1292,6 +1292,7 @@ document.addEventListener('alpine:init', () => {
         count: 0,
         entries: [],
         loaded: false,
+        expandedIndex: null,
 
         // Computed: badge color
         get badgeColor() {
@@ -1326,10 +1327,6 @@ document.addEventListener('alpine:init', () => {
                 this.count = data.total || 0;
                 this.entries = data.entries || [];
                 this.loaded = true;
-                // Update table via CrashLog module (uses innerHTML)
-                if (typeof CrashLog !== 'undefined') {
-                    CrashLog.updateTable(this.entries);
-                }
             } catch (err) {
                 console.error('Failed to fetch crash log:', err);
             }
@@ -1342,18 +1339,193 @@ document.addEventListener('alpine:init', () => {
                 if (!response.ok) throw new Error('Clear failed');
                 const data = await response.json();
                 if (data.status !== 'ok') throw new Error('Clear operation failed');
-
                 this.count = 0;
                 this.entries = [];
-                // Update table to show "No crashes recorded"
-                if (typeof CrashLog !== 'undefined') {
-                    CrashLog.updateTable([]);
-                }
+                this.expandedIndex = null;
                 return true;
             } catch (err) {
                 console.error('Clear crash log error:', err);
                 throw err;
             }
+        },
+
+        // Toggle expanded panic details for a row
+        toggleDetails(index) {
+            this.expandedIndex = this.expandedIndex === index ? null : index;
+        },
+
+        // CSS class for crash type
+        typeClass(reason) {
+            if (reason === 'PANIC') return 'crash-panic';
+            if (reason.includes('WDT')) return 'crash-wdt';
+            return 'crash-other';
+        },
+
+        // Format crash reason for display
+        formatReason(reason) {
+            const map = {
+                'PANIC': 'Panic', 'TASK_WDT': 'Task WDT', 'INT_WDT': 'Int WDT',
+                'SW_RESET': 'SW Reset', 'POWERON': 'Power On',
+                'BROWNOUT': 'Brownout', 'DEEPSLEEP': 'Deep Sleep'
+            };
+            return map[reason] || reason;
+        },
+
+        // Format epoch timestamp
+        formatTime(epoch) {
+            if (!epoch || epoch === 0) return '\u2014';
+            const d = new Date(epoch * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        },
+
+        // ESP32 exception cause description
+        getExcauseDescription(excause) {
+            const causes = {
+                '0x00000000': '(IllegalInstruction)',
+                '0x00000001': '(Syscall)',
+                '0x00000002': '(InstructionFetchError)',
+                '0x00000003': '(LoadStoreError)',
+                '0x00000004': '(Level1Interrupt)',
+                '0x00000005': '(Alloca)',
+                '0x00000006': '(IntegerDivideByZero)',
+                '0x00000009': '(LoadStoreAlignmentCause)',
+                '0x0000000c': '(InstrPIFDataError)',
+                '0x0000000d': '(LoadStorePIFDataError)',
+                '0x0000000e': '(InstrPIFAddrError)',
+                '0x0000000f': '(LoadStorePIFAddrError)',
+                '0x00000014': '(InstrTLBMiss)',
+                '0x00000018': '(LoadStoreTLBMiss)',
+                '0x0000001c': '(LoadProhibited)',
+                '0x0000001d': '(StoreProhibited)'
+            };
+            return causes[excause] || '';
+        },
+
+        // Generate panic details HTML (complex block with backtrace, copy buttons)
+        panicDetailsHtml(entry) {
+            const panic = entry.panic;
+            if (!panic || !panic.pc) return '';
+
+            let html = '<div class="panic-details">';
+            html += '<div style="font-weight: bold; margin-bottom: 8px;">\u26A0\uFE0F Exception Details:</div>';
+
+            let exceptionText = '\u26A0\uFE0F Exception Details:\n\n';
+
+            if (entry.version) {
+                html += '<div style="margin-bottom: 8px; color: #666; font-size: 11px;">';
+                html += `Firmware Version: <strong>${entry.version}</strong>`;
+                html += '</div>';
+                exceptionText += `Firmware Version: ${entry.version}\n`;
+            }
+
+            html += '<div style="margin-bottom: 8px; font-family: monospace; font-size: 11px;">';
+            html += `<div>PC (Program Counter): <strong>${panic.pc}</strong></div>`;
+            exceptionText += `PC (Program Counter): ${panic.pc}\n`;
+
+            if (panic.task) {
+                html += `<div>Task: <strong>${panic.task}</strong></div>`;
+                exceptionText += `Task: ${panic.task}\n`;
+            }
+            if (panic.excause) {
+                const causeDesc = this.getExcauseDescription(panic.excause);
+                html += `<div>Exception Cause: <strong>${panic.excause}</strong> ${causeDesc}</div>`;
+                exceptionText += `Exception Cause: ${panic.excause} ${causeDesc}\n`;
+            }
+            if (panic.excvaddr) {
+                html += `<div>Exception Address: <strong>${panic.excvaddr}</strong></div>`;
+                exceptionText += `Exception Address: ${panic.excvaddr}\n`;
+            }
+            html += '</div>';
+
+            if (panic.backtrace && panic.backtrace.length > 0) {
+                html += '<div style="margin-top: 10px;">';
+                html += `<div style="font-weight: bold; margin-bottom: 5px;">Backtrace (${panic.backtrace.length} addresses):</div>`;
+                html += '<div style="font-family: monospace; font-size: 11px; background: white; padding: 8px; border-radius: 4px; word-break: break-all; line-height: 1.6;">';
+
+                exceptionText += `\nBacktrace (${panic.backtrace.length} addresses):\n`;
+
+                for (let i = 0; i < panic.backtrace.length; i += 4) {
+                    const group = panic.backtrace.slice(i, i + 4);
+                    html += group.join(' ') + '<br>';
+                    exceptionText += group.join(' ') + '\n';
+                }
+
+                html += '</div></div>';
+
+                if (panic.truncated) {
+                    html += '<div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-left: 3px solid #ff9800; font-size: 11px; color: #856404;">';
+                    html += '\u26A0\uFE0F <strong>Warning:</strong> Backtrace was truncated at 16 addresses (ESP-IDF limit). Actual call stack may be deeper.';
+                    html += '</div>';
+                }
+                if (panic.corrupted) {
+                    html += '<div style="margin-top: 10px; padding: 8px; background: #f8d7da; border-left: 3px solid #f44336; font-size: 11px; color: #721c24;">';
+                    html += '\u26A0\uFE0F <strong>Warning:</strong> Backtrace data is corrupted. Results may be unreliable.';
+                    html += '</div>';
+                }
+
+                const addresses = panic.backtrace.join(' ');
+                const exceptionTextEsc = exceptionText.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+                html += '<div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">';
+                html += `<button data-exception="${exceptionTextEsc}" onclick="Alpine.store('crash').copyException(this.dataset.exception)" style="padding: 6px 12px; font-size: 12px; cursor: pointer; border: 1px solid #2196F3; background: white; color: #1976D2; border-radius: 4px;">&#128203; Copy Exception</button>`;
+                html += `<button data-addresses="${addresses}" onclick="Alpine.store('crash').copyCommand(this.dataset.addresses)" style="padding: 6px 12px; font-size: 12px; cursor: pointer; border: 1px solid #4CAF50; background: white; color: #2E7D32; border-radius: 4px;">&#128203; Copy addr2line</button>`;
+                html += '</div>';
+            }
+
+            html += '</div>';
+            return html;
+        },
+
+        // Copy exception details to clipboard
+        copyException(text) {
+            const decoded = text.replace(/\\n/g, '\n').replace(/\\'/g, "'");
+            this._copyToClipboard(decoded, 'Exception details copied to clipboard!');
+        },
+
+        // Copy addr2line command to clipboard
+        copyCommand(addresses) {
+            const command = `xtensa-esp32s3-elf-addr2line -pfiaC -e firmware.elf ${addresses}`;
+            this._copyToClipboard(command, 'addr2line command copied! Replace firmware.elf with your .elf file path');
+        },
+
+        _copyToClipboard(text, message) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    this._showCopyFeedback(message);
+                }).catch(() => {
+                    this._fallbackCopy(text, message);
+                });
+            } else {
+                this._fallbackCopy(text, message);
+            }
+        },
+
+        _fallbackCopy(text, message) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                this._showCopyFeedback(message);
+            } catch (err) {
+                alert('Copy failed. Please copy manually.');
+            }
+            document.body.removeChild(textarea);
+        },
+
+        _showCopyFeedback(message) {
+            const feedback = document.createElement('div');
+            feedback.textContent = message;
+            feedback.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 12px 20px; border-radius: 4px; z-index: 10000; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);';
+            document.body.appendChild(feedback);
+            setTimeout(() => {
+                feedback.style.opacity = '0';
+                feedback.style.transition = 'opacity 0.3s';
+                setTimeout(() => document.body.removeChild(feedback), 300);
+            }, 2000);
         }
     });
 
@@ -1441,6 +1613,147 @@ document.addEventListener('alpine:init', () => {
         reset() {
             this.buttonDisabled = false;
             this.buttonText = 'Update Firmware';
+        },
+
+        // Upload firmware file (XHR for progress tracking)
+        upload(file) {
+            if (!file) return;
+            this.start();
+
+            const formData = new FormData();
+            formData.append('update', file);
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    this.setProgress((event.loaded / event.total) * 100);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                const contentType = xhr.getResponseHeader('content-type');
+                const isJson = contentType && contentType.includes('application/json');
+
+                if (!isJson || xhr.responseText.startsWith('<')) {
+                    this.setSuccess('Firmware uploaded! Device is rebooting...');
+                    this._reconnect();
+                    return;
+                }
+
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (xhr.status === 200 && response.status === 'ok') {
+                        this.setSuccess(response.message);
+                        this._reconnect();
+                    } else {
+                        throw new Error(response.message || 'Update failed');
+                    }
+                } catch (error) {
+                    this.setError('Update failed: ' + error.message);
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                this.setError('Update failed: Network error');
+            });
+
+            xhr.open('POST', '/update');
+            xhr.send(formData);
+        },
+
+        _reconnect() {
+            let countdown = 12;
+            const countdownInterval = setInterval(() => {
+                this.status = `Device rebooting... ${countdown}s`;
+                countdown--;
+                if (countdown < 0) {
+                    clearInterval(countdownInterval);
+                    this._tryReconnect(0, 30);
+                }
+            }, 1000);
+        },
+
+        _tryReconnect(attempt, maxAttempts) {
+            if (attempt >= maxAttempts) {
+                this.status = 'Please refresh page manually';
+                this.statusColor = '#ff9800';
+                return;
+            }
+
+            this.status = `Reconnecting... (${attempt + 1}/${maxAttempts})`;
+
+            fetch('/api/status', { cache: 'no-store' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Not ready');
+                    this.status = 'Connected! Reloading...';
+                    this.statusColor = 'green';
+                    setTimeout(() => window.location.reload(), 500);
+                })
+                .catch(() => {
+                    setTimeout(() => this._tryReconnect(attempt + 1, maxAttempts), 1000);
+                });
+        }
+    });
+
+    // =========================================================================
+    // BACKUP STORE - Config import/export and factory reset
+    // =========================================================================
+    Alpine.store('backup', {
+        importStatus: '',
+        importColor: '',
+        showImportStatus: false,
+        resetInProgress: false,
+
+        importConfig(file) {
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.json')) {
+                alert('Please select a JSON configuration file');
+                return;
+            }
+
+            this.showImportStatus = true;
+            this.importStatus = 'Importing...';
+            this.importColor = 'black';
+
+            const formData = new FormData();
+            formData.append('config', file);
+
+            fetch('/config/import', { method: 'POST', body: formData })
+                .then(r => r.ok ? r.json() : Promise.reject(new Error('Import failed')))
+                .then(data => {
+                    if (data.status === 'ok') {
+                        this.importStatus = data.message + ' Please refresh the page.';
+                        this.importColor = 'green';
+                    }
+                })
+                .catch(error => {
+                    this.importStatus = 'Import failed: ' + error.message;
+                    this.importColor = 'red';
+                });
+        },
+
+        factoryReset() {
+            if (!confirm('Reset all settings to factory defaults?\n\nThis will erase all configuration including WiFi credentials.\nDevice will reboot after reset.')) {
+                return;
+            }
+
+            this.resetInProgress = true;
+
+            const app = Alpine.store('app');
+            const apName = app?.defaultHostname || app?.mdnsHostname || 'esp-bridge-XXXX';
+
+            const onReset = () => {
+                alert(`Factory reset complete. Device is rebooting...\n\nReconnect to WiFi: ${apName}`);
+            };
+
+            Utils.fetchWithReboot('/config/reset', { method: 'POST' })
+                .then(data => { if (data.status === 'ok') onReset(); })
+                .catch(error => {
+                    if (error.isReboot) { onReset(); return; }
+                    alert('Factory reset failed: ' + error.message);
+                    this.resetInProgress = false;
+                });
         }
     });
 
@@ -1450,10 +1763,6 @@ document.addEventListener('alpine:init', () => {
 // INITIALIZATION
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize legacy modules (CrashLog table rendering, FormUtils global handlers)
-    CrashLog.init();
-    FormUtils.attachListeners();
-
     // Wait for Alpine to initialize stores
     document.addEventListener('alpine:initialized', () => {
         // Load config
@@ -1465,13 +1774,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fetch initial crash count for badge
         Alpine.store('crash').fetchCount();
 
-        // Start periodic crash count updates (every 5s)
-        setInterval(() => {
-            const crashContent = document.getElementById('crashContent');
-            if (!(crashContent && crashContent.style.display === 'none')) {
-                CrashLog.updateCount();
+        // Periodic crash count updates (every 5s)
+        setInterval(() => Alpine.store('crash').fetchCount(), 5000);
+
+        // SBUS polling: start/stop reactively when isSbusActive changes
+        Alpine.effect(() => {
+            const active = Alpine.store('app').isSbusActive;
+            const sbus = Alpine.store('sbus');
+            if (active && !sbus.pollInterval) {
+                sbus.startPolling();
+            } else if (!active && sbus.pollInterval) {
+                sbus.stopPolling();
             }
-        }, 5000);
+        });
 
         // Restore side effects for persisted open sections
         // Use setTimeout to ensure Alpine x-collapse has finished rendering DOM
@@ -1484,9 +1799,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 Alpine.store('crash').fetchAll();
             }
         }, 300);
-
-        // Start SBUS polling if SBUS active
-        // (will be called after config loaded in x-init)
     });
 });
 

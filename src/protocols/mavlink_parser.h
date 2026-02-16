@@ -238,17 +238,6 @@ public:
     bool requiresExtendedTimeout() const override {
         return bulkDetector.isActive();
     }
-    
-    // DEAD CODE - methods never called, marked for removal
-    // bool shouldFlushNow(size_t pendingPackets, uint32_t timeSinceLastMs) const override {
-    //     if (bulkDetector.isActive()) {
-    //         return pendingPackets > 0;
-    //     }
-    //     return timeSinceLastMs > 3 || pendingPackets >= 5;
-    // }
-    // uint32_t getBatchTimeoutMs() const override {
-    //     return bulkDetector.isActive() ? 20 : 5;
-    // }
 
     // Get current burst mode state from detector
     bool isBurstActive() const override {

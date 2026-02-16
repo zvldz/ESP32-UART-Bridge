@@ -57,14 +57,6 @@ public:
     virtual bool requiresExtendedTimeout() const { 
         return false;  // By default use normal timeout
     }
-    
-    // DEAD CODE - methods never called, marked for removal
-    // virtual bool shouldFlushNow(size_t pendingPackets, uint32_t timeSinceLastMs) const {
-    //     return timeSinceLastMs > 2 || pendingPackets >= 10;
-    // }
-    // virtual uint32_t getBatchTimeoutMs() const {
-    //     return 2;
-    // }
 };
 
 #endif // PROTOCOL_PARSER_H

@@ -12,8 +12,7 @@
     <script src="/app.js"></script>
     <script defer src="/lib/alpine.min.js"></script>
 </head>
-<body x-data x-init="$store.app.init(); $store.status.startPolling(); $watch('$store.app.isSbusActive', val => { if(val) $store.sbus.startPolling(); else $store.sbus.stopPolling(); });"
-      x-effect="if($store.app.isSbusActive && !$store.sbus.pollInterval) $store.sbus.startPolling();">
+<body x-data>
     <div class="container">
         <h1>🔗 ESP32 UART Bridge <small x-show="$store.app.version" x-text="'v' + $store.app.version" style="font-size: 14px; color: #666;"></small></h1>
 
@@ -144,7 +143,7 @@
                 </span>
             </h4>
             <div x-show="$store.ui.crash" x-collapse x-effect="if ($store.ui.crash && !$store.crash.loaded) $store.crash.fetchAll()" style="overflow: hidden; margin-top: 10px;">
-                <!-- Crash table (populated by CrashLog.updateTable) -->
+                <!-- Crash table (Alpine x-for reactive) -->
                 <div class="log-container" style="height: auto; max-height: 400px;">
                     <table style="width: 100%; font-size: 12px;">
                         <thead>
@@ -158,9 +157,30 @@
                                 <th class="crash-details" style="width: 20%;">Details</th>
                             </tr>
                         </thead>
-                        <tbody id="crashTableBody">
-                            <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                        <!-- No crashes placeholder -->
+                        <tbody x-show="$store.crash.loaded && $store.crash.entries.length === 0">
+                            <tr><td colspan="7" style="text-align: center;">No crashes recorded</td></tr>
                         </tbody>
+                        <!-- One tbody per entry: main row + expandable details row -->
+                        <template x-for="(entry, index) in $store.crash.entries" :key="index">
+                            <tbody>
+                                <tr :class="{ 'heap-critical': entry.heap < 15000 }"
+                                    :style="entry.panic && entry.panic.pc ? 'cursor: pointer;' : ''"
+                                    @click="entry.panic && entry.panic.pc && $store.crash.toggleDetails(index)">
+                                    <td x-text="entry.num"></td>
+                                    <td :class="$store.crash.typeClass(entry.reason)" x-text="$store.crash.formatReason(entry.reason)"></td>
+                                    <td x-text="$store.crash.formatTime(entry.time)"></td>
+                                    <td x-text="$store.status.formatUptime(entry.uptime)"></td>
+                                    <td x-text="$store.status.formatBytes(entry.heap)"></td>
+                                    <td class="crash-min-heap" x-text="$store.status.formatBytes(entry.min_heap)"></td>
+                                    <td class="crash-details" x-text="entry.panic && entry.panic.pc ? '\uD83D\uDD0D PC:' + entry.panic.pc + ' ' + (entry.panic.task || '') : '\u2014'"></td>
+                                </tr>
+                                <tr x-show="entry.panic && entry.panic.pc && $store.crash.expandedIndex === index" x-cloak class="crash-details-row">
+                                    <td colspan="7" style="padding: 10px; background: #f5f5f5; border-left: 3px solid #f44336;"
+                                        x-html="$store.crash.panicDetailsHtml(entry)"></td>
+                                </tr>
+                            </tbody>
+                        </template>
                     </table>
                 </div>
                 <small class="hint">Click on a row with magnifying glass to view detailed backtrace information</small>
@@ -1109,20 +1129,27 @@
             <div x-show="$store.ui.configBackup" x-collapse>
                 <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center;">
                     <div class="text-center">
-                        <button type="button" class="btn-blue btn-small" onclick="window.location.href='/config/export'">Export Config</button>
+                        <button type="button" class="btn-blue btn-small" @click="window.location.href='/config/export'">Export Config</button>
                         <br><small class="text-small-muted">Download current configuration</small>
                     </div>
                     <div class="text-center">
-                        <button type="button" class="btn-orange btn-small" onclick="document.getElementById('configFile').click()">Import Config</button>
+                        <button type="button" class="btn-orange btn-small" @click="$refs.configFile.click()">Import Config</button>
                         <br><small class="text-small-muted">Upload configuration file</small>
                     </div>
                     <div class="text-center">
-                        <button type="button" class="btn-red btn-small" onclick="factoryReset()">Factory Reset</button>
+                        <button type="button" class="btn-red btn-small"
+                                :disabled="$store.backup.resetInProgress"
+                                @click="$store.backup.factoryReset()"
+                                x-text="$store.backup.resetInProgress ? 'Resetting...' : 'Factory Reset'">Factory Reset</button>
                         <br><small class="text-small-muted">Reset all settings to defaults</small>
                     </div>
                 </div>
-                <input type="file" id="configFile" accept=".json" style="display: none;" onchange="handleConfigImport(this)">
-                <p id="importStatus" style="display: none; margin-top: 10px; text-align: center;"></p>
+                <input type="file" x-ref="configFile" accept=".json" style="display: none;"
+                       @change="$store.backup.importConfig($event.target.files[0]); $event.target.value=''">
+                <p x-show="$store.backup.showImportStatus" x-cloak
+                   :style="{ color: $store.backup.importColor }"
+                   x-text="$store.backup.importStatus"
+                   style="margin-top: 10px; text-align: center;"></p>
             </div>
         </div>
 
@@ -1134,13 +1161,14 @@
             </h4>
             <div x-show="$store.ui.firmwareUpdate" x-collapse class="text-center">
                 <div class="text-center">
-                    <button type="button" id="updateButton" class="btn-red btn-small"
+                    <button type="button" class="btn-red btn-small"
                             :disabled="$store.firmware.buttonDisabled"
                             x-text="$store.firmware.buttonText"
-                            onclick="document.getElementById('firmwareFile').click()">Update Firmware</button>
+                            @click="$refs.firmwareFile.click()">Update Firmware</button>
                     <br><small class="text-small-muted">Select .bin file, device restarts after update</small>
                 </div>
-                <input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="handleFirmwareUpdate()">
+                <input type="file" x-ref="firmwareFile" accept=".bin" style="display: none;"
+                       @change="$store.firmware.upload($event.target.files[0]); $event.target.value=''">
                 <div x-show="$store.firmware.showProgress" x-cloak class="mt-15">
                     <div style="background-color: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
                         <div style="height: 20px; background-color: #007bff; transition: width 0.3s;"
@@ -1155,7 +1183,5 @@
     </div>
 
     <script src="/utils.js"></script>
-    <script src="/form-utils.js"></script>
-    <script src="/crash-log.js"></script>
 </body>
 </html>

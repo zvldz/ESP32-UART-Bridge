@@ -179,14 +179,8 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "text/css", CSS_STYLE_GZ, CSS_STYLE_GZ_LEN);
     });
-    server->on("/crash-log.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_CRASH_LOG_GZ, JS_CRASH_LOG_GZ_LEN);
-    });
     server->on("/utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_UTILS_GZ, JS_UTILS_GZ_LEN);
-    });
-    server->on("/form-utils.js", HTTP_GET, [](AsyncWebServerRequest *request){
-        sendGzippedResponse(request, "application/javascript", JS_FORM_UTILS_GZ, JS_FORM_UTILS_GZ_LEN);
     });
 
     // Alpine.js libraries and app
