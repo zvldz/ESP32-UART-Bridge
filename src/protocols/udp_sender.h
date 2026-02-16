@@ -45,7 +45,8 @@ private:
     // Batching control from config (for legacy GCS compatibility)
     bool enableAtomicBatching = true;  // Set via setBatchingEnabled()
     
-    // === DIAGNOSTIC START ===    struct {
+    // === DIAGNOSTIC START ===
+    struct {
         uint32_t totalBatches = 0;
         uint32_t atomicPacketsInBatches = 0;
         uint32_t maxPacketsInBatch = 0;
@@ -75,7 +76,8 @@ private:
 
     void flushBatch() {
         if (atomicBatchSize > 0) {
-            // === DIAGNOSTIC START ===            batchDiag.totalBatches++;
+            // === DIAGNOSTIC START ===
+            batchDiag.totalBatches++;
             batchDiag.atomicPacketsInBatches += atomicBatchPackets;
             if (atomicBatchPackets > batchDiag.maxPacketsInBatch) {
                 batchDiag.maxPacketsInBatch = atomicBatchPackets;
@@ -100,7 +102,8 @@ private:
     
     void flushRawBatch() {
         if (rawBatchSize > 0) {
-            // === DIAGNOSTIC START ===            log_msg(LOG_DEBUG, "[UDP-DIAG] Flush RAW batch: %zu bytes", rawBatchSize);
+            // === DIAGNOSTIC START ===
+            log_msg(LOG_DEBUG, "[UDP-DIAG] Flush RAW batch: %zu bytes", rawBatchSize);
             // === DIAGNOSTIC END ===
             
             sendUdpDatagram(rawBatchBuffer, rawBatchSize);
@@ -379,7 +382,8 @@ public:
 
         // Flush batches on bulk mode transition (functional, not diagnostic)
         if (bulkMode != lastBulkMode) {
-            // === DIAGNOSTIC START ===            static uint32_t bulkStartMs = 0;
+            // === DIAGNOSTIC START ===
+            static uint32_t bulkStartMs = 0;
             if (bulkMode) {
                 bulkStartMs = now;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode ON (queue=%zu)", packetQueue.size());
