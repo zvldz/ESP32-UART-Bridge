@@ -98,8 +98,7 @@ private:
     
     BulkModeDetector bulkDetector;  // Instance of bulk detector
 
-    // === DIAGNOSTIC START === (Remove after MAVLink stabilization)
-    struct DiagnosticCounters {
+    // === DIAGNOSTIC START ===    struct DiagnosticCounters {
         uint32_t totalParsed = 0;
         uint32_t highLatencyWarnings = 0;
         uint32_t lastReportTimeMs = 0;
@@ -161,7 +160,7 @@ public:
             }
 
             if (parseResult == MAVLINK_FRAMING_OK) {
-                // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                // === DIAGNOSTIC BLOCK START ===
                 // Log sequence gaps (rate limited)
                 static uint8_t lastSeq[256] = {0};  // Per sysid
                 static uint32_t gapCount = 0;
@@ -184,7 +183,7 @@ public:
                     }
                 }
                 lastSeq[sysid] = seq;
-                // === TEMPORARY DIAGNOSTIC BLOCK END ===
+                // === DIAGNOSTIC BLOCK END ===
                 
                 // Complete message received
                 bulkDetector.onPacket(rxMessage.msgid);

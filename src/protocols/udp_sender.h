@@ -45,8 +45,7 @@ private:
     // Batching control from config (for legacy GCS compatibility)
     bool enableAtomicBatching = true;  // Set via setBatchingEnabled()
     
-    // === DIAGNOSTIC START === (Remove after batching validation)
-    struct {
+    // === DIAGNOSTIC START ===    struct {
         uint32_t totalBatches = 0;
         uint32_t atomicPacketsInBatches = 0;
         uint32_t maxPacketsInBatch = 0;
@@ -76,8 +75,7 @@ private:
 
     void flushBatch() {
         if (atomicBatchSize > 0) {
-            // === DIAGNOSTIC START === (Remove after batching validation)
-            batchDiag.totalBatches++;
+            // === DIAGNOSTIC START ===            batchDiag.totalBatches++;
             batchDiag.atomicPacketsInBatches += atomicBatchPackets;
             if (atomicBatchPackets > batchDiag.maxPacketsInBatch) {
                 batchDiag.maxPacketsInBatch = atomicBatchPackets;
@@ -102,8 +100,7 @@ private:
     
     void flushRawBatch() {
         if (rawBatchSize > 0) {
-            // === DIAGNOSTIC START === (Remove after UDP stabilization)
-            log_msg(LOG_DEBUG, "[UDP-DIAG] Flush RAW batch: %zu bytes", rawBatchSize);
+            // === DIAGNOSTIC START ===            log_msg(LOG_DEBUG, "[UDP-DIAG] Flush RAW batch: %zu bytes", rawBatchSize);
             // === DIAGNOSTIC END ===
             
             sendUdpDatagram(rawBatchBuffer, rawBatchSize);
@@ -382,8 +379,7 @@ public:
 
         // Flush batches on bulk mode transition (functional, not diagnostic)
         if (bulkMode != lastBulkMode) {
-            // === DIAGNOSTIC START === (Remove after batching validation)
-            static uint32_t bulkStartMs = 0;
+            // === DIAGNOSTIC START ===            static uint32_t bulkStartMs = 0;
             if (bulkMode) {
                 bulkStartMs = now;
                 log_msg(LOG_DEBUG, "[UDP] Bulk mode ON (queue=%zu)", packetQueue.size());
@@ -403,7 +399,7 @@ public:
         while (!packetQueue.empty()) {
             QueuedPacket* item = &packetQueue.front();
             
-            // === TEMPORARY DIAGNOSTIC START ===
+            // === DIAGNOSTIC START ===
             // Log SBUS frames being sent via UDP
             if (item->packet.format == DataFormat::FORMAT_SBUS) {
                 static uint32_t sbusUdpCount = 0;
@@ -411,7 +407,7 @@ public:
                     log_msg(LOG_DEBUG, "UDP: Sent %u SBUS frames", sbusUdpCount);
                 }
             }
-            // === TEMPORARY DIAGNOSTIC END ===
+            // === DIAGNOSTIC END ===
             
             // Route packet based on protocol type (using keepWhole flag)
             if (item->packet.hints.keepWhole) {

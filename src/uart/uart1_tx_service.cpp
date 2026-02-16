@@ -89,8 +89,8 @@ void Uart1TxService::processTxQueue() {
     if (txRing->available() == 0) return;
     if (uart->availableForWrite() == 0) return;
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
-    // Temporary diagnostic for TX queue monitoring
+    // === DIAGNOSTIC BLOCK START ===
+    // TX queue monitoring
     static uint32_t lastLog = 0;
     if (millis() - lastLog > 1000) {
         size_t available = txRing->available();
@@ -98,7 +98,7 @@ void Uart1TxService::processTxQueue() {
         log_msg(LOG_DEBUG, "TX Queue: ring=%zu canWrite=%zu", available, canWrite);
         lastLog = millis();
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
     // Short mutex only for reading segments (ring can be modified by enqueue)
     xSemaphoreTake(ringMutex, portMAX_DELAY);

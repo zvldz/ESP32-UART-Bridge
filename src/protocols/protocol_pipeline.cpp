@@ -840,22 +840,22 @@ void ProtocolPipeline::processInputFlows() {
         }
     }
     
-    // === TEMPORARY DIAGNOSTIC START ===
+    // === DIAGNOSTIC START ===
     static uint32_t exceedCount = 0;
     if (timeExceeded && ++exceedCount % 100 == 0) {
         log_msg(LOG_DEBUG, "[INPUT] Processing time limit exceeded %u times", exceedCount);
     }
-    // === TEMPORARY DIAGNOSTIC END ===
+    // === DIAGNOSTIC END ===
 }
 
 void ProtocolPipeline::processTelemetryFlow() {
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     static uint32_t packetCount = 0;
     static uint32_t lastReport = 0;
     static uint32_t exhaustiveIterations = 0;  // Track how many parse iterations
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
 
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     // Count function call frequency
     static uint32_t callCount = 0;
     static uint32_t lastCallReport = 0;
@@ -866,7 +866,7 @@ void ProtocolPipeline::processTelemetryFlow() {
         callCount = 0;
         lastCallReport = millis();
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
 
     // Process telemetry with exhaustive parsing for efficiency (MAVLink/SBUS only)
     const uint32_t MAX_TIME_MS = 10;  // Max 10ms for telemetry processing
@@ -890,9 +890,9 @@ void ProtocolPipeline::processTelemetryFlow() {
                        (millis() - startTime) < MAX_TIME_MS &&
                        iterations < MAX_ITERATIONS) {
 
-                    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                    // === DIAGNOSTIC BLOCK START ===
                     size_t beforePackets = packetCount;
-                    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+                    // === DIAGNOSTIC BLOCK END ===
 
                     // Remember buffer state before processing
                     size_t availableBefore = flows[i].inputBuffer->available();
@@ -908,13 +908,13 @@ void ProtocolPipeline::processTelemetryFlow() {
 
                     iterations++;
 
-                    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+                    // === DIAGNOSTIC BLOCK START ===
                     exhaustiveIterations++;
                     // Count packets processed (approximation)
                     if (availableAfter > 0) {
                         packetCount++;
                     }
-                    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+                    // === DIAGNOSTIC BLOCK END ===
                 }
 
                 // Log if we hit limits (for debugging)
@@ -927,7 +927,7 @@ void ProtocolPipeline::processTelemetryFlow() {
         }
     }
 
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     if (millis() - lastReport > 1000) {
         log_msg(LOG_INFO, "Telemetry: %u packets/sec, %u parse iterations/sec",
                 packetCount, exhaustiveIterations);
@@ -935,7 +935,7 @@ void ProtocolPipeline::processTelemetryFlow() {
         exhaustiveIterations = 0;
         lastReport = millis();
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
 
     // Process Logger flows separately (not part of telemetry)
     for (size_t i = 0; i < activeFlows; i++) {
@@ -953,7 +953,7 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
         return;  // Processed via fast path, skip normal parsing
     }
 
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     static uint32_t telemetryBytesTotal = 0;
     static uint32_t parsedPacketsTotal = 0;
     static uint32_t lastFlowReport = 0;
@@ -962,7 +962,7 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
     size_t available = flow.inputBuffer->available();
     telemetryBytesTotal += available;
 
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
 
     uint32_t nowMicros = micros();
     uint32_t nowMillis = millis();
@@ -970,7 +970,7 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
     // Parse packets from input buffer (pass millis for lastPacketTime tracking)
     ParseResult result = flow.parser->parse(flow.inputBuffer, nowMillis);
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     // Count successfully parsed packets
     parsedPacketsTotal += result.count;
     
@@ -982,9 +982,9 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
         parsedPacketsTotal = 0;
         lastFlowReport = millis();
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     // Detailed telemetry parser diagnostics
     if (strcmp(flow.name, "Telemetry") == 0 && result.bytesConsumed > 0) {
         static uint32_t totalConsumed = 0;
@@ -1003,7 +1003,7 @@ void ProtocolPipeline::processFlow(DataFlow& flow) {
         }
     }
 
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
     // Consume bytes if parser processed them
     if (result.bytesConsumed > 0) {
