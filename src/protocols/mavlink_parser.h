@@ -98,7 +98,8 @@ private:
     
     BulkModeDetector bulkDetector;  // Instance of bulk detector
 
-    // === DIAGNOSTIC START ===    struct DiagnosticCounters {
+    // === DIAGNOSTIC START ===
+    struct DiagnosticCounters {
         uint32_t totalParsed = 0;
         uint32_t highLatencyWarnings = 0;
         uint32_t lastReportTimeMs = 0;
