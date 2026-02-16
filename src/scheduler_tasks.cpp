@@ -90,7 +90,7 @@ void initializeScheduler() {
         ESP.restart();
     });
 
-    // UDP Logger task - copies log lines to Pipeline
+    // LED activity monitor - blinks LEDs on data RX/TX in standalone mode
     tLedMonitor.set(50, TASK_FOREVER, []{
         // Only show data activity LEDs in standalone mode
         if (bridgeMode != BRIDGE_STANDALONE) {

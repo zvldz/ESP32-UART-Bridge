@@ -1,44 +1,7 @@
 // ESP32 UART Bridge - Common Utilities
+// Reconnect and reboot handling (used by Save & Reboot, Factory Reset)
 
 const Utils = {
-    // Safe fetch with error handling
-    safeFetch(url, callback, errorCallback) {
-        fetch(url)
-            .then(r => {
-                if (!r.ok) throw new Error('Network response was not ok');
-                return r.json();
-            })
-            .then(callback)
-            .catch(err => {
-                console.error('Fetch error:', err);
-                if (errorCallback) errorCallback(err);
-            });
-    },
-
-    // Format bytes to human readable format
-    formatBytes(bytes, decimals = 0) {
-        if (!bytes || bytes === 0) return '0';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + sizes[i];
-    },
-
-    // Format uptime from seconds
-    formatUptime(seconds) {
-        if (!seconds || seconds === 0) return '0s';
-
-        const d = Math.floor(seconds / 86400);
-        const h = Math.floor((seconds % 86400) / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-
-        if (d > 0) return `${d}d ${h}h`;
-        if (h > 0) return `${h}h ${m}m`;
-        if (m > 0) return `${m}m ${s}s`;
-        return `${s}s`;
-    },
-
     // Fetch with reboot handling - for endpoints that trigger device restart
     // Returns Promise that resolves with JSON data or starts reconnect on reboot
     fetchWithReboot(url, options = {}) {

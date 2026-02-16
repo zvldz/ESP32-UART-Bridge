@@ -69,13 +69,6 @@
 
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
-#### Device 2 USB Logger Role ✅ DONE (v2.18.15)
-
-- [x] **D2_USB_LOG role implemented**
-  - Log output via USB Serial, same format as UART3 Logger
-  - Shares log level with UART Logger (USB/UART Logs setting)
-  - USB Device mode only, non-blocking write
-
 #### Web Interface Improvements
 
 - [ ] **Show connected clients info in AP mode**

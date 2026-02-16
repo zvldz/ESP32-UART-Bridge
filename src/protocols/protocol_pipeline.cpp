@@ -515,8 +515,7 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_INFO, "SBUS Input flow created with routing mask: 0x%02X", f.senderMask);
     }
 
-    // POSSIBLY DEAD CODE - needs analysis
-    // This expects SBUS frames on UART1, but unclear when this would happen without SBUS_IN
+    // SBUS output without physical SBUS input (e.g. UDP/network -> SBUS_OUT)
     bool hasSbusOut = (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT);
     bool hasSbusIn = (config->device1.role == D1_SBUS_IN ||
                       config->device2.role == D2_SBUS_IN ||
@@ -609,35 +608,6 @@ void ProtocolPipeline::setupFlows(Config* config) {
         log_msg(LOG_INFO, "SBUS->UDP output flow created");
         }
     }
-    
-    // OBSOLETE CODE - multi-source implemented in SbusRouter, marked for removal
-    // int sbusSourceCount = 0;
-    // const char* sources[4] = {nullptr};
-    // int sourceIdx = 0;
-    // if (config->device2.role == D2_SBUS_IN) {
-    //     sources[sourceIdx++] = "Device2 SBUS_IN";
-    //     sbusSourceCount++;
-    // }
-    // if (config->device2.role == D2_UART2 && config->device3.role == D3_SBUS_OUT) {
-    //     sources[sourceIdx++] = "UART2→SBUS bridge";
-    //     sbusSourceCount++;
-    // }
-    // if (config->device3.role == D3_UART3_BRIDGE && config->device2.role == D2_SBUS_OUT) {
-    //     sources[sourceIdx++] = "UART3→SBUS bridge";
-    //     sbusSourceCount++;
-    // }
-    // if (config->device4.role == D4_NETWORK_BRIDGE &&
-    //     (config->device2.role == D2_SBUS_OUT || config->device3.role == D3_SBUS_OUT)) {
-    //     sources[sourceIdx++] = "UDP→SBUS input";
-    //     sbusSourceCount++;
-    // }
-    // if (sbusSourceCount > 1) {
-    //     log_msg(LOG_ERROR, "SBUS: Multiple input sources detected (%d):", sbusSourceCount);
-    //     for (int i = 0; i < sourceIdx; i++) {
-    //         if (sources[i]) log_msg(LOG_ERROR, "  - %s", sources[i]);
-    //     }
-    //     log_msg(LOG_INFO, "Multi-source now supported via SbusRouter");
-    // }
 }
 
 uint8_t ProtocolPipeline::calculateSbusInputRouting(Config* config) {

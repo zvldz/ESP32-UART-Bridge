@@ -51,6 +51,21 @@
   - Crash was intermittent — FreeRTOS only detects overflow on context switch
   - Applied to all 18 sdkconfig files
 
+### Web Interface
+- **Full Alpine.js migration**: CrashLog moved from innerHTML/DOM to Alpine store + x-for template
+  - Deleted `crash-log.js` and `form-utils.js` (legacy JS files)
+  - Expandable panic details, copy backtrace/addr2line — all in Alpine store
+- **Fixed double initialization**: body x-init and DOMContentLoaded both called init/startPolling
+  - Caused duplicate fetch intervals; now initialization runs once via alpine:initialized
+- **SBUS polling reactivity**: replaced x-effect on body with Alpine.effect() in init block
+- **Cleaned utils.js**: removed dead code (safeFetch, formatBytes, formatUptime)
+- **Alpine.js updated**: 3.15.4 → 3.15.8
+
+### Code Cleanup
+- Removed obsolete SBUS multi-source detection code (superseded by SbusRouter)
+- Removed dead shouldFlushNow/getBatchTimeoutMs methods from parser classes
+- Fixed misleading comments (SBUS output flow, LED monitor task)
+
 ### Diagnostics
 - **SysEvt stack monitoring**: Added sys_evt task to stack watermark diagnostics
 
