@@ -190,19 +190,19 @@ void uartBridgeTask(void* parameter) {
         }
 
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     // Performance profiling - measure all phases to find bottlenecks
     static uint32_t timings[10] = {0};
     static uint32_t counter = 0;
 
     uint32_t t0 = micros();
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
     processDevice1Input(&ctx);
 
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     uint32_t t1 = micros();
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
         // Process Device 2 input (USB or UART2)
         if (device2IsUSB) {
@@ -229,23 +229,23 @@ void uartBridgeTask(void* parameter) {
             }
         }
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     uint32_t t2 = micros();
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
 
         // Always process telemetry (FC->GCS is critical)
         if (ctx.protocolPipeline) {
             ctx.protocolPipeline->processTelemetryFlow();
         }
 
-        // === TEMPORARY DIAGNOSTIC BLOCK START ===
+        // === DIAGNOSTIC BLOCK START ===
         uint32_t t3 = micros();
-        // === TEMPORARY DIAGNOSTIC BLOCK END ===
+        // === DIAGNOSTIC BLOCK END ===
 
         // Process UART1 TX queue (CRITICAL for single-writer mechanism)
         Uart1TxService::getInstance()->processTxQueue();
     
-    // === TEMPORARY DIAGNOSTIC BLOCK START ===
+    // === DIAGNOSTIC BLOCK START ===
     uint32_t t4 = micros();
 
     // Accumulate averages
@@ -262,7 +262,7 @@ void uartBridgeTask(void* parameter) {
         memset(timings, 0, sizeof(timings));
         counter = 0;
     }
-    // === TEMPORARY DIAGNOSTIC BLOCK END ===
+    // === DIAGNOSTIC BLOCK END ===
     
 
         // Pipeline statistics output (every 10 seconds)

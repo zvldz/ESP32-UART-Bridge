@@ -16,7 +16,7 @@ size_t Uart1Sender::sendDirect(const uint8_t* data, size_t size) {
 bool Uart1Sender::enqueue(const ParsedPacket& packet) {
     if (!txService) return false;
 
-    // === TEMPORARY DIAGNOSTIC START ===
+    // === DIAGNOSTIC START ===
     // Log SBUS frames being sent to UART1 (once)
     if (packet.format == DataFormat::FORMAT_SBUS) {
         static bool firstSbusFrame = true;
@@ -32,7 +32,7 @@ bool Uart1Sender::enqueue(const ParsedPacket& packet) {
             log_msg(LOG_DEBUG, "UART1: Sent %u SBUS frames", sbusFrameCount);
         }
     }
-    // === TEMPORARY DIAGNOSTIC END ===
+    // === DIAGNOSTIC END ===
 
     // Direct pass-through to TX service, no local queuing
     bool result = txService->enqueue(packet.data, packet.size);
@@ -42,10 +42,6 @@ bool Uart1Sender::enqueue(const ParsedPacket& packet) {
     } else {
         totalDropped++;
     }
-
-    // Don't free here - memory freed by result.free() in processFlow()
-    // TODO: Remove after testing all boards/protocols
-    // const_cast<ParsedPacket&>(packet).free();
 
     return result;
 }
