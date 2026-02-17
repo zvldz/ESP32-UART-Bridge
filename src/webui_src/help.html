@@ -26,10 +26,11 @@
                 <p><strong>Optimized Protocols:</strong></p>
                 <ul style="margin-left: 20px;">
                     <li><strong>SBUS</strong> - Multi-source failover, WiFi transport with UDP batching</li>
+                    <li><strong>CRSF/ELRS</strong> - RC channels + telemetry, text/binary output via USB, UART, UDP, BLE</li>
                     <li><strong>MAVLink</strong> - Zero-latency forwarding, multi-GCS routing, priority transmission</li>
                     <li><strong>Raw Mode</strong> - Timing-based packet detection for unknown protocols</li>
                 </ul>
-                <p><strong>Compatible with:</strong> SBUS (RC), MAVLink (drones), NMEA (GPS), Modbus RTU, AT Commands, and any UART-based protocol.</p>
+                <p><strong>Compatible with:</strong> SBUS (RC), CRSF/ELRS (RC), MAVLink (drones), NMEA (GPS), Modbus RTU, AT Commands, and any UART-based protocol.</p>
             </div>
         </div>
 
@@ -224,12 +225,21 @@
                 </div>
 
                 <div class="success" style="margin-top: 15px;">
+                    <strong>🎯 Device 1 - Main UART (Always Active):</strong><br>
+                    - <strong>UART Bridge:</strong> Standard bidirectional UART (configurable baud rate)<br>
+                    - <strong>SBUS Input:</strong> Primary SBUS source from RC receiver (100000 baud, 8E2, inverted)<br>
+                    - <strong>CRSF/ELRS Input:</strong> CRSF protocol from ELRS receiver (420000 baud, 8N1)
+                </div>
+
+                <div class="success" style="margin-top: 15px;">
                     <strong>🔌 Device 2 - Secondary Channel:</strong><br>
                     - <strong>UART2:</strong> Additional UART on GPIO 8/9 (not available on MiniKit)<br>
                     - <strong>USB:</strong> USB device or host mode<br>
                     - <strong>SBUS Input:</strong> Second SBUS source for failover<br>
                     - <strong>SBUS Output:</strong> Send SBUS to flight controller (binary format)<br>
                     - <strong>USB SBUS Text Output:</strong> Text format via USB (MiniKit)<br>
+                    - <strong>USB CRSF Text Output:</strong> CRSF telemetry as text via USB<br>
+                    - <strong>USB CRSF Bridge:</strong> Raw CRSF binary frames via USB<br>
                     - <strong>USB Logger:</strong> Stream system logs via USB (same format as UART Logger)
                 </div>
 
@@ -240,7 +250,8 @@
                     - <strong>Logger:</strong> Dedicated UART log output at 115200 baud<br>
                     - <strong>SBUS Input:</strong> Third SBUS source for failover<br>
                     - <strong>SBUS Output:</strong> Send SBUS to flight controller (binary format)<br>
-                    - <strong>SBUS Text Output:</strong> Text format via UART
+                    - <strong>SBUS Text Output:</strong> Text format via UART<br>
+                    - <strong>CRSF Bridge:</strong> Raw CRSF binary frames via UART3 (bidirectional)
                 </div>
 
                 <div class="success" style="margin-top: 15px;">
@@ -250,6 +261,7 @@
                     - <strong>SBUS Output:</strong> Send SBUS frames over WiFi (binary format)<br>
                     - <strong>SBUS Text Output:</strong> Send SBUS as text format via UDP<br>
                     - <strong>SBUS Input:</strong> Receive SBUS from WiFi with failover<br>
+                    - <strong>CRSF Text Output:</strong> CRSF telemetry as text via UDP<br>
                     - Configure target IP and port in main settings<br>
                     - Requires active Wi-Fi connection
                 </div>
@@ -258,6 +270,7 @@
                     <strong>📶 Device 5 - Bluetooth</strong> (requires BLE or BT firmware variant)<strong>:</strong><br>
                     - <strong>Bridge:</strong> MAVLink/Raw telemetry to Android apps (QGC, Tower, Mission Planner)<br>
                     - <strong>SBUS Text Output:</strong> Text format for Mission Planner RC Override plugin<br>
+                    - <strong>CRSF Text Output:</strong> CRSF telemetry as text via Bluetooth<br>
                     - Device name matches mDNS hostname<br><br>
                     <strong>BLE (all boards):</strong><br>
                     - NUS (Nordic UART Service) — hardcoded passkey 1234<br>

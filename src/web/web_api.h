@@ -24,6 +24,7 @@ void handleClientIP(AsyncWebServerRequest *request);
 void handleSbusSetSource(AsyncWebServerRequest *request);
 void handleSbusSetMode(AsyncWebServerRequest *request);
 void handleSbusStatus(AsyncWebServerRequest *request);
+void handleRcChannels(AsyncWebServerRequest *request);
 void handleTestCrash(AsyncWebServerRequest *request);
 
 // New split API endpoints (Alpine.js refactoring)

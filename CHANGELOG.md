@@ -28,6 +28,11 @@
   - USB Device mode only (Host mode ignored for logger)
   - Non-blocking write with `availableForWrite()` check
   - Can work simultaneously with D3_UART3_LOG (independent devices)
+- **RC Channel Monitor**: Real-time 16-channel bar visualization for SBUS and CRSF input
+  - Collapsible section with on-demand polling (250ms), zero overhead when collapsed
+  - Shared `RcChannelData` storage written by SBUS/CRSF parsers, read by `/api/rc/channels` API
+  - Stale indication (gray bars) when no signal for >2 seconds
+  - Two-column grid layout with center line at 1500µs (neutral position)
 
 ### Improvement
 - **Unified output rate field**: renamed `sbusRate` → `outRate` across all devices
@@ -42,6 +47,7 @@
 - **UDP Batching auto-control**: forced ON for SBUS UDP, forced OFF for CRSF Text UDP (role-dependent)
 - **Network Logs selector**: restricted to D4_LOG_NETWORK role only (was enabled for all D4 roles)
 - **Removed duplicate Send Rate** from Advanced Configuration (already in device table)
+- **Per-board log buffer sizes**: MiniKit 30/25, S3 with BLE 50/40, S3 without BLE 100/95
 
 ### Bug Fix
 - **Device 2 Pins column**: USB-based roles (USB Logger, USB CRSF Text, USB CRSF Bridge) now correctly show "USB" instead of "N/A"
@@ -50,6 +56,9 @@
   - Root cause: `log_msg()` stack buffers (~600B) + WiFi/mDNS events exceeded default 2304B stack
   - Crash was intermittent — FreeRTOS only detects overflow on context switch
   - Applied to all 18 sdkconfig files
+- **alpine:initialized event timing**: Fixed initialization after Alpine.js 3.15.8 upgrade
+  - Event fires during deferred script execution (before DOMContentLoaded, not after)
+  - System Status showed "Uptime: 0s", "Free RAM: 0" until Protocol Statistics was toggled
 
 ### Web Interface
 - **Full Alpine.js migration**: CrashLog moved from innerHTML/DOM to Alpine store + x-for template

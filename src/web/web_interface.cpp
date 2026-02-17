@@ -174,6 +174,7 @@ void webserver_init(Config* config, SystemState* state) {
     // Split API endpoints for Alpine.js refactoring
     server->on("/api/config", HTTP_GET, handleApiConfig);
     server->on("/api/status", HTTP_GET, handleApiStatus);
+    server->on("/api/rc/channels", HTTP_GET, handleRcChannels);
 
     // Serve static files with gzip compression
     server->on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){

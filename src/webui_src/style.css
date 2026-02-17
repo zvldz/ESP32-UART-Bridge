@@ -93,6 +93,57 @@ button:hover {
 .sbus-source-btn:disabled { cursor: not-allowed; opacity: 0.6; }
 .sbus-source-btn.sbus-active { font-weight: bold; border-color: #1e7e34; }
 
+/* RC Channel Monitor */
+.rc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+}
+.rc-channel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+.rc-label {
+    width: 30px;
+    font-weight: bold;
+    text-align: right;
+    color: #555;
+    font-family: monospace;
+}
+.rc-bar-bg {
+    flex: 1;
+    height: 14px;
+    background: #e9ecef;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+.rc-bar-fill {
+    height: 100%;
+    background: #007bff;
+    border-radius: 2px;
+    transition: width 0.15s ease;
+}
+.rc-bar-fill.rc-stale { background: #adb5bd; }
+.rc-bar-center {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: rgba(0,0,0,0.15);
+}
+.rc-value {
+    width: 36px;
+    text-align: right;
+    font-family: monospace;
+    font-size: 11px;
+    color: #333;
+}
+.rc-stale-text { color: #adb5bd; }
+
 .status {
     padding: 10px;
     margin: 10px 0;

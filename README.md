@@ -17,6 +17,7 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), RC (SBUS), and more
 - **Protocol Optimization**:
   - **SBUS**: Multi-source failover, WiFi transport with UDP batching
+  - **CRSF/ELRS**: RC channel + telemetry parsing, text/binary output via USB, UART, UDP, BLE
   - **MAVLink**: Zero-latency packet forwarding, multi-GCS routing, priority-based transmission
   - **Raw Mode**: Adaptive buffering for unknown protocols
 - **High Performance**: DMA-accelerated UART with adaptive buffering (256-2048 bytes based on baud rate)
@@ -35,12 +36,13 @@ Universal UART to USB bridge with web configuration interface for any serial com
 - **Wide Speed Range**: 4800 to 1000000 baud
 - **Flow Control**: Hardware RTS/CTS support
 - **Web Interface**: Configuration, monitoring, crash logs, OTA updates
+- **RC Channel Monitor**: Real-time 16-channel bar visualization in web UI (SBUS and CRSF)
 - **Flexible Logging**: Multi-level logs via web, UART, or UDP network stream
 
 ## Current Limitations
 
 - **Device 4 Network**: UDP only
-- **Additional Protocols**: CRSF, Modbus planned for future releases
+- **Additional Protocols**: Modbus planned for future releases
 
 ## Hardware
 
@@ -431,6 +433,30 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 - Device 3: SBUS Input (tertiary source)
 - Device 4: SBUS UDP RX (WiFi backup)
 - Automatic failover based on signal quality and priority
+
+### CRSF/ELRS Features
+- **Device 1 CRSF Input**: 420000 baud, 8N1, single RX wire from ELRS receiver
+- **RC Channels + Telemetry**: Parses RC (16ch), Link Quality, Battery, GPS, Attitude, Flight Mode, Altitude
+- **Text Output**: Human-readable CRSF data via USB, UART3, UDP, or BLE
+- **Binary Bridge**: Raw CRSF frame forwarding via USB or UART3 (for external FC tools)
+- **Bidirectional**: Reverse channel from USB/UART3 back to ELRS RX (telemetry injection)
+- **Web Monitoring**: Real-time CRSF statistics (valid/invalid frames, CRC errors, last activity)
+
+### Common CRSF Configurations
+
+**ELRS Telemetry via WiFi** (ELRS RX → ESP32 → GCS over UDP):
+- Device 1: CRSF Input (from ELRS receiver)
+- Device 4: CRSF Text Output (UDP to GCS)
+- RC Override plugin reads channel + telemetry data
+
+**ELRS via USB** (ELRS RX → ESP32 → PC):
+- Device 1: CRSF Input
+- Device 2: USB CRSF Text Output (human-readable) or USB CRSF Bridge (binary)
+
+**ELRS Bidirectional Bridge** (FC ↔ ESP32 ↔ ELRS RX):
+- Device 1: CRSF Input (bidirectional with RX)
+- Device 3: CRSF Bridge (bidirectional UART3 to FC)
+- Full CRSF passthrough between FC and ELRS receiver
 
 ## LED Indicators
 

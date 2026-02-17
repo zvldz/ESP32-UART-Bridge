@@ -14,6 +14,7 @@
 #include "protocols/protocol_pipeline.h"
 #include "protocols/sbus_router.h"
 #include "protocols/sbus_fast_parser.h"
+#include "protocols/rc_channels.h"
 #if defined(MINIKIT_BT_ENABLED)
 #include "../bluetooth/bluetooth_spp.h"
 #endif
@@ -1125,6 +1126,16 @@ void handleSbusStatus(AsyncWebServerRequest *request) {
     request->send(200, "application/json", response);
 }
 
+// Get RC channel values for web UI monitor
+void handleRcChannels(AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    JsonArray ch = doc["ch"].to<JsonArray>();
+    for (int i = 0; i < RC_CHANNEL_COUNT; i++) {
+        ch.add(rcChannels.channels[i]);
+    }
+    doc["age"] = rcChannels.lastUpdateMs ? millis() - rcChannels.lastUpdateMs : -1;
 
-
-
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}

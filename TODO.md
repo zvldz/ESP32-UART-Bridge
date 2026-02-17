@@ -71,6 +71,9 @@
 
 #### Web Interface Improvements
 
+- [x] ~~**RC Channel Monitor**~~ — DONE v2.18.15
+  - Future: MAVLink RC_CHANNELS (msg 65) as additional data source (1-2 Hz from FC)
+
 - [ ] **Show connected clients info in AP mode**
   - Number of connected stations
   - List of client IP addresses

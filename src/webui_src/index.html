@@ -90,6 +90,32 @@
             </div>
         </div>
 
+        <!-- RC Channel Monitor (shows when SBUS/CRSF input active on Device 1) -->
+        <div x-cloak x-show="$store.app.isRcActive" class="section">
+            <h4 class="section-header" @click="$store.ui.toggle('rcMonitor')">
+                📊 RC Channel Monitor
+                <span class="section-arrow" x-text="$store.ui.rcMonitor ? '▼' : '▶'"></span>
+            </h4>
+            <div x-show="$store.ui.rcMonitor" x-collapse>
+                <div class="rc-grid">
+                    <template x-for="(ch, i) in $store.rc.channels" :key="i">
+                        <div class="rc-channel">
+                            <span class="rc-label" x-text="'CH' + (i + 1)"></span>
+                            <div class="rc-bar-bg">
+                                <div class="rc-bar-fill"
+                                     :style="{ width: $store.rc.barPercent(ch) + '%' }"
+                                     :class="{ 'rc-stale': $store.rc.isStale }">
+                                </div>
+                                <div class="rc-bar-center"></div>
+                            </div>
+                            <span class="rc-value" x-text="ch || '---'"
+                                  :class="{ 'rc-stale-text': $store.rc.isStale }"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- System Logs (Alpine.js reactive) -->
         <div class="section">
             <h4 class="section-header" @click="$store.ui.toggle('logs')">
