@@ -1312,7 +1312,7 @@ document.addEventListener('alpine:init', () => {
         startPolling() {
             if (this.pollInterval) return;
             this.fetchChannels();
-            this.pollInterval = setInterval(() => this.fetchChannels(), 250);
+            this.pollInterval = setInterval(() => this.fetchChannels(), 500);
         },
 
         stopPolling() {
