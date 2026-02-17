@@ -148,6 +148,11 @@ document.addEventListener('alpine:init', () => {
             return this.device1Role === '2';  // D1_CRSF_IN
         },
 
+        // Computed: is RC input active (SBUS or CRSF on Device 1)
+        get isRcActive() {
+            return this.device1Role === '1' || this.device1Role === '2';  // D1_SBUS_IN or D1_CRSF_IN
+        },
+
         // Computed: has SBUS input
         get hasSbusInput() {
             return this.device1Role === '1' ||           // D1_SBUS_IN
@@ -1286,6 +1291,51 @@ document.addEventListener('alpine:init', () => {
     });
 
     // =========================================================================
+    // RC STORE - RC channel monitor (polled when section open)
+    // =========================================================================
+    Alpine.store('rc', {
+        channels: new Array(16).fill(0),
+        age: -1,
+        pollInterval: null,
+
+        // Is data stale (no update for >2 seconds)
+        get isStale() {
+            return this.age < 0 || this.age > 2000;
+        },
+
+        // Bar width percentage for a channel (988-2012 us range)
+        barPercent(value) {
+            if (!value) return 0;
+            return Math.max(0, Math.min(100, (value - 988) / (2012 - 988) * 100));
+        },
+
+        startPolling() {
+            if (this.pollInterval) return;
+            this.fetchChannels();
+            this.pollInterval = setInterval(() => this.fetchChannels(), 250);
+        },
+
+        stopPolling() {
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+        },
+
+        async fetchChannels() {
+            try {
+                const response = await fetch('/api/rc/channels');
+                if (!response.ok) return;
+                const data = await response.json();
+                this.channels = data.ch || new Array(16).fill(0);
+                this.age = data.age ?? -1;
+            } catch (err) {
+                // Silently ignore fetch errors
+            }
+        }
+    });
+
+    // =========================================================================
     // CRASH STORE - Crash log state
     // =========================================================================
     Alpine.store('crash', {
@@ -1542,6 +1592,7 @@ document.addEventListener('alpine:init', () => {
         wifiConfig: JSON.parse(localStorage.getItem('ui:wifiConfig')) || false,
         advancedConfig: JSON.parse(localStorage.getItem('ui:advancedConfig')) || false,
         configBackup: JSON.parse(localStorage.getItem('ui:configBackup')) || false,
+        rcMonitor: JSON.parse(localStorage.getItem('ui:rcMonitor')) || false,
         firmwareUpdate: JSON.parse(localStorage.getItem('ui:firmwareUpdate')) || false,
         additionalNetworks: JSON.parse(localStorage.getItem('ui:additionalNetworks')) || false,
 
@@ -1560,11 +1611,15 @@ document.addEventListener('alpine:init', () => {
                     Alpine.store('crash').fetchAll();
                 } else if (section === 'systemStatus' || section === 'protocolStats') {
                     Alpine.store('status').fetchStatus();
+                } else if (section === 'rcMonitor') {
+                    Alpine.store('rc').startPolling();
                 }
             } else {
                 // Side effects on close
                 if (section === 'logs') {
                     Alpine.store('status').stopLogsPolling();
+                } else if (section === 'rcMonitor') {
+                    Alpine.store('rc').stopPolling();
                 }
             }
         }
@@ -1762,44 +1817,46 @@ document.addEventListener('alpine:init', () => {
 // =========================================================================
 // INITIALIZATION
 // =========================================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // Wait for Alpine to initialize stores
-    document.addEventListener('alpine:initialized', () => {
-        // Load config
-        Alpine.store('app').init();
+// Alpine fires 'alpine:initialized' during deferred script execution (before DOMContentLoaded)
+// Listening at top level ensures we catch the event
+document.addEventListener('alpine:initialized', () => {
+    // Load config
+    Alpine.store('app').init();
 
-        // Start status polling
-        Alpine.store('status').startPolling();
+    // Start status polling
+    Alpine.store('status').startPolling();
 
-        // Fetch initial crash count for badge
-        Alpine.store('crash').fetchCount();
+    // Fetch initial crash count for badge
+    Alpine.store('crash').fetchCount();
 
-        // Periodic crash count updates (every 5s)
-        setInterval(() => Alpine.store('crash').fetchCount(), 5000);
+    // Periodic crash count updates (every 5s)
+    setInterval(() => Alpine.store('crash').fetchCount(), 5000);
 
-        // SBUS polling: start/stop reactively when isSbusActive changes
-        Alpine.effect(() => {
-            const active = Alpine.store('app').isSbusActive;
-            const sbus = Alpine.store('sbus');
-            if (active && !sbus.pollInterval) {
-                sbus.startPolling();
-            } else if (!active && sbus.pollInterval) {
-                sbus.stopPolling();
-            }
-        });
-
-        // Restore side effects for persisted open sections
-        // Use setTimeout to ensure Alpine x-collapse has finished rendering DOM
-        setTimeout(() => {
-            const ui = Alpine.store('ui');
-            if (ui.logs) {
-                Alpine.store('status').startLogsPolling();
-            }
-            if (ui.crash) {
-                Alpine.store('crash').fetchAll();
-            }
-        }, 300);
+    // SBUS polling: start/stop reactively when isSbusActive changes
+    Alpine.effect(() => {
+        const active = Alpine.store('app').isSbusActive;
+        const sbus = Alpine.store('sbus');
+        if (active && !sbus.pollInterval) {
+            sbus.startPolling();
+        } else if (!active && sbus.pollInterval) {
+            sbus.stopPolling();
+        }
     });
+
+    // Restore side effects for persisted open sections
+    // Use setTimeout to ensure Alpine x-collapse has finished rendering DOM
+    setTimeout(() => {
+        const ui = Alpine.store('ui');
+        if (ui.logs) {
+            Alpine.store('status').startLogsPolling();
+        }
+        if (ui.crash) {
+            Alpine.store('crash').fetchAll();
+        }
+        if (ui.rcMonitor) {
+            Alpine.store('rc').startPolling();
+        }
+    }, 300);
 });
 
 // Cleanup on page unload
@@ -1810,6 +1867,9 @@ window.addEventListener('beforeunload', () => {
     }
     if (Alpine.store('sbus')) {
         Alpine.store('sbus').stopPolling();
+    }
+    if (Alpine.store('rc')) {
+        Alpine.store('rc').stopPolling();
     }
 });
 

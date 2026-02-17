@@ -6,6 +6,7 @@
 
 #include "protocol_parser.h"
 #include "crsf_protocol.h"
+#include "rc_channels.h"
 #include "packet_sender.h"
 #include "../config.h"
 #include "../device_stats.h"
@@ -238,6 +239,13 @@ private:
 
         switch (type) {
             case CRSF_TYPE_RC_CHANNELS: {
+                // Update shared RC channel data for web UI monitor
+                if (payloadLen >= CRSF_RC_PAYLOAD_SIZE) {
+                    uint16_t raw[16];
+                    unpackCrsfChannels(payload, raw);
+                    for (int i = 0; i < 16; i++) rcChannels.channels[i] = crsfToUs(raw[i]);
+                    rcChannels.lastUpdateMs = millis();
+                }
                 textLen = formatRcChannels(payload, payloadLen);
                 sendTextRcToOutputs(textLen);  // Per-output rate limiting
                 return;

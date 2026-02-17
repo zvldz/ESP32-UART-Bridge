@@ -4,6 +4,8 @@
 #include "protocol_parser.h"
 #include "sbus_router.h"
 #include "sbus_common.h"
+#include "sbus_text.h"
+#include "rc_channels.h"
 #include "../config.h"
 #include "../device_stats.h"
 #include "../uart/uart_interface.h"
@@ -63,6 +65,12 @@ public:
 
         validFrames++;
         lastFrameTime = millis();
+
+        // Update shared RC channel data for web UI monitor
+        uint16_t raw[16];
+        unpackSbusChannels(frame + 1, raw);
+        for (int i = 0; i < 16; i++) rcChannels.channels[i] = sbusToUs(raw[i]);
+        rcChannels.lastUpdateMs = lastFrameTime;
 
         // Route through singleton router
         // Router will handle:

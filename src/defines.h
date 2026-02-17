@@ -145,12 +145,15 @@ Hardware: ESP32-WROOM-32 based development board
 #define DEFAULT_AP_SSID     "ESP-Bridge"
 #define DEFAULT_AP_PASSWORD "12345678"
 
-// Logging system - reduced for low-memory boards
-#if defined(BOARD_MINIKIT_ESP32) || defined(BLE_ENABLED)
-#define LOG_BUFFER_SIZE     30      // MiniKit/BLE: limited internal heap
+// Logging system - sized per board/feature memory constraints
+#if defined(BOARD_MINIKIT_ESP32)
+#define LOG_BUFFER_SIZE     30      // MiniKit: ~160KB heap, tight memory
 #define LOG_DISPLAY_COUNT   25
+#elif defined(BLE_ENABLED)
+#define LOG_BUFFER_SIZE     50      // S3 with BLE: BLE stack uses extra heap
+#define LOG_DISPLAY_COUNT   40
 #else
-#define LOG_BUFFER_SIZE     100     // S3 boards without BLE
+#define LOG_BUFFER_SIZE     100     // S3 without BLE
 #define LOG_DISPLAY_COUNT   95
 #endif
 
