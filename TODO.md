@@ -400,11 +400,10 @@ lib_deps =
     bblanchon/ArduinoJson@^7.4.2      # JSON parsing and generation
     fastled/FastLED@^3.10.3           # WS2812 LED control
     arkhipenko/TaskScheduler@^4.0.3   # Task scheduling
-    ESP32Async/ESPAsyncWebServer@^3.9.1  # Async web server
-    ESP32Async/AsyncTCP@^3.4.9        # TCP support for async server
+    ESP32Async/ESPAsyncWebServer@3.8.1 # Async web server (3.9+ has crashes, frozen)
+    ESP32Async/AsyncTCP@3.4.8          # TCP support (frozen with webserver)
 
-# BLE builds only (zero_ble_*, supermini_ble_*, xiao_ble_*):
-    h2zero/NimBLE-Arduino@^2.3.2      # BLE stack for Nordic UART Service
+# BLE builds use ESP-IDF NimBLE component (configured in sdkconfig), no external lib
 ```
 
 
