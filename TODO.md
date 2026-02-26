@@ -2,71 +2,6 @@
 
 ## ACTIVE TASKS 🔄
 
-### PLATFORM SUPPORT 🟠
-
-#### ESP32-S3 Super Mini Support 🟡 PARTIALLY TESTED
-
-- [x] **Hardware Adaptation**
-  - [x] Pin mapping for S3 Super Mini board
-  - [x] Adjust for different GPIO availability
-  - [x] LED functionality verified (GPIO48 WS2815)
-  - [x] Verify USB-CDC functionality
-
-- [x] **Build Configuration**
-  - [x] Add platformio environment for S3 Super Mini
-  - [x] Conditional compilation with board flags
-  - [x] Web interface board type detection
-
-- [ ] **Testing on S3 Super Mini** 🟡 BASIC TESTING COMPLETED
-  - [x] Basic ESP32 operation verified
-  - [x] WiFi and web interface working
-  - [x] LED control functional
-  - [x] UDP logging operational
-  - [ ] Verify all UART interfaces work (Device 2, 3, 4)
-  - [ ] Test SBUS with hardware inverter (critical for RC)
-  - [ ] Check power consumption
-  - [ ] Full protocol testing (MAVLink, SBUS, etc.)
-  - [ ] BLE: testing (build `supermini_ble_*` added, hardware identical to Zero)
-
-**Status**: Super Mini support implemented but not fully tested. Basic functionality (WiFi, web, LEDs, UDP logs) confirmed working. UART and SBUS functionality requires hardware testing with actual devices.
-
-#### XIAO ESP32-S3 Support ✅ PARTIALLY TESTED
-
-- [x] **Hardware Adaptation** ✅ COMPLETED
-  - [x] Pin mapping for XIAO ESP32-S3 board (D0-D10 castellated pins)
-  - [x] GPIO mapping documented (Device1: D3/D4, Device2: D8/D9, Device3: D6/D7, RTS/CTS: D0/D1)
-  - [x] LED functionality (single color LED on GPIO21, blink-only mode with inverted logic)
-  - [x] Adjust for different GPIO availability (11 GPIO pins available)
-  - [x] External antenna support configuration
-  - [x] Consider compact form factor constraints
-
-- [x] **Build Configuration** ✅ COMPLETED
-  - [x] Add platformio environment for XIAO ESP32-S3 (xiao_production, xiao_debug)
-  - [x] Conditional compilation with board flags (BOARD_XIAO_ESP32_S3)
-  - [x] Web interface board type detection and D-pin display
-  - [x] SDK configuration for XIAO variant
-
-- [x] **Testing on XIAO ESP32-S3** 🟡 BASIC MODE TESTED (Device1 UART + Device2 USB)
-  - [x] Basic ESP32 operation verified ✅
-  - [x] WiFi and web interface functionality ✅
-  - [x] LED control (blink patterns only, no RGB) ✅
-  - [x] Device 1 (UART Bridge) on D3/D4 tested with flight controller ✅
-  - [x] Device 2 (USB) tested with Mission Planner ✅
-  - [ ] External antenna range/stability testing
-  - [ ] UDP logging operational
-  - [ ] Verify Device 3 UART interface (D6/D7 pins)
-  - [ ] Test RTS/CTS flow control (D0/D1 pins)
-  - [ ] Test SBUS with hardware inverter
-  - [ ] Test SBUS over WiFi/UDP with external antenna
-  - [ ] Check power consumption (important for small board)
-  - [ ] Full protocol testing (MAVLink, SBUS, etc.)
-  - [ ] Thermal testing (compact board heat dissipation)
-  - [ ] BLE: testing (build `xiao_ble_*` added, hardware identical to Zero)
-
-**Status**: XIAO ESP32-S3 support fully implemented and basic configuration tested (Device1 UART Bridge + Device2 USB working with flight controller and Mission Planner). Pin mapping verified: all GPIO pins are available on castellated edge holes. Web interface correctly displays D-pin names (D3/D4 for Device1, D8/D9 for Device2, D6/D7 for Device3). LED blink-only mode working. Need extended testing for Device3, RTS/CTS, network modes, and protocols.
-
-**Note**: XIAO ESP32-S3 is even more compact than Super Mini. Has external antenna connector which is beneficial for network operations like SBUS over UDP/WiFi, improving range and reliability. This is important as boards like Zero with PCB antennas can have unstable ping times causing SBUS packet loss when timing requirements (14ms frame rate) are not met. External antenna should provide more stable connection for time-critical protocols.
-
 ### FUTURE PROTOCOLS & FEATURES 🔵
 
 #### Web Interface Improvements
@@ -153,6 +88,12 @@
     - Reuse existing rate selector UI (10-70 Hz)
 
 ### Future Considerations (Low Priority)
+
+#### Platform Testing (waiting for hardware)
+
+**Super Mini** — implemented, basic tested (WiFi, web, LEDs, UDP). Needs: UART devices, SBUS inverter, BLE testing.
+
+**XIAO ESP32-S3** — implemented, basic tested (D1 UART + D2 USB with FC/MP). Needs: D3, RTS/CTS, SBUS, external antenna range, BLE testing.
 
 #### BLE Remaining Tasks
 
@@ -400,8 +341,8 @@ lib_deps =
     bblanchon/ArduinoJson@^7.4.2      # JSON parsing and generation
     fastled/FastLED@^3.10.3           # WS2812 LED control
     arkhipenko/TaskScheduler@^4.0.3   # Task scheduling
-    ESP32Async/ESPAsyncWebServer@3.8.1 # Async web server (3.9+ has crashes, frozen)
-    ESP32Async/AsyncTCP@3.4.8          # TCP support (frozen with webserver)
+    ESP32Async/ESPAsyncWebServer@3.10.0 # Async web server (6x faster since 3.9.0)
+    ESP32Async/AsyncTCP@3.4.10         # TCP support (deferred close fix)
 
 # BLE builds use ESP-IDF NimBLE component (configured in sdkconfig), no external lib
 ```
