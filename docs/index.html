@@ -558,9 +558,16 @@
                 setProgress(100);
                 logInfo('Flash complete! Resetting device...');
 
+                // Hard reset via RTS toggle (softReset often fails on ESP32-S3)
                 try {
-                    await esploader.softReset();
-                } catch { /* some chips don't support soft reset */ }
+                    await transport.setDTR(false);
+                    await transport.setRTS(true);
+                    await new Promise(r => setTimeout(r, 100));
+                    await transport.setRTS(false);
+                    await new Promise(r => setTimeout(r, 50));
+                } catch { /* fallback: try soft reset */
+                    try { await esploader.softReset(); } catch {}
+                }
 
                 logInfo('Done! Device should be running new firmware.');
             } catch (e) {
