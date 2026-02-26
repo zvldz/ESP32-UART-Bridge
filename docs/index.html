@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 UART Bridge — Web Flasher</title>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e; color: #e0e0e0; min-height: 100vh;
+            display: flex; justify-content: center; padding: 20px;
+        }
+        .container { max-width: 640px; width: 100%; }
+        h1 { text-align: center; margin-bottom: 8px; font-size: 1.5em; color: #fff; }
+        .subtitle { text-align: center; color: #888; font-size: 0.85em; margin-bottom: 24px; }
+        .subtitle a { color: #6c9bd2; text-decoration: none; }
+        .subtitle a:hover { text-decoration: underline; }
+
+        .card {
+            background: #16213e; border-radius: 8px; padding: 20px;
+            margin-bottom: 16px; border: 1px solid #1a3a5c;
+        }
+        .card h2 { font-size: 1.1em; margin-bottom: 12px; color: #6c9bd2; }
+
+        .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+        .form-group { flex: 1; }
+        .form-group label { display: block; font-size: 0.8em; color: #999; margin-bottom: 4px; }
+        select, button {
+            width: 100%; padding: 10px 12px; border-radius: 6px;
+            font-size: 0.95em; border: 1px solid #2a4a6c;
+            background: #0f3460; color: #e0e0e0; cursor: pointer;
+        }
+        select:focus { outline: none; border-color: #6c9bd2; }
+        select:disabled, button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-connect {
+            background: #1a8a4a; border-color: #1a8a4a; font-weight: 600;
+        }
+        .btn-connect:hover:not(:disabled) { background: #1fa855; }
+        .btn-connect.connected { background: #e74c3c; border-color: #e74c3c; }
+
+        .btn-flash {
+            background: #e67e22; border-color: #e67e22; font-weight: 600;
+            font-size: 1.1em; padding: 12px;
+        }
+        .btn-flash:hover:not(:disabled) { background: #f39c12; }
+
+        .chip-info {
+            text-align: center; padding: 8px; font-size: 0.9em;
+            color: #4ecca3; display: none;
+        }
+        .chip-info.warning { color: #f39c12; }
+
+        .progress-container { display: none; margin-bottom: 12px; }
+        .progress-bar {
+            height: 24px; background: #0f3460; border-radius: 4px; overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #1a8a4a, #4ecca3);
+            width: 0%; transition: width 0.2s ease; border-radius: 4px;
+        }
+        .progress-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 0.8em; font-weight: 600; color: #fff;
+        }
+
+        .log-container {
+            background: #0a0a1a; border: 1px solid #1a3a5c; border-radius: 6px;
+            padding: 12px; max-height: 200px; overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace; font-size: 0.8em;
+            line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+            color: #8a8a8a;
+        }
+        .log-container .log-info { color: #4ecca3; }
+        .log-container .log-error { color: #e74c3c; }
+        .log-container .log-warn { color: #f39c12; }
+
+        .board-img {
+            text-align: center; padding: 12px 0 4px; min-height: 20px;
+        }
+        .board-img img {
+            max-height: 120px; border-radius: 6px;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+        }
+
+        .btn-refresh {
+            width: 40px !important; flex-shrink: 0; font-size: 1.3em; padding: 6px;
+            background: transparent; border: 1px solid #2a4a6c; color: #6c9bd2;
+        }
+        .btn-refresh:hover { background: #0f3460; }
+        .btn-refresh.spinning { animation: spin 0.6s linear; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .browser-warning {
+            background: #4a1a1a; border: 1px solid #e74c3c; border-radius: 8px;
+            padding: 16px; text-align: center; color: #e74c3c;
+        }
+
+        .status-line {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.8em; color: #666; margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 UART Bridge</h1>
+        <div class="subtitle">
+            Web Flasher &mdash;
+            <a href="https://github.com/zvldz/ESP32-UART-Bridge" target="_blank">GitHub</a>
+        </div>
+
+        <div id="browser-warning" class="browser-warning" style="display:none;">
+            Web Serial API is not supported in this browser.<br>
+            Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.
+        </div>
+
+        <div id="main-ui">
+            <!-- Firmware Selection -->
+            <div class="card">
+                <h2>Firmware</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Version</label>
+                        <div style="display:flex; gap:8px;">
+                            <select id="sel-version" style="flex:1;"><option>Loading...</option></select>
+                            <button id="btn-refresh" class="btn-refresh" title="Refresh releases list">&#x21bb;</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Board</label>
+                        <select id="sel-board">
+                            <option value="zero">ESP32-S3 Zero</option>
+                            <option value="supermini">ESP32-S3 Super Mini</option>
+                            <option value="xiao">XIAO ESP32-S3</option>
+                            <option value="minikit">ESP32 MiniKit</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Variant</label>
+                        <select id="sel-variant"></select>
+                    </div>
+                </div>
+                <div id="board-img" class="board-img"></div>
+                <div class="status-line">
+                    <span id="fw-info"></span>
+                    <span id="cache-info"></span>
+                </div>
+            </div>
+
+            <!-- Connection -->
+            <div class="card">
+                <h2>Connection</h2>
+                <button id="btn-connect" class="btn-connect">Connect</button>
+                <div id="chip-info" class="chip-info"></div>
+            </div>
+
+            <!-- Flash -->
+            <div class="card">
+                <div id="progress-container" class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                        <span id="progress-text" class="progress-text">0%</span>
+                    </div>
+                </div>
+                <button id="btn-flash" class="btn-flash" disabled>Flash Firmware</button>
+            </div>
+
+            <!-- Log -->
+            <div class="card">
+                <h2>Log</h2>
+                <div id="log" class="log-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
+
+        // ── Board definitions ──
+        const BOARDS = {
+            zero:      { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'ESP32-S3 Zero',
+                img: 'img/zero.jpg',
+                variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
+            },
+            supermini: { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'ESP32-S3 Super Mini',
+                img: 'img/supermini.jpg',
+                variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
+            },
+            xiao:      { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'XIAO ESP32-S3',
+                img: 'img/xiao.jpg',
+                variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
+            },
+            minikit:   { chip: 'ESP32',    bootAddr: 0x1000,  label: 'ESP32 MiniKit',
+                img: 'img/minikit.jpg',
+                variants: [{ value: '', label: 'Standard' }, { value: 'bt', label: 'Bluetooth Classic' }, { value: 'ble', label: 'BLE' }]
+            }
+        };
+
+        const REPO = 'zvldz/ESP32-UART-Bridge';
+        const RELEASES_API = `https://api.github.com/repos/${REPO}/releases`;
+        const CACHE_TTL = 10 * 60 * 1000; // 10 min
+        const MIN_VERSION = 'v2.18.14'; // First release with bootloader + partitions in zip
+        const DB_NAME = 'esp-flasher-cache';
+        const DB_STORE = 'zips';
+
+        // ── State ──
+        let esploader = null;
+        let transport = null;
+        let device = null;
+        let detectedChip = null;
+        let releases = [];
+
+        // ── DOM refs ──
+        const selVersion = document.getElementById('sel-version');
+        const selBoard = document.getElementById('sel-board');
+        const selVariant = document.getElementById('sel-variant');
+        const btnConnect = document.getElementById('btn-connect');
+        const btnFlash = document.getElementById('btn-flash');
+        const chipInfo = document.getElementById('chip-info');
+        const fwInfo = document.getElementById('fw-info');
+        const cacheInfo = document.getElementById('cache-info');
+        const progressContainer = document.getElementById('progress-container');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const logEl = document.getElementById('log');
+
+        // ── Logging ──
+        function log(msg, cls = '') {
+            const span = document.createElement('span');
+            if (cls) span.className = cls;
+            span.textContent = msg + '\n';
+            logEl.appendChild(span);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        function logInfo(msg)  { log(msg, 'log-info'); }
+        function logError(msg) { log(msg, 'log-error'); }
+        function logWarn(msg)  { log(msg, 'log-warn'); }
+
+        // Terminal interface for esptool-js
+        const terminal = {
+            clean() { logEl.innerHTML = ''; },
+            writeLine(data) { log(data); },
+            write(data) { log(data); }
+        };
+
+        // ── Browser check ──
+        if (!('serial' in navigator)) {
+            document.getElementById('browser-warning').style.display = 'block';
+            document.getElementById('main-ui').style.display = 'none';
+        }
+
+        // ── IndexedDB cache for zip files ──
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function getCachedZip(version) {
+            try {
+                const db = await openDB();
+                return new Promise((resolve) => {
+                    const tx = db.transaction(DB_STORE, 'readonly');
+                    const req = tx.objectStore(DB_STORE).get(version);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                });
+            } catch { return null; }
+        }
+
+        async function setCachedZip(version, data) {
+            try {
+                const db = await openDB();
+                const tx = db.transaction(DB_STORE, 'readwrite');
+                tx.objectStore(DB_STORE).put(data, version);
+            } catch { /* ignore cache errors */ }
+        }
+
+        // ── GitHub API: fetch releases ──
+        async function fetchReleases() {
+            // Check localStorage cache
+            const cached = localStorage.getItem('releases_cache');
+            if (cached) {
+                const { data, ts } = JSON.parse(cached);
+                if (Date.now() - ts < CACHE_TTL) {
+                    return data;
+                }
+            }
+
+            const resp = await fetch(RELEASES_API);
+            if (!resp.ok) throw new Error(`GitHub API error: ${resp.status}`);
+            const data = await resp.json();
+
+            // Filter: only releases >= MIN_VERSION with firmware-*.zip asset
+            const versionToNum = (v) => {
+                const m = v.match(/(\d+)\.(\d+)\.(\d+)/);
+                return m ? m[1] * 10000 + m[2] * 100 + (+m[3]) : 0;
+            };
+            const minNum = versionToNum(MIN_VERSION);
+            const valid = data.filter(r =>
+                versionToNum(r.tag_name) >= minNum &&
+                r.assets.some(a => a.name.startsWith('firmware-') && a.name.endsWith('.zip'))
+            );
+
+            localStorage.setItem('releases_cache', JSON.stringify({ data: valid, ts: Date.now() }));
+            return valid;
+        }
+
+        // ── Download firmware zip ──
+        async function downloadFirmwareZip(release) {
+            const version = release.tag_name;
+
+            // Check IndexedDB cache
+            const cached = await getCachedZip(version);
+            if (cached) {
+                logInfo(`Using cached firmware for ${version}`);
+                cacheInfo.textContent = 'cached';
+                return cached;
+            }
+
+            const asset = release.assets.find(a =>
+                a.name.startsWith('firmware-') && a.name.endsWith('.zip')
+            );
+            if (!asset) throw new Error('Firmware zip not found in release');
+
+            logInfo(`Downloading ${asset.name} (${(asset.size / 1048576).toFixed(1)} MB)...`);
+            cacheInfo.textContent = 'downloading...';
+
+            // Try GitHub API (has CORS), fall back to CORS proxies
+            const apiUrl = `https://api.github.com/repos/${REPO}/releases/assets/${asset.id}`;
+            let resp;
+            const methods = [
+                { url: apiUrl, opts: { headers: { 'Accept': 'application/octet-stream' } }, label: 'GitHub API' },
+                { url: `https://proxy.corsfix.com/?${asset.browser_download_url}`, opts: {}, label: 'CORS proxy (corsfix)' }
+            ];
+            for (const method of methods) {
+                try {
+                    logInfo(`Trying ${method.label}...`);
+                    resp = await fetch(method.url, method.opts);
+                    if (resp.ok) break;
+                    logWarn(`${method.label}: HTTP ${resp.status}`);
+                    resp = null;
+                } catch (e) {
+                    logWarn(`${method.label}: ${e.message}`);
+                    resp = null;
+                }
+            }
+            if (!resp || !resp.ok) throw new Error('All download methods failed');
+
+            const data = await resp.arrayBuffer();
+            await setCachedZip(version, data);
+            logInfo(`Downloaded and cached ${asset.name}`);
+            cacheInfo.textContent = 'cached';
+            return data;
+        }
+
+        // ── Extract firmware files from zip ──
+        async function extractFirmware(zipData, board, variant) {
+            const zip = await JSZip.loadAsync(zipData);
+            const suffix = variant ? `${board}-${variant}` : board;
+
+            const names = {
+                firmware:   `firmware-${suffix}.bin`,
+                bootloader: `bootloader-${suffix}.bin`,
+                partitions: `partitions-${suffix}.bin`
+            };
+
+            const files = {};
+            for (const [key, name] of Object.entries(names)) {
+                const entry = zip.file(name);
+                if (!entry) throw new Error(`File not found in zip: ${name}`);
+                const bin = new Uint8Array(await entry.async('arraybuffer'));
+                // esptool-js expects binary strings, not Uint8Array
+                let str = '';
+                for (let i = 0; i < bin.length; i += 4096) {
+                    str += String.fromCharCode(...bin.subarray(i, i + 4096));
+                }
+                files[key] = str;
+                logInfo(`  ${name}: ${bin.length} bytes`);
+            }
+            return files;
+        }
+
+        // ── UI: update variant dropdown based on board ──
+        function updateVariants() {
+            const board = BOARDS[selBoard.value];
+            selVariant.innerHTML = '';
+            for (const v of board.variants) {
+                const opt = document.createElement('option');
+                opt.value = v.value;
+                opt.textContent = v.label;
+                selVariant.appendChild(opt);
+            }
+            updateFwInfo();
+        }
+
+        function updateFwInfo() {
+            const board = selBoard.value;
+            const variant = selVariant.value;
+            const suffix = variant ? `${board}-${variant}` : board;
+            fwInfo.textContent = `firmware-${suffix}.bin`;
+        }
+
+        function updateBoardImage() {
+            const board = BOARDS[selBoard.value];
+            const el = document.getElementById('board-img');
+            if (board.img) {
+                el.innerHTML = `<img src="${board.img}" alt="${board.label}" title="${board.label}">`;
+            } else {
+                el.innerHTML = '';
+            }
+        }
+
+        // ── UI: populate version dropdown ──
+        async function initVersions() {
+            try {
+                releases = await fetchReleases();
+                selVersion.innerHTML = '';
+                for (const r of releases) {
+                    const opt = document.createElement('option');
+                    opt.value = r.tag_name;
+                    opt.textContent = r.tag_name + (r.prerelease ? ' (pre-release)' : '');
+                    selVersion.appendChild(opt);
+                }
+                if (releases.length === 0) {
+                    selVersion.innerHTML = '<option>No releases found</option>';
+                }
+                logInfo(`Loaded ${releases.length} releases`);
+            } catch (e) {
+                logError(`Failed to load releases: ${e.message}`);
+                selVersion.innerHTML = '<option>Error loading releases</option>';
+            }
+        }
+
+        // ── Connect / Disconnect ──
+        async function connect() {
+            if (esploader) {
+                await disconnect();
+                return;
+            }
+
+            try {
+                logInfo('Requesting serial port...');
+                device = await navigator.serial.requestPort({});
+                transport = new Transport(device, true);
+
+                logInfo('Connecting to ESP32...');
+                esploader = new ESPLoader({
+                    transport,
+                    baudrate: 460800,
+                    terminal
+                });
+
+                detectedChip = await esploader.main();
+                logInfo(`Chip detected: ${detectedChip}`);
+
+                chipInfo.style.display = 'block';
+                chipInfo.textContent = `Connected: ${detectedChip}`;
+                chipInfo.className = 'chip-info';
+
+                // Validate chip vs selected board
+                validateChip();
+
+                btnConnect.textContent = 'Disconnect';
+                btnConnect.classList.add('connected');
+                btnFlash.disabled = false;
+            } catch (e) {
+                logError(`Connection failed: ${e.message}`);
+                await disconnect();
+            }
+        }
+
+        async function disconnect() {
+            try {
+                if (transport) await transport.disconnect();
+            } catch { /* ignore */ }
+            esploader = null;
+            transport = null;
+            device = null;
+            detectedChip = null;
+
+            chipInfo.style.display = 'none';
+            btnConnect.textContent = 'Connect';
+            btnConnect.classList.remove('connected');
+            btnFlash.disabled = true;
+        }
+
+        function validateChip() {
+            const expected = BOARDS[selBoard.value].chip;
+            // esptool-js returns chip names like "ESP32-S3" or "ESP32"
+            const match = detectedChip && detectedChip.includes(expected.replace('ESP32-', ''));
+            if (!match && detectedChip) {
+                chipInfo.textContent = `Connected: ${detectedChip} (expected ${expected} for ${BOARDS[selBoard.value].label})`;
+                chipInfo.className = 'chip-info warning';
+                logWarn(`Chip mismatch: detected ${detectedChip}, expected ${expected}`);
+            }
+        }
+
+        // ── Flash ──
+        async function flash() {
+            const version = selVersion.value;
+            const board = selBoard.value;
+            const variant = selVariant.value;
+            const boardDef = BOARDS[board];
+
+            const release = releases.find(r => r.tag_name === version);
+            if (!release) { logError('Release not found'); return; }
+
+            btnFlash.disabled = true;
+            btnConnect.disabled = true;
+            progressContainer.style.display = 'block';
+            setProgress(0);
+
+            try {
+                // Download and extract
+                logInfo(`Preparing ${version} for ${boardDef.label}...`);
+                const zipData = await downloadFirmwareZip(release);
+                setProgress(10);
+
+                logInfo('Extracting firmware files...');
+                const files = await extractFirmware(zipData, board, variant);
+                setProgress(20);
+
+                // Flash
+                logInfo('Flashing firmware...');
+                const flashOptions = {
+                    fileArray: [
+                        { data: files.bootloader, address: boardDef.bootAddr },
+                        { data: files.partitions, address: 0x8000 },
+                        { data: files.firmware,   address: 0x10000 }
+                    ],
+                    flashSize: 'keep',
+                    flashMode: 'keep',
+                    flashFreq: 'keep',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        const fileProgress = total > 0 ? written / total : 0;
+                        // 20-95% range for flashing (3 files)
+                        const overall = 20 + (fileIndex / 3 + fileProgress / 3) * 75;
+                        setProgress(Math.min(95, Math.round(overall)));
+                    }
+                };
+
+                await esploader.writeFlash(flashOptions);
+                setProgress(100);
+                logInfo('Flash complete! Resetting device...');
+
+                try {
+                    await esploader.softReset();
+                } catch { /* some chips don't support soft reset */ }
+
+                logInfo('Done! Device should be running new firmware.');
+            } catch (e) {
+                logError(`Flash failed: ${e.message}`);
+            } finally {
+                btnFlash.disabled = false;
+                btnConnect.disabled = false;
+            }
+        }
+
+        function setProgress(pct) {
+            progressFill.style.width = pct + '%';
+            progressText.textContent = pct + '%';
+        }
+
+        // ── Event listeners ──
+        selBoard.addEventListener('change', () => {
+            updateVariants();
+            updateBoardImage();
+            if (detectedChip) validateChip();
+        });
+        selVariant.addEventListener('change', updateFwInfo);
+        btnConnect.addEventListener('click', connect);
+        btnFlash.addEventListener('click', flash);
+        document.getElementById('btn-refresh').addEventListener('click', async (e) => {
+            localStorage.removeItem('releases_cache');
+            e.currentTarget.classList.add('spinning');
+            await initVersions();
+            setTimeout(() => e.currentTarget.classList.remove('spinning'), 600);
+        });
+
+        // ── Init ──
+        updateVariants();
+        updateBoardImage();
+        initVersions();
+    </script>
+</body>
+</html>
