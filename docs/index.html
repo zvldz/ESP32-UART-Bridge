@@ -168,6 +168,9 @@
                         <span id="progress-text" class="progress-text">0%</span>
                     </div>
                 </div>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:0.85em; color:#999; cursor:pointer;">
+                    <input type="checkbox" id="chk-erase"> Erase all flash before writing (resets all settings)
+                </label>
                 <button id="btn-flash" class="btn-flash" disabled>Flash Firmware</button>
             </div>
 
@@ -541,7 +544,7 @@
                     flashSize: 'keep',
                     flashMode: 'keep',
                     flashFreq: 'keep',
-                    eraseAll: false,
+                    eraseAll: document.getElementById('chk-erase').checked,
                     compress: true,
                     reportProgress: (fileIndex, written, total) => {
                         const fileProgress = total > 0 ? written / total : 0;
