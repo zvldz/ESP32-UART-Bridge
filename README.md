@@ -12,6 +12,12 @@ Universal UART to USB bridge with web configuration interface for any serial com
 
 > **⚠️ BETA SOFTWARE**: This is a beta version and may not work stably in all configurations. Please report any issues you encounter.
 
+## Quick Flash
+
+<a href="https://zvldz.github.io/ESP32-UART-Bridge/" target="_blank"><img src="https://img.shields.io/badge/Web_Flasher-Flash_from_Browser-blue?style=for-the-badge" alt="Web Flasher" height="36"></a>
+
+Flash firmware directly from your browser — no tools required (Chrome/Edge only).
+
 ## Features
 
 - **Universal Protocol Support**: Works with any UART-based protocol - industrial (Modbus RTU), IoT (AT Commands), navigation (NMEA GPS), robotics (MAVLink), RC (SBUS), and more
