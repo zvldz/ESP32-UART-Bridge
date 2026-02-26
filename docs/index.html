@@ -340,7 +340,7 @@
             let resp;
             const methods = [
                 { url: apiUrl, opts: { headers: { 'Accept': 'application/octet-stream' } }, label: 'GitHub API' },
-                { url: `https://proxy.corsfix.com/?${asset.browser_download_url}`, opts: {}, label: 'CORS proxy (corsfix)' }
+                { url: `https://esp-cors.zvldz.workers.dev/?url=${encodeURIComponent(asset.browser_download_url)}`, opts: {}, label: 'Cloudflare proxy' }
             ];
             for (const method of methods) {
                 try {
