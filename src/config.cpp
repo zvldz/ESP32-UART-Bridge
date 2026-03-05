@@ -78,11 +78,14 @@ uart_stop_bits_t string_to_stop_bits(uint8_t bits) {
 static void setDeviceDefaults(Config* config) {
     config->device1.role = D1_UART1;
     config->device1.sbusOutputFormat = SBUS_FMT_BINARY;
+    config->device1.crsfFilter = CRSF_FILTER_ALL;
     config->device2.role = D2_USB;
     config->device2.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device2.outRate = 50;
+    config->device2.crsfFilter = CRSF_FILTER_ALL;
     config->device3.role = D3_NONE;
     config->device3.sbusOutputFormat = SBUS_FMT_BINARY;
+    config->device3.crsfFilter = CRSF_FILTER_ALL;
     config->device4.role = D4_NONE;
 }
 
@@ -125,6 +128,7 @@ void config_init(Config* config) {
     config->device4_config.sbusOutputFormat = SBUS_FMT_BINARY;
     config->device4_config.udpSourceTimeout = 1000;  // Default 1 second
     config->device4_config.udpSendRate = 50;  // Default 50 Hz
+    config->device4_config.crsfFilter = CRSF_FILTER_ALL;
 
     // Log levels defaults
     config->log_level_web = LOG_WARNING;
@@ -148,6 +152,7 @@ void config_init(Config* config) {
     // Note: BT name uses mdns_hostname, "Just Works" pairing
     config->device5_config.role = D5_NONE;
     config->device5_config.btSendRate = 50;  // 50 Hz default for SBUS Text
+    config->device5_config.crsfFilter = CRSF_FILTER_ALL;
 #endif
 }
 
@@ -340,6 +345,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         }
         // Read new key first, fall back to old key for backwards compatibility
         config->device2.outRate = doc["devices"]["device2_out_rate"] | doc["devices"]["device2_sbus_rate"] | 50;
+        config->device2.crsfFilter = doc["devices"]["device2_crsf_filter"] | CRSF_FILTER_ALL;
         config->device3.role = doc["devices"]["device3"] | D3_NONE;
         if (doc["devices"]["device3_sbus_format"].is<int>()) {
             config->device3.sbusOutputFormat = doc["devices"]["device3_sbus_format"] | SBUS_FMT_BINARY;
@@ -365,6 +371,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         }
         config->device4_config.udpSourceTimeout = doc["device4"]["udp_timeout"] | 1000;
         config->device4_config.udpSendRate = doc["device4"]["send_rate"] | 50;
+        config->device4_config.crsfFilter = doc["device4"]["crsf_filter"] | CRSF_FILTER_ALL;
     }
 
 #if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
@@ -373,6 +380,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
     if (doc["device5"].is<JsonObject>()) {
         config->device5_config.role = doc["device5"]["role"] | D5_NONE;
         config->device5_config.btSendRate = doc["device5"]["btSendRate"] | 50;
+        config->device5_config.crsfFilter = doc["device5"]["crsf_filter"] | CRSF_FILTER_ALL;
     }
 #endif
 
@@ -457,6 +465,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["devices"]["device2"] = config->device2.role;
     doc["devices"]["device2_sbus_format"] = config->device2.sbusOutputFormat;
     doc["devices"]["device2_out_rate"] = config->device2.outRate;
+    doc["devices"]["device2_crsf_filter"] = config->device2.crsfFilter;
     doc["devices"]["device3"] = config->device3.role;
     doc["devices"]["device3_sbus_format"] = config->device3.sbusOutputFormat;
     doc["devices"]["device4"] = config->device4.role;
@@ -469,6 +478,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["device4"]["sbus_format"] = config->device4_config.sbusOutputFormat;
     doc["device4"]["udp_timeout"] = config->device4_config.udpSourceTimeout;
     doc["device4"]["send_rate"] = config->device4_config.udpSendRate;
+    doc["device4"]["crsf_filter"] = config->device4_config.crsfFilter;
 
     // Log levels
     doc["logging"]["web"] = config->log_level_web;
@@ -486,6 +496,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     // Note: BT name uses mdns_hostname, "Just Works" pairing
     doc["device5"]["role"] = config->device5_config.role;
     doc["device5"]["btSendRate"] = config->device5_config.btSendRate;
+    doc["device5"]["crsf_filter"] = config->device5_config.crsfFilter;
 #endif
 
     // Note: device_version and device_name are NOT saved - always use compiled values

@@ -22,6 +22,10 @@
   - Device 1 CRSF_IN: TX pin enabled for bidirectional UART (was RX-only)
   - Device 3 CRSF_BRIDGE: RX pin enabled for bidirectional UART3 (was TX-only)
   - USB/UART3 → RawParser → Uart1Sender reverse flows (raw passthrough)
+- **CRSF Text Filters (Phase 4)**: Per-frame-type bitmask filter for text outputs
+  - 6 filter groups: RC Channels, Link Stats, Battery, GPS/Altitude, Attitude, Flight Mode
+  - Select All checkbox with 3x2 grid layout in web UI
+  - Applied to text outputs only (USB, UDP, BLE) — binary bridge passes all frames unfiltered
 - **USB Logger (D2_USB_LOG)**: New Device 2 role — log output via USB Serial
   - Same format as UART3 Logger: `[timestamp][LEVEL] message`
   - Shares log level setting with UART Logger (USB/UART Logs)
@@ -59,6 +63,15 @@
 - **alpine:initialized event timing**: Fixed initialization after Alpine.js 3.15.8 upgrade
   - Event fires during deferred script execution (before DOMContentLoaded, not after)
   - System Status showed "Uptime: 0s", "Free RAM: 0" until Protocol Statistics was toggled
+- **BLE crash on pioarduino 3.3.7**: ESP32-S3 BLE initialization caused boot loop (LoadProhibited)
+  - Framework 3.3.7 extended `btInUse()` check to NimBLE — released BT memory before `setup()`
+  - Fix: `#include "esp32-hal-bt-mem.h"` sets `_btLibraryInUse` via constructor before `app_main()`
+- **MiniKit BLE regression in ESP-IDF 5.5.2**: BLE connections broken on ESP32 WROOM (MiniKit)
+  - pioarduino 3.3.6+ (ESP-IDF 5.5.2) broke BTDM controller — NUS characteristics inaccessible after pairing
+  - Pinned to pioarduino 3.3.5 (ESP-IDF 5.5.1) until fix available in ESP-IDF 5.5.3
+- **Hostname case inconsistency**: AP SSID changed from mixed case to lowercase after saving settings
+  - Removed `toLowerCase()` from hostname save handler (mDNS is case-insensitive per RFC 1123)
+  - Unified hostname generation to mixed case (ESP-Bridge-XXXX) across mDNS, AP SSID, BLE/BT name
 
 ### Web Interface
 - **Full Alpine.js migration**: CrashLog moved from innerHTML/DOM to Alpine store + x-for template

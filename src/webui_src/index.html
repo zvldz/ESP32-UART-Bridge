@@ -689,6 +689,23 @@
                          style="background:#fff3cd; color:#856404; padding:10px; border:1px solid #ffeeba; border-radius:4px; margin-top:10px; font-size:13px;">
                         ⚠️ SBUS Output configured but no SBUS Input source detected
                     </div>
+                    <!-- CRSF Text Filter -->
+                    <div x-show="$store.app.showCrsfFilter" x-cloak
+                         style="margin-top:12px; padding:10px; border:1px solid #444; border-radius:4px;">
+                        <label class="checkbox-label" style="font-weight:bold; font-size:13px; margin-bottom:6px;">
+                            <input type="checkbox" :checked="$store.app.crsfFilter === 63"
+                                   @change="$store.app.crsfFilter === 63 ? $store.app.crsfFilterNone() : $store.app.crsfFilterAll()">
+                            CRSF Text Filter
+                        </label>
+                        <div style="display:grid; grid-template-columns:repeat(3,auto); gap:4px 16px; font-size:13px; justify-content:start;">
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(1)" @change="$store.app.crsfFilterToggle(1)"> RC Channels</label>
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(2)" @change="$store.app.crsfFilterToggle(2)"> Link Stats</label>
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(4)" @change="$store.app.crsfFilterToggle(4)"> Battery</label>
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(8)" @change="$store.app.crsfFilterToggle(8)"> GPS / Altitude</label>
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(16)" @change="$store.app.crsfFilterToggle(16)"> Attitude</label>
+                            <label class="checkbox-label"><input type="checkbox" :checked="$store.app.crsfFilterHas(32)" @change="$store.app.crsfFilterToggle(32)"> Flight Mode</label>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- WiFi Configuration -->
