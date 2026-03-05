@@ -28,13 +28,28 @@ private:
     uint32_t crcErrors;
     uint32_t lastFrameTime;
 
-    // Per-output rate limiting for RC channels (telemetry passes unrestricted)
+    // Per-output rate limiting and filtering for text outputs
     struct CrsfOutput {
         PacketSender* sender;
         uint32_t rateIntervalMs;
         uint32_t lastRcSendMs;
+        uint8_t crsfFilter;      // Bitmask: which frame groups to output
     };
     std::vector<CrsfOutput> textOutputs;
+
+    // Map CRSF frame type to filter bitmask bit
+    static uint8_t getFilterBit(uint8_t type) {
+        switch (type) {
+            case CRSF_TYPE_RC_CHANNELS:  return CRSF_FILTER_RC;
+            case CRSF_TYPE_LINK_STATS:   return CRSF_FILTER_LINK_STATS;
+            case CRSF_TYPE_BATTERY:      return CRSF_FILTER_BATTERY;
+            case CRSF_TYPE_GPS:          return CRSF_FILTER_GPS;
+            case CRSF_TYPE_BARO_ALT:     return CRSF_FILTER_GPS;  // Grouped with GPS
+            case CRSF_TYPE_ATTITUDE:     return CRSF_FILTER_ATTITUDE;
+            case CRSF_TYPE_FLIGHT_MODE:  return CRSF_FILTER_FLIGHT_MODE;
+            default: return 0;  // Unknown types filtered out
+        }
+    }
 
     // Binary outputs: raw CRSF frames forwarded without conversion (no rate limiting)
     std::vector<PacketSender*> binaryOutputs;
@@ -201,21 +216,24 @@ private:
         return (len > 0 && (size_t)len < sizeof(textBuf)) ? len : 0;
     }
 
-    // Send telemetry text to all text outputs (no rate limiting)
-    void sendTextToOutputs(size_t textLen) {
+    // Send telemetry text to filtered text outputs (no rate limiting)
+    void sendTextToOutputs(size_t textLen, uint8_t filterBit) {
         if (textLen == 0 || textOutputs.empty()) return;
 
         for (auto& out : textOutputs) {
-            out.sender->sendDirect((const uint8_t*)textBuf, textLen);
+            if (out.crsfFilter & filterBit) {
+                out.sender->sendDirect((const uint8_t*)textBuf, textLen);
+            }
         }
     }
 
-    // Send RC channels text with per-output rate limiting
+    // Send RC channels text with per-output rate limiting and filter check
     void sendTextRcToOutputs(size_t textLen) {
         if (textLen == 0 || textOutputs.empty()) return;
 
         uint32_t now = millis();
         for (auto& out : textOutputs) {
+            if (!(out.crsfFilter & CRSF_FILTER_RC)) continue;
             if (out.rateIntervalMs > 0 && (now - out.lastRcSendMs) < out.rateIntervalMs) {
                 continue;
             }
@@ -239,7 +257,7 @@ private:
 
         switch (type) {
             case CRSF_TYPE_RC_CHANNELS: {
-                // Update shared RC channel data for web UI monitor
+                // Always update shared RC channel data for web UI monitor
                 if (payloadLen >= CRSF_RC_PAYLOAD_SIZE) {
                     uint16_t raw[16];
                     unpackCrsfChannels(payload, raw);
@@ -247,7 +265,7 @@ private:
                     rcChannels.lastUpdateMs = millis();
                 }
                 textLen = formatRcChannels(payload, payloadLen);
-                sendTextRcToOutputs(textLen);  // Per-output rate limiting
+                sendTextRcToOutputs(textLen);  // Per-output rate limiting + filter
                 return;
             }
             case CRSF_TYPE_LINK_STATS:
@@ -269,11 +287,10 @@ private:
                 textLen = formatBaroAlt(payload, payloadLen);
                 break;
             default:
-                // Unknown frame type — skip for now
-                break;
+                return;  // Unknown frame type — skip
         }
 
-        sendTextToOutputs(textLen);
+        sendTextToOutputs(textLen, getFilterBit(type));
     }
 
 public:
@@ -285,15 +302,16 @@ public:
         log_msg(LOG_INFO, "CrsfParser created (420000 baud, CRC8 DVB-S2)");
     }
 
-    // Register text output with independent RC rate (called during pipeline setup)
-    void registerTextOutput(PacketSender* sender, uint8_t rateHz = 50) {
+    // Register text output with independent RC rate and filter (called during pipeline setup)
+    void registerTextOutput(PacketSender* sender, uint8_t rateHz = 50, uint8_t filter = CRSF_FILTER_ALL) {
         if (!sender) return;
         CrsfOutput out;
         out.sender = sender;
         out.rateIntervalMs = (rateHz > 0 && rateHz <= 100) ? (1000 / rateHz) : 0;
         out.lastRcSendMs = 0;
+        out.crsfFilter = filter;
         textOutputs.push_back(out);
-        log_msg(LOG_INFO, "CRSF text output: %s (%d Hz, total: %zu)", sender->getName(), rateHz, textOutputs.size());
+        log_msg(LOG_INFO, "CRSF text output: %s (%d Hz, filter: 0x%02X, total: %zu)", sender->getName(), rateHz, filter, textOutputs.size());
     }
 
     // Register binary output for raw CRSF frame forwarding (no rate limiting)

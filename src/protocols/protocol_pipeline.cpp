@@ -702,7 +702,7 @@ void ProtocolPipeline::createSenders(Config* config) {
 
         // Register USB sender as CRSF text output (with independent RC rate)
         if (config->device2.role == D2_USB_CRSF_TEXT && crsfParser) {
-            crsfParser->registerTextOutput(usbSender, config->device2.outRate);
+            crsfParser->registerTextOutput(usbSender, config->device2.outRate, config->device2.crsfFilter);
         }
 
         // Register USB sender as CRSF binary output (raw frames, no rate limiting)
@@ -759,7 +759,7 @@ void ProtocolPipeline::createSenders(Config* config) {
 
             // Register UDP sender as CRSF text output (with independent RC rate)
             if (config->device4.role == D4_CRSF_TEXT && crsfParser) {
-                crsfParser->registerTextOutput(udpSender, config->device4_config.udpSendRate);
+                crsfParser->registerTextOutput(udpSender, config->device4_config.udpSendRate, config->device4_config.crsfFilter);
             }
 
             senders[IDX_DEVICE4] = udpSender;
@@ -812,7 +812,7 @@ void ProtocolPipeline::createSenders(Config* config) {
 
         // Register BLE sender as CRSF text output (with independent RC rate)
         if (config->device5_config.role == D5_BT_CRSF_TEXT && crsfParser) {
-            crsfParser->registerTextOutput(bleSender, config->device5_config.btSendRate);
+            crsfParser->registerTextOutput(bleSender, config->device5_config.btSendRate, config->device5_config.crsfFilter);
         }
 
         senders[IDX_DEVICE5] = bleSender;

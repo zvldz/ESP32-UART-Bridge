@@ -134,11 +134,11 @@ String generateDeviceHostname() {
         return config.mdns_hostname;
     }
 
-    // Generate short hostname: esp-bridge-XXXX
+    // Generate short hostname: ESP-Bridge-XXXX (mixed case, matches AP SSID)
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     char hostname[20];
-    sprintf(hostname, "esp-bridge-%02x%02x", mac[4], mac[5]);
+    sprintf(hostname, "ESP-Bridge-%02x%02x", mac[4], mac[5]);
 
     // Save generated hostname to config
     config.mdns_hostname = hostname;

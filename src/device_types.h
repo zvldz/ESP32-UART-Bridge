@@ -93,11 +93,24 @@ enum SbusOutputFormat : uint8_t {
     // Note: value 2 reserved for MAVLINK, new formats should start from 3
 };
 
+// CRSF text filter bitmask (which frame groups to output as text)
+// Default 0x3F = all groups enabled. Binary bridge outputs ignore this filter.
+enum CrsfFilterBit : uint8_t {
+    CRSF_FILTER_RC         = 0x01,  // Bit 0: RC Channels (type 0x16)
+    CRSF_FILTER_LINK_STATS = 0x02,  // Bit 1: Link Statistics (LQ, RSSI, SNR)
+    CRSF_FILTER_BATTERY    = 0x04,  // Bit 2: Battery (voltage, current, mAh)
+    CRSF_FILTER_GPS        = 0x08,  // Bit 3: GPS (coordinates, speed, heading)
+    CRSF_FILTER_ATTITUDE   = 0x10,  // Bit 4: Attitude (pitch, roll, yaw)
+    CRSF_FILTER_FLIGHT_MODE = 0x20, // Bit 5: Flight Mode (string)
+    CRSF_FILTER_ALL        = 0x3F   // Bits 0-5: All groups enabled
+};
+
 // Device configuration
 typedef struct {
     uint8_t role;
     uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK
     uint8_t outRate;           // Text output rate in Hz (10-70, default 50)
+    uint8_t crsfFilter;        // CRSF text filter bitmask (default: CRSF_FILTER_ALL)
 } DeviceConfig;
 
 // Device 4 Configuration
@@ -109,6 +122,7 @@ struct Device4Config {
     uint8_t sbusOutputFormat;  // SbusOutputFormat: BINARY, TEXT, or MAVLINK (only for D4_SBUS_UDP_TX)
     uint16_t udpSourceTimeout; // UDP source timeout in ms (100-5000, default 1000) for D4_SBUS_UDP_RX
     uint8_t udpSendRate;       // Send rate in Hz (10-70, default 50) for D4_SBUS_UDP_TX
+    uint8_t crsfFilter;        // CRSF text filter bitmask (default: CRSF_FILTER_ALL)
 };
 
 // Device 5 Configuration (Bluetooth - Classic SPP on MiniKit, BLE on S3)
@@ -118,6 +132,7 @@ struct Device4Config {
 struct Device5Config {
     uint8_t role;           // Device5Role
     uint8_t btSendRate;     // Send rate in Hz for SBUS Text mode (10-70, default 50)
+    uint8_t crsfFilter;     // CRSF text filter bitmask (default: CRSF_FILTER_ALL)
 };
 #endif
 

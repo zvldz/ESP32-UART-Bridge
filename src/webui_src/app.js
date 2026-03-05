@@ -21,7 +21,7 @@ const TRACKED_FIELDS = [
     'protocolOptimization', 'mavlinkRouting', 'sbusTimingKeeper',
     'device4TargetIP', 'device4TargetPort', 'device4SbusFormat',
     'device4AutoBroadcast', 'device4UdpTimeout', 'udpBatching',
-    'device2OutRate', 'device3OutRate', 'device4OutRate', 'btSendRate',
+    'device2OutRate', 'device3OutRate', 'device4OutRate', 'btSendRate', 'crsfFilter',
     'logLevelWeb', 'logLevelUart', 'logLevelNetwork',
     'usbMode'
 ];
@@ -112,6 +112,9 @@ document.addEventListener('alpine:init', () => {
         device4OutRate: DEFAULT_OUT_RATE,
         btSendRate: DEFAULT_OUT_RATE,
 
+        // CRSF text filter (bitmask, 0x3F = all)
+        crsfFilter: 63,
+
         // UI state
         logDisplayCount: 30,
 
@@ -147,6 +150,22 @@ document.addEventListener('alpine:init', () => {
         get isCrsfActive() {
             return this.device1Role === '2';  // D1_CRSF_IN
         },
+
+        // Computed: show CRSF filter (CRSF active + at least one text output)
+        get showCrsfFilter() {
+            if (!this.isCrsfActive) return false;
+            return this.device2Role === '7' ||   // D2_USB_CRSF_TEXT
+                   this.device4Role === '5' ||   // D4_CRSF_TEXT
+                   this.device5Role === '3';     // D5_BT_CRSF_TEXT
+        },
+
+        // CRSF filter helpers
+        crsfFilterHas(bit) { return (this.crsfFilter & bit) !== 0; },
+        crsfFilterToggle(bit) {
+            this.crsfFilter = this.crsfFilter ^ bit;
+        },
+        crsfFilterAll() { this.crsfFilter = 63; },
+        crsfFilterNone() { this.crsfFilter = 0; },
 
         // Computed: is RC input active (SBUS or CRSF on Device 1)
         get isRcActive() {
@@ -540,6 +559,9 @@ document.addEventListener('alpine:init', () => {
                 this.device4OutRate = String(data.device4OutRate || DEFAULT_OUT_RATE);
                 this.btSendRate = String(data.btSendRate || DEFAULT_OUT_RATE);
 
+                // CRSF filter (use D2 value as global, all devices share same filter in UI)
+                this.crsfFilter = data.device2CrsfFilter ?? 63;
+
                 // UI
                 this.logDisplayCount = data.logDisplayCount ?? 30;
 
@@ -603,6 +625,11 @@ document.addEventListener('alpine:init', () => {
                 device4_out_rate: parseInt(this.device4OutRate),
                 device5_role: parseInt(this.device5Role),
                 bt_send_rate: parseInt(this.btSendRate),
+
+                // CRSF filter (same value to all text outputs)
+                device2_crsf_filter: this.crsfFilter,
+                device4_crsf_filter: this.crsfFilter,
+                device5_crsf_filter: this.crsfFilter,
 
                 // UART config
                 baudrate: parseInt(this.baudrate),

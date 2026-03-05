@@ -425,7 +425,7 @@ void initDevice5Bluetooth() {
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_BT);
         char name[32];
-        snprintf(name, sizeof(name), "esp-bridge-%02x%02x", mac[4], mac[5]);
+        snprintf(name, sizeof(name), "ESP-Bridge-%02x%02x", mac[4], mac[5]);
         btName = name;
     }
 
@@ -463,7 +463,7 @@ void initDevice5BLE() {
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_BT);
         char name[32];
-        snprintf(name, sizeof(name), "esp-bridge-%02x%02x", mac[4], mac[5]);
+        snprintf(name, sizeof(name), "ESP-Bridge-%02x%02x", mac[4], mac[5]);
         bleName = name;
     }
 

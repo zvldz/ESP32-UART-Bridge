@@ -198,6 +198,13 @@ static void populateApiConfig(JsonDocument& doc) {
     doc["device3OutRate"] = config.device3.outRate;
     doc["device4SbusFormat"] = config.device4_config.sbusOutputFormat;
 
+    // CRSF text filters
+    doc["device2CrsfFilter"] = config.device2.crsfFilter;
+    doc["device4CrsfFilter"] = config.device4_config.crsfFilter;
+#if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)
+    doc["device5CrsfFilter"] = config.device5_config.crsfFilter;
+#endif
+
     // Log levels
     doc["logLevelWeb"] = (int)config.log_level_web;
     doc["logLevelUart"] = (int)config.log_level_uart;
@@ -513,6 +520,15 @@ void handleSaveJson(AsyncWebServerRequest *request) {
         }
     }
 
+    if (doc.containsKey("device2_crsf_filter")) {
+        uint8_t filter = doc["device2_crsf_filter"];
+        if ((filter & ~CRSF_FILTER_ALL) == 0 && filter != config.device2.crsfFilter) {
+            config.device2.crsfFilter = filter;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 2 CRSF filter: 0x%02X", filter);
+        }
+    }
+
     if (doc.containsKey("device2_sbus_format")) {
         uint8_t fmt = doc["device2_sbus_format"];
         if (fmt <= 2 && fmt != config.device2.sbusOutputFormat) {
@@ -614,6 +630,15 @@ void handleSaveJson(AsyncWebServerRequest *request) {
         }
     }
 
+    if (doc.containsKey("device4_crsf_filter")) {
+        uint8_t filter = doc["device4_crsf_filter"];
+        if ((filter & ~CRSF_FILTER_ALL) == 0 && filter != config.device4_config.crsfFilter) {
+            config.device4_config.crsfFilter = filter;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 4 CRSF filter: 0x%02X", filter);
+        }
+    }
+
     // Sync device4 role
     config.device4_config.role = config.device4.role;
 
@@ -633,6 +658,15 @@ void handleSaveJson(AsyncWebServerRequest *request) {
             config.device5_config.btSendRate = rate;
             configChanged = true;
             log_msg(LOG_INFO, "BT send rate: %d Hz", rate);
+        }
+    }
+
+    if (doc.containsKey("device5_crsf_filter")) {
+        uint8_t filter = doc["device5_crsf_filter"];
+        if ((filter & ~CRSF_FILTER_ALL) == 0 && filter != config.device5_config.crsfFilter) {
+            config.device5_config.crsfFilter = filter;
+            configChanged = true;
+            log_msg(LOG_INFO, "Device 5 CRSF filter: 0x%02X", filter);
         }
     }
 #endif
@@ -819,10 +853,9 @@ void handleSaveJson(AsyncWebServerRequest *request) {
     // mDNS Hostname
     if (doc.containsKey("mdns_hostname")) {
         String newHostname = doc["mdns_hostname"].as<String>();
-        newHostname.toLowerCase();
         newHostname.trim();
 
-        // Validate hostname
+        // Validate hostname (case-insensitive per RFC 1123)
         bool valid = newHostname.length() <= 63;
         if (valid && newHostname.length() > 0) {
             if (newHostname.charAt(0) == '-' || newHostname.charAt(newHostname.length() - 1) == '-') {
@@ -830,14 +863,14 @@ void handleSaveJson(AsyncWebServerRequest *request) {
             }
             for (size_t i = 0; i < newHostname.length() && valid; i++) {
                 char c = newHostname.charAt(i);
-                if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+                if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-')) {
                     valid = false;
                 }
             }
         }
 
         if (!valid) {
-            sendJsonError(request, 400, "Invalid hostname: use a-z, 0-9, - only, max 63 chars");
+            sendJsonError(request, 400, "Invalid hostname: use a-z, A-Z, 0-9, - only, max 63 chars");
             return;
         }
 

@@ -261,14 +261,16 @@
   - [x] sendRawToOutputs() — raw frame forwarding before buffer consume (zero-copy)
   - [x] processSenders skip for binary outputs (sendDirect path, no queue)
 
-  Phase 3 — Bidirectional communication: ✅ DONE
+  Phase 3 — Bidirectional communication: ✅ DONE (not tested with FC yet)
   - [x] Device 1 CRSF_IN: TX pin enabled (bidirectional UART)
   - [x] Device 3 CRSF_BRIDGE: RX pin enabled (bidirectional UART3)
   - [x] Input buffer allocation for D2_USB_CRSF_BRIDGE and D3_CRSF_BRIDGE
   - [x] Reverse input flows: USB/UART3 → RawParser → Uart1Sender → ELRS RX
+  - [ ] Test bidirectional CRSF with flight controller (telemetry back to ELRS RX)
 
   Phase 4 — filters and telemetry extraction:
-  - [ ] Filter bitmask UI (checkboxes in web interface to select frame types)
+  - [x] Filter bitmask UI (checkboxes in web interface, 6 groups: RC, LinkStats, Battery, GPS, Attitude, FlightMode)
+  - [ ] Per-device filter UI (backend stores crsfFilter per device, UI currently sets all devices at once)
   - [ ] Telemetry extraction: battery, GPS, attitude (structured data, not just text)
 
   Phase 5 — VTX control (requires both TX+RX wires, not single-wire):

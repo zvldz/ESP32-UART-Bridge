@@ -8,6 +8,12 @@
 #include "../device_stats.h"
 #include "nvs_flash.h"
 
+// ESP32-S3: pioarduino 3.3.7+ requires explicit include to prevent BT memory release
+// Uncomment when upgrading from 3.3.5 to 3.3.7+
+// #if defined(CONFIG_IDF_TARGET_ESP32S3)
+// #include "esp32-hal-bt-mem.h"
+// #endif
+
 // ESP32 (WROOM) needs explicit BT controller init
 // Arduino framework releases BT memory at startup if btInUse() returns false
 #if defined(CONFIG_IDF_TARGET_ESP32)
@@ -54,13 +60,23 @@ static void ble_rx_callback_wrapper(const uint8_t* data, size_t len) {
 static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
     switch (event->type) {
         case BLE_GAP_EVENT_CONNECT:
-            log_msg(LOG_INFO, "BLE: Connect event, status=%d", event->connect.status);
+            log_msg(LOG_INFO, "BLE: Connect event, status=%d, handle=%d",
+                    event->connect.status, event->connect.conn_handle);
             if (event->connect.status == 0) {
-                // Bonded devices restore encryption automatically via stored keys
-                // security_initiate() is not needed and causes race conditions
+                // Log connection parameters for debugging
+                struct ble_gap_conn_desc desc;
+                if (ble_gap_conn_find(event->connect.conn_handle, &desc) == 0) {
+                    log_msg(LOG_INFO, "BLE: Conn params: itvl=%d latency=%d timeout=%d",
+                            desc.conn_itvl, desc.conn_latency, desc.supervision_timeout);
+                    log_msg(LOG_INFO, "BLE: Peer addr type=%d, encrypted=%d authenticated=%d",
+                            desc.peer_id_addr.type, desc.sec_state.encrypted,
+                            desc.sec_state.authenticated);
+                }
                 if (bluetoothBLE) {
                     bluetoothBLE->onConnect(event->connect.conn_handle);
                 }
+
+                // Pairing handled automatically by NimBLE when client accesses ENC characteristics
             } else {
                 // Connection failed, restart advertising
                 ble_on_sync();
@@ -85,7 +101,41 @@ static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
             break;
 
         case BLE_GAP_EVENT_SUBSCRIBE:
+            log_msg(LOG_INFO, "BLE: Subscribe, handle=%d, cur_notify=%d",
+                    event->subscribe.attr_handle, event->subscribe.cur_notify);
+            break;
+
         case BLE_GAP_EVENT_MTU:
+            log_msg(LOG_INFO, "BLE: MTU update, handle=%d, mtu=%d",
+                    event->mtu.conn_handle, event->mtu.value);
+            break;
+
+        case BLE_GAP_EVENT_CONN_UPDATE: {
+            struct ble_gap_conn_desc udesc;
+            if (ble_gap_conn_find(event->conn_update.conn_handle, &udesc) == 0) {
+                log_msg(LOG_INFO, "BLE: Conn update, status=%d, itvl=%d latency=%d timeout=%d",
+                        event->conn_update.status, udesc.conn_itvl,
+                        udesc.conn_latency, udesc.supervision_timeout);
+
+            } else {
+                log_msg(LOG_INFO, "BLE: Conn update, status=%d", event->conn_update.status);
+            }
+            break;
+        }
+
+        case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+            // Log peer's requested connection parameters
+            log_msg(LOG_INFO, "BLE: Conn update REQ from peer: itvl=%d-%d latency=%d timeout=%d",
+                    event->conn_update_req.peer_params->itvl_min,
+                    event->conn_update_req.peer_params->itvl_max,
+                    event->conn_update_req.peer_params->latency,
+                    event->conn_update_req.peer_params->supervision_timeout);
+            // Accept peer's parameters as-is
+            break;
+
+        case BLE_GAP_EVENT_NOTIFY_TX:
+            log_msg(LOG_DEBUG, "BLE: Notify TX, status=%d, handle=%d",
+                    event->notify_tx.status, event->notify_tx.attr_handle);
             break;
 
         case BLE_GAP_EVENT_ENC_CHANGE:
@@ -114,6 +164,7 @@ static int ble_gap_event_handler(struct ble_gap_event* event, void* arg) {
         }
 
         default:
+            log_msg(LOG_INFO, "BLE: Unhandled GAP event type=%d", event->type);
             break;
     }
     return 0;
