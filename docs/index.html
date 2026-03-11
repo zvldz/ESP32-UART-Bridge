@@ -156,8 +156,10 @@
             <!-- Connection -->
             <div class="card">
                 <h2>Connection</h2>
-                <button id="btn-connect" class="btn-connect">Connect</button>
-                <button id="btn-reboot" class="btn-connect" style="background:#e67e22; border-color:#e67e22; margin-left:8px;" title="Reboot device via USB (no flashing)">Reboot</button>
+                <div style="display:flex; gap:10px;">
+                    <button id="btn-connect" class="btn-connect" style="flex:1;">Connect</button>
+                    <button id="btn-reboot" class="btn-connect" style="flex:0 0 auto; background:#e67e22; border-color:#e67e22; padding-left:20px; padding-right:20px;" title="Reboot device via USB (no flashing)">Reboot</button>
+                </div>
                 <div id="chip-info" class="chip-info"></div>
             </div>
 
