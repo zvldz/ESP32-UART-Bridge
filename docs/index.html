@@ -157,6 +157,7 @@
             <div class="card">
                 <h2>Connection</h2>
                 <button id="btn-connect" class="btn-connect">Connect</button>
+                <button id="btn-reboot" class="btn-connect" style="background:#e67e22; border-color:#e67e22; margin-left:8px;" title="Reboot device via USB (no flashing)">Reboot</button>
                 <div id="chip-info" class="chip-info"></div>
             </div>
 
@@ -225,6 +226,7 @@
         const selVariant = document.getElementById('sel-variant');
         const btnConnect = document.getElementById('btn-connect');
         const btnFlash = document.getElementById('btn-flash');
+        const btnReboot = document.getElementById('btn-reboot');
         const chipInfo = document.getElementById('chip-info');
         const fwInfo = document.getElementById('fw-info');
         const cacheInfo = document.getElementById('cache-info');
@@ -592,6 +594,19 @@
         selVariant.addEventListener('change', updateFwInfo);
         btnConnect.addEventListener('click', connect);
         btnFlash.addEventListener('click', flash);
+        btnReboot.addEventListener('click', async () => {
+            try {
+                const port = await navigator.serial.requestPort({});
+                await port.open({ baudRate: 115200 });
+                await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+                await new Promise(r => setTimeout(r, 100));
+                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                await port.close();
+                logInfo('Device rebooted.');
+            } catch (e) {
+                logError(`Reboot failed: ${e.message}`);
+            }
+        });
         document.getElementById('btn-refresh').addEventListener('click', async (e) => {
             localStorage.removeItem('releases_cache');
             e.currentTarget.classList.add('spinning');
