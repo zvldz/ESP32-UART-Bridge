@@ -3,7 +3,7 @@
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-5.0%2B-blue)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-green)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Board](https://img.shields.io/badge/Board-Waveshare_S3_Zero-blue)](https://www.waveshare.com/wiki/ESP32-S3-Zero)
-[![Version](https://img.shields.io/badge/Version-2.18.15-brightgreen)]()
+[![Version](https://img.shields.io/badge/Version-2.18.16-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Universal UART to USB bridge with web configuration interface for any serial communication needs.
@@ -394,7 +394,7 @@ Wireless serial bridge via Bluetooth. Requires BLE or BT firmware variant (see [
 Device name matches mDNS hostname. Modes:
 - **Disabled**: Bluetooth off
 - **Bridge**: MAVLink/Raw telemetry to Android apps (QGC, Tower, Mission Planner)
-- **SBUS Text Output**: Text format `RC 1500,...\r\n` for Mission Planner RC Override plugin
+- **SBUS Text Output**: Text format `RC 1500,...\r\n` for Mission Planner RC Override plugin or [RC-Connector](https://github.com/zvldz/RC-Connector)
 
 ### Network Configuration for Device 4
 When Device 4 is enabled, additional settings appear:
@@ -450,14 +450,15 @@ SBUS is a digital RC protocol used by FrSky, Futaba, and compatible receivers. S
 
 ### Common CRSF Configurations
 
-**ELRS Telemetry via WiFi** (ELRS RX → ESP32 → GCS over UDP):
+**ELRS Telemetry to GCS** (ELRS RX → ESP32 → GCS):
 - Device 1: CRSF Input (from ELRS receiver)
-- Device 4: CRSF Text Output (UDP to GCS)
-- RC Override plugin reads channel + telemetry data
+- Device 4: CRSF Text Output (UDP) and/or Device 5: CRSF Text Output (BLE)
+- RC Override plugin or [RC-Connector](https://github.com/zvldz/RC-Connector) reads channel + telemetry data
 
 **ELRS via USB** (ELRS RX → ESP32 → PC):
 - Device 1: CRSF Input
 - Device 2: USB CRSF Text Output (human-readable) or USB CRSF Bridge (binary)
+- [RC-Connector](https://github.com/zvldz/RC-Connector) reads channel + telemetry data via USB
 
 **ELRS Bidirectional Bridge** (FC ↔ ESP32 ↔ ELRS RX):
 - Device 1: CRSF Input (bidirectional with RX)

@@ -6,13 +6,28 @@
 
 #### Web Interface Improvements
 
-- [x] ~~**RC Channel Monitor**~~ — DONE v2.18.15
-  - Future: MAVLink RC_CHANNELS (msg 65) as additional data source (1-2 Hz from FC)
-
 - [ ] **Show connected clients info in AP mode**
   - Number of connected stations
   - List of client IP addresses
   - IP of current web interface user
+
+- [ ] **Live UART monitor in web UI** (read-only)
+  - Real-time UART data stream via WebSocket
+  - Use case: headless device diagnostics (e.g. RPi boot log over WiFi)
+  - Configurable status badges via pattern matching (e.g. `login:` → Ready, `kernel panic` → Crash)
+  - User defines patterns and corresponding status/badge in web UI
+  - Copy to clipboard button
+
+#### Network Improvements
+
+- [ ] **DNS hostname support in UDP target**
+  - Currently only IP address accepted, add `WiFi.hostByName()` resolve
+  - Cache resolved IP with TTL to avoid per-packet DNS lookup
+
+- [ ] **Dynamic UDP connect** (without reboot)
+  - Current behavior (saved): address in config, applied on boot — keep as is
+  - New option: non-persistent address field + Connect button, applies on the fly
+  - Address not saved to config, resets after reboot
 
 #### Advanced Protocol Management
 
@@ -95,6 +110,8 @@
 
 **XIAO ESP32-S3** — implemented, basic tested (D1 UART + D2 USB with FC/MP). Needs: D3, RTS/CTS, SBUS, external antenna range, BLE testing.
 
+- [ ] **Test CRSF input from TX16S JR bay** — ESP in TX module case, D1_CRSF_IN reads channels from radio, text output via BLE/UDP. Radio sends CRSF regardless of receiver link status.
+
 #### BLE Remaining Tasks
 
   - [ ] **LOW**: Check encryption before sending notifications (`desc.sec_state.encrypted`)
@@ -142,6 +159,12 @@
     **Reference**: MP has experimental CommsBLE (since 2020, SimpleBLE, not in releases, BUSL-1.1 license).
     Our approach — WinRT, no license restrictions, no external DLLs.
     MP API: MainV2.cs:522 (CustomPortList), CommsSerialPort.cs:312 (GetCustomPorts).
+
+  - [ ] **LOW**: Auto-reset ESP from bootloader mode (if manual RST checkbox isn't enough)
+    - When COM connected but no data for >3s, try RTS toggle (up to 3 attempts with 3s intervals)
+    - Reset attempt counter on first valid data line
+    - Only when RST checkbox is enabled
+    - Complements existing manual RST-on-connect feature (v2.2.5+)
 
 #### UART Improvements 🔵 LOW PRIORITY
 
@@ -191,121 +214,32 @@
 
 #### New Protocol Support 🔵 LOW PRIORITY
 
-- [~] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems (Phase 1+1.5+2+3 done)
-
-  **Primary use case**: ELRS RX → UART → ESP → WiFi/USB → Raspberry Pi (binary RC data)
-  **Secondary**: text output for debugging/visualization and GCS plugin compatibility
-
-  **Connection notes:**
-  - UART between ELRS RX and ESP is full-duplex (separate TX/RX wires)
-  - For RX-only (RC channels from ELRS RX): single wire sufficient, no need to send anything back
-  - ELRS RX sends RC frames at constant rate regardless of whether it receives telemetry
-  - No ACK mechanism in CRSF — all data is fire-and-forget
-  - Telemetry on the radio screen is lost without reverse channel, but irrelevant if GCS provides it via MAVLink
-  - Each CRSF frame has exactly one type — no mixed-type frames, safe for line-based filtering
-
-  **Architecture — configurable filters instead of separate roles:**
-
-  One CRSF input role per device (e.g. `D1_CRSF_IN`) — no need for separate roles per frame type.
-  Bitmask filter selects which frame groups to forward/convert:
-
-  | Bit | Group | Frame types | Description |
-  |-----|-------|-------------|-------------|
-  | 0 | RC Channels | 0x16 | 16ch x 11bit, 26 bytes (27 with ELRS 4.0+ armStatus) |
-  | 1 | Link Stats | 0x14 | RSSI, SNR, LQ, TX power |
-  | 2 | Flight Telemetry | 0x08,0x09,0x1E,0x21 | Battery, baro, attitude, flight mode |
-  | 3 | Sensors | 0x02,0x07,0x0A,0x0C,0x0D,0x0E | GPS, vario, airspeed, RPM, temp, cells |
-  | 4 | VTX/MSP | 0x32,0x7A-0x7C | VTX control, MSP passthrough |
-  | 5 | Config | 0x28-0x2E | Device ping/info, param read/write, ELRS status |
-  | 6 | Reserved | | |
-  | 7 | Passthrough | | Forward all frames raw (overrides other bits) |
-
-  Filter stored as `uint8_t crsfFilter` in config.
-  Multiple filters can be active simultaneously (e.g., RC + Link Stats + Battery).
-
-  **Text output format** (for debugging and GCS plugin compatibility):
-  Each frame type uses a unique line prefix. Consumers filter by prefix, ignore unknown lines.
-  Compatible with existing SBUS text plugins (RC Override ignores non-`RC` lines).
-  ```
-  RC 1500,1500,1000,1500,1500,1500,1500,1500,992,992,992,992,172,172,172,172\r\n
-  LQ 99,-45,8,250\r\n
-  BAT 16.2,12.5,1450,85\r\n
-  ATT 15.2,-3.1,180.0\r\n
-  GPS 49.123456,16.654321,250,12.5,180\r\n
-  FM ACRO\r\n
-  ```
-  Multiple filter groups active = interleaved lines of different types in one stream.
-
-  Phase 1 — text output (all frame types, no filters): ✅ DONE
-  - [x] `D1_CRSF_IN = 2` in Device1Role enum. UART1 at 420000 baud, 8N1, non-inverted. GPIO 4 RX
-  - [x] `D2_USB_CRSF_TEXT = 7` in Device2Role enum. Text CRSF output via USB
-  - [x] `CrsfParser` — frame parser (addr 0xC8, len, type, payload, CRC8 validation). Own code, no external libs
-  - [x] Text output for ALL parsed frame types (RC, LQ, BAT, GPS, ATT, FM, ALT)
-  - [x] Output rate limiter via `outRate` field (renamed from sbusRate, shared SBUS/CRSF)
-  - [x] Web UI: Device 1/2 dropdowns, role constraints (three-mode architecture: UART/SBUS/CRSF)
-  - [x] diagnostics.cpp role names, config.cpp load/save, web_api.cpp
-  - [x] CRSF statistics in web UI (validFrames, invalidFrames, crcErrors, lastActivity)
-  - [x] Protocol optimization auto-detect (CRSF > SBUS > None)
-  - [x] Alpine.js UI unification (all device selects use x-for with computed arrays)
-  Phase 1.5 — additional text outputs: ✅ DONE
-  - [x] UDP CRSF Text output (`D4_CRSF_TEXT = 5`) — sendDirect generic path in UdpSender
-  - [x] BLE CRSF Text output (`D5_BT_CRSF_TEXT = 3`) — BLE_ENABLED only
-  - [x] Per-output independent rate limiting (CrsfOutput struct, RC only, telemetry unrestricted)
-  - [x] Web UI: device4/5 options, outRate selectors, role validation
-  - [x] Network Logs selector restricted to D4_LOG_NETWORK role only
-
-  Phase 2 — binary output: ✅ DONE
-  - [x] Raw CRSF forward (binary frames via USB/UART3, no text conversion)
-  - [x] `D2_USB_CRSF_BRIDGE = 8` — binary CRSF via USB (TX only, no rate limiting)
-  - [x] `D3_CRSF_BRIDGE = 6` — binary CRSF via UART3 at 420000 baud (TX only)
-  - [x] sendRawToOutputs() — raw frame forwarding before buffer consume (zero-copy)
-  - [x] processSenders skip for binary outputs (sendDirect path, no queue)
-
-  Phase 3 — Bidirectional communication: ✅ DONE (not tested with FC yet)
-  - [x] Device 1 CRSF_IN: TX pin enabled (bidirectional UART)
-  - [x] Device 3 CRSF_BRIDGE: RX pin enabled (bidirectional UART3)
-  - [x] Input buffer allocation for D2_USB_CRSF_BRIDGE and D3_CRSF_BRIDGE
-  - [x] Reverse input flows: USB/UART3 → RawParser → Uart1Sender → ELRS RX
-  - [ ] Test bidirectional CRSF with flight controller (telemetry back to ELRS RX)
-
-  Phase 4 — filters and telemetry extraction:
-  - [x] Filter bitmask UI (checkboxes in web interface, 6 groups: RC, LinkStats, Battery, GPS, Attitude, FlightMode)
-  - [ ] Per-device filter UI (backend stores crsfFilter per device, UI currently sets all devices at once)
-  - [ ] Telemetry extraction: battery, GPS, attitude (structured data, not just text)
-
-  Phase 5 — VTX control (requires both TX+RX wires, not single-wire):
-  - [ ] VTX control via MSP-over-CRSF (band/channel/power)
-
-  **Protocol reference:**
-  - UART: 420000 baud (ELRS) / 416666 (Crossfire), **8N1, non-inverted**. Hardcode 420000 for Phase 1, configurable later
-  - Frame: `[Addr][Length][Type][Payload...][CRC8]`, max 64 bytes total
-  - Addr = destination: 0xC8 (flight controller), 0xEE (CRSF RX). RX→FC traffic uses 0xC8
-  - RC Channels (type 0x16): 16ch x 11bit = 22 byte payload, total 26 bytes
-  - Channel range: 0-2047 (11-bit). Typical: 172=988us, 992=1500us, 1811=2012us
-  - ELRS 4.0+: optional armStatus byte (len=0x19, total 27 bytes)
-  - CRC8: polynomial 0xD5 (DVB-S2), covers Type + Payload
-  - RC frames sent at constant rate (50-1000Hz depending on ELRS config)
-  - Full-duplex on RX-to-FC segment, half-duplex inside RC TX (not relevant)
-  - Failsafe: absence of frames = failsafe (no flag bits like SBUS)
-
-  **Memory footprint:** ~340 bytes RAM (parser state + 64-byte frame buffer + CRC table).
-  No new heap allocations — reuses existing pipeline senders (UDP, USB, UART, BLE).
-  Text formatting uses stack buffers (~120 bytes, temporary). Fits all builds including BLE.
-
-  **Test bench:** Radio TX (internal ELRS module) → ELRS RX → ESP32 Zero (Device 1).
-  Wiring: GND, VCC (5V or 3.3V depending on RX), data TX→RX (+ optional RX→TX for Phase 3).
-  3.3V logic, non-inverted — no level shifter or inverter needed (unlike SBUS).
-
-  **Key differences from SBUS:**
-  - Non-inverted (standard UART, no hardware hacks)
-  - Variable frame length (CRC required for validation)
-  - Bidirectional telemetry (battery, GPS, RSSI, LQ) — optional for our use case
-  - Baudrate 420000 vs 100000
-  - Multiple frame types in one stream (vs SBUS = only RC channels)
-
-  **Reference**: [ExpressLRS crsf_protocol.h](https://github.com/ExpressLRS/ExpressLRS/blob/master/src/lib/CrsfProtocol/crsf_protocol.h), [CRSF wiki](https://github.com/crsf-wg/crsf/wiki), [TBS spec](https://github.com/tbs-fpv/tbs-crsf-spec), Betaflight `crsf.c`
-- [ ] **Per-device protocol configuration** - Independent protocol selection for each Device
-- [ ] **Independent protocol detectors** - Separate MAVLink/SBUS/Raw detection per interface
+- [~] **CRSF Protocol** - RC channels and telemetry for ELRS/Crossfire systems
+  - Phase 1-3: ✅ DONE (text/binary/bidirectional outputs via USB, UART3, UDP, BLE)
+  - [ ] Test bidirectional CRSF with flight controller (Phase 3, telemetry back to ELRS RX)
+  - [ ] Per-device filter UI (Phase 4, backend ready — UI currently sets all devices at once)
+  - [ ] Telemetry extraction (Phase 4): structured data for web UI (battery, GPS, attitude)
+  - [ ] VTX control via MSP-over-CRSF (Phase 5, requires bidirectional wiring)
+  - Alternative: direct VTX protocols (SmartAudio by TBS, IRC Tramp by ImmersionRC) — low priority
+  - **Reference**: [ExpressLRS crsf_protocol.h](https://github.com/ExpressLRS/ExpressLRS/blob/master/src/lib/CrsfProtocol/crsf_protocol.h), [CRSF wiki](https://github.com/crsf-wg/crsf/wiki), [TBS spec](https://github.com/tbs-fpv/tbs-crsf-spec)
+- [ ] **MSP Protocol** (Betaflight/iNav) 🟡 MEDIUM PRIORITY
+  - MSPv1 (`$M`) + MSPv2 (`$X`) frame parsing, CRC validation
+  - Passive telemetry extraction from FC responses (no polling needed when GCS is connected)
+  - Use cases beyond raw bridge:
+    - RC Channel Monitor in web UI (MSP_RC msg 105, same as SBUS/CRSF/MAVLink)
+    - Telemetry text output to USB/UDP/BLE (battery, GPS, attitude — like CRSF Text)
+    - Arming state detection for LED indication
+    - FC status in web UI (flight mode, CPU load, sensor flags)
+    - VTX control (band/channel/power) — also available via MSP-over-CRSF (Phase 5)
+  - Request-response protocol — FC doesn't push data, needs GCS polling or own polling timer
+  - Implementation scope (MAVLink parity analysis):
+    1. `MspParser` — MSPv1 + MSPv2 from scratch (two frame formats, two CRC algorithms)
+    2. Protocol optimization mode — `MSP = 4` in enum, pipeline integration, web UI
+    3. RC channels — MSP_RC (msg 105) → shared `RcChannelData`
+    4. Statistics — valid/invalid frames, CRC errors, last activity in web UI
+    5. No routing needed — MSP has no addressing (unlike MAVLink sysid/compid)
+    6. Text telemetry output — optional, lower priority
+  - Reference: [Betaflight MSP](https://betaflight.com/docs/development/API/MSP), [iNav MSP](https://github.com/iNavFlight/inav/wiki/MSP-V2)
 
 #### System Reliability & Memory Management 🔵 LOW PRIORITY
 
@@ -318,6 +252,15 @@
   - Critical threshold: 20KB (reboot after sustained low memory)
   - Warning threshold: 50KB (log warnings)
   - Heap fragmentation tracking
+
+## Known Issues & Warnings
+
+⚠️ **pioarduino pinned to 3.3.5 (ESP-IDF 5.5.1)** — DO NOT upgrade until BLE fix confirmed
+- pioarduino 3.3.6+ (ESP-IDF 5.5.2) breaks BLE on MiniKit (ESP32 WROOM)
+- Symptom: BLE pairing succeeds but NUS characteristics inaccessible, no data transfer
+- ESP32-S3 boards not affected — only WROOM BTDM controller
+- ESP-IDF 5.5.2 changelog suspects: BTDM scheduling priority changes, NimBLE handle duplication fix, HCI status fix
+- When upgrading: uncomment `esp32-hal-bt-mem.h` include in bluetooth_ble.cpp (needed for 3.3.7+), delete cached sdkconfig files, test BLE on MiniKit before release
 
 ## Build & CI/CD
 

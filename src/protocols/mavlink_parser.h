@@ -5,6 +5,7 @@
 #include "packet_memory_pool.h"
 #include "protocol_stats.h"
 #include "mavlink_include.h"
+#include "rc_channels.h"
 #include "../logging.h"
 
 class MavlinkParser : public ProtocolParser {
@@ -301,8 +302,29 @@ private:
         tempPackets[packetCount].physicalInterface = 0xFF;  // Invalid until set
         tempPackets[packetCount].parseTimeMicros = micros();
 
+        // Extract RC channels for web monitor
+        if (msg->msgid == MAVLINK_MSG_ID_RC_CHANNELS) {
+            mavlink_rc_channels_t rc;
+            mavlink_msg_rc_channels_decode(msg, &rc);
+            const uint16_t ch[] = { rc.chan1_raw, rc.chan2_raw, rc.chan3_raw, rc.chan4_raw,
+                                    rc.chan5_raw, rc.chan6_raw, rc.chan7_raw, rc.chan8_raw,
+                                    rc.chan9_raw, rc.chan10_raw, rc.chan11_raw, rc.chan12_raw,
+                                    rc.chan13_raw, rc.chan14_raw, rc.chan15_raw, rc.chan16_raw };
+            for (int i = 0; i < RC_CHANNEL_COUNT; i++) rcChannels.channels[i] = ch[i];
+            rcChannels.lastUpdateMs = millis();
+        } else if (msg->msgid == MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE) {
+            mavlink_rc_channels_override_t rc;
+            mavlink_msg_rc_channels_override_decode(msg, &rc);
+            const uint16_t ch[] = { rc.chan1_raw, rc.chan2_raw, rc.chan3_raw, rc.chan4_raw,
+                                    rc.chan5_raw, rc.chan6_raw, rc.chan7_raw, rc.chan8_raw,
+                                    rc.chan9_raw, rc.chan10_raw, rc.chan11_raw, rc.chan12_raw,
+                                    rc.chan13_raw, rc.chan14_raw, rc.chan15_raw, rc.chan16_raw };
+            for (int i = 0; i < RC_CHANNEL_COUNT; i++) rcChannels.channels[i] = ch[i];
+            rcChannels.lastUpdateMs = millis();
+        }
+
         diagCounters.totalParsed++;
-        
+
         // Hints for optimization
         tempPackets[packetCount].hints.keepWhole = true;
         tempPackets[packetCount].hints.canFragment = false;

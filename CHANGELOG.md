@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## v2.18.16
+
+### New Feature
+- **RC Monitor: MAVLink source**: RC channel bars in web UI now work with MAVLink protocol
+  - Parses `RC_CHANNELS` (msg 65) from FC and `RC_CHANNELS_OVERRIDE` (msg 70) from GCS/plugin
+  - Passive extraction from traffic passing through the bridge (any direction, any interface)
+  - Uses shared `RcChannelData` — same web UI monitor as SBUS/CRSF, no additional polling
+
+### MP Plugin (v2.3.0)
+- **R2D2 format support**: Auto-detect `$` prefix (EdgeTX raw -1024..+1024, 24ch) alongside existing `RC` format
+  - Converts raw values to PWM, uses first 16 channels
+  - Detected format shown in LED tooltip: "Connected, data OK (R2D2)" or "(ESP)"
+  - Unknown format indication: "Connected, unknown data format"
+- **Rate limiter**: Selectable RC Override rate (10/20/30/40/50 Hz, default 20)
+  - Applies on the fly, no reconnect needed
+  - Setting persisted in MP config.xml
+- **RST checkbox**: Reset ESP via RTS toggle on COM connect (for CP2104/CH340 boards stuck in bootloader)
+  - Visible only in COM mode (hidden for UDP/BLE)
+
+### Web Flasher
+- **Try Reboot button**: Reset ESP via RTS toggle (CP2104/CH340 boards only)
+
+### Docs
+- **README**: Added [RC-Connector](https://github.com/zvldz/RC-Connector) as alternative to RC Override plugin
+- **README**: ELRS telemetry section updated — covers UDP, BLE, and USB output paths
+
 ## v2.18.15
 
 ### New Feature

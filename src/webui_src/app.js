@@ -169,7 +169,7 @@ document.addEventListener('alpine:init', () => {
 
         // Computed: is RC input active (SBUS or CRSF on Device 1)
         get isRcActive() {
-            return this.device1Role === '1' || this.device1Role === '2';  // D1_SBUS_IN or D1_CRSF_IN
+            return this.device1Role === '1' || this.device1Role === '2' || this.protocolOptimization === '1';  // D1_SBUS_IN or D1_CRSF_IN or MAVLink
         },
 
         // Computed: has SBUS input

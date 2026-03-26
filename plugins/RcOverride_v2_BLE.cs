@@ -31,13 +31,15 @@ namespace RcOverride_BLE
 {
     public class RcOverride_BLE : Plugin
     {
-        // --- Rate limit (0 = disabled, set to e.g. 50 for 50ms minimum interval) ---
-        private const int RATE_LIMIT_MS = 0;
+        // --- Rate limit ---
+        private const int RATE_LIMIT_DEFAULT_HZ = 20;
+        private int _rateLimitMs = 1000 / RATE_LIMIT_DEFAULT_HZ;
 
         // --- LED and timeout config ---
         private const int LED_TIMEOUT_MS = 1000;
         private const int DATA_TIMEOUT_MS = 3000;
         private const int BUFFER_MAX_SIZE = 4096;
+        private const int UNKNOWN_FORMAT_THRESHOLD = 80;  // Lines before declaring unknown format
         private const int PORT_RETRY_INTERVAL_MS = 2000;  // Wait 2s between open attempts (for BT ports)
         private const int BLE_FAST_FAIL_THRESHOLD_MS = 5000;  // Failures faster than this indicate auth problem
         private const int BLE_FAST_FAIL_COUNT_FOR_AUTH = 5;   // N consecutive fast failures = auth error
@@ -54,6 +56,8 @@ namespace RcOverride_BLE
         private const string SETTING_COM_PORT = "RcOverride_ComPort";
         private const string SETTING_UDP_PORT = "RcOverride_UdpPort";
         private const string SETTING_BLE_DEVICE_ID = "RcOverride_BleDeviceId";
+        private const string SETTING_RESET_ON_CONNECT = "RcOverride_ResetOnConnect";
+        private const string SETTING_RATE_HZ = "RcOverride_RateHz";
 
         // --- Source mode ---
         private enum SourceMode { COM, UDP, BLE }
@@ -98,13 +102,15 @@ namespace RcOverride_BLE
         private ComboBox _cmbPort;      // COM port selection
         private TextBox _txtUdpPort;    // UDP port input
         private ComboBox _cmbBle;       // BLE device selection
+        private ComboBox _cmbRate;      // Rate limit Hz
         private CheckBox _chkEnable;
+        private CheckBox _chkResetOnConnect;
         private System.Windows.Forms.Panel _ledPanel;
         private ToolTip _ledToolTip;
 
         public override string Name => "RC Override";
         public override string Author => "P Team";
-        public override string Version => "2.2.4";
+        public override string Version => "2.3.1";
 
         private StringBuilder _buffer = new StringBuilder(256);
 
@@ -112,6 +118,7 @@ namespace RcOverride_BLE
         private int _linesReceived = 0;
         private int _linesParsed = 0;
         private int _framesSent = 0;
+        private string _detectedFormat = null;  // "ESP" or "R2D2"
         private DateTime _lastDiagTime = DateTime.MinValue;
         private const int DIAG_INTERVAL_MS = 5000;
 
@@ -330,7 +337,7 @@ namespace RcOverride_BLE
                 {
                     _linesParsed++;
                     DateTime now = DateTime.UtcNow;
-                    if (RATE_LIMIT_MS == 0 || (now - _lastFrameSent).TotalMilliseconds >= RATE_LIMIT_MS)
+                    if ((now - _lastFrameSent).TotalMilliseconds >= _rateLimitMs)
                     {
                         _lastFrameSent = now;
                         _lastPacketTime = now;
@@ -438,13 +445,15 @@ namespace RcOverride_BLE
             if (!IsVehicleReady())
                 SetLedColor(Color.Orange, "Connected, no vehicle telemetry");
             else if (_lastPacketTime != DateTime.MinValue && (now - _lastPacketTime).TotalMilliseconds < LED_TIMEOUT_MS)
-                SetLedColor(Color.LimeGreen, "Connected, data OK");
+                SetLedColor(Color.LimeGreen, _detectedFormat != null ? $"Connected, data OK ({_detectedFormat})" : "Connected, data OK");
             else
-                SetLedColor(Color.Orange, "Connected, no data from ESP");
+                SetLedColor(Color.Orange, _linesReceived >= UNKNOWN_FORMAT_THRESHOLD && _linesParsed == 0 ? "Connected, unknown data format" : "Connected, no data");
         }
 
         // ---------------------------------------------------------------
-        // Parse "RC 1500 1500 1000 ..."
+        // Parse RC channels from two formats:
+        //   ESP:  "RC 1500,1500,1000,..."  (16ch, PWM 800-2200)
+        //   R2D2: "$-1024,0,512,..."       (24ch, raw -1024..+1024, convert to PWM)
         // ---------------------------------------------------------------
 
         private ushort[] ParseRcLine(string line)
@@ -454,59 +463,94 @@ namespace RcOverride_BLE
 
             try
             {
-                // Example formats we accept:
-                // "RC 1500,1500,1000,..."
-                // "RC,1500,1500,1000,..."
-                // "some noise RC 1500,1500,1000,..."
-                // "RC1500,1500,1000,..." (no space)
-
-                // find "RC" even if garbage exists before it
-                int start = line.IndexOf("RC");
-                if (start < 0)
-                    return null;
-
-                // cut everything before RC
-                string raw = line.Substring(start);
-
-                // remove CR/LF and whitespace
-                raw = raw.Trim();
-
-                // must start with RC
-                if (!raw.StartsWith("RC"))
-                    return null;
-
-                // remove "RC" and leading comma/space
-                string body = raw.Substring(2).TrimStart(',', ' ');
-
-                // find the end of CSV (newline or next RC) - defensive
-                int newlineIdx = body.IndexOfAny(new[] { '\r', '\n' });
-                if (newlineIdx >= 0)
-                    body = body.Substring(0, newlineIdx);
-
-                // now split by comma
-                string[] parts = body.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-
-                if (parts.Length < 16)
-                    return null;
-
-                ushort[] rc = new ushort[16];
-
-                for (int i = 0; i < 16; i++)
+                // R2D2 format: "$-1024,0,512,..." (EdgeTX raw values, 24 channels)
+                int dollarIdx = line.IndexOf('$');
+                if (dollarIdx >= 0)
                 {
-                    if (!ushort.TryParse(parts[i].Trim(), out rc[i]))
-                        return null;
-
-                    // clamp to valid PWM range for safety
-                    if (rc[i] < 800) rc[i] = 800;
-                    if (rc[i] > 2200) rc[i] = 2200;
+                    var rc = ParseR2D2(line.Substring(dollarIdx));
+                    if (rc != null) _detectedFormat = "R2D2";
+                    return rc;
                 }
 
-                return rc;
+                // ESP format: "RC 1500,1500,1000,..." (PWM values, 16 channels)
+                int rcIdx = line.IndexOf("RC");
+                if (rcIdx >= 0)
+                {
+                    var rc = ParseEsp(line.Substring(rcIdx));
+                    if (rc != null) _detectedFormat = "ESP";
+                    return rc;
+                }
+
+                return null;
             }
             catch
             {
                 return null;
             }
+        }
+
+        private ushort[] ParseR2D2(string raw)
+        {
+            // Remove "$" prefix and trim
+            string body = raw.Substring(1).Trim();
+
+            int newlineIdx = body.IndexOfAny(new[] { '\r', '\n' });
+            if (newlineIdx >= 0)
+                body = body.Substring(0, newlineIdx);
+
+            string[] parts = body.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 16)
+                return null;
+
+            ushort[] rc = new ushort[16];
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (!short.TryParse(parts[i].Trim(), out short val))
+                    return null;
+
+                // Convert EdgeTX raw (-1024..+1024) to PWM: (val / 2) + 1500
+                int pwm = (val / 2) + 1500;
+                if (pwm < 800) pwm = 800;
+                if (pwm > 2200) pwm = 2200;
+                rc[i] = (ushort)pwm;
+            }
+
+            return rc;
+        }
+
+        private ushort[] ParseEsp(string raw)
+        {
+            raw = raw.Trim();
+
+            if (!raw.StartsWith("RC"))
+                return null;
+
+            // Remove "RC" and leading comma/space
+            string body = raw.Substring(2).TrimStart(',', ' ');
+
+            int newlineIdx = body.IndexOfAny(new[] { '\r', '\n' });
+            if (newlineIdx >= 0)
+                body = body.Substring(0, newlineIdx);
+
+            string[] parts = body.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 16)
+                return null;
+
+            ushort[] rc = new ushort[16];
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (!ushort.TryParse(parts[i].Trim(), out rc[i]))
+                    return null;
+
+                if (rc[i] < 800) rc[i] = 800;
+                if (rc[i] > 2200) rc[i] = 2200;
+            }
+
+            return rc;
         }
 
         // ---------------------------------------------------------------
@@ -609,6 +653,17 @@ namespace RcOverride_BLE
                 _port.Handshake = Handshake.RequestToSend;
                 _port.Open();
                 _port.Handshake = Handshake.None;
+
+                // Reset ESP via RTS toggle if checkbox is enabled (CP2104/CH340 boards)
+                if (_chkResetOnConnect != null && _chkResetOnConnect.Checked)
+                {
+                    _port.RtsEnable = true;
+                    System.Threading.Thread.Sleep(100);
+                    _port.RtsEnable = false;
+                    System.Threading.Thread.Sleep(200);
+                    _port.DiscardInBuffer();
+                    Console.WriteLine("[RC] ESP reset via RTS toggle");
+                }
 
                 _lastDataTime = DateTime.UtcNow;
 
@@ -1288,6 +1343,44 @@ namespace RcOverride_BLE
                 }
             };
 
+            // Rate limit selector
+            _cmbRate = new ComboBox();
+            _cmbRate.DropDownStyle = ComboBoxStyle.DropDownList;
+            _cmbRate.Width = 48;
+            _cmbRate.Margin = new Padding(0);
+            _cmbRate.TabStop = false;
+            _cmbRate.Items.AddRange(new object[] { "10", "20", "30", "40", "50" });
+            int savedHz = RATE_LIMIT_DEFAULT_HZ;
+            var savedHzStr = Settings.Instance[SETTING_RATE_HZ];
+            if (!string.IsNullOrEmpty(savedHzStr) && int.TryParse(savedHzStr, out int hz))
+                savedHz = hz;
+            int rateIdx = _cmbRate.Items.IndexOf(savedHz.ToString());
+            _cmbRate.SelectedIndex = rateIdx >= 0 ? rateIdx : 1;  // default 20 Hz
+            _rateLimitMs = 1000 / savedHz;
+            _cmbRate.Location = new System.Drawing.Point(_cmbPort.Right + 5, 2);
+            var rateToolTip = new ToolTip();
+            rateToolTip.SetToolTip(_cmbRate, "RC Override rate limit (Hz)");
+            _cmbRate.SelectedIndexChanged += (s, e) =>
+            {
+                if (int.TryParse(_cmbRate.SelectedItem as string, out int selHz) && selHz > 0)
+                {
+                    _rateLimitMs = 1000 / selHz;
+                    Settings.Instance[SETTING_RATE_HZ] = selHz.ToString();
+                }
+            };
+
+            // Reset on connect checkbox (COM mode only, for CP2104/CH340 boards)
+            _chkResetOnConnect = new CheckBox();
+            _chkResetOnConnect.Text = "RST";
+            _chkResetOnConnect.AutoSize = true;
+            _chkResetOnConnect.Checked = Settings.Instance[SETTING_RESET_ON_CONNECT] == "True";
+            _chkResetOnConnect.Margin = new Padding(4, 4, 0, 0);
+            _chkResetOnConnect.TabStop = false;
+            _chkResetOnConnect.Location = new System.Drawing.Point(_cmbRate.Right + 5, 4);
+            var rstToolTip = new ToolTip();
+            rstToolTip.SetToolTip(_chkResetOnConnect, "Reset ESP via RTS on connect (CP2104/CH340 only)");
+            _chkResetOnConnect.CheckedChanged += (s, e) => Settings.Instance[SETTING_RESET_ON_CONNECT] = _chkResetOnConnect.Checked.ToString();
+
             // Enable checkbox
             _chkEnable = new CheckBox();
             _chkEnable.Text = "MAVLINK RC";
@@ -1295,7 +1388,7 @@ namespace RcOverride_BLE
             _chkEnable.Checked = false;
             _chkEnable.Margin = new Padding(4, 4, 0, 0);
             _chkEnable.TabStop = false;
-            _chkEnable.Location = new System.Drawing.Point(_cmbPort.Right + 5, 4);
+            _chkEnable.Location = new System.Drawing.Point(_chkResetOnConnect.Right + 5, 4);
             _chkEnable.CheckedChanged += (s, e) => {
                 if (_chkEnable.Checked)
                 {
@@ -1332,6 +1425,8 @@ namespace RcOverride_BLE
             _uiPanel.Controls.Add(_cmbPort);
             _uiPanel.Controls.Add(_txtUdpPort);
             _uiPanel.Controls.Add(_cmbBle);
+            _uiPanel.Controls.Add(_cmbRate);
+            _uiPanel.Controls.Add(_chkResetOnConnect);
             _uiPanel.Controls.Add(_chkEnable);
             _uiPanel.Controls.Add(_ledPanel);
 
@@ -1414,7 +1509,22 @@ namespace RcOverride_BLE
                     break;
             }
 
-            _chkEnable.Location = new System.Drawing.Point(activeControl.Right + 5, 4);
+            // Rate selector after device control
+            if (_cmbRate != null)
+                _cmbRate.Location = new System.Drawing.Point(activeControl.Right + 5, 2);
+
+            Control afterDevice = (_cmbRate != null) ? (Control)_cmbRate : activeControl;
+
+            // RST checkbox only visible in COM mode (RTS signal is serial-only)
+            if (_chkResetOnConnect != null)
+            {
+                _chkResetOnConnect.Visible = (_sourceMode == SourceMode.COM);
+                _chkResetOnConnect.Location = new System.Drawing.Point(afterDevice.Right + 5, 4);
+            }
+
+            Control beforeEnable = (_chkResetOnConnect != null && _chkResetOnConnect.Visible)
+                ? (Control)_chkResetOnConnect : afterDevice;
+            _chkEnable.Location = new System.Drawing.Point(beforeEnable.Right + 5, 4);
             _ledPanel.Location = new System.Drawing.Point(_chkEnable.Right + 5, 5);
         }
 
@@ -1514,6 +1624,7 @@ namespace RcOverride_BLE
                 _txtUdpPort = null;
                 _cmbBle = null;
                 _chkEnable = null;
+                _chkResetOnConnect = null;
                 _ledPanel = null;
             }
         }
