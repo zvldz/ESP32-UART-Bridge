@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include <ESPAsyncWebServer.h>
+#include <AsyncWebSocket.h>
 #include <functional>
 
 // Web interface constants
@@ -20,6 +21,9 @@ struct ImportData {
 // Web server interface
 void webserver_init(Config* config, SystemState* state);
 void webserver_stop();  // Stop web server and free memory (Stage 2 WiFi cleanup)
+
+// Terminal WebSocket - push buffered data to connected clients
+void terminal_ws_poll();
 
 // Page handlers
 void handleRoot(AsyncWebServerRequest *request);

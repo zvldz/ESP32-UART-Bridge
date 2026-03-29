@@ -90,6 +90,82 @@
             </div>
         </div>
 
+        <!-- Terminal Monitor (shows when Terminal protocol active) -->
+        <div x-cloak x-show="$store.app.isTerminalActive" class="section"
+             :class="{ 'term-fullscreen': $store.app.termFullscreen }">
+            <h4 class="section-header" x-show="!$store.app.termFullscreen"
+                @click="$store.ui.toggle('terminal')">
+                🖥️ Terminal
+                <span class="section-arrow" x-text="$store.ui.terminal ? '▼' : '▶'"></span>
+            </h4>
+            <div x-show="$store.ui.terminal || $store.app.termFullscreen" x-collapse>
+                <div :style="'position: relative; background: #1e1e1e; border-radius: 4px; overflow: hidden;' + ($store.app.termFullscreen ? 'height: calc(100vh - 10px); display: flex; flex-direction: column;' : '')">
+                    <!-- Terminal toolbar (inside dark area) -->
+                    <div style="display: flex; justify-content: flex-end; gap: 3px; padding: 5px 5px 0 5px;">
+                        <span @click="$store.app.termSave()" class="term-btn" title="Save to file">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#888" stroke-width="1.5">
+                                <path d="M10 3v10M6 9l4 4 4-4M4 15h12"></path>
+                            </svg>
+                        </span>
+                        <span @click="$store.app.termCopy()" class="term-btn" title="Copy to clipboard">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#888" stroke-width="1.5">
+                                <rect x="6" y="6" width="10" height="12" rx="1"></rect>
+                                <path d="M14 4V3a1 1 0 00-1-1H5a1 1 0 00-1 1v12a1 1 0 001 1h1"></path>
+                            </svg>
+                        </span>
+                        <span @click="$store.app.termClear()" class="term-btn" title="Clear terminal">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#888" stroke-width="1.5">
+                                <path d="M5 6h10M8 6V4h4v2M6 6v10a1 1 0 001 1h6a1 1 0 001-1V6"></path>
+                            </svg>
+                        </span>
+                        <span x-show="$store.app.terminalAnsi" @click="$store.app.termToggleInput()" class="term-btn"
+                              :style="$store.app.termInputEnabled ? 'background: rgba(0, 100, 0, 0.9);' : ''"
+                              title="Toggle keyboard input">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" :stroke="$store.app.termInputEnabled ? '#4f4' : '#888'" stroke-width="1.5">
+                                <rect x="2" y="5" width="16" height="11" rx="1.5"></rect>
+                                <line x1="5" y1="8" x2="7" y2="8"></line>
+                                <line x1="9" y1="8" x2="11" y2="8"></line>
+                                <line x1="13" y1="8" x2="15" y2="8"></line>
+                                <line x1="5" y1="11" x2="7" y2="11"></line>
+                                <line x1="9" y1="11" x2="11" y2="11"></line>
+                                <line x1="13" y1="11" x2="15" y2="11"></line>
+                                <line x1="7" y1="14" x2="13" y2="14"></line>
+                            </svg>
+                        </span>
+                        <span @click="$store.app.termToggleAnsi()" class="term-btn"
+                              title="Toggle ANSI color rendering (xterm.js)">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="none">
+                                <line x1="4" y1="7" x2="16" y2="7" :stroke="$store.app.terminalAnsi ? '#888' : '#e06c75'" stroke-width="2.5"/>
+                                <line x1="4" y1="11" x2="16" y2="11" :stroke="$store.app.terminalAnsi ? '#888' : '#98c379'" stroke-width="2.5"/>
+                                <line x1="4" y1="15" x2="16" y2="15" :stroke="$store.app.terminalAnsi ? '#888' : '#61afef'" stroke-width="2.5"/>
+                            </svg>
+                        </span>
+                        <span @click="$store.app.termToggleFullscreen()" class="term-btn" title="Toggle fullscreen">
+                            <svg x-show="!$store.app.termFullscreen" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#888" stroke-width="1.5">
+                                <path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"></path>
+                            </svg>
+                            <svg x-show="$store.app.termFullscreen" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#888" stroke-width="1.5">
+                                <path d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <!-- Terminal output: plain text or xterm.js (mutually exclusive) -->
+                    <template x-if="!$store.app.terminalAnsi">
+                        <pre x-ref="termOutput"
+                             x-effect="$nextTick(() => { if ($refs.termOutput) $refs.termOutput.scrollTop = $refs.termOutput.scrollHeight })"
+                             :style="'background: #1e1e1e; color: #d4d4d4; padding: 10px; margin: 0; min-height: 60px; overflow-y: auto; font-size: 12px; font-family: Consolas, Courier New, monospace; white-space: pre-wrap; word-wrap: break-word;' + ($store.app.termFullscreen ? 'flex: 1; max-height: none;' : 'max-height: 300px;')"
+                             x-text="$store.app._termLines.join('\n')"></pre>
+                    </template>
+                    <template x-if="$store.app.terminalAnsi">
+                        <div x-ref="xtermContainer"
+                             x-init="$store.app.termInitXterm($refs.xtermContainer)"
+                             x-effect="$store.app._termFitDelayed()"
+                             :style="'min-height: 60px; overflow: hidden;' + ($store.app.termFullscreen ? 'flex: 1;' : 'max-height: 300px;')"></div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- RC Channel Monitor (shows when SBUS/CRSF input active on Device 1) -->
         <div x-cloak x-show="$store.app.isRcActive" class="section">
             <h4 class="section-header" @click="$store.ui.toggle('rcMonitor')">
@@ -966,7 +1042,16 @@
                                     <option value="1">MAVLink</option>
                                     <option value="2" x-show="$store.app.isSbusActive">SBUS</option>
                                     <option value="3" x-show="$store.app.isCrsfActive">CRSF</option>
+                                    <option value="4">Terminal</option>
                                 </select>
+                                <div x-show="$store.app.isTerminalActive">
+                                    <label class="checkbox-label" title="ANSI escape rendering via xterm.js (colors, cursor, etc.)">
+                                        <input type="checkbox" name="terminal_ansi"
+                                               x-model="$store.app.terminalAnsi"
+>
+                                        <span>ANSI</span>
+                                    </label>
+                                </div>
                                 <div id="mavlink-routing-section" x-show="$store.app.showMavlinkRouting">
                                     <label class="checkbox-label" title="Routes messages by target System ID. Fallback: broadcast">
                                         <input type="checkbox" id="mavlink-routing" name="mavlink_routing"

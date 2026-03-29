@@ -5,6 +5,7 @@
 #include "../uart/uart1_tx_service.h"
 #include "sbus_fast_parser.h"
 #include "sbus_router.h"
+#include "terminal_parser.h"
 #if defined(MINIKIT_BT_ENABLED)
 #include "bluetooth_sender.h"
 #endif
@@ -190,6 +191,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 }
                 f.router = sharedRouter;  // CRITICAL: Use shared router, NOT new!
                 break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
+                break;
             default:
                 f.parser = new RawParser();
                 f.router = nullptr;
@@ -269,6 +274,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
+                break;
             default:
                 f.parser = new RawParser();
                 f.router = nullptr;
@@ -303,6 +312,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                     log_msg(LOG_INFO, "MAVLink parser created for UDP_Input flow (channel=2)");
                 }
                 f.router = sharedRouter;  // Use shared router
+                break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
                 break;
             default:
                 f.parser = new RawParser();
@@ -339,6 +352,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                 }
                 f.router = sharedRouter;  // Use shared router
                 break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
+                break;
             default:
                 f.parser = new RawParser();
                 f.router = nullptr;
@@ -373,6 +390,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                     log_msg(LOG_INFO, "MAVLink parser created for UART3_Input flow (channel=4)");
                 }
                 f.router = sharedRouter;  // Use shared router
+                break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
                 break;
             default:
                 f.parser = new RawParser();
@@ -412,6 +433,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                     log_msg(LOG_INFO, "MAVLink parser created for BT_Input flow (channel=5)");
                 }
                 f.router = sharedRouter;  // Use shared router
+                break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
                 break;
             default:
                 f.parser = new RawParser();
@@ -453,6 +478,10 @@ void ProtocolPipeline::setupFlows(Config* config) {
                     log_msg(LOG_INFO, "MAVLink parser created for BLE_Input flow (channel=5)");
                 }
                 f.router = sharedRouter;  // Use shared router
+                break;
+            case PROTOCOL_TERMINAL:
+                f.parser = new TerminalParser();
+                f.router = nullptr;
                 break;
             default:
                 f.parser = new RawParser();
@@ -1221,6 +1250,12 @@ void ProtocolPipeline::appendStatsToJson(JsonDocument& doc) {
                         parserStats["lastActivityMs"] = (long)(millis() - lastTime);
                     }
                 }
+                break;
+            }
+
+            case PROTOCOL_TERMINAL: {  // Terminal (4)
+                parserStats["linesProcessed"] = ctx->protocol.stats->packetsDetected;
+                parserStats["bytesProcessed"] = ctx->protocol.stats->totalBytes;
                 break;
             }
         }

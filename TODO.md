@@ -11,23 +11,20 @@
   - List of client IP addresses
   - IP of current web interface user
 
-- [ ] **Live UART monitor in web UI** (read-only)
-  - Real-time UART data stream via WebSocket
-  - Use case: headless device diagnostics (e.g. RPi boot log over WiFi)
-  - Configurable status badges via pattern matching (e.g. `login:` → Ready, `kernel panic` → Crash)
-  - User defines patterns and corresponding status/badge in web UI
-  - Copy to clipboard button
+- [x] **Terminal protocol optimization** (v2.19.0)
+  - [x] `terminal_parser` — raw with 5ms flush timeout, taps data to ring buffer (PSRAM 32KB / internal 4KB)
+  - [x] WebSocket `/ws/terminal` with history replay on connect
+  - [x] Web UI: collapsible terminal window, save/copy/clear buttons, fullscreen mode
+  - [x] ANSI rendering via xterm.js + fit addon (dynamic toggle, lazy load)
+  - [x] Web input: keyboard toggle button → xterm onData → WebSocket → UART TX
+  - [ ] Phase 3: dynamic UDP connect button near terminal window (non-persistent, applies on the fly)
+  - [ ] Phase 4: configurable pattern matching → status badges (e.g. `login:` → Ready)
 
 #### Network Improvements
 
 - [ ] **DNS hostname support in UDP target**
   - Currently only IP address accepted, add `WiFi.hostByName()` resolve
   - Cache resolved IP with TTL to avoid per-packet DNS lookup
-
-- [ ] **Dynamic UDP connect** (without reboot)
-  - Current behavior (saved): address in config, applied on boot — keep as is
-  - New option: non-persistent address field + Connect button, applies on the fly
-  - Address not saved to config, resets after reboot
 
 #### Advanced Protocol Management
 
@@ -101,6 +98,11 @@
     - Some FC or receivers may benefit from throttled rate (50 Hz typical)
     - D4 binary (format=0) also needs rate control — currently only text format (format=1) has it
     - Reuse existing rate selector UI (10-70 Hz)
+
+### Pre-release Testing
+
+- [ ] **MAVLink RC Monitor** — test RC channel bars with real MAVLink traffic (msg 65 RC_CHANNELS, msg 70 RC_CHANNELS_OVERRIDE)
+- [ ] **Terminal protocol** — test WebSocket terminal with UART device (e.g. RPi console)
 
 ### Future Considerations (Low Priority)
 

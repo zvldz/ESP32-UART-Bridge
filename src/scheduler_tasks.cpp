@@ -37,6 +37,7 @@ Task tLedMonitor(50, TASK_FOREVER, nullptr);  // 50ms interval for LED monitorin
 Task tSbusRouterTick(10, TASK_FOREVER, nullptr);  // Every 10ms - exported for external control
 static Task tBroadcastUpdate(3000, TASK_FOREVER, nullptr);  // Update broadcast IP every 3s
 static Task tHeapMonitor(5000, TASK_FOREVER, nullptr);  // DEBUG: heap monitor via Serial (disabled by default)
+static Task tTerminalWsPoll(50, TASK_FOREVER, nullptr);  // Terminal WebSocket push every 50ms
 
 // Simple snapshot for LED comparison (not atomic)
 struct LedSnapshot {
@@ -169,6 +170,10 @@ void initializeScheduler() {
     });
 #endif
 
+    tTerminalWsPoll.set(50, TASK_FOREVER, []{
+        terminal_ws_poll();
+    });
+
     tUdpLoggerTask.set(100, TASK_FOREVER, []{
         if (config.device4.role != D4_LOG_NETWORK) return;
 
@@ -269,6 +274,7 @@ void initializeScheduler() {
     taskScheduler.addTask(tSbusRouterTick);
     taskScheduler.addTask(tBroadcastUpdate);
     taskScheduler.addTask(tHeapMonitor);
+    taskScheduler.addTask(tTerminalWsPoll);
 
     // Enable basic tasks that run in all modes
     tCrashlogUpdate.enable();
@@ -332,6 +338,11 @@ void enableNetworkTasks(bool temporaryNetwork) {
         (config.device4.role == D4_NETWORK_BRIDGE || config.device4.role == D4_SBUS_UDP_TX)) {
         tBroadcastUpdate.enable();
     }
+
+    // Enable Terminal WebSocket polling if Terminal protocol is active
+    if (config.protocolOptimization == PROTOCOL_TERMINAL) {
+        tTerminalWsPoll.enable();
+    }
 }
 
 void disableNetworkTasks() {
@@ -342,6 +353,7 @@ void disableNetworkTasks() {
     tBroadcastUpdate.disable();
     // Device 4 network tasks (both modes)
     tUdpLoggerTask.disable();
+    tTerminalWsPoll.disable();
 }
 
 void startWiFiTimeout() {
