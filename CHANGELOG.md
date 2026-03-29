@@ -1,8 +1,16 @@
 # CHANGELOG
 
-## v2.18.16
+## v2.19.0
 
 ### New Feature
+- **Terminal protocol optimization**: Full web terminal for UART devices
+  - Raw parser with 5ms flush timeout — no line buffering, instant echo
+  - Ring buffer in PSRAM 32 KB (S3) / internal RAM 4 KB (MiniKit) with history replay
+  - WebSocket endpoint `/ws/terminal` for real-time bidirectional streaming
+  - ANSI rendering via xterm.js with fit addon (dynamic toggle, lazy loaded)
+  - Web keyboard input: browser → WebSocket → UART TX (toggle button, ANSI mode only)
+  - Fullscreen mode, save/copy/clear buttons, partial line display
+  - Use case: headless device diagnostics, remote serial console (e.g. RPi over WiFi)
 - **RC Monitor: MAVLink source**: RC channel bars in web UI now work with MAVLink protocol
   - Parses `RC_CHANNELS` (msg 65) from FC and `RC_CHANNELS_OVERRIDE` (msg 70) from GCS/plugin
   - Passive extraction from traffic passing through the bridge (any direction, any interface)

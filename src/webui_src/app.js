@@ -18,7 +18,7 @@ const TRACKED_FIELDS = [
     'wifiNetwork0Ssid', 'wifiNetwork0Pass', 'wifiNetwork1Ssid', 'wifiNetwork1Pass',
     'wifiNetwork2Ssid', 'wifiNetwork2Pass', 'wifiNetwork3Ssid', 'wifiNetwork3Pass',
     'wifiNetwork4Ssid', 'wifiNetwork4Pass',
-    'protocolOptimization', 'mavlinkRouting', 'sbusTimingKeeper',
+    'protocolOptimization', 'mavlinkRouting', 'terminalAnsi', 'sbusTimingKeeper',
     'device4TargetIP', 'device4TargetPort', 'device4SbusFormat',
     'device4AutoBroadcast', 'device4UdpTimeout', 'udpBatching',
     'device2OutRate', 'device3OutRate', 'device4OutRate', 'btSendRate', 'crsfFilter',
@@ -99,6 +99,7 @@ document.addEventListener('alpine:init', () => {
         // Protocol
         protocolOptimization: '0',
         mavlinkRouting: false,
+        terminalAnsi: false,
         sbusTimingKeeper: false,
 
         // Log levels (-1=OFF, 0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG)
@@ -245,6 +246,241 @@ document.addEventListener('alpine:init', () => {
         // Computed: show MAVLink Routing section
         get showMavlinkRouting() {
             return this.protocolOptimization === '1' && !this.isSbusActive;
+        },
+
+        // Computed: is Terminal protocol active
+        get isTerminalActive() {
+            return this.protocolOptimization === '4';
+        },
+
+        // Terminal WebSocket & xterm.js
+        _termWs: null,
+        _termLines: [],
+        _termPartial: '',
+        _termMaxLines: 200,
+        _xterm: null,
+        _fitAddon: null,
+        _resizeObserver: null,
+        _xtermLoaded: false,
+        _xtermOnDataDispose: null,
+        termFullscreen: false,
+        termInputEnabled: false,
+        termCsiFilter: true,
+
+        termConnect() {
+            if (this._termWs) return;
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${proto}//${location.host}/ws/terminal`);
+            ws.binaryType = 'arraybuffer';
+            ws.onmessage = (e) => {
+                const text = (e.data instanceof ArrayBuffer)
+                    ? new TextDecoder('utf-8', { fatal: false }).decode(e.data)
+                    : e.data;
+                // Accumulate in _termLines, handling partial lines across chunks
+                // Remove previous partial line from display (will be replaced)
+                if (this._termPartial && this._termLines.length > 0 &&
+                    this._termLines[this._termLines.length - 1] === this._termPartial) {
+                    this._termLines.pop();
+                }
+                const lines = text.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    if (i === 0 && this._termPartial) {
+                        this._termPartial += lines[i];
+                        if (lines.length > 1) {
+                            if (this._termPartial.length > 0) this._termLines.push(this._termPartial);
+                            this._termPartial = '';
+                        }
+                    } else if (i < lines.length - 1) {
+                        if (lines[i].length > 0) this._termLines.push(lines[i]);
+                    } else {
+                        this._termPartial = lines[i];
+                    }
+                }
+                // Always show partial line (prompt without \n)
+                if (this._termPartial) {
+                    this._termLines.push(this._termPartial);
+                }
+                while (this._termLines.length > this._termMaxLines) {
+                    this._termLines.shift();
+                }
+                // Also write to xterm if active
+                if (this._xterm) this._xterm.write(text);
+            };
+            ws.onopen = () => { this._termWs = ws; };
+            ws.onclose = () => { this._termWs = null; };
+            ws.onerror = () => {};
+        },
+
+        termDisconnect() {
+            if (this._termWs) {
+                this._termWs.close();
+                this._termWs = null;
+            }
+        },
+
+        termClear() {
+            this._termLines = [];
+            if (this._xterm) this._xterm.clear();
+        },
+
+        termToggleInput() {
+            this.termInputEnabled = !this.termInputEnabled;
+            if (this._xterm) {
+                this._xterm.options.disableStdin = !this.termInputEnabled;
+                if (this.termInputEnabled) {
+                    this._xterm.options.cursorBlink = true;
+                    // Register onData handler to send keystrokes via WebSocket
+                    if (!this._xtermOnDataDispose) {
+                        this._xtermOnDataDispose = this._xterm.onData(data => {
+                            // CSI cursor position report filter (ESC[n;mR) — disabled, not needed with raw parser
+                            // if (this.termCsiFilter && /^\x1b\[\d+;\d+R$/.test(data)) return;
+                            if (this._termWs && this._termWs.readyState === 1) {
+                                this._termWs.send(data);
+                            }
+                        });
+                    }
+                    this._xterm.focus();
+                } else {
+                    this._xterm.options.cursorBlink = false;
+                    if (this._xtermOnDataDispose) {
+                        this._xtermOnDataDispose.dispose();
+                        this._xtermOnDataDispose = null;
+                    }
+                }
+            }
+        },
+
+        termCopy() {
+            let text;
+            if (this._xterm && this.terminalAnsi) {
+                this._xterm.selectAll();
+                text = this._xterm.getSelection();
+                this._xterm.clearSelection();
+            } else {
+                text = this._termLines.join('\n');
+            }
+            navigator.clipboard.writeText(text);
+        },
+
+        termToggleAnsi() {
+            this.terminalAnsi = !this.terminalAnsi;
+            if (this.terminalAnsi) this._termFitDelayed();
+        },
+
+        termToggleFullscreen() {
+            this.termFullscreen = !this.termFullscreen;
+            document.body.style.overflow = this.termFullscreen ? 'hidden' : '';
+            // Fit xterm after layout update
+            if (this._fitAddon && this.terminalAnsi) {
+                this._termFitDelayed();
+            }
+        },
+
+        // Delayed fit — waits for CSS/layout to settle, double fit for reliability
+        _termFitDelayed() {
+            setTimeout(() => {
+                if (this._fitAddon) {
+                    try { this._fitAddon.fit(); } catch(e) {}
+                    // Second fit after layout fully settles
+                    setTimeout(() => {
+                        try { this._fitAddon.fit(); } catch(e) {}
+                    }, 150);
+                }
+            }, 50);
+        },
+
+        termSave() {
+            let text;
+            if (this._xterm && this.terminalAnsi) {
+                this._xterm.selectAll();
+                text = this._xterm.getSelection();
+                this._xterm.clearSelection();
+            } else {
+                text = this._termLines.join('\n');
+            }
+            const a = document.createElement('a');
+            a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
+            a.download = 'terminal_' + new Date().toISOString().replace(/[:.]/g, '-') + '.log';
+            a.click();
+        },
+
+        async _loadXterm() {
+            if (this._xtermLoaded) return true;
+            try {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = '/lib/xterm.css';
+                document.head.appendChild(link);
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = '/lib/xterm.js';
+                    s.onload = resolve;
+                    s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = '/lib/xterm-addon-fit.js';
+                    s.onload = resolve;
+                    s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+                this._xtermLoaded = true;
+                return true;
+            } catch (e) {
+                console.error('Failed to load xterm.js:', e);
+                return false;
+            }
+        },
+
+        // Called from x-init when ANSI mode activates (x-if creates new container)
+        async termInitXterm(container) {
+            // Clean up previous instance if any
+            if (this._resizeObserver) {
+                this._resizeObserver.disconnect();
+                this._resizeObserver = null;
+            }
+            if (this._xterm) {
+                try { this._xterm.dispose(); } catch(e) {}
+                this._xterm = null;
+                this._fitAddon = null;
+            }
+            if (!await this._loadXterm()) return;
+            this._xtermOnDataDispose = null;
+            this._xterm = new Terminal({
+                cursorBlink: this.termInputEnabled,
+                disableStdin: !this.termInputEnabled,
+                scrollback: 1000,
+                fontSize: 12,
+                fontFamily: "'Consolas', 'Courier New', monospace",
+                theme: { background: '#1e1e1e' }
+            });
+            this._fitAddon = new FitAddon.FitAddon();
+            this._xterm.loadAddon(this._fitAddon);
+            this._xterm.open(container);
+            this._termFitDelayed();
+            // Replay accumulated lines
+            if (this._termLines.length > 0) {
+                this._xterm.write(this._termLines.join('\r\n'));
+            }
+            // Restore input handler if enabled
+            if (this.termInputEnabled) {
+                this._xtermOnDataDispose = this._xterm.onData(data => {
+                    // CSI cursor position report filter — disabled, not needed with raw parser
+                    // if (/^\x1b\[\d+;\d+R$/.test(data)) return;
+                    if (this._termWs && this._termWs.readyState === 1) {
+                        this._termWs.send(data);
+                    }
+                });
+                this._xterm.focus();
+            }
+            // Auto-fit on container resize
+            this._resizeObserver = new ResizeObserver(() => {
+                if (this._fitAddon) {
+                    try { this._fitAddon.fit(); } catch(e) {}
+                }
+            });
+            this._resizeObserver.observe(container);
         },
 
         // XIAO GPIO to D-pin mapping
@@ -545,6 +781,7 @@ document.addEventListener('alpine:init', () => {
                 // Protocol (convert to string for x-model select compatibility)
                 this.protocolOptimization = String(data.protocolOptimization ?? 0);
                 this.mavlinkRouting = data.mavlinkRouting ?? false;
+                this.terminalAnsi = data.terminalAnsi ?? false;
                 this.sbusTimingKeeper = data.sbusTimingKeeper ?? false;
 
                 // Log levels (convert to string for x-model select compatibility)
@@ -659,6 +896,7 @@ document.addEventListener('alpine:init', () => {
                 // Protocol
                 protocol_optimization: parseInt(this.protocolOptimization),
                 mavlink_routing: this.mavlinkRouting,
+                terminal_ansi: this.terminalAnsi,
                 udp_batching: this.udpBatching,
 
                 // Log levels
@@ -1620,6 +1858,7 @@ document.addEventListener('alpine:init', () => {
         advancedConfig: JSON.parse(localStorage.getItem('ui:advancedConfig')) || false,
         configBackup: JSON.parse(localStorage.getItem('ui:configBackup')) || false,
         rcMonitor: JSON.parse(localStorage.getItem('ui:rcMonitor')) || false,
+        terminal: JSON.parse(localStorage.getItem('ui:terminal')) || false,
         firmwareUpdate: JSON.parse(localStorage.getItem('ui:firmwareUpdate')) || false,
         additionalNetworks: JSON.parse(localStorage.getItem('ui:additionalNetworks')) || false,
 
@@ -1640,6 +1879,8 @@ document.addEventListener('alpine:init', () => {
                     Alpine.store('status').fetchStatus();
                 } else if (section === 'rcMonitor') {
                     Alpine.store('rc').startPolling();
+                } else if (section === 'terminal') {
+                    Alpine.store('app').termConnect();
                 }
             } else {
                 // Side effects on close
@@ -1647,6 +1888,8 @@ document.addEventListener('alpine:init', () => {
                     Alpine.store('status').stopLogsPolling();
                 } else if (section === 'rcMonitor') {
                     Alpine.store('rc').stopPolling();
+                } else if (section === 'terminal') {
+                    Alpine.store('app').termDisconnect();
                 }
             }
         }
@@ -1883,6 +2126,9 @@ document.addEventListener('alpine:initialized', () => {
         if (ui.rcMonitor) {
             Alpine.store('rc').startPolling();
         }
+        if (ui.terminal && Alpine.store('app').isTerminalActive) {
+            Alpine.store('app').termConnect();
+        }
     }, 300);
 });
 
@@ -1897,6 +2143,9 @@ window.addEventListener('beforeunload', () => {
     }
     if (Alpine.store('rc')) {
         Alpine.store('rc').stopPolling();
+    }
+    if (Alpine.store('app')) {
+        Alpine.store('app').termDisconnect();
     }
 });
 

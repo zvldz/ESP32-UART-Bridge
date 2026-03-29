@@ -66,6 +66,9 @@ def get_files_hash(web_src, js_files):
     css_file = web_src / "style.css"
     if css_file.exists():
         hasher.update(css_file.read_bytes())
+    xterm_css = web_src / "lib" / "xterm.css"
+    if xterm_css.exists():
+        hasher.update(xterm_css.read_bytes())
 
     # Hash JS files
     for js_name in js_files:
@@ -150,6 +153,9 @@ def process_html_files(source, target, env):
         "lib/alpine-persist.min.js",
         "lib/alpine-collapse.min.js",
         "lib/alpine.min.js",
+        # Terminal emulator
+        "lib/xterm.js",
+        "lib/xterm-addon-fit.js",
         # Alpine application (main entry point)
         "app.js",
         # Utility modules
@@ -209,6 +215,14 @@ def process_html_files(source, target, env):
             print(f"  Processing style.css")
             compressed_data = gzip_compress(css_content, 'css', 'style.css')
             write_compressed_constant(f, 'CSS_STYLE', compressed_data)
+
+        # Write xterm.css constant
+        xterm_css_file = web_src / "lib" / "xterm.css"
+        if xterm_css_file.exists():
+            xterm_css_content = xterm_css_file.read_text(encoding='utf-8')
+            print(f"  Processing lib/xterm.css")
+            compressed_data = gzip_compress(xterm_css_content, 'css', 'xterm.css')
+            write_compressed_constant(f, 'CSS_LIB_XTERM', compressed_data)
         
         # Write JS constants
         for js_name in js_files:

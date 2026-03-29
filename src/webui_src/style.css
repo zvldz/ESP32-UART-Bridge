@@ -534,6 +534,38 @@ pre {
     padding-right: 40px;
 }
 
+/* Terminal toolbar buttons */
+.term-btn {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    background: rgba(60, 60, 60, 0.9);
+    border-radius: 3px;
+}
+.term-btn:hover {
+    background: rgba(80, 80, 80, 0.9);
+}
+.term-btn:hover svg {
+    stroke: #ccc;
+}
+
+/* Terminal fullscreen mode */
+.term-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    background: #1e1e1e;
+    padding: 5px;
+}
+
 /* Card/box styling (used 4 times) */
 .info-card {
     margin-bottom: 20px;

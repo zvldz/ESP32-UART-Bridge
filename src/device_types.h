@@ -189,6 +189,7 @@ typedef struct {
     uint8_t protocolOptimization;
     bool udpBatchingEnabled;
     bool mavlinkRouting;
+    bool terminalAnsi;  // Terminal: use xterm.js ANSI rendering
 
     // SBUS settings
     bool sbusTimingKeeper;

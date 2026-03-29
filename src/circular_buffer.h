@@ -81,7 +81,9 @@ public:
         if (size <= 2048) return 2048;
         if (size <= 4096) return 4096;
         if (size <= 8192) return 8192;
-        return 16384;  // Maximum for high speeds (921600)
+        if (size <= 16384) return 16384;
+        if (size <= 32768) return 32768;
+        return 65536;
     }
     
     // Initialize buffer with DMA-compatible memory

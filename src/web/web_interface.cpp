@@ -12,6 +12,8 @@
 #include "logging.h"
 #include "config.h"
 #include "defines.h"
+#include "../protocols/terminal_parser.h"
+#include "../uart/uart1_tx_service.h"
 #include "../uart/uart_interface.h"
 #include "../usb/usb_interface.h"
 #include "scheduler_tasks.h"
@@ -31,6 +33,7 @@ extern UsbInterface* usbInterface;
 
 // Local objects - created on demand
 AsyncWebServer* server = nullptr;
+AsyncWebSocket* terminalWs = nullptr;
 
 // Indicates whether the web server was successfully started
 static bool webServerInitialized = false;
@@ -197,6 +200,15 @@ void webserver_init(Config* config, SystemState* state) {
     server->on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request){
         sendGzippedResponse(request, "application/javascript", JS_APP_GZ, JS_APP_GZ_LEN);
     });
+    server->on("/lib/xterm.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_LIB_XTERM_GZ, JS_LIB_XTERM_GZ_LEN);
+    });
+    server->on("/lib/xterm.css", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "text/css", CSS_LIB_XTERM_GZ, CSS_LIB_XTERM_GZ_LEN);
+    });
+    server->on("/lib/xterm-addon-fit.js", HTTP_GET, [](AsyncWebServerRequest *request){
+        sendGzippedResponse(request, "application/javascript", JS_LIB_XTERM_ADDON_FIT_GZ, JS_LIB_XTERM_ADDON_FIT_GZ_LEN);
+    });
 
     // Note: Fragments removed - all HTML now inlined in index.html for better gzip compression
 
@@ -209,6 +221,40 @@ void webserver_init(Config* config, SystemState* state) {
             handleOTA(request, filename, index, data, len, final);
         }
     );
+
+    // Terminal WebSocket endpoint (only when Terminal protocol active)
+    if (config->protocolOptimization == PROTOCOL_TERMINAL) {
+        terminalWs = new AsyncWebSocket("/ws/terminal");
+        terminalWs->onEvent([](AsyncWebSocket *ws, AsyncWebSocketClient *client,
+                               AwsEventType type, void *arg, uint8_t *data, size_t len) {
+            if (type == WS_EVT_CONNECT) {
+                log_msg(LOG_INFO, "Terminal WS client #%u connected", client->id());
+                // Send buffered history to new client
+                TerminalBuffer* termBuf = TerminalBuffer::getInstance();
+                uint8_t histBuf[512];
+                size_t offset = 0;
+                size_t got;
+                while ((got = termBuf->readHistory(histBuf, sizeof(histBuf), offset)) > 0) {
+                    client->binary(histBuf, got);
+                    offset += got;
+                }
+                termBuf->resetWsReader();
+            } else if (type == WS_EVT_DISCONNECT) {
+                log_msg(LOG_INFO, "Terminal WS client #%u disconnected", client->id());
+            } else if (type == WS_EVT_DATA) {
+                // Forward browser input to UART1 TX
+                AwsFrameInfo *info = (AwsFrameInfo*)arg;
+                if (info->opcode == WS_TEXT || info->opcode == WS_BINARY) {
+                    Uart1TxService* txService = Uart1TxService::getInstance();
+                    if (txService && len > 0) {
+                        txService->enqueue(data, len);
+                    }
+                }
+            }
+        });
+        server->addHandler(terminalWs);
+        log_msg(LOG_INFO, "Terminal WebSocket endpoint created: /ws/terminal");
+    }
 
     // Setup not found handler for captive portal
     server->onNotFound(handleNotFound);
@@ -224,10 +270,36 @@ void webserver_stop() {
     if (!webServerInitialized || !server) return;
 
     log_msg(LOG_INFO, "Stopping web server");
+    if (terminalWs) {
+        terminalWs->closeAll();
+        terminalWs = nullptr;  // Owned by server, deleted with it
+    }
     server->end();
     delete server;
     server = nullptr;
     webServerInitialized = false;
+}
+
+// Push terminal buffer data to connected WebSocket clients
+void terminal_ws_poll() {
+    if (!terminalWs || terminalWs->count() == 0) return;
+
+    TerminalBuffer* termBuf = TerminalBuffer::getInstance();
+    size_t avail = termBuf->available();
+    if (avail == 0) return;
+
+    // Drain all available data in chunks
+    uint8_t buf[512];
+    while (avail > 0) {
+        size_t toRead = min(avail, sizeof(buf));
+        size_t got = termBuf->readNew(buf, toRead);
+        if (got == 0) break;
+        terminalWs->binaryAll(buf, got);
+        avail = termBuf->available();
+    }
+
+    // Periodic cleanup of disconnected clients
+    terminalWs->cleanupClients();
 }
 
 // Handle help page with gzip compression

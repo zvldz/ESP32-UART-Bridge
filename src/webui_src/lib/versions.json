@@ -19,6 +19,20 @@
       "file": "alpine-collapse.min.js",
       "url": "https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.15.8/dist/cdn.min.js",
       "docs": "https://alpinejs.dev/plugins/collapse"
+    },
+    "xterm": {
+      "version": "5.5.0",
+      "files": ["xterm.js", "xterm.css"],
+      "url_js": "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js",
+      "url_css": "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css",
+      "docs": "https://xtermjs.org/",
+      "notes": "Loaded dynamically when ANSI mode enabled, not included in initial page load"
+    },
+    "xterm-addon-fit": {
+      "version": "0.10.0",
+      "files": ["xterm-addon-fit.js"],
+      "url_js": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js",
+      "notes": "Auto-resize xterm to container dimensions"
     }
   },
   "loadOrder": [
@@ -26,5 +40,5 @@
     "alpine-collapse.min.js",
     "alpine.min.js"
   ],
-  "notes": "Plugins must be loaded BEFORE alpine.min.js"
+  "notes": "Plugins must be loaded BEFORE alpine.min.js. xterm.js loaded on demand."
 }

@@ -143,6 +143,7 @@ void config_init(Config* config) {
 
     // MAVLink routing default
     config->mavlinkRouting = false;
+    config->terminalAnsi = false;
 
     // SBUS settings defaults
     config->sbusTimingKeeper = false;  // Disabled by default
@@ -396,6 +397,7 @@ bool config_load_from_json(Config* config, const String& jsonString) {
         config->protocolOptimization = doc["protocol"]["optimization"] | PROTOCOL_NONE;
         config->udpBatchingEnabled = doc["protocol"]["udp_batching"] | true;
         config->mavlinkRouting = doc["protocol"]["mavlink_routing"] | false;
+        config->terminalAnsi = doc["protocol"]["terminal_ansi"] | false;
         config->sbusTimingKeeper = doc["protocol"]["sbus_timing_keeper"] | false;
     }
 
@@ -489,6 +491,7 @@ static void populateConfigExportJson(JsonDocument& doc, const Config* config) {
     doc["protocol"]["optimization"] = config->protocolOptimization;
     doc["protocol"]["udp_batching"] = config->udpBatchingEnabled;
     doc["protocol"]["mavlink_routing"] = config->mavlinkRouting;
+    doc["protocol"]["terminal_ansi"] = config->terminalAnsi;
     doc["protocol"]["sbus_timing_keeper"] = config->sbusTimingKeeper;
 
 #if defined(MINIKIT_BT_ENABLED) || defined(BLE_ENABLED)

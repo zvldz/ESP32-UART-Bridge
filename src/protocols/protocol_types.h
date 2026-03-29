@@ -12,6 +12,7 @@ enum ProtocolType {
     PROTOCOL_MAVLINK = 1,   // MAVLink packet detection
     PROTOCOL_SBUS = 2,      // Future: SBUS protocol
     PROTOCOL_CRSF = 3,      // Future: CRSF protocol
+    PROTOCOL_TERMINAL = 4,  // Terminal: raw stream tap for web UI viewer
 };
 
 // Transmission hints for optimized sending
