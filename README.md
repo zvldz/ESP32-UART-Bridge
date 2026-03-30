@@ -25,6 +25,7 @@ Flash firmware directly from your browser — no tools required (Chrome/Edge onl
   - **SBUS**: Multi-source failover, WiFi transport with UDP batching
   - **CRSF/ELRS**: RC channel + telemetry parsing, text/binary output via USB, UART, UDP, BLE
   - **MAVLink**: Zero-latency packet forwarding, multi-GCS routing, priority-based transmission
+  - **Terminal**: Web serial console with xterm.js — ANSI colors, keyboard input, fullscreen mode
   - **Raw Mode**: Adaptive buffering for unknown protocols
 - **High Performance**: DMA-accelerated UART with adaptive buffering (256-2048 bytes based on baud rate)
 - **USB Host/Device Modes**:
@@ -343,7 +344,7 @@ The web interface allows configuration of:
 - **USB Mode**: Device (default) or Host mode
 - **WiFi "At Boot"**: Disabled, Temporary (auto-disable), or Always On
 - **Device Roles**: Configure Device 1, 2, 3, and 4 functionality (including SBUS modes)
-- **Protocol Optimization**: Choose RAW (timing-based), MAVLink (packet-aware), or SBUS (frame-based) optimization
+- **Protocol Optimization**: Choose RAW (timing-based), MAVLink (packet-aware), SBUS (frame-based), or Terminal (web serial console) optimization
 
 ## Device Roles
 
@@ -594,6 +595,11 @@ The ESP32-S3's native USB implementation outputs bootloader messages when DTR/RT
   - Supports v1/v2 protocols at any baud rate with perfect packet boundaries
   - Memory pool optimization prevents heap fragmentation during intensive communication
   - Priority-based transmission ensures critical packets are delivered first
+- **Terminal devices**: Enable Protocol Optimization → Terminal for web serial console
+  - Real-time UART viewer in browser with xterm.js ANSI rendering
+  - Keyboard input from browser to UART (login, shell commands, interactive apps)
+  - Fullscreen mode, save/copy/clear, history replay on reconnect
+  - Use case: headless Raspberry Pi, routers, embedded Linux diagnostics over WiFi
 - **GPS/NMEA**: Most GPS modules use 9600 or 115200 baud (use RAW mode for timing-based optimization)
 - **AT command modems**: May require specific line endings (CR, LF, or CR+LF) (use RAW mode)
 - **Modbus RTU**: Uses strict timing requirements - RAW mode provides timing-based buffering but is not Modbus-optimized

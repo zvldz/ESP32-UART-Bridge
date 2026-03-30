@@ -307,7 +307,13 @@ document.addEventListener('alpine:init', () => {
                 if (this._xterm) this._xterm.write(text);
             };
             ws.onopen = () => { this._termWs = ws; };
-            ws.onclose = () => { this._termWs = null; };
+            ws.onclose = () => {
+                this._termWs = null;
+                // Auto-reconnect after 2 seconds if terminal is still open
+                if (this.isTerminalActive) {
+                    setTimeout(() => this.termConnect(), 2000);
+                }
+            };
             ws.onerror = () => {};
         },
 
