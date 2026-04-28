@@ -109,6 +109,14 @@ public:
         portEXIT_CRITICAL(&lock);
     }
 
+    // Drop all buffered history; new clients won't replay anything
+    void clear() {
+        portENTER_CRITICAL(&lock);
+        writePos = 0;
+        wsSentPos = 0;
+        portEXIT_CRITICAL(&lock);
+    }
+
     size_t available() const {
         return writePos - wsSentPos;
     }

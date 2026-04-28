@@ -253,6 +253,7 @@ void webserver_init(Config* config, SystemState* state) {
             }
         });
         server->addHandler(terminalWs);
+        server->on("/terminal_clear", HTTP_GET, handleTerminalClear);
         log_msg(LOG_INFO, "Terminal WebSocket endpoint created: /ws/terminal");
     }
 
@@ -300,6 +301,12 @@ void terminal_ws_poll() {
 
     // Periodic cleanup of disconnected clients
     terminalWs->cleanupClients();
+}
+
+// Drop terminal ring buffer history (called from web UI clear button)
+void handleTerminalClear(AsyncWebServerRequest *request) {
+    TerminalBuffer::getInstance()->clear();
+    request->send(200, "application/json", "{\"status\":\"ok\"}");
 }
 
 // Handle help page with gzip compression

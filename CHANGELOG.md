@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v2.19.1
+
+### Web Terminal
+- **Clear button now drops server-side history**: previously only cleared the visible UI; on reconnect/refresh the old ring buffer would replay
+  - New REST endpoint `GET /terminal_clear` resets the ring buffer (`writePos`/`wsSentPos` to 0)
+  - Frontend awaits server clear, then `_xterm.reset()` for a clean state (cursor at 0,0, SGR reset)
+- **Keyboard shortcuts in view-only mode**: standard browser-like behavior when input is disabled
+  - **Ctrl+C** / **Ctrl+Insert** — copy selection to clipboard
+  - **Ctrl+A** — select entire scrollback
+  - In input mode all keys pass through unchanged (Ctrl+C → SIGINT to UART)
+  - Implemented via `attachCustomKeyEventHandler` — xterm scrollback navigation (PageUp/PageDown) preserved
+
 ## v2.19.0
 
 ### New Feature

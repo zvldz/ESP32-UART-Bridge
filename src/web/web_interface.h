@@ -31,6 +31,7 @@ void handleHelp(AsyncWebServerRequest *request);
 void handleSuccess(AsyncWebServerRequest *request);
 void handleNotFound(AsyncWebServerRequest *request);
 void handleReboot(AsyncWebServerRequest *request);
+void handleTerminalClear(AsyncWebServerRequest *request);
 
 // Static file handlers
 void handleCSS(AsyncWebServerRequest *request);

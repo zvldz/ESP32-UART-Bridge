@@ -324,9 +324,11 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        termClear() {
+        async termClear() {
+            // Drop server-side ring buffer first, so reconnects/new clients won't replay old data
+            try { await fetch('/terminal_clear'); } catch(e) {}
             this._termLines = [];
-            if (this._xterm) this._xterm.clear();
+            if (this._xterm) this._xterm.reset();
         },
 
         termToggleInput() {
@@ -460,6 +462,24 @@ document.addEventListener('alpine:init', () => {
                 fontSize: 12,
                 fontFamily: "'Consolas', 'Courier New', monospace",
                 theme: { background: '#1e1e1e' }
+            });
+            // In view-only mode, Ctrl+C / Ctrl+Insert copy selection, Ctrl+A selects all.
+            // In input mode, pass through so Ctrl+C goes to UART as SIGINT (\x03).
+            this._xterm.attachCustomKeyEventHandler(e => {
+                if (!this.termInputEnabled && e.type === 'keydown' && e.ctrlKey && !e.shiftKey && !e.altKey) {
+                    if (e.key === 'c' || e.key === 'Insert') {
+                        const sel = this._xterm.getSelection();
+                        if (sel) {
+                            navigator.clipboard.writeText(sel);
+                            return false;
+                        }
+                    }
+                    if (e.key === 'a') {
+                        this._xterm.selectAll();
+                        return false;
+                    }
+                }
+                return true;
             });
             this._fitAddon = new FitAddon.FitAddon();
             this._xterm.loadAddon(this._fitAddon);
