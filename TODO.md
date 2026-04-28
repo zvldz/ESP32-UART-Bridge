@@ -28,6 +28,38 @@
 
 #### Advanced Protocol Management
 
+- [ ] **R2D2 RC text format support** — wire-compatibility with EdgeTX LUA scripts (Apachi Team)
+
+  **Goal**: ESP can pretend to be an EdgeTX radio running the R2D2 LUA script, so any R2D2-aware receiver (RC-Connector, MP plugin, future tools) accepts the ESP stream byte-for-byte.
+
+  **Current state**: ESP only emits ESP-Bridge format `RC val,val,...\n` (16ch, µs 1000-2000) in two places:
+  - `sbus_text.h::sbusFrameToText` — SBUS → text path
+  - `crsf_parser.h::formatRcChannels` — CRSF → text path
+
+  Used by 8 text-output roles (D2/D3/D4 SBUS_OUT TEXT, D2_USB_SBUS_TEXT, D5_BT_SBUS_TEXT, D2_USB_CRSF_TEXT, D4_CRSF_TEXT, D5_BT_CRSF_TEXT). Input parsing for "RC ..." doesn't exist — text format is output-only.
+
+  **R2D2 wire format** (from `r2d2-usb-vcp.lua`): `$val,val,...,val,\r\n` — 24 fields, raw -1024..+1024, **trailing comma after last value**, conversion `raw = (us - 1500) * 2`. We send all 24 fields (first 16 = real data, last 8 = 0) to match LUA byte-for-byte — guards against any strict R2D2 parser. Overhead is ~16 bytes/frame, negligible.
+
+  **Architecture** — single global setting (no per-device mix needed):
+  - New `Config.rcTextFormat: 0=ESP_BRIDGE, 1=R2D2` (extensible enum, not bool)
+  - Existing per-device `sbusOutputFormat` (BINARY/TEXT/MAVLINK) stays untouched — orthogonal axis: per-device picks WHAT to emit, global picks HOW the text is shaped
+  - 5 hardcoded text-only roles (USB/BT) need no config changes — they just read the global flag
+
+  **Implementation outline**:
+  - [ ] New `rc_text_format.h` with two formatters over `us[16]`:
+    - `formatEspBridge(us[16], buf)` → "RC ..." (current behavior)
+    - `formatR2D2(us[16], buf)` → "$..." (24 fields, last 8 = 0, trailing comma)
+  - [ ] Switch in `sbus_text.h::sbusFrameToText` and `crsf_parser.h::formatRcChannels` based on global flag
+  - [ ] `Config.rcTextFormat` field + load/save/migration in `config.cpp` (default ESP_BRIDGE)
+  - [ ] Web UI: single dropdown "RC Text Format: ESP-Bridge | R2D2" near Protocol Optimization
+  - [ ] `help.html` — describe both formats and when to pick each
+
+  **Buffer sizing**: R2D2 line is longer than ESP-Bridge (`$` + 24 fields × up to 6 chars + 24 commas + `\r\n` ≈ 170-180 bytes). `CRSF_TEXT_BUFFER_SIZE = 200` already fits; `SBUS_TEXT_BUFFER_SIZE = 101` (in `sbus_text.h:12`) needs to grow to ~200 (or pick max of both formats).
+
+  **Rate limiting**: existing `outRate` / `udpSendRate` / `btSendRate` (10-70 Hz, decimation) applies to R2D2 unchanged.
+
+  **Synergy with MP plugin v2.3.0**: plugin already auto-detects `$` prefix on input — after this task ESP can talk to MP plugin in either format. Same for RC-Connector (auto-detects via `RcParser.cs`).
+
 - [ ] **Protocol Conversion Features**
 
   - [ ] **SBUS↔UART Bridge (ESP↔ESP transport)**
