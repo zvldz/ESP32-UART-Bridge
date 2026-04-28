@@ -264,6 +264,22 @@
 - ESP-IDF 5.5.2 changelog suspects: BTDM scheduling priority changes, NimBLE handle duplication fix, HCI status fix
 - When upgrading: uncomment `esp32-hal-bt-mem.h` include in bluetooth_ble.cpp (needed for 3.3.7+), delete cached sdkconfig files, test BLE on MiniKit before release
 
+### Likely fixed upstream — needs testing before unpinning
+
+ESP-IDF 5.5.3 / 5.5.4 ship fixes that match our symptoms exactly:
+- IDF 5.5.3 controller: "Fixed crash in btdm_controller_task on ESP32", "Fixed scan HCI command timeout issue on ESP32" — both target WROOM BTDM, the same area we suspected
+- IDF 5.5.4: "Fixed potential NimBLE host connection loss in ESP-IDF v5.5.3 on ESP32 / ESP32C3 / ESP32S3" — closes regression introduced by 5.5.3
+
+Available upgrade target: **pioarduino 55.03.38-1** (Arduino 3.3.8 + ESP-IDF 5.5.4, released 2026-04-13).
+
+Current state works stably — no rush to upgrade. When time permits:
+1. Bump platform URL to `55.03.38-1`
+2. Uncomment `esp32-hal-bt-mem.h` include in `bluetooth_ble.cpp` (BLE memory mgmt became automatic in Arduino 3.3.7)
+3. **Test on both boards before committing**:
+   - **MiniKit**: BLE NUS pairing + data transfer (the original regression)
+   - **Zero (S3)**: regression check — BLE, WiFi, USB Host, UART2 all still working
+4. Only after both boards pass — commit, remove this Known Issue note, drop the pin
+
 ## Build & CI/CD
 
 ### Debug Toolchain Paths
