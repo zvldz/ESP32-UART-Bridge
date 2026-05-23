@@ -11,6 +11,10 @@
   - **Ctrl+A** — select entire scrollback
   - In input mode all keys pass through unchanged (Ctrl+C → SIGINT to UART)
   - Implemented via `attachCustomKeyEventHandler` — xterm scrollback navigation (PageUp/PageDown) preserved
+- **Clipboard works over HTTP**: Copy button and keyboard shortcuts now work when ESP is accessed by local IP (non-secure context)
+  - `navigator.clipboard` requires HTTPS/localhost — added fallback via `document.execCommand('copy')`
+- **Unified clipboard helper**: all copy paths (terminal, logs, crash log) now go through `Utils.copyText` in `utils.js` — single implementation, no duplicate fallbacks
+- **Terminal Copy / Save**: trim trailing empty lines from xterm's virtual buffer (`selectAll` previously included filler rows beyond actual content)
 
 ## v2.19.0
 

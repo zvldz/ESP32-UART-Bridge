@@ -2,6 +2,27 @@
 // Reconnect and reboot handling (used by Save & Reboot, Factory Reset)
 
 const Utils = {
+    // Copy text to clipboard with fallback for non-secure HTTP context
+    // (navigator.clipboard requires HTTPS/localhost; ESP runs on local IP over HTTP)
+    copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(() => this._execCopy(text));
+        } else {
+            this._execCopy(text);
+        }
+    },
+
+    _execCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+    },
+
     // Fetch with reboot handling - for endpoints that trigger device restart
     // Returns Promise that resolves with JSON data or starts reconnect on reboot
     fetchWithReboot(url, options = {}) {
