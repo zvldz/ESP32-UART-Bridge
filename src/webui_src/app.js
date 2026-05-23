@@ -367,7 +367,8 @@ document.addEventListener('alpine:init', () => {
             } else {
                 text = this._termLines.join('\n');
             }
-            navigator.clipboard.writeText(text);
+            // selectAll() picks up empty lines past actual content — trim trailing whitespace
+            Utils.copyText(text.replace(/\s+$/, ''));
         },
 
         termToggleAnsi() {
@@ -406,6 +407,8 @@ document.addEventListener('alpine:init', () => {
             } else {
                 text = this._termLines.join('\n');
             }
+            // selectAll() picks up empty lines past actual content — trim trailing whitespace
+            text = text.replace(/\s+$/, '');
             const a = document.createElement('a');
             a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
             a.download = 'terminal_' + new Date().toISOString().replace(/[:.]/g, '-') + '.log';
@@ -470,7 +473,7 @@ document.addEventListener('alpine:init', () => {
                     if (e.key === 'c' || e.key === 'Insert') {
                         const sel = this._xterm.getSelection();
                         if (sel) {
-                            navigator.clipboard.writeText(sel);
+                            Utils.copyText(sel);
                             return false;
                         }
                     }
@@ -1449,32 +1452,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.logs || this.logs.length === 0) return;
             const text = this.logs.join('\n');
             if (!text || text === 'Loading logs...' || text === 'No logs available') return;
-
-            // Use modern clipboard API if available
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).catch(err => {
-                    console.error('Clipboard write failed:', err);
-                    this._fallbackCopy(text);
-                });
-            } else {
-                this._fallbackCopy(text);
-            }
-        },
-
-        // Fallback copy method for older browsers
-        _fallbackCopy(text) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-            } catch (err) {
-                console.error('Fallback copy failed:', err);
-            }
-            document.body.removeChild(textArea);
+            Utils.copyText(text);
         }
     });
 
@@ -1830,31 +1808,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         _copyToClipboard(text, message) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    this._showCopyFeedback(message);
-                }).catch(() => {
-                    this._fallbackCopy(text, message);
-                });
-            } else {
-                this._fallbackCopy(text, message);
-            }
-        },
-
-        _fallbackCopy(text, message) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                this._showCopyFeedback(message);
-            } catch (err) {
-                alert('Copy failed. Please copy manually.');
-            }
-            document.body.removeChild(textarea);
+            Utils.copyText(text);
+            this._showCopyFeedback(message);
         },
 
         _showCopyFeedback(message) {
