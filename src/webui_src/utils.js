@@ -26,7 +26,7 @@ const Utils = {
     // Fetch with reboot handling - for endpoints that trigger device restart
     // Returns Promise that resolves with JSON data or starts reconnect on reboot
     fetchWithReboot(url, options = {}) {
-        return fetch(url, options)
+        return fetch(url, { credentials: 'include', ...options })
             .then(response => {
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
