@@ -81,9 +81,21 @@
         .board-img {
             text-align: center; padding: 12px 0 4px; min-height: 20px;
         }
+        .board-img .board-img-wrap {
+            position: relative; display: inline-block;
+        }
         .board-img img {
             max-height: 120px; border-radius: 6px;
             filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+            display: block;
+        }
+        .board-badge {
+            position: absolute; top: 8px; right: 8px;
+            background: #ffeb3b; color: #000;
+            padding: 3px 8px; border-radius: 4px;
+            font-size: 12px; font-weight: bold;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
 
         .btn-refresh {
@@ -129,6 +141,10 @@
                             <select id="sel-version" style="flex:1;"><option>Loading...</option></select>
                             <button id="btn-refresh" class="btn-refresh" title="Refresh releases list">&#x21bb;</button>
                         </div>
+                        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:13px; font-weight:normal;">
+                            <input type="checkbox" id="chk-show-prerelease">
+                            Show pre-release / beta builds
+                        </label>
                     </div>
                 </div>
                 <div class="form-row">
@@ -136,6 +152,7 @@
                         <label>Board</label>
                         <select id="sel-board">
                             <option value="zero">ESP32-S3 Zero</option>
+                            <option value="zero-n8r8" data-beta="true">ESP32-S3 Zero N8R8 (8MB+8MB)</option>
                             <option value="supermini">ESP32-S3 Super Mini</option>
                             <option value="xiao">XIAO ESP32-S3</option>
                             <option value="minikit">ESP32 MiniKit</option>
@@ -192,6 +209,10 @@
         const BOARDS = {
             zero:      { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'ESP32-S3 Zero',
                 img: 'img/zero.jpg',
+                variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
+            },
+            'zero-n8r8': { chip: 'ESP32-S3', bootAddr: 0x0, label: 'ESP32-S3 Zero N8R8 (8MB+8MB)',
+                img: 'img/zero.jpg', badge: 'N8R8', beta: true,
                 variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
             },
             supermini: { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'ESP32-S3 Super Mini',
@@ -421,32 +442,64 @@
             const board = BOARDS[selBoard.value];
             const el = document.getElementById('board-img');
             if (board.img) {
-                el.innerHTML = `<img src="${board.img}" alt="${board.label}" title="${board.label}">`;
+                const badge = board.badge ? `<span class="board-badge">${board.badge}</span>` : '';
+                el.innerHTML = `<div class="board-img-wrap"><img src="${board.img}" alt="${board.label}" title="${board.label}">${badge}</div>`;
             } else {
                 el.innerHTML = '';
             }
         }
 
         // ── UI: populate version dropdown ──
+        const chkShowPrerelease = document.getElementById('chk-show-prerelease');
+
+        function renderVersions() {
+            const showPrerelease = chkShowPrerelease.checked;
+            selVersion.innerHTML = '';
+            const visible = releases.filter(r => showPrerelease || !r.prerelease);
+            for (const r of visible) {
+                const opt = document.createElement('option');
+                opt.value = r.tag_name;
+                opt.textContent = r.tag_name + (r.prerelease ? ' (pre-release)' : '');
+                selVersion.appendChild(opt);
+            }
+            if (visible.length === 0) {
+                selVersion.innerHTML = '<option>No releases found</option>';
+            }
+        }
+
+        function renderBoards() {
+            const showBeta = chkShowPrerelease.checked;
+            for (const opt of selBoard.options) {
+                if (opt.dataset.beta === 'true') {
+                    opt.hidden = !showBeta;
+                }
+            }
+            // If currently selected beta board is hidden, fall back to first non-beta option
+            const cur = selBoard.options[selBoard.selectedIndex];
+            if (cur && cur.hidden) {
+                for (const opt of selBoard.options) {
+                    if (!opt.hidden) { selBoard.value = opt.value; break; }
+                }
+                selBoard.dispatchEvent(new Event('change'));
+            }
+        }
+
         async function initVersions() {
             try {
                 releases = await fetchReleases();
-                selVersion.innerHTML = '';
-                for (const r of releases) {
-                    const opt = document.createElement('option');
-                    opt.value = r.tag_name;
-                    opt.textContent = r.tag_name + (r.prerelease ? ' (pre-release)' : '');
-                    selVersion.appendChild(opt);
-                }
-                if (releases.length === 0) {
-                    selVersion.innerHTML = '<option>No releases found</option>';
-                }
+                renderVersions();
+                renderBoards();
                 logInfo(`Loaded ${releases.length} releases`);
             } catch (e) {
                 logError(`Failed to load releases: ${e.message}`);
                 selVersion.innerHTML = '<option>Error loading releases</option>';
             }
         }
+
+        chkShowPrerelease.addEventListener('change', () => {
+            renderVersions();
+            renderBoards();
+        });
 
         // ── Connect / Disconnect ──
         async function connect() {
