@@ -30,6 +30,7 @@ jobs:
       - name: Build all production firmware
         run: |
           pio run -e zero_production -e zero_ble_production \
+                  -e zero_n8r8_production -e zero_n8r8_ble_production \
                   -e supermini_production -e supermini_ble_production \
                   -e xiao_production -e xiao_ble_production \
                   -e minikit_production -e minikit_bt_production -e minikit_ble_production
@@ -40,6 +41,8 @@ jobs:
           for env_board in \
             "zero_production:zero" \
             "zero_ble_production:zero-ble" \
+            "zero_n8r8_production:zero-n8r8" \
+            "zero_n8r8_ble_production:zero-n8r8-ble" \
             "supermini_production:supermini" \
             "supermini_ble_production:supermini-ble" \
             "xiao_production:xiao" \
@@ -91,5 +94,6 @@ jobs:
             firmware-${{ github.ref_name }}.zip
             debug-${{ github.ref_name }}.zip
           body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

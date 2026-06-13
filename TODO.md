@@ -289,6 +289,15 @@
 
 ## Known Issues & Warnings
 
+ℹ️ **`zero_ble_debug` does not fit on 4MB Zero (ESP32-S3FH4R2)**
+- BLE debug build is ~1645 KB, app slot in `partitions_custom_4mb.csv` is 1.5 MB (1572 KB) — exceeds by ~73 KB, link fails
+- BLE production (~1469 KB) and non-BLE debug (~1416 KB) both fit; only BLE+debug combo overflows
+- On N8R8 (8MB Zero) no issue — app slots in `partitions_custom_8mb.csv` are 2 MB
+- Possible fix on 4MB: shrink LittleFS partition (384 KB → ~192 KB) and coredump (64 KB → 32 KB) to free ~224 KB total (~112 KB per app slot). Config fits in 192 KB easily — the real cost is **breaking change**: existing devices upgrading OTA would lose stored config and crashlogs because LittleFS/coredump partition offsets shift. Would require an export-then-import flow or in-firmware migration logic.
+- Decision: accept the limitation. BLE debug on 4MB Zero is dev-only and rarely needed. Revisit if real use case appears.
+
+
+
 ⚠️ **pioarduino pinned to 3.3.5 (ESP-IDF 5.5.1)** — DO NOT upgrade until BLE fix confirmed
 - pioarduino 3.3.6+ (ESP-IDF 5.5.2) breaks BLE on MiniKit (ESP32 WROOM)
 - Symptom: BLE pairing succeeds but NUS characteristics inaccessible, no data transfer
