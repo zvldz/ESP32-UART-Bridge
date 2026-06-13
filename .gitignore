@@ -42,6 +42,8 @@ src/CMakeLists.txt
 src/webui_gen/
 
 mp_logs
+scripts/mp_log_filter.sh
+scripts/mp_start.bat
 
 chat.txt
 compile_commands.json

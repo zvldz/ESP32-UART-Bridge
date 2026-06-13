@@ -217,9 +217,7 @@
     - Root cause: `ARDUINO_USB_MODE=1` (HWCDC) has hardware auto-reset on RTS transition
     - Same approach as MissionPlanner's `CHK_rtsresetesp32` setting
     - Applied to both v2 (COM/UDP) and v2_BLE plugins
-- **MP Plugins crash fix**: Image disposal (`ArgumentException in Image.get_RawFormat`)
-  - VideoTX: clone MP resources instead of direct use, dispose in Exit()
-  - FuseSwitch: dispose icon in Exit()
+- **MP Plugins crash fix**: Image disposal (`ArgumentException in Image.get_RawFormat`) — clone MP resources instead of direct use, dispose icons in Exit()
 
 ### Code Cleanup
 - **BLE+WiFi coexistence**: Always enabled, mutual exclusion removed. Fallback skip commented in `device_init.cpp`
