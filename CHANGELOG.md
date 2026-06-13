@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v2.20.0-beta1
+
+### Hardware Support
+- **New board: ESP32-S3-Zero N8R8** — Waveshare's revised Zero with ESP32-S3-PICO-1 (8MB Flash + 8MB OPI PSRAM)
+  - Pin-compatible with the original Zero (same `BOARD_ESP32_S3_ZERO` define), only Flash/PSRAM differs
+  - New build envs: `zero_n8r8_production`, `zero_n8r8_ble_production`
+  - New partitions: `partitions_custom_8mb.csv` (1.5 MB app slots × 2, ~4.75 MB LittleFS)
+  - sdkconfig: `CONFIG_SPIRAM_MODE_OCT=y`, `CONFIG_SPIRAM_SPEED_80M=y`, `CONFIG_ESPTOOLPY_FLASHSIZE="8MB"`
+
+### Web Flasher
+- **Pre-release / beta builds toggle**: checkbox under version dropdown
+  - When off (default): only stable releases and stable boards are shown
+  - When on: pre-release versions and beta-only boards (e.g. Zero N8R8) become available
+- **CI workflow**: tags containing `-` (e.g. `v2.20.0-beta1`) are auto-published as pre-releases on GitHub
+
 ## v2.19.1
 
 ### Web Terminal
