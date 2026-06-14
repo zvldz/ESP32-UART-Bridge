@@ -54,7 +54,8 @@ Flash firmware directly from your browser — no tools required (Chrome/Edge onl
 ## Hardware
 
 - **Recommended Boards**:
-  - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash, 512KB DRAM, USB Host support ✅ Fully tested
+  - **Waveshare ESP32-S3-Zero**: Compact (25x24mm), WS2812 RGB LED, USB-C, 4MB Flash + 2MB QSPI PSRAM, 512KB DRAM, USB Host support ✅ Fully tested
+  - **Waveshare ESP32-S3-Zero N8R8**: Same form-factor as above, but uses ESP32-S3-PICO-1 with 8MB Flash + 8MB OPI PSRAM. Pin-compatible with the original Zero ✅ Tested by user
   - **ESP32-S3 Super Mini**: Ultra-compact, WS2815 RGB LED (GPIO48), USB-C, 4MB Flash, 512KB DRAM, no USB Host ✅ Fully tested
   - **XIAO ESP32-S3**: Ultra-compact (21x17.5mm), single-color LED, USB-C, 8MB Flash/8MB PSRAM, 512KB DRAM, USB Host support, external antenna connector ⚠️ Partially tested (basic mode: UART Bridge + USB)
   - **ESP32 MiniKit with CP2104**: Classic WROOM-32 board, single-color LED (GPIO2), USB via CP2104 chip, 4MB Flash, 320KB DRAM, no PSRAM ⚠️ Partially tested (CH340/CH9102 not supported)
