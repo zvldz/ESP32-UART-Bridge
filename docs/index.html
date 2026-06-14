@@ -152,7 +152,7 @@
                         <label>Board</label>
                         <select id="sel-board">
                             <option value="zero">ESP32-S3 Zero</option>
-                            <option value="zero-n8r8" data-beta="true">ESP32-S3 Zero N8R8 (8MB+8MB)</option>
+                            <option value="zero-n8r8">ESP32-S3 Zero N8R8 (8MB+8MB)</option>
                             <option value="supermini">ESP32-S3 Super Mini</option>
                             <option value="xiao">XIAO ESP32-S3</option>
                             <option value="minikit">ESP32 MiniKit</option>
@@ -212,7 +212,8 @@
                 variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
             },
             'zero-n8r8': { chip: 'ESP32-S3', bootAddr: 0x0, label: 'ESP32-S3 Zero N8R8 (8MB+8MB)',
-                img: 'img/zero.jpg', badge: 'N8R8', beta: true,
+                img: 'img/zero.jpg', badge: 'N8R8',
+                minVersion: 'v2.20.0',
                 variants: [{ value: '', label: 'Standard' }, { value: 'ble', label: 'BLE' }]
             },
             supermini: { chip: 'ESP32-S3', bootAddr: 0x0,    label: 'ESP32-S3 Super Mini',
@@ -467,14 +468,49 @@
             }
         }
 
+        // Parse "v2.20.0-beta1" → {major:2, minor:20, patch:0, pre:"beta1"}
+        // Returns null if not parsable (e.g. placeholder strings).
+        function parseVersion(v) {
+            const m = String(v || '').match(/^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
+            if (!m) return null;
+            return { major: +m[1], minor: +m[2], patch: +m[3], pre: m[4] || '' };
+        }
+
+        // Semver compare: a < b → negative, a > b → positive. Pre-release < full release.
+        function compareVersions(a, b) {
+            const pa = parseVersion(a), pb = parseVersion(b);
+            if (!pa || !pb) return 0;
+            if (pa.major !== pb.major) return pa.major - pb.major;
+            if (pa.minor !== pb.minor) return pa.minor - pb.minor;
+            if (pa.patch !== pb.patch) return pa.patch - pb.patch;
+            if (!pa.pre && !pb.pre) return 0;
+            if (!pa.pre) return 1;
+            if (!pb.pre) return -1;
+            return pa.pre.localeCompare(pb.pre);
+        }
+
+        // A board is "beta" if its minVersion points at a pre-release tag
+        // (i.e. the only release that supports it is itself a pre-release).
+        // As soon as minVersion is bumped to a stable tag like "v2.20.0",
+        // the board automatically becomes a stable option.
+        function isBoardBeta(boardDef) {
+            return !!(boardDef && boardDef.minVersion && boardDef.minVersion.includes('-'));
+        }
+
         function renderBoards() {
             const showBeta = chkShowPrerelease.checked;
+            const currentVersion = selVersion.value;
             for (const opt of selBoard.options) {
-                if (opt.dataset.beta === 'true') {
-                    opt.hidden = !showBeta;
+                const boardDef = BOARDS[opt.value];
+                let hidden = false;
+                if (isBoardBeta(boardDef) && !showBeta) hidden = true;
+                if (boardDef && boardDef.minVersion && currentVersion &&
+                    compareVersions(currentVersion, boardDef.minVersion) < 0) {
+                    hidden = true;
                 }
+                opt.hidden = hidden;
             }
-            // If currently selected beta board is hidden, fall back to first non-beta option
+            // If currently selected board is hidden, fall back to first visible option
             const cur = selBoard.options[selBoard.selectedIndex];
             if (cur && cur.hidden) {
                 for (const opt of selBoard.options) {
@@ -500,6 +536,10 @@
             renderVersions();
             renderBoards();
         });
+
+        // Re-evaluate board visibility when user picks a different version
+        // (boards with minVersion may need to hide/show)
+        selVersion.addEventListener('change', renderBoards);
 
         // ── Connect / Disconnect ──
         async function connect() {

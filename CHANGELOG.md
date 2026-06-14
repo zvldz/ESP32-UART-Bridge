@@ -1,19 +1,20 @@
 # CHANGELOG
 
-## v2.20.0-beta1
+## v2.20.0
 
 ### Hardware Support
 - **New board: ESP32-S3-Zero N8R8** — Waveshare's revised Zero with ESP32-S3-PICO-1 (8MB Flash + 8MB OPI PSRAM)
   - Pin-compatible with the original Zero (same `BOARD_ESP32_S3_ZERO` define), only Flash/PSRAM differs
-  - New build envs: `zero_n8r8_production`, `zero_n8r8_ble_production`
-  - New partitions: `partitions_custom_8mb.csv` (1.5 MB app slots × 2, ~4.75 MB LittleFS)
+  - Build envs: `zero_n8r8_production`, `zero_n8r8_debug`, `zero_n8r8_ble_production`, `zero_n8r8_ble_debug`
+  - New partitions: `partitions_custom_8mb.csv` (2 MB app slots × 2, ~3.875 MB LittleFS — enough headroom for BLE debug builds)
   - sdkconfig: `CONFIG_SPIRAM_MODE_OCT=y`, `CONFIG_SPIRAM_SPEED_80M=y`, `CONFIG_ESPTOOLPY_FLASHSIZE="8MB"`
 
 ### Web Flasher
 - **Pre-release / beta builds toggle**: checkbox under version dropdown
   - When off (default): only stable releases and stable boards are shown
-  - When on: pre-release versions and beta-only boards (e.g. Zero N8R8) become available
-- **CI workflow**: tags containing `-` (e.g. `v2.20.0-beta1`) are auto-published as pre-releases on GitHub
+  - When on: pre-release versions and beta-only boards become available
+- **Per-board minimum version**: each board entry can declare a `minVersion` so it's hidden when an older release is selected (auto-detected as beta when `minVersion` itself is a pre-release tag)
+- **CI workflow**: tags containing `-` (e.g. `v2.X.Y-beta1`) are auto-published as pre-releases on GitHub
 
 ## v2.19.1
 
